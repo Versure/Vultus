@@ -33,10 +33,25 @@ all succeed against a workspace whose structure matches the apps + shared-libs
 subset of PLAN §3, with the cross-scope import ban proven by an automated test
 that fails CI if Sheriff ever stops enforcing it.
 
+The workspace **must be scaffolded on the latest stable versions available when
+this is implemented** — Nx, Angular, Ionic, Capacitor, the Firebase Functions
+Node SDK (and its targeted Node LTS runtime), and `@softarc/sheriff` /
+`@softarc/eslint-plugin-sheriff`. Use the current `create-nx-workspace` and the
+latest generators rather than an older toolchain or a pinned-old preset; do not
+reach for a conservative/legacy version. (See **Scope** for the explicit
+requirement and **Risks** for how "latest" reconciles with version pinning.)
+
 ## Scope
 
 In scope:
 
+- Scaffold the workspace on the **latest stable versions available when this is
+  implemented** — Nx, Angular, Ionic, Capacitor, the Firebase Functions Node SDK
+  (and the targeted Node LTS runtime), and `@softarc/sheriff` /
+  `@softarc/eslint-plugin-sheriff`. Use the current `create-nx-workspace` /
+  latest generators; do not use a pinned-old preset or a deliberately
+  conservative toolchain. (Reproducibility is handled by pinning the *resolved*
+  versions — see **Risks**.)
 - Initialize an Nx workspace at the repo root using **pnpm** as the package
   manager (Nx `packageManager` setting = pnpm; `pnpm-lock.yaml` committed).
 - Generate `apps/mobile` — Ionic + Angular (Capacitor) shell, tagged
@@ -154,7 +169,12 @@ tasks are `[sequential]` and run by a single infrastructure engineer.
 
 1. **[sequential] Initialize the Nx workspace with pnpm.**
    - Run `create-nx-workspace` (or `nx init`) producing an integrated monorepo
-     at the repo root, alongside the existing `docs/` and `CLAUDE.md`.
+     at the repo root, alongside the existing `docs/` and `CLAUDE.md`. Use the
+     **latest stable** `create-nx-workspace` and generators available at
+     implementation time (latest stable Nx, Angular, Ionic, Capacitor, Firebase
+     Functions Node SDK + Node LTS runtime, and `@softarc/*`) — do not pin to an
+     older preset. Then **pin the resolved versions** for reproducibility (see
+     `pnpm install` step and Risks).
    - Set the package manager to pnpm (`--packageManager=pnpm`); ensure
      `nx.json` / generated config records pnpm, generate `pnpm-lock.yaml`, and
      commit it.
@@ -291,11 +311,20 @@ Tailored from the PLAN §5 checklist:
   mechanism — a fixture directory excluded from all project lint/build targets,
   exercised by a programmatic ESLint invocation inside a dedicated test — must be
   implemented exactly so both the negative test passes and `nx lint` / `nx build`
-  of real code stays clean. Pin the Sheriff and ESLint versions used by that test
-  to the workspace versions to avoid the "version mismatch breaks CI" risk
-  (PLAN §9).
-- **Sheriff/Nx version compatibility** (PLAN §9). Pin Nx, Angular, and
-  `@softarc/*` versions; do not float them. A mismatch is a known CI-breaker.
+  of real code stays clean. The negative test uses the workspace's own
+  (latest-stable, then locked) Sheriff and ESLint versions — it asserts on the
+  Sheriff rule id (`@softarc/sheriff/dependency-rule`), not the human-readable
+  message string, so it survives `@softarc` upgrades and avoids the "version
+  mismatch breaks CI" risk (PLAN §9).
+- **Sheriff/Nx version compatibility** (PLAN §9). Install the **latest stable**
+  Nx, Angular, Ionic, Capacitor, Firebase Functions Node SDK, and `@softarc/*`
+  at implementation time, then **pin the resolved versions** — exact versions in
+  `package.json` plus the committed `pnpm-lock.yaml` — so builds are
+  reproducible. "Pin" here means *lock what you resolved*, not float and not
+  deliberately old: latest-on-install, frozen-after-install. This keeps the
+  PLAN §9 "version mismatch breaks CI" mitigation intact (the resolved set is
+  locked; later bumps come through renovate-style update PRs, not silent
+  floating).
 - **Empty `scope:shared` libs and the 3+-slice rule.** Generating three shared
   libs before any slice exists could look like premature sharing (CLAUDE.md /
   PLAN §3 §"When to extract"). This is intentional and *not* a violation: PLAN §3
