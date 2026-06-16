@@ -52,6 +52,7 @@ day one so multi-user is a UI change later, not a migration.
 | Manual refresh | App calls same HTTP Cloud Function (rate-limited) | Single code path for sync logic. |
 | Region scope | Multi-region from day one | Trivial in data model, painful to add later. |
 | Data sources | TMDB (metadata + watch providers) + Trakt (calendar) | Both free for non-commercial; complementary. |
+| UI design source | Google Stitch — "Vultus Android App Design" | Canonical screens + design system; accessed via Stitch MCP. |
 | Hosting cost | €0/month | Firebase Spark + GitHub Actions free tier + TMDB/Trakt free tier. |
 
 ### Why the .NET backend was dropped
@@ -83,6 +84,31 @@ availability per region. Mitigations baked into the design:
 - If accuracy turns out to be poor in practice, Watchmode is the layered
   fallback (1,000 calls/month free tier, more accurate transitions). The
   data-source clients are encapsulated per slice, so swapping is local.
+
+### Design reference (Stitch)
+
+The canonical UI design for this app lives in **Google Stitch** as the project
+**"Vultus Android App Design"** (mobile / Android, text-to-UI). It is the
+visual source of truth for screens, layout, and the design system; the Ionic +
+Angular implementation should match it.
+
+- **Stitch project ID:** `projects/13590348714018893783`
+- **Access:** via the Stitch MCP server (configured in Claude Code as `stitch`).
+  Useful tools: `list_projects`, `get_project`, `list_screens`, `get_screen`,
+  `list_design_systems` / `get` the design system, `generate_screen_from_text`,
+  `generate_variants`, `edit_screens`.
+- **Design system:** "Vultus Design System" — dark-first, **Inter** typography,
+  primary **Emerald `#10B981`**, navy-slate surfaces (`#0F172A` / `#1E293B`),
+  8px grid, 0.5rem default radius. Semantic status colors map directly to the
+  watchlist `status` field:
+  - Watching → `#3B82F6` (electric blue)
+  - Completed → `#10B981` (emerald)
+  - Dropped → `#EF4444` (muted red)
+  - Planned → `#94A3B8` (neutral slate)
+
+When building a mobile slice, pull the relevant Stitch screen first and align
+component structure, spacing, and the design-system tokens above. Treat the
+Stitch design system as the contract for `shared/ui-kit` theming.
 
 ---
 
