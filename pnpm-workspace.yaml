@@ -1,0 +1,19 @@
+packages:
+  - 'apps/*'
+  - 'libs/shared/*'
+  - 'libs/mobile/*'
+  - 'libs/functions/*'
+  - 'tools/*'
+allowBuilds:
+  '@firebase/util': false
+  '@parcel/watcher': true
+  '@swc/core': true
+  esbuild: true
+  less: true
+  lmdb: true
+  msgpackr-extract: true
+  nx: true
+  protobufjs: false
+  unrs-resolver: true
+minimumReleaseAgeExclude:
+  - '@capacitor/keyboard@8.0.5'
