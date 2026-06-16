@@ -234,6 +234,16 @@ title-cache/{tmdbId}/availability/{region}
 
 ## 5. The agentic workflow
 
+> **Superseded note (2026-06-16):** The task-management model below (§5 "issue-
+> driven", §6 issue breakdown, `feat/<issue-number>-<slug>` branches, issue
+> templates) has been **replaced by the spec-file workflow** in
+> `docs/specs/README.md` and the `.claude/` skills (`create-spec`, `rework-spec`,
+> `implement-feature`, `rework-feature`). **There are no GitHub issues** — a spec
+> file in `docs/specs/NNNN-slug.md`, reviewed and merged as a PR, is the unit of
+> work, and branches are `spec/NNNN-slug` / `feat/NNNN-slug`. The architecture,
+> definition of done, test pyramid, and secrets guidance in this section remain
+> authoritative; only the issue-based task tracking is obsolete.
+
 ### Setup repo files
 
 - **`CLAUDE.md`** at repo root — auto-loaded every Claude Code session.

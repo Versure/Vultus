@@ -1,0 +1,61 @@
+# CLAUDE.md — Vultus standing instructions
+
+Vultus is a personal Movie/TV tracker (Ionic + Angular via Capacitor, Nx
+monorepo, Firebase backend). `docs/PLAN.md` is the source of truth for
+architecture and decisions; read it before non-trivial work.
+
+## Architecture (PLAN §3–§4)
+
+- **Vertical slice, enforced by Sheriff.** Each slice owns its UI, state, data,
+  and types. **No cross-slice imports** — slices communicate only through
+  `scope:shared`. **Don't DRY across slices**: duplication inside a slice is
+  fine; extract to `shared/` only when the *same* logic appears in **3+ slices**
+  with the same reason to change. The agent's instinct to deduplicate breaks
+  vertical slice — resist it.
+- **Scope tags:** `scope:shared` (importable by anyone), `scope:mobile`
+  (`apps/mobile` + `libs/mobile/*`), `scope:functions` (`apps/functions` +
+  `libs/functions/*`). `scope:mobile` and `scope:functions` must never import
+  each other.
+- **Data model:** Firestore, keyed by `userId` from day one; see PLAN §4 for
+  collection paths, `title-cache`, and the `previousSnapshot` transition model.
+- **UI design source:** Google Stitch "Vultus Android App Design"
+  (`projects/13590348714018893783`), via the `stitch` MCP. Design tokens:
+  dark-first, Inter, primary Emerald `#10B981`, navy-slate surfaces
+  (`#0F172A`/`#1E293B`), 8px grid. Treat the Stitch design system as the contract
+  for `shared/ui-kit` theming.
+
+## Commands & definition of done (PLAN §5)
+
+- Commands (once the Nx workspace is bootstrapped): `nx test`, `nx lint`
+  (includes Sheriff), `nx build`, `nx e2e`, `nx serve`, `firebase
+  emulators:start`. Prefer `nx affected -t <target> --base=main`.
+- **Definition of done** for any PR: typecheck + lint/Sheriff + unit + component
+  (for non-trivial UI) + build + e2e (affected critical flows) all green, and the
+  changed slice has tests for its logic.
+- The workspace is **not bootstrapped yet** (repo is docs-only); the first
+  features create it. Tooling-absent gates degrade gracefully — see the skills.
+
+## Conventions
+
+- **Shell is PowerShell** (Windows). Use PS-safe syntax: `2>$null`, here-strings
+  `@'...'@` for multi-line text, `$env:VAR`, `$LASTEXITCODE`.
+- **Secrets:** never read or write `.env.local` or any secret. Secrets live in
+  `.env.local` (gitignored), GitHub Actions secrets, and Firebase functions
+  config. Flag if a secret would be needed somewhere it shouldn't be.
+- **Branches:** `spec/NNNN-slug` (spec PRs), `feat/NNNN-slug` (feature PRs).
+  PRs target `main`; squash-merge so each spec/feature is one commit.
+
+## Development workflow — spec-driven (no GitHub issues)
+
+This repo is built through a spec-first, mostly-autonomous workflow. **There are
+no GitHub issues** — a spec file (`docs/specs/NNNN-slug.md`), reviewed and merged
+as a PR, is the unit of work. This **supersedes the issue-driven model in
+PLAN §5–§6** (the architecture/DoD there remain authoritative).
+
+Four skills drive it (each is self-contained — its mechanics live in its
+`SKILL.md`): `/create-spec` → review the spec PR → `/rework-spec` → merge →
+`/implement-feature` → review the feature PR → `/rework-feature` → merge. See
+`docs/specs/README.md` for the spec format and status lifecycle. Specialist
+subagents (`spec-author`, `spec-reviewer`, `feature-implementer`,
+`backend-engineer`, `frontend-engineer`, `infrastructure-engineer`,
+`feature-reviewer`, `qa-runner`) carry their own behavior rules.
