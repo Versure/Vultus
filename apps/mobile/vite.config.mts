@@ -1,12 +1,12 @@
 /// <reference types='vitest' />
 import { defineConfig } from 'vite';
 import angular from '@analogjs/vite-plugin-angular';
-import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 
 export default defineConfig(() => ({
   root: __dirname,
   cacheDir: '../../node_modules/.vite/apps/mobile',
-  plugins: [angular(), nxViteTsPaths()],
+  resolve: { tsconfigPaths: true },
+  plugins: [angular()],
   test: {
     name: 'mobile',
     watch: false,
