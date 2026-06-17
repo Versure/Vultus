@@ -14,8 +14,10 @@ permissions:
   contents: read
 
 jobs:
+  # No `name:` on this job: the check-run name must stay the job id `main` so the
+  # required status check renders as `CI / main` (branch-protection ruleset). A
+  # display name would override the check context and break the required check.
   main:
-    name: Lint, test, build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
