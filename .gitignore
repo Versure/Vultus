@@ -48,3 +48,11 @@ Thumbs.db
 .nx/polygraph
 .nx/self-healing
 .angular
+
+.nx/migrate-runs
+
+# Playwright e2e
+/test-results
+/playwright-report
+/blob-report
+/playwright/.cache
