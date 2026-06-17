@@ -8,7 +8,8 @@
       "!{projectRoot}/eslint.config.mjs",
       "!{projectRoot}/**/?(*.)+(spec|test).[jt]s?(x)?(.snap)",
       "!{projectRoot}/tsconfig.spec.json",
-      "!{projectRoot}/jest.config.[jt]s",
+      "!{projectRoot}/vite.config.[jt]s",
+      "!{projectRoot}/vite.config.[cm][jt]s",
       "!{projectRoot}/src/test-setup.[jt]s",
       "!{projectRoot}/test-setup.[jt]s"
     ],
@@ -19,6 +20,12 @@
       "plugin": "@nx/eslint/plugin",
       "options": {
         "targetName": "lint"
+      }
+    },
+    {
+      "plugin": "@nx/vite/plugin",
+      "options": {
+        "testTargetName": "test"
       }
     }
   ],
@@ -40,16 +47,16 @@
         "{workspaceRoot}/tools/eslint-rules/**/*"
       ]
     },
-    "@nx/jest:jest": {
+    "@nx/vite:test": {
       "cache": true,
-      "inputs": ["default", "^production", "{workspaceRoot}/jest.preset.js"],
+      "inputs": ["default", "^production"],
       "options": {
         "passWithNoTests": true
       },
       "configurations": {
         "ci": {
-          "ci": true,
-          "codeCoverage": true
+          "watch": false,
+          "coverage": true
         }
       }
     },
@@ -71,7 +78,7 @@
       "e2eTestRunner": "none",
       "linter": "eslint",
       "style": "scss",
-      "unitTestRunner": "jest"
+      "unitTestRunner": "vitest"
     }
   }
 }

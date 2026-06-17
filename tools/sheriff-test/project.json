@@ -7,16 +7,13 @@
   "implicitDependencies": [],
   "targets": {
     "test": {
-      "executor": "@nx/jest:jest",
+      "executor": "@nx/vite:test",
       "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
       "inputs": [
         "default",
         "{workspaceRoot}/sheriff.config.ts",
         "{workspaceRoot}/tools/sheriff-fixtures/**/*"
-      ],
-      "options": {
-        "jestConfig": "tools/sheriff-test/jest.config.cts"
-      }
+      ]
     }
   }
 }
