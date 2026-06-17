@@ -9,7 +9,7 @@ architecture and decisions; read it before non-trivial work.
 - **Vertical slice, enforced by Sheriff.** Each slice owns its UI, state, data,
   and types. **No cross-slice imports** — slices communicate only through
   `scope:shared`. **Don't DRY across slices**: duplication inside a slice is
-  fine; extract to `shared/` only when the *same* logic appears in **3+ slices**
+  fine; extract to `shared/` only when the _same_ logic appears in **3+ slices**
   with the same reason to change. The agent's instinct to deduplicate breaks
   vertical slice — resist it.
 - **Scope tags:** `scope:shared` (importable by anyone), `scope:mobile`
@@ -26,14 +26,17 @@ architecture and decisions; read it before non-trivial work.
 
 ## Commands & definition of done (PLAN §5)
 
-- Commands (once the Nx workspace is bootstrapped): `nx test`, `nx lint`
-  (includes Sheriff), `nx build`, `nx e2e`, `nx serve`, `firebase
-  emulators:start`. Prefer `nx affected -t <target> --base=main`.
+- The workspace is **bootstrapped** (spec 0001): Nx 23 monorepo, pnpm, Ionic +
+  Angular 21 / Capacitor 8 (`apps/mobile`), Firebase Functions (`apps/functions`),
+  `libs/shared/{domain,firestore-schema,ui-kit}`. **Unit tests run on Vitest +
+  Analog** (not Jest); **e2e on Playwright** (`apps/mobile-e2e`).
+- Commands: `pnpm nx test`, `pnpm nx lint` (includes Sheriff), `pnpm nx build`,
+  `pnpm nx e2e`, `pnpm nx serve`, `firebase emulators:start` (once Firebase is
+  configured in a later spec). Prefer `nx affected -t <target> --base=main`.
 - **Definition of done** for any PR: typecheck + lint/Sheriff + unit + component
   (for non-trivial UI) + build + e2e (affected critical flows) all green, and the
-  changed slice has tests for its logic.
-- The workspace is **not bootstrapped yet** (repo is docs-only); the first
-  features create it. Tooling-absent gates degrade gracefully — see the skills.
+  changed slice has tests for its logic. Tooling-absent gates degrade gracefully —
+  see the skills.
 
 ## Conventions
 
@@ -44,6 +47,10 @@ architecture and decisions; read it before non-trivial work.
   config. Flag if a secret would be needed somewhere it shouldn't be.
 - **Branches:** `spec/NNNN-slug` (spec PRs), `feat/NNNN-slug` (feature PRs).
   PRs target `main`; squash-merge so each spec/feature is one commit.
+- **Pre-commit hook:** husky + lint-staged run ESLint `--fix` (Sheriff included)
+  and Prettier on staged files; a commit that breaks lint, the module boundaries,
+  or formatting is blocked locally. Don't bypass with `--no-verify` — fix the
+  underlying issue.
 
 ## Development workflow — spec-driven (no GitHub issues)
 
