@@ -138,18 +138,21 @@ names**, which branch protection and future specs (the deferred e2e job) will
 reference. Fix these names so they are stable to depend on:
 
 - **Workflow name:** `CI`
-- **Job:** a single job named `main` (display name "Lint, test, build"). Using
-  one job keeps `pnpm install` + Nx cache warm-up shared across the three gates
-  and minimizes runner minutes. The required-status-check name surfaced to
-  branch protection will be `CI / main` (GitHub renders it `<workflow> /
-  <job>`). The Manual prerequisite note and the PR description must record the
-  exact check string the user marks required.
+- **Job:** a single job with the id `main`. Using one job keeps `pnpm install` +
+  Nx cache warm-up shared across the three gates and minimizes runner minutes.
+  The required-status-check context surfaced to branch protection is **`main`** —
+  the bare check-run name, which equals the job id. **Do not set a job-level
+  `name:`**: a display name overrides the check-run name (and therefore the
+  required-check context), so the gate would never match. (GitHub's PR UI _shows_
+  the check as `CI / main`, i.e. `<workflow> / <job>`, but rulesets/branch
+  protection match the bare check-run name `main`, not that rendered string.) The
+  Manual prerequisite note and the PR description must record the exact check
+  string the user marks required.
 
 (If the implementer finds splitting into parallel per-gate jobs materially
 faster, that is an allowed refinement, but then the workflow MUST list every
-resulting `CI / <job>` check name in the PR description so the human marks the
-correct set required. The default and simplest contract is the single `main`
-job above.)
+resulting job-id check name in the PR description so the human marks the correct
+set required. The default and simplest contract is the single `main` job above.)
 
 ## UI / Stitch screen refs
 
@@ -237,9 +240,10 @@ Once this PR merges and the workflow has run on `main` at least once:
    rule for `main`.
 2. Enable **"Require status checks to pass before merging"** and **"Require
    branches to be up to date before merging."**
-3. In the status-checks search box, select **`CI / main`** (the single job from
-   this spec). If the implementer split the workflow into multiple jobs, select
-   **every** `CI / <job>` check listed in the PR description instead.
+3. In the status-checks search box, select **`main`** (the bare check-run name =
+   the single job's id; GitHub matches this, not the `CI / main` string it shows
+   in the PR UI). If the implementer split the workflow into multiple jobs, select
+   **every** job-id check listed in the PR description instead.
 4. (Recommended) Enable "Do not allow bypassing the above settings."
 
 This is a one-time checkbox in GitHub settings; it is not, and cannot be,
@@ -322,10 +326,12 @@ excluded — see Context/Scope):
   e2e job to this same `ci.yml`. Documented so it is a known, intentional gap,
   not an oversight.
 - **Required-check name coupling.** Branch protection references the check by its
-  rendered `CI / <job>` name; if a later refactor renames the workflow or job,
-  the required check silently stops matching and PRs can merge ungated. Mitigated
-  by fixing the names in Public types / APIs and recording them in the PR; any
-  future rename must update branch protection in the same change.
+  bare check-run name (the job id, `main`); if a later refactor renames the job —
+  or adds a job-level `name:`, which silently overrides the check-run name — the
+  required check stops matching and PRs can merge ungated. Mitigated by fixing the
+  job id in Public types / APIs (and the no-`name:` rule there) and recording the
+  exact context in the PR; any future rename must update branch protection in the
+  same change.
 - **No new secret is needed and none is added** — consistent with the €0 /
   no-new-secret invariant (PLAN §5/§7, CLAUDE.md). The only residual cost is
   GitHub Actions runner minutes on the free tier, bounded by `concurrency`
