@@ -2,7 +2,7 @@
 number: 0002
 slug: ci-pipeline
 title: Add GitHub Actions CI pipeline running the definition-of-done gates on PRs
-status: approved
+status: done
 slices: []
 scopes: [scope:shared, scope:mobile, scope:functions]
 created: 2026-06-17
