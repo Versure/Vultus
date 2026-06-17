@@ -1,0 +1,19 @@
+{
+  "name": "sheriff-test",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "tools/sheriff-test/src",
+  "projectType": "library",
+  "tags": [],
+  "implicitDependencies": [],
+  "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
+      "inputs": [
+        "default",
+        "{workspaceRoot}/sheriff.config.ts",
+        "{workspaceRoot}/tools/sheriff-fixtures/**/*"
+      ]
+    }
+  }
+}

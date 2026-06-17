@@ -1,0 +1,31 @@
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "rootDir": ".",
+    "sourceMap": true,
+    "declaration": false,
+    "moduleResolution": "node",
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "target": "es2022",
+    "module": "esnext",
+    "lib": ["es2022", "dom"],
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    "baseUrl": ".",
+    "strict": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": false,
+    "paths": {
+      "@vultus/shared/domain": ["./libs/shared/domain/src/index.ts"],
+      "@vultus/shared/firestore-schema": [
+        "./libs/shared/firestore-schema/src/index.ts"
+      ],
+      "@vultus/shared/ui-kit": ["./libs/shared/ui-kit/src/index.ts"]
+    }
+  },
+  "exclude": ["node_modules", "tmp"]
+}

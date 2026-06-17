@@ -1,0 +1,8 @@
+{
+  "name": "shared-firestore-schema",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/shared/firestore-schema/src",
+  "projectType": "library",
+  "tags": [],
+  "targets": {}
+}

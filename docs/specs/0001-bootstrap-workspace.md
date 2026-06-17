@@ -2,7 +2,7 @@
 number: 0001
 slug: bootstrap-workspace
 title: Bootstrap the Nx workspace with Sheriff module boundaries enforced
-status: approved
+status: done
 slices: []
 scopes: [scope:shared, scope:mobile, scope:functions]
 created: 2026-06-16
