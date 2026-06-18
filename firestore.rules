@@ -1,0 +1,62 @@
+rules_version = '2';
+
+// Vultus Firestore security rules — ACCESS CONTROL ONLY (PLAN §4).
+//
+// Field/schema validation (status enums, timestamp shapes, etc.) is
+// DELIBERATELY DEFERRED to the `libs/shared/firestore-schema` converters
+// (PLAN §6 item 6). Do NOT add field-shape validation here — keep these rules
+// focused on "who may read/write which path."
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Owner check. NOTE: Firebase Auth sets `request.auth.uid` for ANONYMOUS
+    // users too (Vultus v1 uses anonymous auth — PLAN §2). So an anonymous
+    // signed-in user whose uid equals {userId} satisfies this check and is a
+    // legitimate owner. Do NOT add an "anonymous exception" — anonymous owners
+    // are intended to pass.
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // ---- User-owned data — owner-only -------------------------------------
+    // The user document itself plus EVERY current and future subcollection
+    // beneath it (watchlist, watchlist/*/episodes, notifications, ...) is
+    // locked to its owner via the recursive wildcard below.
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+
+      match /{document=**} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // ---- Global title cache — authenticated read, NEVER client-write ------
+    // `title-cache/{tmdbId}` and its `availability/{region}` subcollection are
+    // a shared, cross-user cache. Any authenticated user (incl. anonymous) may
+    // READ it.
+    //
+    // CRITICAL: clients may NEVER write here (`allow write: if false`). All
+    // writes to title-cache come from Cloud Functions via the Firebase Admin
+    // SDK, and the Admin SDK BYPASSES Firestore security rules ENTIRELY — it is
+    // not subject to `request.auth` or any rule in this file. Therefore the
+    // correct and complete client rule is `write: if false` ALWAYS. Do NOT add
+    // a "functions can write" allowance: functions do not go through these
+    // rules at all, and any client write rule would open the shared cache to
+    // tampering.
+    match /title-cache/{tmdbId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+
+      match /availability/{region} {
+        allow read: if request.auth != null;
+        allow write: if false;
+      }
+    }
+
+    // ---- Default: deny all -------------------------------------------------
+    // Anything not explicitly allowed above is denied. Keep this LAST.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

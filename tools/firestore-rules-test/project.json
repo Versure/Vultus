@@ -1,0 +1,23 @@
+{
+  "name": "firestore-rules-test",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "tools/firestore-rules-test/src",
+  "projectType": "library",
+  "tags": [],
+  "implicitDependencies": [],
+  "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
+      "options": {
+        "passWithNoTests": true
+      }
+    },
+    "test-rules": {
+      "command": "firebase emulators:exec --only firestore \"vitest run -c tools/firestore-rules-test/vitest.rules.config.mts\"",
+      "options": {
+        "cwd": "{workspaceRoot}"
+      }
+    }
+  }
+}
