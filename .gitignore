@@ -8,6 +8,11 @@ out-tsc
 # dependencies
 node_modules
 
+# secrets (never commit) — see docs/setup/firebase-and-secrets.md
+.env.local
+.env*.local
+*.serviceaccount.json
+
 # IDEs and editors
 /.idea
 .project
