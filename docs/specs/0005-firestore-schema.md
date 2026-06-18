@@ -2,7 +2,7 @@
 number: 0005
 slug: firestore-schema
 title: Add collection paths and Timestamp converters in shared/firestore-schema
-status: approved
+status: done
 slices: []
 scopes: [scope:shared]
 created: 2026-06-18
@@ -560,7 +560,7 @@ helpers, not a build. So `build` is **not** part of the DoD and must not be
 invoked.
 
 - [ ] `pnpm nx typecheck shared-firestore-schema` passes — `tsc --noEmit -p
-    tsconfig.lib.json` compiles the data types + converters + path builders
+  tsconfig.lib.json` compiles the data types + converters + path builders
       (+ optional `type-assertions.ts`), proving structural alignment with
       `@vultus/shared/domain`. (Note: `typecheck` does **not** enforce the
       no-firebase rule — `firebase-admin`/`firebase-functions` are root deps, so
