@@ -2,7 +2,7 @@
 number: 0004
 slug: firebase-config-emulators
 title: Commit version-controlled Firebase config and wire up the local Emulator Suite
-status: approved
+status: done
 slices: []
 scopes: [scope:shared]
 created: 2026-06-18
@@ -55,7 +55,7 @@ In scope:
   PLAN §4 access-control lockdown (see **Data model touchpoints** for the exact
   rule contract).
 - **`firestore.indexes.json`** — **empty skeleton** (`{"indexes": [],
-  "fieldOverrides": []}`). Composite indexes are added **per slice** when a real
+"fieldOverrides": []}`). Composite indexes are added **per slice** when a real
   query needs one; this spec ships none and says so explicitly so slice authors
   know to add their own.
 - **Emulator Suite wiring** for local dev: **Firestore + Auth + Emulator UI
@@ -134,11 +134,11 @@ any boundary, and it imports **no slice and no scope lib** (it reads the root
 **infra test tooling, not a slice** — it does not participate in the
 vertical-slice architecture, exactly like `tools/sheriff-test`.
 
-| Touched | Path | Sheriff tags |
-|---|---|---|
-| Firebase root config | `.firebaserc`, `firebase.json`, `firestore.rules`, `firestore.indexes.json` | none (not an Nx project) |
-| Rules-test project | `tools/firestore-rules-test/**` | none (`tools/*` matches no module glob → untagged) |
-| `.gitignore` | repo root | none |
+| Touched              | Path                                                                        | Sheriff tags                                       |
+| -------------------- | --------------------------------------------------------------------------- | -------------------------------------------------- |
+| Firebase root config | `.firebaserc`, `firebase.json`, `firestore.rules`, `firestore.indexes.json` | none (not an Nx project)                           |
+| Rules-test project   | `tools/firestore-rules-test/**`                                             | none (`tools/*` matches no module glob → untagged) |
+| `.gitignore`         | repo root                                                                   | none                                               |
 
 **Why a new `tools/` project and not a slice:** these are emulator-backed
 integration tests for root infra config. They are not mobile or functions code,
@@ -150,7 +150,7 @@ share no logic with any slice, and must not be importable by slices. The
 ## Data model touchpoints
 
 This spec **codifies access control over the entire PLAN §4 data model** in
-`firestore.rules`. No collections or fields are *created* (Firestore is
+`firestore.rules`. No collections or fields are _created_ (Firestore is
 schemaless; documents appear when written by later specs), but every path in
 PLAN §4 gets an explicit rule. The rule contract, exactly:
 
@@ -215,7 +215,7 @@ introduced (the `shared/domain` PR is independent and untouched). The stable
 - **pnpm scripts** (in root `package.json`), names fixed so later specs/CI can
   call them:
   - `emulators` → `firebase emulators:start --import ./.emulator-data
-    --export-on-exit ./.emulator-data`
+--export-on-exit ./.emulator-data`
   - `emulators:clean` → `firebase emulators:start` (no import/export — fresh
     state)
   - `test:rules` → the `firebase emulators:exec` rules-test command (see task
@@ -258,7 +258,7 @@ consistent everywhere they appear:
    that **does** match `**/*.rules.spec.ts`.
 4. **The `test-rules` target runs the emulator-only command** —
    `firebase emulators:exec --only firestore "vitest run -c
-   vitest.rules.config.mts"` — so the rules specs only ever execute with the
+vitest.rules.config.mts"` — so the rules specs only ever execute with the
    Firestore emulator up.
 
 `passWithNoTests` alone is **insufficient** here, because the rules spec files
@@ -288,7 +288,7 @@ run by a single **infrastructure-engineer**.
      per-slice indexes are added later.
    - Write `firebase.json`:
      - `firestore`: `{ "rules": "firestore.rules", "indexes":
-       "firestore.indexes.json" }`.
+"firestore.indexes.json" }`.
      - `emulators`: `firestore` (port 8080), `auth` (port 9099),
        `ui` (`enabled: true`, port 4000), and `singleProjectMode` as
        appropriate. **No `functions` emulator block.**
@@ -319,7 +319,7 @@ run by a single **infrastructure-engineer**.
        include and run bare in CI with no emulator.
      - Add a **separate** rules vitest config
        (`tools/firestore-rules-test/vitest.rules.config.mts`, `environment:
-       'node'`) whose `include` is `['src/**/*.rules.spec.ts']`.
+'node'`) whose `include` is `['src/**/*.rules.spec.ts']`.
      - Define the `test-rules` target whose command is the `emulators:exec`
        invocation in task 5 (so `pnpm nx run firestore-rules-test:test-rules`
        works), pointing the inner `vitest run -c vitest.rules.config.mts`.
@@ -336,7 +336,7 @@ run by a single **infrastructure-engineer**.
 4. **[sequential] Write the rules-test specs.**
    - `@firebase/rules-unit-testing` `initializeTestEnvironment` against the
      Firestore emulator, loading the committed `firestore.rules`. `firebase
-     emulators:exec` sets `FIRESTORE_EMULATOR_HOST`, which
+emulators:exec` sets `FIRESTORE_EMULATOR_HOST`, which
      `initializeTestEnvironment` reads **automatically**; do **not** hardcode a
      host — the pinned `8080` is only a documented **fallback** so a contributor
      who customizes the port in `firebase.json` is not overridden by a divergent
@@ -347,7 +347,7 @@ run by a single **infrastructure-engineer**.
 5. **[sequential] Wire the invocation + scripts and `.gitignore`.**
    - Canonical command (Firestore-only emulator, since rules tests need just
      Firestore): `firebase emulators:exec --only firestore "vitest run -c
-     tools/firestore-rules-test/vitest.rules.config.mts"` — i.e.
+tools/firestore-rules-test/vitest.rules.config.mts"` — i.e.
      `emulators:exec` boots the Firestore emulator (setting
      `FIRESTORE_EMULATOR_HOST`), runs Vitest against the **rules** config (whose
      `include` matches `*.rules.spec.ts`), and tears the emulator down. The exact
@@ -360,7 +360,7 @@ run by a single **infrastructure-engineer**.
    - Document in the PR (and a short `README` note alongside `firebase.json` is
      acceptable) the dev commands: `pnpm emulators`
      (`firebase emulators:start --import ./.emulator-data --export-on-exit
-     ./.emulator-data`) and `pnpm test:rules`.
+./.emulator-data`) and `pnpm test:rules`.
    - Files: `package.json` (scripts), `.gitignore`,
      `tools/firestore-rules-test/project.json` (target).
 
@@ -427,18 +427,19 @@ that belongs with the **same follow-up that adds the Playwright/emulator e2e job
 (PLAN §6 item 20), which also needs the emulator running in CI — doing it once,
 there, avoids two half-baked emulator-in-CI setups. To keep the definition of
 done **honest**, this spec:
-  - provides the **exact local command** (`pnpm test:rules`) and makes it pass
-    locally as a hard DoD item;
-  - ensures the bare `nx test` graph (what CI runs today) **does not** attempt to
-    run the emulator-backed specs (task 3), so CI stays green and is **not**
-    falsely claimed to cover the rules;
-  - records the CI-integration gap as a **Risk** + an explicit follow-up note,
-    so the next maintainer adds a `firestore-rules` CI job (Java + firebase-tools
-    + `emulators:exec`) alongside the e2e job rather than discovering the gap.
+
+- provides the **exact local command** (`pnpm test:rules`) and makes it pass
+  locally as a hard DoD item;
+- ensures the bare `nx test` graph (what CI runs today) **does not** attempt to
+  run the emulator-backed specs (task 3), so CI stays green and is **not**
+  falsely claimed to cover the rules;
+- records the CI-integration gap as a **Risk** + an explicit follow-up note,
+  so the next maintainer adds a `firestore-rules` CI job (Java + firebase-tools
+  - `emulators:exec`) alongside the e2e job rather than discovering the gap.
 
 (If the implementer judges it low-cost to add a dedicated CI job now —
 `setup-java` + `firebase-tools` + `emulators:exec --only firestore` — that is an
-**allowed enhancement**, but it must be a *separate job* that does not block the
+**allowed enhancement**, but it must be a _separate job_ that does not block the
 existing required `main` check, and the PR must document it. The default,
 honest-DoD path is local-only-for-now.)
 

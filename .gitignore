@@ -5,6 +5,12 @@ dist
 tmp
 out-tsc
 
+# Firebase Emulator Suite local data (import/export round-trip; never committed)
+.emulator-data/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
 # dependencies
 node_modules
 
