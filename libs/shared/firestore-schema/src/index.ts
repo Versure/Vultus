@@ -1,4 +1,8 @@
-// @vultus/shared/firestore-schema — collection paths, converters, query helpers
-// (PLAN §3, §4, §6 item 6). Placeholder barrel; real schema arrives in its own
-// spec. Exported constant keeps the barrel non-empty and lint-clean.
-export const SHARED_FIRESTORE_SCHEMA_PLACEHOLDER = true;
+// @vultus/shared/firestore-schema — SDK-agnostic Firestore collection/document
+// paths and pure Timestamp↔ISO converters (PLAN §3, §4, §6 item 6). Imports only
+// @vultus/shared/domain; NO firebase/SDK import (the boundary is structural —
+// `Date` on write, `{ toDate() }` on read). Query helpers are deferred to slices.
+
+export * from './lib/data-types';
+export * from './lib/paths';
+export * from './lib/converters';
