@@ -1,4 +1,7 @@
 // @vultus/shared/domain — cross-slice domain types (PLAN §3, §6 item 5).
-// Placeholder barrel: Show, Movie, Episode, WatchProvider, Region, etc. arrive
-// in their own spec. Exported constant keeps the barrel non-empty and lint-clean.
-export const SHARED_DOMAIN_PLACEHOLDER = true;
+// Pure types + `as const` literal arrays only. No runtime logic, no Firebase
+// import, no Date/Timestamp — all timestamps are ISO 8601 strings.
+
+export * from './lib/enums';
+export * from './lib/entities';
+export * from './lib/documents';

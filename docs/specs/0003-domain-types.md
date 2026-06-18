@@ -2,7 +2,7 @@
 number: 0003
 slug: domain-types
 title: Define the core domain types in shared/domain
-status: approved
+status: done
 slices: []
 scopes: [scope:shared]
 created: 2026-06-18
