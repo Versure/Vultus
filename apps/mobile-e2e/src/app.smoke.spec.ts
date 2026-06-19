@@ -1,19 +1,28 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * Smoke test: the mobile app boots, the default route redirects to /home, and
- * the home page renders. Asserts on the Ionic toolbar title and welcome copy
- * (apps/mobile/src/app/home/home.page.html), not a brittle full snapshot.
+ * No-emulator smoke test (spec 0010, decision 5).
+ *
+ * Runs under the existing `nx serve`-backed Playwright `webServer`, which has
+ * NO Firebase backend. It asserts only that the tabs shell renders and that
+ * Watchlist is the landing route. It deliberately does NOT assert anonymous
+ * auth or any emulator-backed behavior — the full boot + anon-session + tab-nav
+ * flow against the Firebase emulators is owned by the e2e-setup spec
+ * (PLAN §6 item 20).
+ *
+ * This relies on the shell's graceful render-gating (app.config.ts): the
+ * anon-auth `provideAppInitializer` swallows the sign-in failure that occurs
+ * with no Auth backend, so bootstrap completes and the tabs render anyway.
  */
-test('boots and renders the home page', async ({ page }) => {
+test('boots into the tabs shell and lands on Watchlist', async ({ page }) => {
   await page.goto('/');
 
-  // Default route ('' -> redirect 'full' -> 'home').
-  await expect(page).toHaveURL(/\/home$/);
+  // Default route ('' -> redirect 'full' -> 'tabs/watchlist').
+  await expect(page).toHaveURL(/\/tabs\/watchlist$/);
 
-  // ion-title renders the appName binding ('Vultus').
-  await expect(page.locator('ion-title')).toHaveText('Vultus');
-
-  // Home content placeholder copy.
-  await expect(page.locator('ion-content')).toContainText('Welcome to Vultus');
+  // The tabs shell renders three tab buttons (Watchlist / Search / Settings).
+  await expect(page.locator('ion-tab-button')).toHaveCount(3);
+  await expect(page.locator('ion-tab-button[tab="watchlist"]')).toBeVisible();
+  await expect(page.locator('ion-tab-button[tab="search"]')).toBeVisible();
+  await expect(page.locator('ion-tab-button[tab="settings"]')).toBeVisible();
 });

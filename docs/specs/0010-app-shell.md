@@ -2,7 +2,7 @@
 number: 0010
 slug: app-shell
 title: Add the Ionic tabs app shell, routing, Firebase/AngularFire init, anonymous auth, and the three stub mobile slice libs
-status: approved
+status: implementing
 slices: [slice:watchlist, slice:search, slice:settings]
 scopes: [scope:mobile, scope:shared]
 created: 2026-06-19
@@ -631,7 +631,7 @@ run here. The verified Nx targets per project: `mobile` has
 exercise the smoke spec; it runs via `nx e2e mobile-e2e`).
 
 - [ ] `pnpm nx run-many -t lint test -p mobile mobile-watchlist mobile-search
-    mobile-settings shared-ui-kit` passes **with Sheriff active** (lint
+  mobile-settings shared-ui-kit` passes **with Sheriff active** (lint
       includes Sheriff): `apps/mobile` imports
       `@vultus/mobile/{watchlist,search,settings}` + `@vultus/shared/ui-kit` +
       third-party only; each slice stub imports `scope:shared` + Ionic only (no
@@ -640,7 +640,7 @@ exercise the smoke spec; it runs via `nx e2e mobile-e2e`).
       page) are green (no emulator, no network, no secrets; AngularFire mocked
       where a TestBed needs it).
 - [ ] `pnpm nx typecheck mobile mobile-watchlist mobile-search mobile-settings
-    shared-ui-kit` passes — the shell, the three slice stubs, and the ui-kit
+  shared-ui-kit` passes — the shell, the three slice stubs, and the ui-kit
       theme compile (AngularFire providers + environment types resolve). (A real
       `typecheck` target exists for each of these projects.)
 - [ ] `pnpm nx build mobile` passes for the **production** configuration — the
@@ -657,7 +657,7 @@ exercise the smoke spec; it runs via `nx e2e mobile-e2e`).
       labels+icons / **Watchlist default** (PLAN §5: component tests for
       non-trivial UI).
 - [ ] The **rewritten no-emulator smoke spec** (`apps/mobile-e2e/src/
-    app.smoke.spec.ts`) no longer references `/home` and asserts the tabs shell
+  app.smoke.spec.ts`) no longer references `/home` and asserts the tabs shell
       renders / Watchlist is the landing route — runnable via `nx e2e mobile-e2e`
       against the existing `nx serve`-backed `webServer` with **no emulator**.
       **The emulator-backed boot+anon+nav e2e is descoped to PLAN §6 item 20**
@@ -669,14 +669,14 @@ exercise the smoke spec; it runs via `nx e2e mobile-e2e`).
 - [ ] **`sheriff.config.ts` touched at most once** (verify-then-edit); the PR
       records whether an edit was needed or "no change needed".
 - [ ] **Guardrail verifications (review-checked):** (a) **no `users/**`document
-    is written** by the shell or the auth service — the anon session is created,
-    nothing in Firestore is written; the`users/{uid}`doc remains the settings
-    slice's job (item 16); (b) **no`scope:functions`file is touched** (this
-    spec runs in parallel with spec 0009); (c) **no secret is read or written** —
-   `.env.local`is never touched, the Firebase **web config is public** (dev =
-    placeholder/demo, prod = clearly-marked placeholders the user fills per
-    PLAN §7); (d) the scaffold`home` page is removed with **no orphaned
-    reference** (`app.routes.ts`, e2e, any import).
+  is written** by the shell or the auth service — the anon session is created,
+  nothing in Firestore is written; the`users/{uid}`doc remains the settings
+  slice's job (item 16); (b) **no`scope:functions`file is touched** (this
+  spec runs in parallel with spec 0009); (c) **no secret is read or written** —
+ `.env.local`is never touched, the Firebase **web config is public** (dev =
+  placeholder/demo, prod = clearly-marked placeholders the user fills per
+  PLAN §7); (d) the scaffold`home` page is removed with **no orphaned
+  reference** (`app.routes.ts`, e2e, any import).
 - [ ] PR description records: the **Stitch screen ID** used for the tab bar (or
       that the `stitch` MCP was unreachable and PLAN §2 tokens were applied), the
       chosen `@angular/fire` version + the Angular-21/firebase-12 compatibility

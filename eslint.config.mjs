@@ -66,7 +66,7 @@ export default tseslint.config(
     },
   },
 
-  // --- Angular TS best practices — apps/mobile only -----------------------
+  // --- Angular TS best practices — apps/mobile (prefix `app`) -------------
   {
     files: ['apps/mobile/**/*.ts'],
     extends: [...angular.configs.tsRecommended],
@@ -83,9 +83,30 @@ export default tseslint.config(
     },
   },
 
-  // --- Angular template best practices + a11y — apps/mobile only ----------
+  // --- Angular TS best practices — mobile slice libs (prefix `lib`) -------
+  // The mobile slice libs (libs/mobile/*) are the first libs to ship Angular
+  // components + templates; their generated components use the `lib` selector
+  // prefix. This mirrors each lib's own eslint.config.mjs so the root config
+  // (used by the lint-staged pre-commit gate) also recognises them.
   {
-    files: ['apps/mobile/**/*.html'],
+    files: ['libs/mobile/**/*.ts'],
+    extends: [...angular.configs.tsRecommended],
+    processor: angular.processInlineTemplates,
+    rules: {
+      '@angular-eslint/directive-selector': [
+        'error',
+        { type: 'attribute', prefix: 'lib', style: 'camelCase' },
+      ],
+      '@angular-eslint/component-selector': [
+        'error',
+        { type: 'element', prefix: 'lib', style: 'kebab-case' },
+      ],
+    },
+  },
+
+  // --- Angular template best practices + a11y — mobile app + slice libs ---
+  {
+    files: ['apps/mobile/**/*.html', 'libs/mobile/**/*.html'],
     extends: [
       ...angular.configs.templateRecommended,
       ...angular.configs.templateAccessibility,

@@ -27,7 +27,10 @@
       "@vultus/shared/ui-kit": ["./libs/shared/ui-kit/src/index.ts"],
       "@vultus/functions/sync-titles": [
         "./libs/functions/sync-titles/src/index.ts"
-      ]
+      ],
+      "@vultus/mobile/watchlist": ["./libs/mobile/watchlist/src/index.ts"],
+      "@vultus/mobile/search": ["./libs/mobile/search/src/index.ts"],
+      "@vultus/mobile/settings": ["./libs/mobile/settings/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "tmp"]

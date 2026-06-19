@@ -1,0 +1,92 @@
+// =============================================================================
+// Vultus global theme — Stitch design-system tokens (PLAN §2)
+// =============================================================================
+//
+// This file is the SCSS entrypoint for @vultus/shared/ui-kit. It carries the
+// "Vultus Design System" Stitch tokens (Google Stitch project
+// projects/13590348714018893783) as CSS custom properties plus the Ionic theme
+// variables they map onto. shared/ui-kit is the design-system theming contract
+// for the whole app (PLAN §2: "Treat the Stitch design system as the contract
+// for shared/ui-kit theming").
+//
+// HOW apps/mobile CONSUMES THIS
+// -----------------------------
+// In apps/mobile/src/styles.scss, after the Ionic core + dark palette imports:
+//
+//   @import '@vultus/shared/ui-kit/src/lib/theme.scss';
+//
+// (apps/mobile already @imports CSS files through SCSS, so a plain @import of
+// this .scss resolves the same way; a relative path
+// `../../../libs/shared/ui-kit/src/lib/theme.scss` works too if the alias is not
+// wired for the SCSS loader.) The app keeps its existing
+// `@ionic/angular/css/palettes/dark.always.css` import — this theme is
+// dark-first and layers on top of it.
+//
+// SHERIFF: scope:shared — importable by anyone. Plain CSS variables, no TS
+// imports, so no cross-scope boundary is crossed.
+// =============================================================================
+
+:root {
+  // ---------------------------------------------------------------------------
+  // Primary — Emerald #10B981 (Ionic --ion-color-primary + companions)
+  // ---------------------------------------------------------------------------
+  --ion-color-primary: #10b981;
+  --ion-color-primary-rgb: 16, 185, 129;
+  --ion-color-primary-contrast: #ffffff;
+  --ion-color-primary-contrast-rgb: 255, 255, 255;
+  --ion-color-primary-shade: #0ea372;
+  --ion-color-primary-tint: #28c08f;
+
+  // ---------------------------------------------------------------------------
+  // Surfaces — navy-slate (dark-first)
+  // ---------------------------------------------------------------------------
+  // Level 0 background #0F172A; Level 1 elevated/cards #1E293B.
+  --ion-background-color: #0f172a;
+  --ion-background-color-rgb: 15, 23, 42;
+
+  --vultus-surface: #0f172a; // Level 0 — app background
+  --vultus-surface-elevated: #1e293b; // Level 1 — cards / toolbars / search bar
+  --vultus-surface-overlay: #2d3748; // Level 2 — modals / overlays
+  --vultus-border: #334155; // 1px low-contrast outline on Level 1 surfaces
+
+  // Text — near-white primary content, mid-slate metadata.
+  --ion-text-color: #f8fafc;
+  --ion-text-color-rgb: 248, 250, 252;
+  --vultus-text-muted: #94a3b8;
+
+  // ---------------------------------------------------------------------------
+  // Typography — Inter-first stack (no web-font @import; family stack only)
+  // ---------------------------------------------------------------------------
+  --vultus-font-family:
+    'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, sans-serif;
+  --ion-font-family: var(--vultus-font-family);
+
+  // ---------------------------------------------------------------------------
+  // Spacing — 8px grid
+  // ---------------------------------------------------------------------------
+  --vultus-space-1: 8px;
+  --vultus-space-2: 16px;
+  --vultus-space-3: 24px;
+  --vultus-space-4: 32px;
+  --vultus-space-5: 40px;
+  --vultus-space-6: 48px;
+
+  // ---------------------------------------------------------------------------
+  // Radius — 0.5rem default (rounded shape language)
+  // ---------------------------------------------------------------------------
+  --vultus-radius: 0.5rem;
+  --vultus-radius-sm: 0.25rem;
+  --vultus-radius-md: 0.75rem;
+  --vultus-radius-lg: 1rem;
+  --vultus-radius-pill: 9999px;
+
+  // ---------------------------------------------------------------------------
+  // Semantic watchlist status colors (watchlist `status` field → color)
+  // Consumed by later slices (e.g. the watchlist slice's status badges).
+  // ---------------------------------------------------------------------------
+  --vultus-status-watching: #3b82f6;
+  --vultus-status-completed: #10b981;
+  --vultus-status-dropped: #ef4444;
+  --vultus-status-planned: #94a3b8;
+}

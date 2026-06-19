@@ -14,10 +14,12 @@ import { SheriffConfig, sameTag } from '@softarc/sheriff-core';
  *   scope:functions  apps/functions   + libs/functions/*
  *   scope:shared     libs/shared/*    (importable by anyone)
  *
- * Slice-tag vocabulary (declared now, no lib carries them yet — the slice libs
- * arrive in their own specs):
- *   slice:watchlist  slice:search  slice:title-detail  slice:settings
- *   slice:sync-titles  slice:dispatch-notifications
+ * Slice-tag vocabulary. The mobile tab slices below are now in use (spec 0010
+ * generated libs/mobile/{watchlist,search,settings}); the remaining tags are
+ * declared ahead of the libs that will carry them in their own specs:
+ *   slice:watchlist  slice:search  slice:settings   (in use — libs/mobile/*)
+ *   slice:title-detail                               (pushed later, not a tab)
+ *   slice:sync-titles  slice:dispatch-notifications  (functions slices)
  *
  * Boundary rules (PLAN §3 "Rules"):
  *   1. scope:mobile cannot import scope:functions, and vice versa.
@@ -39,11 +41,18 @@ export const config: SheriffConfig = {
     'apps/mobile': 'scope:mobile',
     'apps/functions': 'scope:functions',
 
-    'libs/shared/<name>': 'scope:shared',
+    // Libs expose their public API through a `src/index.ts` barrel. With
+    // enableBarrelLess that barrel folder is itself a module, so the
+    // scope/slice tag must be applied to `.../src` (not the lib root) for a
+    // runtime (value) cross-module import of the barrel — e.g. the app's lazy
+    // `import('@vultus/mobile/watchlist')` — to resolve to a *tagged* module
+    // rather than an untagged `src`. (Type-only imports are elided and never
+    // policed, which is why this only surfaced with the first runtime import.)
+    'libs/shared/<name>/src': 'scope:shared',
 
-    // Future slice libs — tagged by glob so they inherit scope + slice on creation.
-    'libs/mobile/<slice>': ['scope:mobile', 'slice:<slice>'],
-    'libs/functions/<slice>': ['scope:functions', 'slice:<slice>'],
+    // Slice libs — tagged by glob so they inherit scope + slice on creation.
+    'libs/mobile/<slice>/src': ['scope:mobile', 'slice:<slice>'],
+    'libs/functions/<slice>/src': ['scope:functions', 'slice:<slice>'],
 
     // Negative-test fixtures (excluded from production targets).
     'tools/sheriff-fixtures/mobile-side': 'scope:mobile',

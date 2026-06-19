@@ -16,3 +16,8 @@
 
 /* Dark palette — Vultus is dark-first (PLAN §2). */
 @import '@ionic/angular/css/palettes/dark.always.css';
+
+/* Vultus design-system theme (shared/ui-kit, PLAN §2) — Emerald primary,
+   navy-slate surfaces, Inter, 8px grid, 0.5rem radius, status colors. Layers
+   on top of the dark palette above. */
+@import '../../../libs/shared/ui-kit/src/lib/theme.scss';
