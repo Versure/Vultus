@@ -5,6 +5,13 @@
   "projectType": "application",
   "tags": [],
   "targets": {
+    "test-integration": {
+      "executor": "@nx/vitest:test",
+      "options": {
+        "configFile": "apps/functions/vite.integration.config.mts",
+        "watch": false
+      }
+    },
     "build": {
       "executor": "@nx/esbuild:esbuild",
       "outputs": ["{options.outputPath}"],

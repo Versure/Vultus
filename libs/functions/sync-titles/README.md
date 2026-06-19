@@ -7,8 +7,10 @@ calendar client (upcoming/aired episodes), both over a single in-slice HTTP
 transport — and the **title-cache sync engine** (spec 0008) that orchestrates
 them: it refreshes `title-cache` metadata + per-region availability and detects
 provider transitions against the previous snapshot, writing through an injected,
-Firebase-free persistence port. The HTTP/callable function that wraps the engine
-is a follow-on spec (PLAN §6 item 12).
+Firebase-free persistence port, plus the **Admin-SDK adapter** (spec 0009) that
+implements that port against `firebase-admin` Firestore — the one place the SDK
+enters the slice. The HTTP `onRequest` function that wires the engine + adapter
+lives in `apps/functions` (spec 0009).
 
 ## Public API
 
@@ -33,6 +35,13 @@ Imported from `@vultus/functions/sync-titles`:
     pass over the caller-supplied `{ tmdbId, type }[]`, writing refreshed
     metadata + per-region availability and returning a structured per-title
     result with the detected transitions.
+- `createFirestoreTitleCacheStore(db: Firestore): TitleCacheStore` — the
+  Admin-SDK adapter (spec 0009) implementing the engine's `TitleCacheStore` port
+  against `firebase-admin` Firestore. A thin map onto the spec-0005
+  `@vultus/shared/firestore-schema` path builders + converters — **no business
+  logic** (transition detection + the snapshot roll stay in the engine). Pass it
+  the `Firestore` instance from `firebase-admin/firestore`; it is the only place
+  `firebase-admin` enters the slice.
 - Types: `TmdbClientConfig`, `TmdbClient`, `RegionProviders`, `TraktClientConfig`,
   `TraktClient`, `TraktCalendarEntry`, `SyncEngine`, `SyncEngineConfig`,
   `SyncTitleInput`, `TitleCacheStore`, `SyncResult`, `ProviderTransition`,
@@ -144,14 +153,19 @@ const results = await engine.sync([
 
 ## Boundaries
 
-- Imports only `@vultus/shared/domain` (`Episode`, `WatchProvider`, `Region`,
-  `TitleCacheEntry`, `RegionAvailability`, `TitleType`, `WatchProviderType`,
-  etc.).
-- No persistence SDK in the engine — it writes through the injected,
-  domain-typed `TitleCacheStore` port. No `firebase-admin`,
+- The clients + engine import only `@vultus/shared/domain` (`Episode`,
+  `WatchProvider`, `Region`, `TitleCacheEntry`, `RegionAvailability`,
+  `TitleType`, `WatchProviderType`, etc.).
+- **No persistence SDK in the engine** — it writes through the injected,
+  domain-typed `TitleCacheStore` port: no `firebase-admin`,
   `@google-cloud/firestore`, `firebase-functions`, no
-  `@vultus/shared/firestore-schema`, no secret access. No HTTP runtime
+  `@vultus/shared/firestore-schema`, no secret access, no HTTP runtime
   dependency (native `fetch` only).
+- **`firebase-admin` enters the slice in exactly one file** —
+  `store/firestore-title-cache-store.ts`, the Admin-SDK adapter (spec 0009),
+  which also imports `@vultus/shared/firestore-schema` (path builders +
+  converters). Nothing else in the slice imports a Firebase SDK; the engine
+  stays SDK-free.
 
 ## Internal layout
 
@@ -169,6 +183,11 @@ const results = await engine.sync([
   the `TitleCacheStore` port (`store.ts`), and the contract types (`types.ts`)
   plus their specs. Depends on the `tmdb/` + `trakt/` client types in-slice and
   on `@vultus/shared/domain`; imports no Firebase SDK.
+- `store/` — the Admin-SDK persistence adapter (`firestore-title-cache-store.ts`)
+  implementing the engine's `TitleCacheStore` port against `firebase-admin`
+  Firestore via the spec-0005 `@vultus/shared/firestore-schema` path builders +
+  converters, plus its spec. **This is the only file in the slice that imports
+  `firebase-admin`**; it adds no business logic.
 
 Only the symbols re-exported from `src/index.ts` are public; DTOs, mappers, and
 the http transport are slice-internal.
@@ -180,12 +199,19 @@ The in-slice HTTP transport in `src/lib/shared/http.ts` (min-interval throttle,
 now **auth-agnostic** and shared by both clients in this slice — headers, base
 URL, and error factory are injected per client. It stays in this slice rather
 than being extracted to `shared/`, per the vertical-slice 3+-consumers rule
-(there is still exactly one consuming slice). The remaining follow-on is the
-**HTTP / callable function** (PLAN §6 item 12): wrap `createSyncEngine` with
-shared-secret auth, rate-limiting, an idempotency key, watchlist gathering, the
-Admin-SDK `TitleCacheStore` adapter, `apps/functions` wiring, and deploy. (The
-availability writes this engine makes are also what the `dispatch-notifications`
-slice — PLAN §6 item 14 — reacts to; that is a separate slice, not this one.)
+(there is still exactly one consuming slice).
+
+The HTTP sync function (PLAN §6 item 12) is **built** in spec 0009: the
+`apps/functions` `syncTitles` `onRequest` handler wires `createSyncEngine` to
+the Admin-SDK `createFirestoreTitleCacheStore(db)` adapter exported here, with
+shared-secret/Firebase-Auth dual auth, rate-limiting, a `collectionGroup`
+watchlist gather, and a staleness window. The remaining follow-ons are:
+
+- **#13 daily-sync cron** (`.github/workflows/daily-sync.yml`) — a GitHub
+  Actions schedule that `POST`s to `syncTitles` with the shared secret.
+- **#14 dispatch-notifications** — a separate slice that reacts to the
+  `title-cache` availability writes this engine makes, fanning out per-user
+  notifications. Not this slice.
 
 ## Testing
 

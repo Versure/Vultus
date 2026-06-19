@@ -41,13 +41,15 @@ export const config: SheriffConfig = {
     'apps/mobile': 'scope:mobile',
     'apps/functions': 'scope:functions',
 
-    // Libs expose their public API through a `src/index.ts` barrel. With
-    // enableBarrelLess that barrel folder is itself a module, so the
-    // scope/slice tag must be applied to `.../src` (not the lib root) for a
-    // runtime (value) cross-module import of the barrel — e.g. the app's lazy
-    // `import('@vultus/mobile/watchlist')` — to resolve to a *tagged* module
-    // rather than an untagged `src`. (Type-only imports are elided and never
-    // policed, which is why this only surfaced with the first runtime import.)
+    // Tag the lib `src` barrel folder, not the project root: with
+    // `enableBarrelLess` a lib's `src/index.ts` makes `src` its own module, so
+    // the source actually lives in (and must carry the tag on) `<lib>/src`.
+    // Tagging only the project root would leave `src` untagged (`noTag`), which
+    // silently disables scope/slice enforcement for the lib's real source and
+    // blocks tagged consumers (e.g. apps/functions importing the sync-titles
+    // barrel, or apps/mobile's lazy `import('@vultus/mobile/watchlist')`) from
+    // importing it. Apps have no `src` barrel, so their whole tree is one
+    // module (tagged above).
     'libs/shared/<name>/src': 'scope:shared',
 
     // Slice libs — tagged by glob so they inherit scope + slice on creation.
