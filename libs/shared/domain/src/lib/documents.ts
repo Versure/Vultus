@@ -70,6 +70,7 @@ export interface TitleMetadata {
 
 export interface TitleCacheEntry {
   type: TitleType;
+  traktId: number | null; // Trakt show id (tv only); null for movies and unresolved
   metadata: TitleMetadata;
   lastSyncedAt: string; // ISO 8601
 }

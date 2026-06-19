@@ -147,6 +147,7 @@ const _notificationDoc = {
 
 const _titleCacheEntry = {
   type: 'movie',
+  traktId: null,
   metadata: {
     title: 'Dune',
     overview: 'A noble family...',

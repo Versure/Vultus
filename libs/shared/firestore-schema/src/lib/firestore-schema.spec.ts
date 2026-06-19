@@ -160,9 +160,10 @@ describe('converters — round-trip identity', () => {
     ).toEqual(n);
   });
 
-  it('TitleCacheEntry: lastSyncedAt; metadata posterPath/releaseDate null', () => {
+  it('TitleCacheEntry: lastSyncedAt; metadata posterPath/releaseDate null; traktId null', () => {
     const t: TitleCacheEntry = {
       type: 'movie',
+      traktId: null,
       metadata: {
         title: 'Dune',
         overview: 'A boy.',
@@ -171,9 +172,30 @@ describe('converters — round-trip identity', () => {
       },
       lastSyncedAt: '2026-06-01T00:00:00.000Z',
     };
-    expect(
-      dataToTitleCache(simulateStored(titleCacheToData(t)) as never),
-    ).toEqual(t);
+    const result = dataToTitleCache(
+      simulateStored(titleCacheToData(t)) as never,
+    );
+    expect(result).toEqual(t);
+    expect(result.traktId).toBeNull();
+  });
+
+  it('TitleCacheEntry: traktId number round-trips', () => {
+    const t: TitleCacheEntry = {
+      type: 'tv',
+      traktId: 42,
+      metadata: {
+        title: 'Severance',
+        overview: 'A mysterious job.',
+        posterPath: '/poster.jpg',
+        releaseDate: '2022-02-18T00:00:00.000Z',
+      },
+      lastSyncedAt: '2026-06-01T00:00:00.000Z',
+    };
+    const result = dataToTitleCache(
+      simulateStored(titleCacheToData(t)) as never,
+    );
+    expect(result).toEqual(t);
+    expect(result.traktId).toBe(42);
   });
 
   it('RegionAvailability: providers + previousSnapshot pass through', () => {
