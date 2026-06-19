@@ -13,7 +13,6 @@
   // immediately, making long-running tasks (nx serve) appear to finish at once.
   // cmd.exe uses pnpm.cmd which waits on the child process correctly.
   "terminal.integrated.automationProfile.windows": {
-    "path": "cmd.exe",
-    "args": ["/d", "/c"]
+    "path": "cmd.exe"
   }
 }
