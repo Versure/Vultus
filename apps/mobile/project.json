@@ -56,7 +56,7 @@
       "defaultConfiguration": "production"
     },
     "dev": {
-      "executor": "@nx/run-commands",
+      "executor": "nx:run-commands",
       "options": {
         "commands": [
           "npx firebase emulators:start",
