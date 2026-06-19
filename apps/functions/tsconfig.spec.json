@@ -8,6 +8,7 @@
   },
   "include": [
     "vite.config.mts",
+    "vite.integration.config.mts",
     "src/**/*.test.ts",
     "src/**/*.spec.ts",
     "src/**/*.d.ts"

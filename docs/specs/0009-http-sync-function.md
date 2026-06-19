@@ -2,7 +2,7 @@
 number: 0009
 slug: http-sync-function
 title: Add the HTTP sync function wrapping the sync engine in apps/functions
-status: approved
+status: implementing
 slices: [slice:sync-titles]
 scopes: [scope:functions]
 created: 2026-06-19
@@ -108,8 +108,8 @@ Out of scope (each its own spec/slice):
 - **Episode / calendar sync** — out, exactly as in 0008. The engine uses Trakt
   only for `getShowTraktId`; no `getCalendar` / `getSeasonEpisodes` here.
 - **Deploy** — the workflow ends at a green merged PR; Firebase Functions deploy
-  + secret/param provisioning is manual (PLAN §7, specs README "Scope &
-  limitations").
+  - secret/param provisioning is manual (PLAN §7, specs README "Scope &
+    limitations").
 - **Watchmode fallback** (PLAN §9) — later.
 - **The engine internals** — unchanged. This spec wraps and wires the 0008
   engine; it does **not** modify the `createSyncEngine` contract.
@@ -124,8 +124,8 @@ Out of scope (each its own spec/slice):
 | functions (app)       | `apps/functions`             | `scope:functions`                      | **replace** placeholder handler with the sync `onRequest` |
 
 - **Tagging is by path glob in `sheriff.config.ts`** — `'apps/functions':
-  'scope:functions'` and `'libs/functions/<slice>': ['scope:functions',
-  'slice:<slice>']`. **This spec does not edit `sheriff.config.ts`.** The
+'scope:functions'` and `'libs/functions/<slice>': ['scope:functions',
+'slice:<slice>']`. **This spec does not edit `sheriff.config.ts`.** The
   `apps/functions` `project.json` `tags: []` is correct as-is — Sheriff tags are
   assigned by path, **not** by Nx `project.json` tags (see the config's header
   comment) — so nothing needs adding there.
@@ -164,12 +164,12 @@ The function is a **reader of watchlists** and a **writer of the global
 `title-cache` only** (via the engine's port + the rate-limit doc). It writes
 **no** `users/**` document.
 
-| PLAN §4 path                                 | Access    | By                                                                                  |
-| -------------------------------------------- | --------- | ----------------------------------------------------------------------------------- |
-| `users/{userId}/watchlist/{titleId}`         | **read**  | `collectionGroup('watchlist')` gather → distinct `{ tmdbId, type }`                 |
-| `title-cache/{tmdbId}`                        | r/w       | engine via the Admin-SDK `TitleCacheStore` adapter (`titleCacheDocPath`)            |
-| `title-cache/{tmdbId}/availability/{region}` | r/w       | engine via the adapter (`availabilityDocPath`)                                      |
-| `system/sync`                                | r/w       | the function's rate-limit / idempotency window (`lastRunAt`, `lastRunStartedAt`)    |
+| PLAN §4 path                                 | Access   | By                                                                               |
+| -------------------------------------------- | -------- | -------------------------------------------------------------------------------- |
+| `users/{userId}/watchlist/{titleId}`         | **read** | `collectionGroup('watchlist')` gather → distinct `{ tmdbId, type }`              |
+| `title-cache/{tmdbId}`                       | r/w      | engine via the Admin-SDK `TitleCacheStore` adapter (`titleCacheDocPath`)         |
+| `title-cache/{tmdbId}/availability/{region}` | r/w      | engine via the adapter (`availabilityDocPath`)                                   |
+| `system/sync`                                | r/w      | the function's rate-limit / idempotency window (`lastRunAt`, `lastRunStartedAt`) |
 
 - **Watchlist gather.** The watchlist doc shape (`libs/shared/domain`
   `WatchlistItem`, PLAN §4) carries `type: 'movie' | 'tv'` and `tmdbId: number`.
@@ -220,8 +220,8 @@ stays. The handler:
      Invalid → `403`.
   3. Neither header present → `401`.
 - **Rate limit (user path only):** read `system/sync.lastRunAt`; if `now -
-  lastRunAt < RATE_LIMIT_MS` (5 min) → `429` with a JSON body `{ error:
-  'rate_limited', retryAfterMs }`. The privileged path skips this check.
+lastRunAt < RATE_LIMIT_MS` (5 min) → `429` with a JSON body `{ error:
+'rate_limited', retryAfterMs }`. The privileged path skips this check.
 - **Gather:** `collectionGroup('watchlist')` → distinct `{ tmdbId, type }[]`.
 - **Staleness filter:** unless `force` (privileged), drop any title whose stored
   `title-cache.lastSyncedAt` is younger than `STALENESS_WINDOW_MS` (default ~20h).
@@ -273,12 +273,12 @@ Mapping (using `@vultus/shared/firestore-schema`):
   for each doc, key = the doc id (a `Region`), value =
   `dataToAvailability(doc.data() as RegionAvailabilityReadData)`.
 - `putEntry(tmdbId, entry)` → `db.doc(titleCacheDocPath(tmdbId)).set(
-  titleCacheToData(entry))` (the converter returns the `Date`-typed write shape;
+titleCacheToData(entry))` (the converter returns the `Date`-typed write shape;
   the Admin SDK coerces `Date` → `Timestamp` — never construct an SDK
   `Timestamp`).
 - `putAvailability(tmdbId, region, availability)` →
   `db.doc(availabilityDocPath(tmdbId, region)).set(availabilityToData(
-  availability))`.
+availability))`.
 
 (If the merged port is the consolidated `read`/`write` form, implement those
 method names over the same path builders + converters.) The adapter is exported
@@ -293,7 +293,7 @@ Defined in `apps/functions/src` (the deployable boundary that owns config):
 - `SYNC_SHARED_SECRET` — `defineSecret('SYNC_SHARED_SECRET')`; the cron's
   shared secret. Read via `.value()` **inside** the handler (not at module load).
 - The **TMDB v4 read token** and **Trakt client id** — `defineSecret(
-  'TMDB_READ_TOKEN')` / `defineString('TRAKT_CLIENT_ID')` (the Trakt client id is
+'TMDB_READ_TOKEN')` / `defineString('TRAKT_CLIENT_ID')` (the Trakt client id is
   not a secret per PLAN §5's secrets table, but treat both as configurable
   params); injected into `createTmdbClient({ readAccessToken })` /
   `createTraktClient({ clientId })`.
@@ -363,10 +363,10 @@ convention.
      injectable helper functions** (so they unit-test without the SDK), e.g. in
      `apps/functions/src/lib/`:
      - `auth.ts` — `classifyAuth(headers, secret, verifyToken)` → `'cron' |
-       'user' | null` (constant-time secret compare; token verify injected).
+'user' | null` (constant-time secret compare; token verify injected).
      - `gather.ts` — `dedupeTitles(items)` → distinct `{ tmdbId, type }[]`.
      - `staleness.ts` — `filterStale(titles, lastSyncedByTmdbId, now, windowMs,
-       force)` → titles to sync.
+force)` → titles to sync.
      - `rate-limit.ts` — `isRateLimited(lastRunAt, now, windowMs)` → boolean.
    - Replace `healthcheck` in `src/main.ts` with `syncTitles` (`onRequest`):
      init `admin` (once), declare the params, run auth → rate-limit → gather →
@@ -378,8 +378,8 @@ convention.
    - Add unit tests (`*.spec.ts`) for the pure helpers + a handler-wiring test
      that injects a **fake engine** and a **fake/mocked `db`**: assert the engine
      is called with the **deduped, staleness-filtered** union, that **no
-     `users/**` write occurs**, that the secret path bypasses the rate limit and
-     the user path is `429`'d when recent, and that `401`/`403`/`405` map
+     `users/**`write occurs**, that the secret path bypasses the rate limit and
+the user path is`429`'d when recent, and that `401`/`403`/`405` map
      correctly.
    - If `apps/functions` has a `README.md`, update it to describe the function;
      if it does not, do **not** invent one (only the lib-README rule is binding).
@@ -473,8 +473,7 @@ integration gate" below).
   → `429` and **engine NOT called**.
 - **No-auth → `401`; bad secret/token → `403`; non-POST → `405`.**
 - **Boundary assertion**: across all paths the fake `db` records **no write to
-  any `users/**` path** and **no notification write** — only `title-cache/**`
-  (via the store) and `system/sync`. This is the load-bearing boundary test.
+  any `users/**`path** and **no notification write** — only`title-cache/\*\*`(via the store) and`system/sync`. This is the load-bearing boundary test.
 - Engine errors for some titles are reflected in `errored`/`synced` counts; the
   handler still returns `200` (best-effort, per 0008's per-title isolation).
 
@@ -491,7 +490,7 @@ TMDB/Trakt HTTP transport **mocked/stubbed** (no live network, no secrets) but a
   correct set of distinct `{ tmdbId, type }` (a shared title is synced **once**).
 - **(b) Real round-trip through the spec-0005 converters.** After a pass the
   engine has written real `title-cache/{tmdbId}` + `title-cache/{tmdbId}/
-  availability/{region}` docs that read back through `dataToTitleCache` /
+availability/{region}` docs that read back through `dataToTitleCache` /
   `dataToAvailability` to the expected `TitleCacheEntry` (incl. `traktId`, number
   and null) and `RegionAvailability` — proving the adapter's path builders +
   converters work against real Firestore, not just a fake.
@@ -499,9 +498,8 @@ TMDB/Trakt HTTP transport **mocked/stubbed** (no live network, no secrets) but a
   sequence** against the same emulator persists the spec-0005 `previousSnapshot`
   transition correctly (pass 2 rolls pass 1's availability into
   `previousSnapshot`) — the round trip that a fake store cannot exercise.
-- **(d) Boundary, for real.** After the passes, **no `users/**` doc has been
-  written** (the seeded watchlist docs are unchanged, none created/mutated) and
-  `system/sync` **is** updated.
+- **(d) Boundary, for real.** After the passes, **no `users/**`doc has been
+written** (the seeded watchlist docs are unchanged, none created/mutated) and`system/sync` **is** updated.
 
 **This test is a CI gate, not a manual step.** It is **wired to run automatically
 in GitHub Actions** (the CI job starts the Firestore emulator, runs the
@@ -566,8 +564,7 @@ cannot run under Claude Code tools here.
 - [ ] **Boundary verifications (review-checked, like 0008):** (a) **no secret is
       read or written** — params declared by name, read via `.value()` at
       runtime, never `.env.local`, never logged; secret compared constant-time;
-      (b) **no `users/**` write and no notification write** — only `title-cache`
-      (via the engine port) and `system/sync`; (c) **the engine contract is
+      (b) **no `users/**`write and no notification write** — only`title-cache`    (via the engine port) and`system/sync`; (c) **the engine contract is
       unchanged** and the engine remains SDK-free.
 - [ ] PR description records the exact verification commands (both projects),
       confirms the no-secret / no-`users/**`-write / no-SDK-in-engine boundaries,

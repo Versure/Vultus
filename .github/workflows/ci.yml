@@ -38,6 +38,14 @@ jobs:
           node-version: 20
           cache: pnpm
 
+      - name: Set up Java
+        # The Firestore emulator is a Java process; the integration gate below
+        # runs it via `firebase emulators:exec`.
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -60,3 +68,13 @@ jobs:
       - name: Run all gates (push to main baseline)
         if: github.event_name == 'push'
         run: pnpm nx run-many -t lint test build --all --configuration=ci
+
+      # Emulator-backed integration gate (spec 0009). Runs on both pull_request
+      # and push so it's a true required gate on PRs to main. Needs NO secrets:
+      # the integration spec stubs the TMDB/Trakt HTTP transport. `firebase
+      # emulators:exec` boots only Firestore, sets FIRESTORE_EMULATOR_HOST for
+      # the wrapped command (un-skipping the suite and pointing the Admin SDK at
+      # the emulator credential-free), then tears the emulator down on exit. It
+      # exits non-zero if the wrapped command fails, failing this gate.
+      - name: Run emulator integration gate
+        run: pnpm exec firebase emulators:exec --only firestore --project vultus-cab62 "pnpm nx test-integration functions"
