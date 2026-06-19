@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mapWatchProviders, normalizeDate } from './mappers';
+import { mapWatchProviders, normalizeDate } from './tmdb-mappers';
 
 describe('normalizeDate', () => {
   it('coerces a date-only string to a UTC midnight ISO instant', () => {

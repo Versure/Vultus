@@ -9,13 +9,14 @@ import type {
   TitleType,
   WatchProvider,
 } from '@vultus/shared/domain';
-import { createHttpCore, NOT_FOUND } from './http';
+import { createHttpCore, NOT_FOUND } from '../shared/http';
 import {
   mapMovie,
   mapSeasonEpisodes,
   mapTvShow,
   mapWatchProviders,
-} from './mappers';
+} from './tmdb-mappers';
+import { TmdbError } from './tmdb-error';
 import type {
   TmdbMovieResponse,
   TmdbSeasonResponse,
@@ -70,12 +71,18 @@ export function createTmdbClient(config: TmdbClientConfig): TmdbClient {
 
   const language = config.language ?? DEFAULT_LANGUAGE;
   const core = createHttpCore({
-    readAccessToken: config.readAccessToken,
+    // The token lives only in this header value — never in url/path/logs/errors.
+    headers: {
+      Authorization: `Bearer ${config.readAccessToken}`,
+      Accept: 'application/json',
+    },
     fetch: fetchImpl,
     baseUrl: config.baseUrl ?? DEFAULT_BASE_URL,
     maxRetries: config.maxRetries ?? DEFAULT_MAX_RETRIES,
     minRequestIntervalMs:
       config.minRequestIntervalMs ?? DEFAULT_MIN_REQUEST_INTERVAL_MS,
+    errorFactory: (message, status, endpoint) =>
+      new TmdbError(`TMDB ${message}`, status, endpoint),
   });
 
   const langQuery = `language=${encodeURIComponent(language)}`;

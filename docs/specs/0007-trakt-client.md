@@ -2,7 +2,7 @@
 number: 0007
 slug: trakt-client
 title: Add a typed Trakt calendar client to the sync-titles functions slice
-status: approved
+status: done
 slices: [slice:sync-titles]
 scopes: [scope:functions]
 created: 2026-06-19
@@ -58,7 +58,7 @@ In scope:
   refactor (hard constraint — see Definition of done and Risks).
 - **Trakt auth via an injected client id (api key)**: requests send
   `trakt-api-key: <clientId>` + `trakt-api-version: 2` + `Content-Type:
-  application/json`. The client id is a **config parameter**, never read from
+application/json`. The client id is a **config parameter**, never read from
   env/secret by this client. **No OAuth** (no user access token, no Trakt-side
   user watchlist).
 - **HTTP via the native global `fetch`** (Node 20+), **injectable** for tests
@@ -105,8 +105,8 @@ Out of scope (each belongs to a later spec or another source):
 
 ## Affected slices & Sheriff tags
 
-| Project              | Path                         | Sheriff tags                           |
-| -------------------- | ---------------------------- | -------------------------------------- |
+| Project               | Path                         | Sheriff tags                           |
+| --------------------- | ---------------------------- | -------------------------------------- |
 | functions-sync-titles | `libs/functions/sync-titles` | `scope:functions`, `slice:sync-titles` |
 
 - The lib **already exists** (created by spec 0006) and is tagged
@@ -141,8 +141,8 @@ use them:
 
 | PLAN §4 / sync-engine need                                                       | This client returns                                                                 |
 | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Fill `title-cache/{tmdbId}.metadata.traktId` (`Title.traktId`, `number \| null`) | `getShowTraktId(tmdbId)` → `number \| null`                                          |
-| Detect newly-aired episodes for tracked shows (the `episode-aired` notification) | `getCalendar(startDate, days)` → `TraktCalendarEntry[]` (show identity + `Episode`)  |
+| Fill `title-cache/{tmdbId}.metadata.traktId` (`Title.traktId`, `number \| null`) | `getShowTraktId(tmdbId)` → `number \| null`                                         |
+| Detect newly-aired episodes for tracked shows (the `episode-aired` notification) | `getCalendar(startDate, days)` → `TraktCalendarEntry[]` (show identity + `Episode`) |
 
 The calendar entries carry a **show identity** (`traktId`, optional `tmdbId`,
 `showTitle`) so the sync engine can match an entry to a tracked title by id, and
@@ -266,11 +266,11 @@ slice. Both never embed the credential in `message`/`endpoint`.
     passes the window explicitly.
   - **Response:** an array of entries, each
     `{ first_aired, episode: { season, number, title, ids }, show: { title,
-    year, ids: { trakt, slug, tvdb, imdb, tmdb } } }`.
+year, ids: { trakt, slug, tvdb, imdb, tmdb } } }`.
   - **Mapping → `TraktCalendarEntry`:** `show.ids.trakt`→`traktId`,
     `show.ids.tmdb`→`tmdbId` (`number | null`; Trakt may return `null`),
     `show.title`→`showTitle`, and `{ episode.season → season,
-    episode.number → episode, first_aired → airDate }` → the domain `Episode`.
+episode.number → episode, first_aired → airDate }` → the domain `Episode`.
     Returns `TraktCalendarEntry[]` (**empty array** when nothing airs in the
     window). This method does **not** 404 in normal operation; a `404` (if
     Trakt ever returns one for this path) maps to **`[]`**.
@@ -329,7 +329,7 @@ sentinel / status→error behavior. Concretely:
   core config, or a `buildHeaders()` hook). TMDB passes
   `{ Authorization: 'Bearer <token>', Accept: 'application/json' }`; Trakt passes
   `{ 'trakt-api-key': '<clientId>', 'trakt-api-version': '2', 'Content-Type':
-  'application/json' }`.
+'application/json' }`.
 - The core must accept an **injectable error constructor / error factory** so it
   throws `TmdbError` for the TMDB client and `TraktError` for the Trakt client
   (the core stays error-type-agnostic), OR keep the throw at the client layer by
@@ -470,8 +470,8 @@ Trakt unit tests (lots) must cover:
   - Keep timing fast (small `minRequestIntervalMs` / short `Retry-After` / fake
     timers).
 - **Required headers**: assert every Trakt request sends `trakt-api-key:
-  <clientId>` **and** `trakt-api-version: 2` (and `Content-Type:
-  application/json`), and **no** `Authorization` header.
+<clientId>` **and** `trakt-api-version: 2` (and `Content-Type:
+application/json`), and **no** `Authorization` header.
 - **Client id never leaked**: assert the client id does not appear in any
   `TraktError.message`/`.endpoint`, the request URL/path, and (if a console spy
   is used) is not logged.
