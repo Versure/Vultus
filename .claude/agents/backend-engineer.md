@@ -30,6 +30,10 @@ the **spec path**, the **worktree path**, and **your assigned task subset**
 - **Never read/write `.env.local` or any secret.** If you'd need a secret in a
   place it shouldn't be, stop and report it.
 - **Don't commit or push** — the orchestrator handles git.
+- **Keep the lib README current.** When you change a lib's public API, behavior,
+  or boundaries, update that lib's `README.md` in the same change — never leave
+  the generated Nx scaffold text. State what the lib is, its barrel exports, a
+  short usage note, and its Sheriff scope/slice boundaries.
 
 ## Backend domain guidance
 

@@ -51,6 +51,12 @@ architecture and decisions; read it before non-trivial work.
   and Prettier on staged files; a commit that breaks lint, the module boundaries,
   or formatting is blocked locally. Don't bypass with `--no-verify` — fix the
   underlying issue.
+- **Library READMEs stay current.** Every lib (`libs/**`) has a `README.md`. When
+  you change a lib's public API, behavior, or boundaries, update its `README.md`
+  in the **same change** — never leave the generated Nx scaffold text behind. A
+  lib README should state what the lib is, its public surface (the barrel
+  exports), a short usage note, and its Sheriff scope/slice boundaries. This is
+  part of the definition of done for any PR touching a lib.
 
 ## Development workflow — spec-driven (no GitHub issues)
 

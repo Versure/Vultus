@@ -25,7 +25,7 @@ PushNotifications API from a component); the **native** Capacitor setup
   `apps/mobile` routing module where slices register routes. Don't run
   `npm/pnpm install` or `nx generate` (they race the lockfile and Nx cache) —
   if you need a dependency, a generated lib, or a new route registered,
-  **report it** for the orchestrator to do. *Exception:* when assigned
+  **report it** for the orchestrator to do. _Exception:_ when assigned
   `shared/ui-kit` as a **sequential foundation step**, you own that lib's own
   source and its barrel `index.ts`.
 - **Work in the given worktree** via its absolute path; never touch the primary
@@ -37,6 +37,11 @@ PushNotifications API from a component); the **native** Capacitor setup
 - **Never read/write `.env.local` or any secret.** Stop and report if you'd need
   one in the wrong place.
 - **Don't commit or push** — the orchestrator handles git.
+- **Keep the lib README current.** When you change a lib's public API, behavior,
+  or boundaries (incl. `shared/ui-kit`), update that lib's `README.md` in the
+  same change — never leave the generated Nx scaffold text. State what the lib
+  is, its barrel exports, a short usage note, and its Sheriff scope/slice
+  boundaries.
 
 ## Frontend domain guidance
 

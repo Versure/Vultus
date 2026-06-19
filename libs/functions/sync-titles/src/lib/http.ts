@@ -1,6 +1,13 @@
 // Internal fetch/retry/throttle core for the TMDB client. Not exported from the
 // barrel. Right-sized for a personal daily sync: serialized requests (effective
 // concurrency ~1), 429 retried honoring `Retry-After`, no 5xx retry.
+//
+// Deferral note (spec 0006, YAGNI): this generic transport (min-interval
+// throttle, 429/Retry-After retry, 404 sentinel, status -> TmdbError mapping) is
+// intentionally slice-internal and TMDB-auth-specific for now. When the Trakt
+// calendar client lands in this same slice it can reuse this transport by making
+// the Authorization header injectable, rather than duplicating it. It stays
+// in-slice (not hoisted to shared/) per the vertical-slice 3+-consumers rule.
 
 import { TmdbError } from './tmdb-error';
 

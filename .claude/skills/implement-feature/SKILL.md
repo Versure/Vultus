@@ -12,6 +12,7 @@ working on `main`. (Project-wide rules — shell, secrets, architecture, DoD —
 in `CLAUDE.md`.)
 
 ## Conventions
+
 - Feature branch `feat/NNNN-slug`, one worktree per feature.
 - Auto-fix loops (review, QA, pipeline) bounded to **2 retries** (override via
   `$ARGUMENTS`); state "Attempt N/2" before each retry. On exhaustion, make the
@@ -19,15 +20,17 @@ in `CLAUDE.md`.)
   merge — human gates are PR review + merge.
 
 ## Concurrency model (read before fanning out)
+
 Parallel agents in one worktree are safe only on **physically disjoint files**.
 Sheriff is an import linter — it does **not** make files disjoint. Therefore:
+
 - **You (orchestrator), not the agents, own every shared/root file**:
   `package.json`+lockfile, `nx.json`, `tsconfig*.json`, `project.json`,
   `firestore.rules`/`indexes`, `.github/workflows/*`, registration barrels, and
   the `apps/*` route/export registration. Edit these **sequentially**. Run all
   `npm install` / `nx generate` yourself, serially (they race the lockfile + Nx
   cache). **Populating a shared lib** (`shared/domain`, `shared/firestore-schema`,
-  `shared/ui-kit`) — its source *and* barrel — is foundation work, run by one
+  `shared/ui-kit`) — its source _and_ barrel — is foundation work, run by one
   agent alone, never fanned out.
 - **Disjointness assertion (mechanical, not judgment):** each `[parallel]` task
   in the spec carries a **file manifest** (prefer one slice dir per task). Before
@@ -38,12 +41,14 @@ Sheriff is an import linter — it does **not** make files disjoint. Therefore:
 ## Steps
 
 ### 1. Select & read the spec
+
 - From `$ARGUMENTS` (`NNNN`/slug) or list `main` specs with `status: approved`
   (treat a merged spec missing the field as approved). Read it fully — Scope,
   Affected slices, Public types, Data model, **task graph + manifests**, Test
   plan, DoD.
 
 ### 2. Create the worktree
+
 - Branch→dir `/`→`-`. Resolve an absolute, worktree-invariant path:
   ```powershell
   $root = (git rev-parse --path-format=absolute --git-common-dir) -replace '\.git$',''
@@ -57,21 +62,23 @@ Sheriff is an import linter — it does **not** make files disjoint. Therefore:
 - **Bootstrap check:** if no `nx.json` exists, go to step 3a.
 
 ### 3. Decompose & route (you)
+
 - Split tasks into **[sequential foundation]** — new-slice `nx generate`,
   installs, root/config wiring, `firestore.rules`/`indexes`, CI, shared-lib
   population, `apps/*` registration — and **[parallel]** slice-internal source
-  + tests (per the manifests).
+  - tests (per the manifests).
 - **Route by Sheriff scope tag:** `scope:functions` source → **backend-engineer**;
-  `scope:mobile` source + in-app Capacitor *plugin usage* + `shared/ui-kit` →
-  **frontend-engineer**; Nx/Sheriff/CI/Firebase config + *native* Capacitor
+  `scope:mobile` source + in-app Capacitor _plugin usage_ + `shared/ui-kit` →
+  **frontend-engineer**; Nx/Sheriff/CI/Firebase config + _native_ Capacitor
   (`capacitor.config.ts`, icon/splash, APK) → **infrastructure-engineer**;
   `scope:shared` non-UI (`shared/domain`, `shared/firestore-schema`) + glue →
-  **feature-implementer**. *Tiebreakers:* a change spanning `firestore.rules`
+  **feature-implementer**. _Tiebreakers:_ a change spanning `firestore.rules`
   (infra) + schema/converters runs as sequential foundation; native Capacitor →
   infra, plugin calls in a component → frontend. Each agent gets the spec path,
   the absolute `$wt`, and its task subset (+ manifest).
 
 ### 3a. Bootstrap mode (first features only)
+
 - Workspace bootstrap (Nx/Sheriff/CI/Firebase, PLAN §6.1–6.4) is sequential and
   all shared/root files: run a **single infrastructure-engineer**, no fan-out.
 - Commit hygiene: ensure `.gitignore` (incl. `node_modules/`, `.nx/`) exists
@@ -82,6 +89,7 @@ Sheriff is an import linter — it does **not** make files disjoint. Therefore:
   to enable branch protection once the CI feature merges.
 
 ### 4. Implement
+
 - Do **foundation** first, sequentially. Then run the disjointness assertion and
   **fan out** routed specialists in parallel (all calls in one message), each
   confined to its manifest and forbidden from shared/root files or
@@ -90,30 +98,39 @@ Sheriff is an import linter — it does **not** make files disjoint. Therefore:
   its manifest: re-dispatch any slice whose agent failed/returned null or
   reported success but wrote nothing. (A global `git status` can't attribute
   files per slice or catch a clobber — trust the manifests + reported lists.)
+- **Lib README currency is part of done** (CLAUDE.md): any slice that creates a
+  lib or changes a lib's public API/behavior/boundaries must update that lib's
+  `README.md` in the same change — never leave the generated Nx scaffold text.
+  Instruct each implementer accordingly and verify on fan-in; the feature-reviewer
+  flags a stale/scaffold README as a finding.
 
 ### 5. Auto-review → bounded rework
+
 - Spawn **feature-reviewer** on the diff (`git -C $wt diff main...HEAD`). For
   `NEEDS_REWORK`, dispatch the appropriate specialist(s) by scope tag (you handle
   shared-file fixes), re-review, up to the bound; then record open findings.
 
 ### 6. QA → bounded fix
+
 - Spawn **qa-runner**; it returns each gate's raw result. **You make the
-  skip-vs-fail call:** a gate the spec *required* (e.g. named e2e flows) that was
+  skip-vs-fail call:** a gate the spec _required_ (e.g. named e2e flows) that was
   `SKIPPED` is a **blocking** unmet DoD gate, not an acceptable skip (only
   genuinely-not-bootstrapped tooling is an OK skip). For `FAIL`/unmet, dispatch
   the relevant specialist with details, re-run QA, up to the bound.
 
 ### 7. Open the PR
+
 - Flip the spec to `status: done` **in the diff** by reading the frontmatter and
   setting `status:` (inserting it if absent — don't assume a line exists).
   Merging marks it done. Commit all work, push `feat/NNNN-slug`.
 - `gh pr create --base main` referencing the spec, summarizing the change, with a
   screenshot note for UI (`--draft` if any loop hit its bound or a required gate
   is unmet). Label best-effort: `gh label create needs-human --color D93F0B
-  --force 2>$null`; `gh pr edit <pr> --add-label needs-human 2>$null` when
+--force 2>$null`; `gh pr edit <pr> --add-label needs-human 2>$null` when
   surfacing to the human.
 
 ### 8. Watch the pipeline → bounded fix
+
 - `gh pr checks <pr>` exit codes: `0` pass; `8` pending (keep watching); `1` =
   a check failed **or** no checks exist — disambiguate via the stderr "no checks
   reported" message (none → CI not set up → **skip and note**; else a real
@@ -124,6 +141,7 @@ Sheriff is an import linter — it does **not** make files disjoint. Therefore:
   commit, push. Up to the bound.
 
 ### 9. Report
+
 - Report the PR URL, what was built, QA result, unresolved items. The user
   reviews and merges manually; comments or a `needs-human` draft → `/rework-feature`.
 - Leave the worktree for rework; remove after merge: `git worktree remove --force $wt`.

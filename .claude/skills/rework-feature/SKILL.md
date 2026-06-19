@@ -11,6 +11,7 @@ and **qa-runner** — driven by PR comments (or a surfaced `needs-human` draft)
 instead of a fresh spec. (Project-wide rules are in `CLAUDE.md`.)
 
 ## Conventions
+
 - Operates on a `feat/NNNN-slug` branch / its PR; pushes to the same branch.
 - The **concurrency model is identical to implement-feature**: you own all
   shared/root files; parallel agents are confined to disjoint slice files and
@@ -20,6 +21,7 @@ instead of a fresh spec. (Project-wide rules are in `CLAUDE.md`.)
 ## Steps
 
 ### 1. Identify the PR + worktree
+
 - From `$ARGUMENTS` (PR number/branch) or the current branch; else list open
   feature PRs (`gh pr list`) and ask.
 - Resolve the absolute worktree path (`$wt`, dir `feat-NNNN-slug`):
@@ -32,6 +34,7 @@ instead of a fresh spec. (Project-wide rules are in `CLAUDE.md`.)
   the branch exists, `git worktree add --force $wt feat/NNNN-slug`.
 
 ### 2. Pull the work to do — two sources
+
 - (a) Human feedback: `gh pr view <pr> --json comments,reviews,body` plus
   `gh api "repos/{owner}/{repo}/pulls/<pr>/comments"` for inline threads
   (substitute the real PR number).
@@ -41,6 +44,7 @@ instead of a fresh spec. (Project-wide rules are in `CLAUDE.md`.)
 - Consolidate into a concrete change list; ask the user if anything is ambiguous.
 
 ### 3. Implement the fixes
+
 - Map each item to the slice/file it affects and **route by scope tag** (same
   routing + tiebreakers as implement-feature §3): `scope:functions` →
   **backend-engineer**, `scope:mobile`/`shared/ui-kit` → **frontend-engineer**,
@@ -48,26 +52,33 @@ instead of a fresh spec. (Project-wide rules are in `CLAUDE.md`.)
   `scope:shared` non-UI/glue → **feature-implementer**. **You** apply shared/root
   fixes yourself. Parallel only across disjoint slices (assert manifests first);
   sequential where they share files.
+- **Keep lib READMEs current** (CLAUDE.md DoD): if a fix changes a lib's public
+  API/behavior/boundaries, update that lib's `README.md` in the same change —
+  never leave the generated Nx scaffold text.
 
 ### 4. Auto-review → bounded rework
+
 - Spawn **feature-reviewer** on the updated diff; dispatch the relevant specialist
   for blocking findings, re-review, up to the bound.
 
 ### 5. QA → bounded fix
+
 - Spawn **qa-runner**; **you make the skip-vs-fail call** against the spec's DoD.
   On `FAIL`/unmet gate, dispatch the relevant specialist with details, re-run, up
   to the bound.
 
 ### 6. Push & watch the pipeline
+
 - Commit and push to the **same** `feat/NNNN-slug` branch.
 - `gh pr checks <pr>` (exit `0` pass / `8` pending / `1` fail-or-none —
   disambiguate via "no checks reported" / `4`+network = auth, stop). If checks
   exist, `gh pr checks <pr> --watch --interval 30`; on a real failure fetch
   `gh run view <id> --log-failed` (id via `gh run list --branch feat/NNNN-slug
-  -L 1 --json databaseId`), fix via the relevant specialist, push, re-watch — up
+-L 1 --json databaseId`), fix via the relevant specialist, push, re-watch — up
   to the bound. Optionally reply to / resolve addressed threads.
 
 ### 7. Report
+
 - If the PR was a draft and everything now passes, mark it ready and clear the
   flag: `gh pr ready <pr>`; `gh pr edit <pr> --remove-label needs-human 2>$null`.
   If a loop hit its bound again, keep it a draft with `needs-human`.
