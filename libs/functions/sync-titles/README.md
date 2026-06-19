@@ -1,11 +1,14 @@
 # functions-sync-titles
 
 The `sync-titles` functions slice (`scope:functions`, `slice:sync-titles`) — the
-first `libs/functions/*` slice. It contains two typed REST clients: a TMDB v3
+first `libs/functions/*` slice. It contains two typed REST clients — a TMDB v3
 client (streaming availability + metadata + episodes) and a Trakt API v2
-calendar client (upcoming/aired episodes). Both run over a single in-slice HTTP
-transport. The sync engine that orchestrates them is a follow-on spec
-(PLAN §6 items 11–12) that will live in this same slice.
+calendar client (upcoming/aired episodes), both over a single in-slice HTTP
+transport — and the **title-cache sync engine** (spec 0008) that orchestrates
+them: it refreshes `title-cache` metadata + per-region availability and detects
+provider transitions against the previous snapshot, writing through an injected,
+Firebase-free persistence port. The HTTP/callable function that wraps the engine
+is a follow-on spec (PLAN §6 item 12).
 
 ## Public API
 
@@ -24,8 +27,16 @@ Imported from `@vultus/functions/sync-titles`:
     to tracked titles is the sync engine's job).
   - `getShowTraktId(tmdbId)` → `Promise<number | null>` — resolve a TMDB show id
     to its Trakt show id (no match / `404` → `null`).
+- `createSyncEngine(config: SyncEngineConfig): SyncEngine` — factory returning a
+  sync engine with one method:
+  - `sync(titles: SyncTitleInput[])` → `Promise<SyncResult[]>` — runs one sync
+    pass over the caller-supplied `{ tmdbId, type }[]`, writing refreshed
+    metadata + per-region availability and returning a structured per-title
+    result with the detected transitions.
 - Types: `TmdbClientConfig`, `TmdbClient`, `RegionProviders`, `TraktClientConfig`,
-  `TraktClient`, `TraktCalendarEntry`.
+  `TraktClient`, `TraktCalendarEntry`, `SyncEngine`, `SyncEngineConfig`,
+  `SyncTitleInput`, `TitleCacheStore`, `SyncResult`, `ProviderTransition`,
+  `SyncOutcome`.
 - Errors: `TmdbError`, `TraktError` (kept distinct — each carries `status` +
   `endpoint`, neither embeds its credential).
 
@@ -74,11 +85,73 @@ calendar entry missing `first_aired`/`episode.season`/`episode.number` is
 string throws a plain `TypeError` before any fetch — a programming error, not an
 HTTP failure) and clamps `days` into `[1, 33]` (`Math.trunc` first).
 
+### The sync engine
+
+`createSyncEngine({ tmdb, trakt, store, now? })` runs one sync pass. All
+dependencies are **injected**, mirroring the client factories:
+
+- `tmdb` / `trakt` — the `TmdbClient` / `TraktClient` above (or any object with
+  the same method shapes).
+- `store` — a `TitleCacheStore`: the Firebase-free persistence port the engine
+  writes through. It is **domain-typed** (`@vultus/shared/domain`) and keys on
+  `tmdbId` / `Region` — the exact PLAN §4 `title-cache` keys — with four methods:
+  `getEntry(tmdbId)`, `getAvailability(tmdbId)`, `putEntry(tmdbId, entry)`,
+  `putAvailability(tmdbId, region, availability)`. The engine imports **no**
+  Firebase SDK; the real Admin-SDK adapter is the HTTP-function spec's (#12) thin
+  wiring layer over `titleCacheDocPath` / `availabilityDocPath` + the spec-0005
+  converters.
+- `now?` — an injectable clock for deterministic `lastSyncedAt` and transition
+  timestamps. Defaults to `() => new Date().toISOString()`.
+
+Per input `{ tmdbId, type }`, in order: fetch metadata (`getMovie` for movies,
+`getTvShow` for tv) — a `null` (TMDB 404) is a clean **skip** (no write); for
+**tv only**, resolve `getShowTraktId(tmdbId)` onto the entry's `traktId`
+(movies never call it — `traktId` stays `null`); write the entry; then fetch
+`getWatchProviders` and, per returned region, detect transitions and write the
+rolled availability.
+
+**Transition baseline + snapshot roll.** Transitions are detected by diffing the
+freshly fetched providers (`next`) against the **stored current `providers`**
+(`prev`; absent → `[]`), keyed by `providerId`: a `providerId` only in `next` is
+`added`, only in `prev` is `removed`, in both is unchanged (presence only — a
+bucket change like flatrate→rent yields no transition in v1). The written
+`previousSnapshot` is set to **that prior `providers`** (not the stored
+`previousSnapshot`), so the snapshot rolls forward by exactly one pass. The
+first-ever sync uses `prev = []` (every provider `added`, `previousSnapshot`
+written `[]`).
+
+**Per-title error isolation.** Any throw for one title (`TmdbError`/`TraktError`
+— `errorStatus` captured from its `status` — or any other error, including a
+store-write failure) is caught and recorded as that title's
+`outcome: 'error'` with a credential-free `reason`; the batch continues. A title
+that errors after its entry write is a partial success recorded as `'error'`.
+
+**Boundary: no notifications, no episodes.** The engine writes **only**
+`title-cache` entry + availability through the port. It writes no `users/**`
+document, no notification, and does not fetch the Trakt calendar or season
+episodes — those are #12 (HTTP function) / #14 (`dispatch-notifications`)
+concerns that **consume** the availability writes this engine makes.
+
+```ts
+import { createSyncEngine } from '@vultus/functions/sync-titles';
+
+const engine = createSyncEngine({ tmdb, trakt, store });
+const results = await engine.sync([
+  { tmdbId: 603, type: 'movie' },
+  { tmdbId: 1396, type: 'tv' },
+]);
+```
+
 ## Boundaries
 
-- Imports only `@vultus/shared/domain` (`Episode`, etc.).
-- No persistence, no `@vultus/shared/firestore-schema`, no `firebase-functions`,
-  no secret access. No HTTP runtime dependency (native `fetch` only).
+- Imports only `@vultus/shared/domain` (`Episode`, `WatchProvider`, `Region`,
+  `TitleCacheEntry`, `RegionAvailability`, `TitleType`, `WatchProviderType`,
+  etc.).
+- No persistence SDK in the engine — it writes through the injected,
+  domain-typed `TitleCacheStore` port. No `firebase-admin`,
+  `@google-cloud/firestore`, `firebase-functions`, no
+  `@vultus/shared/firestore-schema`, no secret access. No HTTP runtime
+  dependency (native `fetch` only).
 
 ## Internal layout
 
@@ -91,6 +164,11 @@ HTTP failure) and clamps `days` into `[1, 33]` (`Math.trunc` first).
   mappers (`trakt-mappers.ts`), and error (`trakt-error.ts`) plus their specs.
 - `shared/` — the auth-agnostic HTTP transport (`http.ts`) consumed by both
   clients (imported as `../shared/http`).
+- `engine/` — the title-cache sync engine: the factory + orchestration
+  (`sync-engine.ts`), the pure transition-detection function (`transitions.ts`),
+  the `TitleCacheStore` port (`store.ts`), and the contract types (`types.ts`)
+  plus their specs. Depends on the `tmdb/` + `trakt/` client types in-slice and
+  on `@vultus/shared/domain`; imports no Firebase SDK.
 
 Only the symbols re-exported from `src/index.ts` are public; DTOs, mappers, and
 the http transport are slice-internal.
@@ -103,8 +181,11 @@ now **auth-agnostic** and shared by both clients in this slice — headers, base
 URL, and error factory are injected per client. It stays in this slice rather
 than being extracted to `shared/`, per the vertical-slice 3+-consumers rule
 (there is still exactly one consuming slice). The remaining follow-on is the
-**sync engine + HTTP function** (PLAN §6 items 11–12): orchestrate both clients,
-compute transitions against `previousSnapshot`, and persist to `title-cache`.
+**HTTP / callable function** (PLAN §6 item 12): wrap `createSyncEngine` with
+shared-secret auth, rate-limiting, an idempotency key, watchlist gathering, the
+Admin-SDK `TitleCacheStore` adapter, `apps/functions` wiring, and deploy. (The
+availability writes this engine makes are also what the `dispatch-notifications`
+slice — PLAN §6 item 14 — reacts to; that is a separate slice, not this one.)
 
 ## Testing
 

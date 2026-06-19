@@ -2,7 +2,7 @@
 number: 0008
 slug: sync-engine
 title: Add the title-cache sync engine to the sync-titles functions slice
-status: approved
+status: done
 slices: [slice:sync-titles]
 scopes: [scope:functions, scope:shared]
 created: 2026-06-19
@@ -126,11 +126,11 @@ Out of scope (each belongs to a later spec or another slice):
 
 ## Affected slices & Sheriff tags
 
-| Project                 | Path                           | Sheriff tags                           |
-| ----------------------- | ------------------------------ | -------------------------------------- |
-| functions-sync-titles   | `libs/functions/sync-titles`   | `scope:functions`, `slice:sync-titles` |
-| shared domain (edit)    | `libs/shared/domain`           | `scope:shared`                         |
-| shared firestore-schema (edit) | `libs/shared/firestore-schema` | `scope:shared`               |
+| Project                        | Path                           | Sheriff tags                           |
+| ------------------------------ | ------------------------------ | -------------------------------------- |
+| functions-sync-titles          | `libs/functions/sync-titles`   | `scope:functions`, `slice:sync-titles` |
+| shared domain (edit)           | `libs/shared/domain`           | `scope:shared`                         |
+| shared firestore-schema (edit) | `libs/shared/firestore-schema` | `scope:shared`                         |
 
 - `functions-sync-titles` **already exists** (spec 0006) and is tagged
   `scope:functions` + `slice:sync-titles` **automatically by
@@ -145,7 +145,7 @@ Out of scope (each belongs to a later spec or another slice):
     terms of it** — but the **recommended** design keeps the port in pure domain
     terms, so the engine likely imports only `@vultus/shared/domain`. The
     `scope:functions → scope:shared` rule (`'scope:functions': ['scope:shared',
-    'scope:functions']`) permits both. The same-slice import of the existing TMDB
+'scope:functions']`) permits both. The same-slice import of the existing TMDB
     / Trakt client types within `libs/functions/sync-titles` is in-slice (no
     boundary crossed).
   - The engine must **NOT** import `scope:mobile`, any other slice, or
@@ -172,10 +172,10 @@ The engine **writes** to the PLAN §4 `title-cache` collection **through the
 injected `TitleCacheStore` port** (the port's Admin-SDK implementation, which
 actually calls Firestore, is #12). The shapes written are exactly spec 0005's:
 
-| PLAN §4 path                                    | Domain type          | Written by the engine                                                                 |
-| ----------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------- |
-| `title-cache/{tmdbId}`                          | `TitleCacheEntry`    | `{ type, metadata, traktId, lastSyncedAt }` — refreshed metadata + (tv) resolved `traktId` + `now()` |
-| `title-cache/{tmdbId}/availability/{region}`    | `RegionAvailability` | `{ providers, previousSnapshot, lastSyncedAt }` — new providers, rolled snapshot, `now()` |
+| PLAN §4 path                                 | Domain type          | Written by the engine                                                                                |
+| -------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------- |
+| `title-cache/{tmdbId}`                       | `TitleCacheEntry`    | `{ type, metadata, traktId, lastSyncedAt }` — refreshed metadata + (tv) resolved `traktId` + `now()` |
+| `title-cache/{tmdbId}/availability/{region}` | `RegionAvailability` | `{ providers, previousSnapshot, lastSyncedAt }` — new providers, rolled snapshot, `now()`            |
 
 **Domain change (decision 4):** add `traktId: number | null` to
 **`TitleCacheEntry`** in `libs/shared/domain/src/lib/documents.ts`. This forces a
@@ -183,8 +183,7 @@ matching `shared/firestore-schema` change: `TitleCacheReadData` /
 `TitleCacheWriteData` gain `traktId: number | null` (a plain **non-timestamp**
 field that passes straight through `titleCacheToData` / `dataToTitleCache`
 unchanged — like `type`), and the firestore-schema round-trip test for
-`TitleCacheEntry` gains `traktId` coverage. See Public types / APIs and decision
-4.
+`TitleCacheEntry` gains `traktId` coverage. See Public types / APIs and decision 4.
 
 No new collections, indexes, or security rules are created. The
 `previousSnapshot` field on `RegionAvailability` already exists (spec 0003/0005)
@@ -319,7 +318,7 @@ export interface SyncResult {
 Per input title `{ tmdbId, type }`, in order:
 
 1. **Metadata fetch.** `type === 'movie'` → `tmdb.getMovie(tmdbId)`; `type ===
-   'tv'` → `tmdb.getTvShow(tmdbId)`. **A `null` (TMDB 404) →** the title is
+'tv'` → `tmdb.getTvShow(tmdbId)`. **A `null` (TMDB 404) →** the title is
    **`skipped`** (`outcome: 'skipped'`, `reason: 'title not found in TMDB'`); no
    write occurs and processing moves to the next title. (Rationale: with no
    metadata there is no entry to refresh; a 404 is a clean skip, not an error.)
@@ -328,9 +327,9 @@ Per input title `{ tmdbId, type }`, in order:
    `traktId`. If `type === 'movie'`, **do not call** `getShowTraktId`; `traktId`
    is `null`.
 3. **Write the entry.** `store.putEntry(tmdbId, { type, metadata, traktId,
-   lastSyncedAt: now() })`.
+lastSyncedAt: now() })`.
 4. **Availability fetch + per-region transition detection.** `tmdb
-   .getWatchProviders(tmdbId, type)` → `RegionProviders | null`. **`null` (404)**
+.getWatchProviders(tmdbId, type)` → `RegionProviders | null`. **`null` (404)**
    → no availability write for this title; the title is still counted `synced`
    (its metadata was written) with `transitions: []` (`reason` optionally noting
    "no watch providers"). For a non-null map, **for each region key present**
@@ -349,7 +348,7 @@ Per input title `{ tmdbId, type }`, in order:
        changed bucket, v1 keys transitions on provider presence by `providerId`
        — note in Risks).
    - **Write the rolled availability:** `store.putAvailability(tmdbId, region, {
-     providers: next, previousSnapshot: prev, lastSyncedAt: now() })`. The new
+providers: next, previousSnapshot: prev, lastSyncedAt: now() })`. The new
      `previousSnapshot` is **the prior `providers`** (the value transition
      detection diffed against), so the next pass diffs `next` against this pass's
      `next` — the snapshot rolls forward by exactly one pass.
@@ -360,7 +359,7 @@ Per input title `{ tmdbId, type }`, in order:
 **Transition baseline decision (`providers` vs `previousSnapshot`).** Transitions
 are computed **against the stored `providers`** (this title-region's last-known
 current state), and **`previousSnapshot` is written to be the prior `providers`**.
-Rationale: `previousSnapshot` is the *output* of the roll (the "what it was before
+Rationale: `previousSnapshot` is the _output_ of the roll (the "what it was before
 this write" record spec 0003 names it for), not the diff baseline. Diffing
 `next` against the stored `previousSnapshot` instead would compare against a
 two-passes-old state and double-count. The first-ever sync (no stored entry) uses
@@ -376,8 +375,9 @@ with `outcome: 'error'` (capturing `error.status` into `errorStatus` when it is 
 title. The engine **never** lets one title abort the pass.
 
 **No notifications, no episodes.** The engine writes **only** `title-cache` entry
-+ availability through the port. It writes no `users/**` document, no
-notification, and does not fetch the Trakt calendar or season episodes.
+
+- availability through the port. It writes no `users/**` document, no
+  notification, and does not fetch the Trakt calendar or season episodes.
 
 ### Domain + firestore-schema change (decision 4)
 
@@ -508,7 +508,7 @@ objects whose methods return canned values / throw on demand.
 
 - **Movie happy path**: `getMovie` returns metadata, `getWatchProviders` returns a
   one-region map → `store.putEntry` called with `{ type:'movie', metadata,
-  traktId: null, lastSyncedAt: '<fixed now>' }`; `getShowTraktId` **not called**;
+traktId: null, lastSyncedAt: '<fixed now>' }`; `getShowTraktId` **not called**;
   `store.putAvailability` called with `providers: next`, `previousSnapshot: prev`,
   `lastSyncedAt: '<fixed now>'`; `SyncResult.outcome === 'synced'`.
 - **Tv happy path**: `getTvShow` + `getShowTraktId` returns `42` →

@@ -138,6 +138,7 @@ export function dataToNotification(
 export function titleCacheToData(t: TitleCacheEntry): TitleCacheWriteData {
   return {
     type: t.type,
+    traktId: t.traktId,
     metadata: t.metadata,
     lastSyncedAt: new Date(t.lastSyncedAt),
   };
@@ -145,6 +146,7 @@ export function titleCacheToData(t: TitleCacheEntry): TitleCacheWriteData {
 export function dataToTitleCache(data: TitleCacheReadData): TitleCacheEntry {
   return {
     type: data.type,
+    traktId: data.traktId,
     metadata: data.metadata,
     lastSyncedAt: data.lastSyncedAt.toDate().toISOString(),
   };
