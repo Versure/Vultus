@@ -204,6 +204,9 @@ the sync engine can `instanceof`-check it.
 
 ### Method semantics
 
+> The endpoint contracts and field mappings below were verified against the
+> current TMDB v3 API reference on 2026-06-19.
+
 - **`getMovie(tmdbId)`** → `GET /movie/{tmdbId}?language=<language>`. Map
   `title`→`title`, `overview`→`overview`, `poster_path`→`posterPath`
   (`string | null`), `release_date`→`releaseDate` (normalized per air-date rule
@@ -221,7 +224,9 @@ the sync engine can `instanceof`-check it.
   `provider_id`→`providerId`, `provider_name`→`name`. **Buckets other than
   `flatrate`/`rent`/`buy` (TMDB also returns `ads`/`free`) are dropped** —
   `WatchProviderType` has no member for them. `display_priority`/`logo_path` are
-  ignored. Returns `Partial<Record<Region, WatchProvider[]>>`. **404 → `null`.**
+  ignored; likewise the response's top-level `id` and each country's `link` field
+  are present in the TMDB response but are **not modeled** by the internal DTO.
+  Returns `Partial<Record<Region, WatchProvider[]>>`. **404 → `null`.**
 - **`getSeasonEpisodes(tmdbId, seasonNumber)`** →
   `GET /tv/{tmdbId}/season/{seasonNumber}?language=<language>`. Map each entry in
   `episodes[]` to `Episode`: prefer `season_number` for `season` (fall back to
@@ -482,7 +487,10 @@ node library with no UI, no flow, and no build target):
   sync of a small watchlist**, not high throughput. `429` is retried with
   `Retry-After`; `5xx` is **not** retried (fail fast, the daily cron re-runs
   tomorrow). If TMDB tightens limits or the watchlist grows large, revisit in the
-  sync-engine spec.
+  sync-engine spec. TMDB's `append_to_response` could fold `watch/providers`
+  into the detail call to cut request count, but is **deliberately not used** —
+  each method issues one focused request, which is fine at personal-daily-sync
+  scale.
 - **nx project name / alias drift.** The generator derives the project name from
   the directory (expected `functions-sync-titles`) and may emit a non-slash
   import alias; both are pinned above (verify the name via `nx show projects`,
