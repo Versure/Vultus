@@ -30,3 +30,8 @@ export type {
   ProviderTransition,
   SyncOutcome,
 } from './lib/engine/types';
+
+// The Admin-SDK adapter that implements the engine's TitleCacheStore port
+// against firebase-admin Firestore (spec 0009). This is the only SDK-bound
+// export; the engine itself stays Firebase-free.
+export { createFirestoreTitleCacheStore } from './lib/store/firestore-title-cache-store';

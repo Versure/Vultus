@@ -39,11 +39,18 @@ export const config: SheriffConfig = {
     'apps/mobile': 'scope:mobile',
     'apps/functions': 'scope:functions',
 
-    'libs/shared/<name>': 'scope:shared',
+    // Tag the lib `src` barrel folder, not the project root: with
+    // `enableBarrelLess` a lib's `src/index.ts` makes `src` its own module, so
+    // the source actually lives in (and must carry the tag on) `<lib>/src`.
+    // Tagging only the project root would leave `src` untagged (`noTag`), which
+    // silently disables scope/slice enforcement for the lib's real source and
+    // blocks tagged consumers (e.g. apps/functions) from importing the barrel.
+    // Apps have no `src` barrel, so their whole tree is one module (tagged above).
+    'libs/shared/<name>/src': 'scope:shared',
 
     // Future slice libs — tagged by glob so they inherit scope + slice on creation.
-    'libs/mobile/<slice>': ['scope:mobile', 'slice:<slice>'],
-    'libs/functions/<slice>': ['scope:functions', 'slice:<slice>'],
+    'libs/mobile/<slice>/src': ['scope:mobile', 'slice:<slice>'],
+    'libs/functions/<slice>/src': ['scope:functions', 'slice:<slice>'],
 
     // Negative-test fixtures (excluded from production targets).
     'tools/sheriff-fixtures/mobile-side': 'scope:mobile',
