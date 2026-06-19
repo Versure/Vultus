@@ -5,58 +5,72 @@ import {
   AUTH_EMULATOR_URL,
   FIRESTORE_EMULATOR_HOST,
   FIRESTORE_EMULATOR_PORT,
-  connectEmulatorsIfEnabled,
+  connectAuthEmulatorIfEnabled,
+  connectFirestoreEmulatorIfEnabled,
   type EmulatorEnv,
 } from './emulators';
 
-describe('connectEmulatorsIfEnabled', () => {
-  const auth = {} as Auth;
-  const firestore = {} as Firestore;
+const auth = {} as Auth;
+const firestore = {} as Firestore;
 
-  function makeConnectors() {
-    return {
-      connectAuth: vi.fn(),
-      connectFirestore: vi.fn(),
-    };
-  }
+const DEV: EmulatorEnv = { production: false, useEmulators: true };
+const DEV_NO_EMU: EmulatorEnv = { production: false, useEmulators: false };
+const PROD: EmulatorEnv = { production: true, useEmulators: true };
 
-  it('connects both emulators when dev + useEmulators', () => {
-    const connectors = makeConnectors();
-    const env: EmulatorEnv = { production: false, useEmulators: true };
+describe('connectAuthEmulatorIfEnabled', () => {
+  it('connects the Auth emulator when dev + useEmulators', () => {
+    const connectAuth = vi.fn();
 
-    connectEmulatorsIfEnabled(env, auth, firestore, connectors);
+    connectAuthEmulatorIfEnabled(DEV, auth, connectAuth);
 
-    expect(connectors.connectAuth).toHaveBeenCalledWith(
-      auth,
-      AUTH_EMULATOR_URL,
-      {
-        disableWarnings: true,
-      },
-    );
-    expect(connectors.connectFirestore).toHaveBeenCalledWith(
+    expect(connectAuth).toHaveBeenCalledWith(auth, AUTH_EMULATOR_URL, {
+      disableWarnings: true,
+    });
+  });
+
+  it('does not connect when useEmulators is false', () => {
+    const connectAuth = vi.fn();
+
+    connectAuthEmulatorIfEnabled(DEV_NO_EMU, auth, connectAuth);
+
+    expect(connectAuth).not.toHaveBeenCalled();
+  });
+
+  it('does not connect in production', () => {
+    const connectAuth = vi.fn();
+
+    connectAuthEmulatorIfEnabled(PROD, auth, connectAuth);
+
+    expect(connectAuth).not.toHaveBeenCalled();
+  });
+});
+
+describe('connectFirestoreEmulatorIfEnabled', () => {
+  it('connects the Firestore emulator when dev + useEmulators', () => {
+    const connectFirestore = vi.fn();
+
+    connectFirestoreEmulatorIfEnabled(DEV, firestore, connectFirestore);
+
+    expect(connectFirestore).toHaveBeenCalledWith(
       firestore,
       FIRESTORE_EMULATOR_HOST,
       FIRESTORE_EMULATOR_PORT,
     );
   });
 
-  it('connects neither emulator when useEmulators is false', () => {
-    const connectors = makeConnectors();
-    const env: EmulatorEnv = { production: false, useEmulators: false };
+  it('does not connect when useEmulators is false', () => {
+    const connectFirestore = vi.fn();
 
-    connectEmulatorsIfEnabled(env, auth, firestore, connectors);
+    connectFirestoreEmulatorIfEnabled(DEV_NO_EMU, firestore, connectFirestore);
 
-    expect(connectors.connectAuth).not.toHaveBeenCalled();
-    expect(connectors.connectFirestore).not.toHaveBeenCalled();
+    expect(connectFirestore).not.toHaveBeenCalled();
   });
 
-  it('connects neither emulator in production', () => {
-    const connectors = makeConnectors();
-    const env: EmulatorEnv = { production: true, useEmulators: true };
+  it('does not connect in production', () => {
+    const connectFirestore = vi.fn();
 
-    connectEmulatorsIfEnabled(env, auth, firestore, connectors);
+    connectFirestoreEmulatorIfEnabled(PROD, firestore, connectFirestore);
 
-    expect(connectors.connectAuth).not.toHaveBeenCalled();
-    expect(connectors.connectFirestore).not.toHaveBeenCalled();
+    expect(connectFirestore).not.toHaveBeenCalled();
   });
 });

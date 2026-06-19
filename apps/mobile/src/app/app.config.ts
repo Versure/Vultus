@@ -15,14 +15,17 @@ import {
 } from '@angular/fire/firestore';
 import { appRoutes } from './app.routes';
 import { environment } from '../environments/environment';
-import { connectEmulatorsIfEnabled } from './firebase/emulators';
+import {
+  connectAuthEmulatorIfEnabled,
+  connectFirestoreEmulatorIfEnabled,
+} from './firebase/emulators';
 import { ShellAuthService } from './auth/auth.service';
 
 /**
  * AngularFire DI contract (spec 0010, decision 1) — the data-access pattern
  * every later mobile slice follows. Slices INJECT `Auth` / `Firestore`; they do
- * NOT call `initializeApp` again. Emulator connection is gated through the
- * unit-tested `connectEmulatorsIfEnabled` helper.
+ * NOT call `initializeApp` again. Each provider factory gates its own emulator
+ * connection through the unit-tested `connect*EmulatorIfEnabled` helpers.
  */
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -32,13 +35,18 @@ export const appConfig: ApplicationConfig = {
     provideFirebaseApp(() => initializeApp(environment.firebase)),
     provideAuth(() => {
       const auth = getAuth();
-      connectEmulatorsIfEnabled(environment, auth, getFirestore(), {
-        connectAuth: connectAuthEmulator,
-        connectFirestore: connectFirestoreEmulator,
-      });
+      connectAuthEmulatorIfEnabled(environment, auth, connectAuthEmulator);
       return auth;
     }),
-    provideFirestore(() => getFirestore()),
+    provideFirestore(() => {
+      const firestore = getFirestore();
+      connectFirestoreEmulatorIfEnabled(
+        environment,
+        firestore,
+        connectFirestoreEmulator,
+      );
+      return firestore;
+    }),
     // Gate render on the resolved anonymous session (decision 3). CRITICAL:
     // degrade gracefully — under the no-emulator dev server (e2e smoke) there
     // is no Auth backend, so signInAnonymously rejects. Swallow the failure so

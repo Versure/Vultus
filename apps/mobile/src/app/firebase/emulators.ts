@@ -13,14 +13,16 @@ export interface EmulatorEnv {
  * CJS transform chokes on). Typed structurally to match
  * `connectAuthEmulator` / `connectFirestoreEmulator`.
  */
-export interface EmulatorConnectors {
-  connectAuth: (
-    auth: Auth,
-    url: string,
-    options?: { disableWarnings: boolean },
-  ) => void;
-  connectFirestore: (firestore: Firestore, host: string, port: number) => void;
-}
+export type ConnectAuthFn = (
+  auth: Auth,
+  url: string,
+  options?: { disableWarnings: boolean },
+) => void;
+export type ConnectFirestoreFn = (
+  firestore: Firestore,
+  host: string,
+  port: number,
+) => void;
 
 /** Auth emulator endpoint (firebase.json: Auth on 9099). */
 export const AUTH_EMULATOR_URL = 'http://localhost:9099';
@@ -28,29 +30,42 @@ export const AUTH_EMULATOR_URL = 'http://localhost:9099';
 export const FIRESTORE_EMULATOR_HOST = 'localhost';
 export const FIRESTORE_EMULATOR_PORT = 8080;
 
+/** Whether emulators should be wired (dev only): `!production && useEmulators`. */
+function emulatorsEnabled(env: EmulatorEnv): boolean {
+  return !env.production && env.useEmulators;
+}
+
 /**
- * Connect AngularFire `Auth` / `Firestore` to the local emulators, but ONLY in
- * dev (`!production && useEmulators`). When disabled it touches neither
- * connector. The connectors are passed in (app.config.ts supplies the real
- * AngularFire fns) so the spec asserts the gating without a live Firebase
- * (spec 0010 Test plan).
- *
- * This is the single tested code path used by `provideAuth` in app.config.ts,
- * so the "connect only when useEmulators" branch is covered.
+ * Connect AngularFire `Auth` to the local emulator, but ONLY in dev
+ * (`!production && useEmulators`); otherwise a no-op. The connector is passed
+ * in (app.config.ts supplies the real AngularFire fn) so the spec asserts the
+ * gating without a live Firebase (spec 0010 Test plan). Lives in the
+ * `provideAuth` factory, next to the instance it gates.
  */
-export function connectEmulatorsIfEnabled(
+export function connectAuthEmulatorIfEnabled(
   env: EmulatorEnv,
   auth: Auth,
-  firestore: Firestore,
-  connectors: EmulatorConnectors,
+  connectAuth: ConnectAuthFn,
 ): void {
-  if (env.production || !env.useEmulators) {
+  if (!emulatorsEnabled(env)) {
     return;
   }
-  connectors.connectAuth(auth, AUTH_EMULATOR_URL, { disableWarnings: true });
-  connectors.connectFirestore(
-    firestore,
-    FIRESTORE_EMULATOR_HOST,
-    FIRESTORE_EMULATOR_PORT,
-  );
+  connectAuth(auth, AUTH_EMULATOR_URL, { disableWarnings: true });
+}
+
+/**
+ * Connect AngularFire `Firestore` to the local emulator, but ONLY in dev
+ * (`!production && useEmulators`); otherwise a no-op. Lives in the
+ * `provideFirestore` factory, next to the instance it gates — mirroring
+ * `connectAuthEmulatorIfEnabled` (spec 0010 Test plan).
+ */
+export function connectFirestoreEmulatorIfEnabled(
+  env: EmulatorEnv,
+  firestore: Firestore,
+  connectFirestore: ConnectFirestoreFn,
+): void {
+  if (!emulatorsEnabled(env)) {
+    return;
+  }
+  connectFirestore(firestore, FIRESTORE_EMULATOR_HOST, FIRESTORE_EMULATOR_PORT);
 }
