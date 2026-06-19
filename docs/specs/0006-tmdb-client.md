@@ -2,7 +2,7 @@
 number: 0006
 slug: tmdb-client
 title: Add a typed TMDB API client to the sync-titles functions slice
-status: approved
+status: implementing
 slices: [slice:sync-titles]
 scopes: [scope:functions]
 created: 2026-06-18
@@ -88,13 +88,13 @@ Out of scope (each belongs to a later spec):
 
 ## Affected slices & Sheriff tags
 
-| Project (nx name TBD — see below)   | Path                         | Sheriff tags                          |
-| ----------------------------------- | ---------------------------- | ------------------------------------- |
-| sync-titles functions slice (new)   | `libs/functions/sync-titles` | `scope:functions`, `slice:sync-titles` |
+| Project (nx name TBD — see below) | Path                         | Sheriff tags                           |
+| --------------------------------- | ---------------------------- | -------------------------------------- |
+| sync-titles functions slice (new) | `libs/functions/sync-titles` | `scope:functions`, `slice:sync-titles` |
 
 - The tags are assigned **automatically by `sheriff.config.ts`** via the
   existing path-glob key `'libs/functions/<slice>': ['scope:functions',
-  'slice:<slice>']`. This spec **does not edit `sheriff.config.ts`** — generating
+'slice:<slice>']`. This spec **does not edit `sheriff.config.ts`** — generating
   the lib at exactly `libs/functions/sync-titles` is what makes the glob match
   and tag it. (The `slice:sync-titles` tag is already declared in the Sheriff
   vocabulary; no lib carries it yet — this lib is the first.)
@@ -123,11 +123,11 @@ collections, indexes, converters, or rules.
 It does, however, **produce values shaped to fit** the PLAN §4 model so the
 later sync engine can persist them directly:
 
-| PLAN §4 target (written LATER by the sync engine) | This client returns                                  |
-| ------------------------------------------------- | ---------------------------------------------------- |
-| `title-cache/{tmdbId}.metadata` (`TitleMetadata`) | `getMovie` / `getTvShow` → `TitleMetadata`           |
-| `title-cache/{tmdbId}/availability/{region}.providers` (`WatchProvider[]`) | `getWatchProviders` → per-`Region` `WatchProvider[]` |
-| `users/{userId}/watchlist/{titleId}/episodes/*` (`EpisodeDoc`) | `getSeasonEpisodes` → `Episode[]` (the persistence-agnostic value subset: `season`/`episode`/`airDate`) |
+| PLAN §4 target (written LATER by the sync engine)                          | This client returns                                                                                     |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `title-cache/{tmdbId}.metadata` (`TitleMetadata`)                          | `getMovie` / `getTvShow` → `TitleMetadata`                                                              |
+| `title-cache/{tmdbId}/availability/{region}.providers` (`WatchProvider[]`) | `getWatchProviders` → per-`Region` `WatchProvider[]`                                                    |
+| `users/{userId}/watchlist/{titleId}/episodes/*` (`EpisodeDoc`)             | `getSeasonEpisodes` → `Episode[]` (the persistence-agnostic value subset: `season`/`episode`/`airDate`) |
 
 `getMovie`/`getTvShow` return **`TitleMetadata`** specifically because that is
 exactly the shape `title-cache.metadata` stores (the caller already knows
@@ -145,7 +145,12 @@ convention — see Implementation task graph task 1).
 ### Config + factory
 
 ```ts
-import type { TitleType, Region, WatchProvider, Episode } from '@vultus/shared/domain';
+import type {
+  TitleType,
+  Region,
+  WatchProvider,
+  Episode,
+} from '@vultus/shared/domain';
 import type { TitleMetadata } from '@vultus/shared/domain';
 
 export interface TmdbClientConfig {
@@ -161,7 +166,7 @@ export interface TmdbClientConfig {
   language?: string;
   /** Resilience knobs — all optional with conservative personal-sync defaults
    *  (see Resilience below). */
-  maxRetries?: number;       // 429 retry cap; default 3
+  maxRetries?: number; // 429 retry cap; default 3
   minRequestIntervalMs?: number; // throttle floor between requests; default ~250ms
 }
 
@@ -267,14 +272,14 @@ TMDB date fields (`air_date`, `release_date`, `first_air_date`) are **date-only
 
 - **Normalize a present, non-empty date-only string to a full ISO-8601 UTC
   instant: `"YYYY-MM-DD"` → `"YYYY-MM-DDT00:00:00.000Z"`** (i.e. `new
-  Date(`${d}T00:00:00.000Z`).toISOString()`). This is consistent across all
+Date(`${d}T00:00:00.000Z`).toISOString()`). This is consistent across all
   three fields and round-trips through spec 0005's `new Date(iso)` converter.
 - **`releaseDate`** (movie/tv metadata) is `string | null` in `TitleMetadata`,
   so a `null`/missing/empty date → **`null`**.
 - **`Episode.airDate` is a required `string`** in the domain (no `null`
   allowed). Therefore **episodes with a `null`/missing/empty `air_date` are
   SKIPPED** (omitted from the returned `Episode[]`) — an unaired episode has no
-  air date to track, and the sync engine notifies on *aired* episodes. This is
+  air date to track, and the sync engine notifies on _aired_ episodes. This is
   stated explicitly so the behavior is contractual, not incidental. (Alternative
   considered: widen `Episode.airDate` to `string | null` in `shared/domain` —
   rejected here to avoid changing the merged domain type for a follow-on
@@ -320,6 +325,7 @@ is written.
      libs, which expose only `lint`/`typecheck`/`test` via the inferred
      `@nx/vite` / `@nx/eslint` / `@nx/vitest` plugins. Confirm the generated
      `project.json` has empty/absent `targets` like `libs/shared/domain`.)
+
    - **Verify / adjust** the generated lib to match the shared-lib conventions:
      - `vite.config.mts` with `test.name: '<nx project name>'`,
        `environment: 'node'`, `passWithNoTests: true`, the same `include` glob
@@ -340,7 +346,7 @@ is written.
    - **Determine and record the nx project name** the generator assigns (likely
      `functions-sync-titles`; `@nx/js` derives the name from the directory).
      Verify with `pnpm nx show projects` / `pnpm nx show project
-     functions-sync-titles`. Use that exact name in all `nx` target invocations
+functions-sync-titles`. Use that exact name in all `nx` target invocations
      (Definition of done). Remove any placeholder `lib.ts`/`*.spec.ts` the
      generator scaffolds once real code lands.
    - Files: `libs/functions/sync-titles/**`, `tsconfig.base.json` (`paths`),
@@ -356,8 +362,8 @@ is written.
 
 3. **[sequential] Fetch / retry / throttle core.**
    - Add `src/lib/http.ts` (or similar): a small internal `request<T>(path,
-     init)` that injects `Authorization: Bearer <token>` + `Accept:
-     application/json`, applies the language query param where relevant, enforces
+init)` that injects `Authorization: Bearer <token>` + `Accept:
+application/json`, applies the language query param where relevant, enforces
      `minRequestIntervalMs` (serialize requests / effective concurrency ~1),
      retries `429` up to `maxRetries` honoring `Retry-After`
      (seconds → ms; cap), returns parsed JSON on 2xx, returns a sentinel for
@@ -498,5 +504,5 @@ node library with no UI, no flow, and no build target):
   consistent with PLAN §3 paths and the `@vultus/shared/<name>` alias convention.
 - **No PLAN conflict.** This implements PLAN §6 item 9 as the first third of the
   sync-titles slice; the only deviations from item 9's one-liner are the
-  deliberate deferrals (no rate-limiting *config wiring*, no orchestration) to
+  deliberate deferrals (no rate-limiting _config wiring_, no orchestration) to
   the sync-engine spec, which §6 separates into items 11–12.

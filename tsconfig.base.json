@@ -24,7 +24,10 @@
       "@vultus/shared/firestore-schema": [
         "./libs/shared/firestore-schema/src/index.ts"
       ],
-      "@vultus/shared/ui-kit": ["./libs/shared/ui-kit/src/index.ts"]
+      "@vultus/shared/ui-kit": ["./libs/shared/ui-kit/src/index.ts"],
+      "@vultus/functions/sync-titles": [
+        "./libs/functions/sync-titles/src/index.ts"
+      ]
     }
   },
   "exclude": ["node_modules", "tmp"]
