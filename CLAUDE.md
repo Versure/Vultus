@@ -65,9 +65,10 @@ no GitHub issues** — a spec file (`docs/specs/NNNN-slug.md`), reviewed and mer
 as a PR, is the unit of work. This **supersedes the issue-driven model in
 PLAN §5–§6** (the architecture/DoD there remain authoritative).
 
-Four skills drive it (each is self-contained — its mechanics live in its
+Five skills drive it (each is self-contained — its mechanics live in its
 `SKILL.md`): `/create-spec` → review the spec PR → `/rework-spec` → merge →
-`/implement-feature` → review the feature PR → `/rework-feature` → merge. See
+`/implement-feature` → review the feature PR → `/rework-feature` → merge →
+`/cleanup-feature` (tear down the merged feature's worktree + branch). See
 `docs/specs/README.md` for the spec format and status lifecycle. Specialist
 subagents (`spec-author`, `spec-reviewer`, `feature-implementer`,
 `backend-engineer`, `frontend-engineer`, `infrastructure-engineer`,
