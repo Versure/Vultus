@@ -2,7 +2,7 @@
 number: 0006
 slug: tmdb-client
 title: Add a typed TMDB API client to the sync-titles functions slice
-status: implementing
+status: done
 slices: [slice:sync-titles]
 scopes: [scope:functions]
 created: 2026-06-18
