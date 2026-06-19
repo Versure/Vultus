@@ -11,16 +11,12 @@
 //
 // HOW apps/mobile CONSUMES THIS
 // -----------------------------
-// In apps/mobile/src/styles.scss, after the Ionic core + dark palette imports:
-//
-//   @import '@vultus/shared/ui-kit/src/lib/theme.scss';
-//
-// (apps/mobile already @imports CSS files through SCSS, so a plain @import of
-// this .scss resolves the same way; a relative path
-// `../../../libs/shared/ui-kit/src/lib/theme.scss` works too if the alias is not
-// wired for the SCSS loader.) The app keeps its existing
-// `@ionic/angular/css/palettes/dark.always.css` import — this theme is
-// dark-first and layers on top of it.
+// Listed as a separate entry in the `styles` array of apps/mobile/project.json,
+// AFTER apps/mobile/src/styles.scss (which loads the Ionic core + dark palette).
+// Loading it as a separate Angular styles entry (not via Sass @use/@import)
+// sidesteps the Sass rule that @use must precede all other rules, and guarantees
+// this file is compiled after the Ionic CSS so its :root custom properties win
+// any cascade conflict with the dark palette values.
 //
 // SHERIFF: scope:shared — importable by anyone. Plain CSS variables, no TS
 // imports, so no cross-scope boundary is crossed.

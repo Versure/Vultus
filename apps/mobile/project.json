@@ -20,7 +20,10 @@
             "input": "apps/mobile/public"
           }
         ],
-        "styles": ["apps/mobile/src/styles.scss"]
+        "styles": [
+          "apps/mobile/src/styles.scss",
+          "libs/shared/ui-kit/src/lib/theme.scss"
+        ]
       },
       "configurations": {
         "production": {

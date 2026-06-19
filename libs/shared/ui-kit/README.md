@@ -32,17 +32,23 @@ fine).
 
 ## Usage
 
-The theme is **dark-first** and is applied app-wide via `apps/mobile`'s global
-styles. In `apps/mobile/src/styles.scss`, after the Ionic core +
-`@ionic/angular/css/palettes/dark.always.css` imports:
+The theme is **dark-first** and is applied app-wide. It is registered as a
+separate entry in the `styles` array of `apps/mobile/project.json`:
 
-```scss
-@import '@vultus/shared/ui-kit/src/lib/theme.scss';
+```json
+"styles": [
+  "apps/mobile/src/styles.scss",
+  "libs/shared/ui-kit/src/lib/theme.scss"
+]
 ```
 
-(A relative path resolves equivalently if the path alias is not wired into the
-SCSS loader.) Slice components reference the `--vultus-*` / `--ion-*` variables
-directly in their own SCSS — they do **not** re-declare tokens.
+Loading it as a second Angular styles entry (rather than via a Sass `@use`/`@import`
+inside `styles.scss`) keeps the Ionic core imports free of Sass deprecation warnings
+and guarantees `theme.scss` is compiled **after** the Ionic dark palette, so its
+`:root` custom properties win any cascade conflicts on shared Ionic variables.
+
+Slice components reference the `--vultus-*` / `--ion-*` variables directly in their
+own SCSS — they do **not** re-declare tokens.
 
 ## Sheriff scope
 
