@@ -80,9 +80,24 @@ HTTP failure) and clamps `days` into `[1, 33]` (`Math.trunc` first).
 - No persistence, no `@vultus/shared/firestore-schema`, no `firebase-functions`,
   no secret access. No HTTP runtime dependency (native `fetch` only).
 
+## Internal layout
+
+`src/lib/` is grouped by data source, behind the single `src/index.ts` barrel
+(the only public surface):
+
+- `tmdb/` — TMDB v3 client (`tmdb-client.ts`), its DTOs (`tmdb-dtos.ts`), mappers
+  (`tmdb-mappers.ts`), and error (`tmdb-error.ts`) plus their specs.
+- `trakt/` — Trakt API v2 client (`trakt-client.ts`), DTOs (`trakt-dtos.ts`),
+  mappers (`trakt-mappers.ts`), and error (`trakt-error.ts`) plus their specs.
+- `shared/` — the auth-agnostic HTTP transport (`http.ts`) consumed by both
+  clients (imported as `../shared/http`).
+
+Only the symbols re-exported from `src/index.ts` are public; DTOs, mappers, and
+the http transport are slice-internal.
+
 ## Future work
 
-The in-slice HTTP transport in `src/lib/http.ts` (min-interval throttle,
+The in-slice HTTP transport in `src/lib/shared/http.ts` (min-interval throttle,
 `429`/`Retry-After` retry, `404` sentinel, status → injected-error mapping) is
 now **auth-agnostic** and shared by both clients in this slice — headers, base
 URL, and error factory are injected per client. It stays in this slice rather

@@ -5,7 +5,7 @@
 // calendar and `null` for the id lookup.
 
 import type { Episode } from '@vultus/shared/domain';
-import { createHttpCore, NOT_FOUND } from './http';
+import { createHttpCore, NOT_FOUND } from '../shared/http';
 import { TraktError } from './trakt-error';
 import { extractShowTraktId, mapCalendar } from './trakt-mappers';
 import type { TraktCalendarEntryDto, TraktSearchResultDto } from './trakt-dtos';

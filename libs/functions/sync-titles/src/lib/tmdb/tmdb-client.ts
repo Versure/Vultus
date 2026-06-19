@@ -9,13 +9,13 @@ import type {
   TitleType,
   WatchProvider,
 } from '@vultus/shared/domain';
-import { createHttpCore, NOT_FOUND } from './http';
+import { createHttpCore, NOT_FOUND } from '../shared/http';
 import {
   mapMovie,
   mapSeasonEpisodes,
   mapTvShow,
   mapWatchProviders,
-} from './mappers';
+} from './tmdb-mappers';
 import { TmdbError } from './tmdb-error';
 import type {
   TmdbMovieResponse,
