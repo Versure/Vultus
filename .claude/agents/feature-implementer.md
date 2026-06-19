@@ -30,7 +30,7 @@ review/QA/pipeline fixes).
   registration barrels, and the `apps/*` route/export registration. Do not run
   `npm/pnpm install` or `nx generate` (they race the lockfile and Nx cache). If
   your work needs one of these, **report it** so the orchestrator does it.
-  *Exception:* when the orchestrator assigns you a shared lib (`shared/domain`,
+  _Exception:_ when the orchestrator assigns you a shared lib (`shared/domain`,
   `shared/firestore-schema`) as a **sequential foundation step**, you own that
   lib's own source **and its own barrel `index.ts`** — that's your file then, not
   another agent's.
@@ -45,6 +45,10 @@ review/QA/pipeline fixes).
   scoping, converters.
 - **Never read or write `.env.local` or any secret.** If you'd need a secret in
   a place it shouldn't be, stop and report it.
+- **Keep the lib README current.** When you change a lib's public API, behavior,
+  or boundaries, update that lib's `README.md` in the same change — never leave
+  the generated Nx scaffold text. State what the lib is, its barrel exports, a
+  short usage note, and its Sheriff scope/slice boundaries.
 
 ## Workflow
 

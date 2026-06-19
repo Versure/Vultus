@@ -37,6 +37,9 @@ uncommitted work).
 4. **Tests** — does the changed logic have unit tests? Non-trivial UI a
    component test? Are the spec's named e2e flows present? Flag untested logic.
 5. **Secrets/safety** — any committed secret, `.env` read, or hardcoded key.
+6. **Lib README currency** (CLAUDE.md DoD) — if the diff creates a lib or changes
+   a lib's public API/behavior/boundaries, its `README.md` must be updated to
+   match; flag a stale or still-scaffold (generated Nx text) lib README.
 
 Verify findings against the actual diff before reporting — no speculative
 findings. Prefer fewer, high-confidence items.
