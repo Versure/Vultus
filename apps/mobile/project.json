@@ -55,6 +55,16 @@
       },
       "defaultConfiguration": "production"
     },
+    "dev": {
+      "executor": "@nx/run-commands",
+      "options": {
+        "commands": [
+          "npx firebase emulators:start",
+          "pnpm nx serve mobile"
+        ],
+        "parallel": true
+      }
+    },
     "serve": {
       "continuous": true,
       "executor": "@angular/build:dev-server",
