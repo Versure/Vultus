@@ -91,6 +91,11 @@ In scope:
 - **Vitest unit tests** for the adapter (mocked `firebase-admin`), the auth /
   rate-limit / staleness gating, and the handler wiring (fake engine; assert the
   deduped union is passed and that no `users/**` doc is ever written).
+- **An automated, emulator-backed integration test** that exercises the real
+  adapter (`createFirestoreTitleCacheStore(db)`) + the `collectionGroup('watchlist')`
+  gather + the `syncTitles` handler end-to-end against the **Firestore emulator**
+  (TMDB/Trakt HTTP stubbed, no live network/secrets), **wired as a GitHub Actions
+  CI gate** (not an honor-system manual step). See Test plan.
 
 Out of scope (each its own spec/slice):
 
@@ -142,6 +147,16 @@ Out of scope (each its own spec/slice):
 - **Not a premature `shared/` extraction.** The adapter and handler logic stay in
   their respective projects; nothing is hoisted to `shared/`. There is still one
   consuming slice — the "extract only at 3+ slices" rule is respected.
+- **CI-config touchpoint (the one place this spec touches CI).** The automated
+  emulator integration test adds a Firestore-emulator integration-test step/job to
+  `.github/workflows/ci.yml` — root/infra config (`scope:functions`-adjacent,
+  outside any Sheriff slice; Sheriff governs only workspace import boundaries, not
+  workflow YAML). The job must stay minimal: start the Firestore emulator, run the
+  integration target/suite, tear down. Running it requires `firebase-tools`, which
+  is **already a root devDependency** (the emulator commands referenced throughout
+  these specs rely on it) — **verify it is present in the lockfile and do not add a
+  new dependency**; if (and only if) it is genuinely absent, that addition is in
+  scope for the CI-wiring task.
 
 ## Data model touchpoints
 
@@ -378,15 +393,52 @@ convention.
      `apps/functions/src/lib/rate-limit.spec.ts`,
      `apps/functions/src/main.spec.ts`.
 
-(`firebase-admin` and `firebase-functions` are already root dependencies — no new
-dependency is added. The actual helper file names/grouping are a recommendation;
-keep the **pure logic injectable + unit-tested** and the SDK glue thin.)
+3. **[sequential] Automated emulator-backed integration test + CI gate wiring.
+   Depends on tasks 1 and 2** (it exercises the real adapter and the real
+   handler).
+   - Add the integration spec — an `*.integration.spec.ts` (or equivalent
+     dedicated pattern) that boots against the **Firestore emulator**, seeds a
+     watchlist across multiple users, stubs the TMDB/Trakt HTTP transport (no live
+     network, no secrets), wires `createSyncEngine` to the **real**
+     `createFirestoreTitleCacheStore(db)` + the `collectionGroup('watchlist')`
+     gather + the `syncTitles` handler, and asserts the four behaviours in the
+     Test plan ("Automated emulator integration gate"). **Backend work.**
+   - Add the minimal Nx test target/configuration needed to run it under the
+     emulator — e.g. a dedicated `integration` test configuration or a
+     `*.integration.spec.ts` glob run separately in CI behind the emulator (kept
+     **out** of the default `nx test` run so the SDK-free unit suites stay
+     emulator-free). Decide whether the integration spec lives under
+     `apps/functions` or `libs/functions/sync-titles` based on what it exercises
+     end-to-end (the handler lives in `apps/functions`, so it lands there unless
+     it can run purely against the slice barrel).
+   - Add the CI step/job to `.github/workflows/ci.yml`: start the Firestore
+     emulator, run the integration target/suite as a **required gate**, tear down.
+     **Infrastructure work** (infrastructure-engineer territory) — the integration
+     spec itself is backend.
+   - Note the local-tooling reality: per project memory the Firestore emulator
+     **cannot run under Claude Code tools here (loopback blocked)**, so the
+     implementing agent runs/verifies this test in the **user's own terminal
+     locally**; CI (where the emulator works) is the automated gate.
+   - Files: the integration spec (e.g.
+     `apps/functions/src/sync-titles.integration.spec.ts` **or**
+     `libs/functions/sync-titles/src/lib/store/firestore-title-cache-store.integration.spec.ts`
+     — one location, chosen per above), any Nx config it needs (the project's
+     `project.json` / `vite.config.ts` test-configuration glob in the chosen
+     project), and `.github/workflows/ci.yml`.
+
+(`firebase-admin` and `firebase-functions` are already root dependencies, and
+`firebase-tools` (the emulator) is an already-present root devDependency — no new
+runtime dependency is added; verify before assuming. The actual helper file
+names/grouping are a recommendation; keep the **pure logic injectable +
+unit-tested** and the SDK glue thin.)
 
 ## Test plan
 
-Per the PLAN §5 pyramid — backend logic, so the surface is **unit tests** with
-mocks/fakes; **no component, no e2e** (no UI flow). The Firestore-emulator
-integration check is a **manual gate** (see below).
+Per the PLAN §5 pyramid — backend logic, so the bulk of the surface is **unit
+tests** with mocks/fakes; **no component, no e2e** (no UI flow). On top of those,
+one **automated emulator-backed integration test** runs the real flow end-to-end
+against the Firestore emulator as a **CI gate** (see "Automated emulator
+integration gate" below).
 
 **Admin-SDK adapter (`firestore-title-cache-store.spec.ts`):**
 
@@ -426,21 +478,49 @@ integration check is a **manual gate** (see below).
 - Engine errors for some titles are reflected in `errored`/`synced` counts; the
   handler still returns `200` (best-effort, per 0008's per-title isolation).
 
-**Manual gate (run in the user's own terminal — NOT in CI here):** the real
-Admin-SDK adapter + the `collectionGroup('watchlist')` query verified against the
-**Firestore emulator** (`firebase emulators:start`). Per project memory the
-**emulator cannot run under Claude Code tools here (loopback blocked)**, so this
-verification is **explicitly a manual step** and the **automated DoD gates pass
-without it** (the adapter + handler are proven by unit tests with a mocked Admin
-SDK and a fake engine). Stated exactly as spec 0008 handled the no-emulator
-constraint.
+**Automated emulator integration gate (`*.integration.spec.ts`, real Firestore
+emulator, stubbed TMDB/Trakt):** one test that wires the **real**
+`createSyncEngine(...)` to the **real** `createFirestoreTitleCacheStore(db)` +
+the `collectionGroup('watchlist')` gather + the `syncTitles` handler, with the
+TMDB/Trakt HTTP transport **mocked/stubbed** (no live network, no secrets) but a
+**real Firestore emulator** as the backing store. It asserts:
+
+- **(a) Gather + dedupe.** A seeded watchlist spread across **multiple users**
+  (the same `{ tmdbId, type }` tracked by more than one user, plus distinct
+  titles) is gathered via `collectionGroup('watchlist')` and deduped to the
+  correct set of distinct `{ tmdbId, type }` (a shared title is synced **once**).
+- **(b) Real round-trip through the spec-0005 converters.** After a pass the
+  engine has written real `title-cache/{tmdbId}` + `title-cache/{tmdbId}/
+  availability/{region}` docs that read back through `dataToTitleCache` /
+  `dataToAvailability` to the expected `TitleCacheEntry` (incl. `traktId`, number
+  and null) and `RegionAvailability` — proving the adapter's path builders +
+  converters work against real Firestore, not just a fake.
+- **(c) Snapshot roll across two sequential passes.** Running the sync **twice in
+  sequence** against the same emulator persists the spec-0005 `previousSnapshot`
+  transition correctly (pass 2 rolls pass 1's availability into
+  `previousSnapshot`) — the round trip that a fake store cannot exercise.
+- **(d) Boundary, for real.** After the passes, **no `users/**` doc has been
+  written** (the seeded watchlist docs are unchanged, none created/mutated) and
+  `system/sync` **is** updated.
+
+**This test is a CI gate, not a manual step.** It is **wired to run automatically
+in GitHub Actions** (the CI job starts the Firestore emulator, runs the
+integration suite, tears down — see Implementation task graph task 3), so a future
+change that breaks the real adapter/gather/handler flow **fails CI**. Per project
+memory the **Firestore emulator cannot run under Claude Code tools here (loopback
+blocked)**, so the **implementing agent runs and verifies this test in the user's
+own terminal locally** rather than in-session; CI is where it runs as the
+automated regression gate. The mocked-SDK unit suites above still stand on their
+own (they run in the default emulator-free `nx test`).
 
 ## Definition of done
 
 Tailored from the PLAN §5 checklist to the projects touched and the gates that
 exist (`functions-sync-titles` and `functions` both have inferred `typecheck` /
 `lint` / `test` / `build` targets via the Nx vite plugin). No component / e2e
-(no UI). The emulator integration check is the manual gate above.
+(no UI). The emulator integration check is an **automated CI gate** (above), run
+locally in the user's terminal by the implementing agent because the emulator
+cannot run under Claude Code tools here.
 
 - [ ] `pnpm nx typecheck functions-sync-titles` passes — the adapter compiles
       against the merged 0008 `TitleCacheStore` port + spec-0005 converters.
@@ -462,6 +542,18 @@ exist (`functions-sync-titles` and `functions` both have inferred `typecheck` /
       with the real `syncTitles` export replacing `healthcheck`.
 - [ ] `pnpm nx affected -t lint typecheck test build --base=main` is green (the
       affected set is `functions-sync-titles` + `functions` and any dependents).
+- [ ] **The automated emulator-backed integration test passes** (real Firestore
+      emulator + stubbed TMDB/Trakt): gather + dedupe across users, the spec-0005
+      converter round-trip incl. `traktId`, the `previousSnapshot` roll across two
+      sequential passes, and the no-`users/**`-write / `system/sync`-updated
+      boundary. Verified by the implementing agent **locally in the user's own
+      terminal** (the emulator cannot run under Claude Code tools — loopback
+      blocked).
+- [ ] **`.github/workflows/ci.yml` runs this as a gate:** the CI workflow starts
+      the Firestore emulator, runs the integration target/suite as a **required**
+      step, and tears down — so a future regression in the real adapter / gather /
+      handler flow fails CI. No new dependency added (`firebase-tools` already
+      present; verified).
 - [ ] The barrel `@vultus/functions/sync-titles` exports
       `createFirestoreTitleCacheStore` **in addition to** all existing
       0006/0007/0008 exports (**none dropped**); internal DTO/http/mapper/engine
@@ -479,8 +571,9 @@ exist (`functions-sync-titles` and `functions` both have inferred `typecheck` /
       unchanged** and the engine remains SDK-free.
 - [ ] PR description records the exact verification commands (both projects),
       confirms the no-secret / no-`users/**`-write / no-SDK-in-engine boundaries,
-      and notes the emulator integration check as a manual gate run in the user's
-      terminal.
+      and notes the automated emulator integration test as a **CI gate** that the
+      implementing agent verified locally in the user's terminal (the emulator
+      cannot run under Claude Code tools here).
 
 ## Scaling & limits
 
@@ -538,12 +631,18 @@ The ceilings and the escalation ladder, so they are designed-for not surprises:
   step in the ladder bounds per-run work — future.
 - **Data-source accuracy is not this function's concern (PLAN §9).** It writes
   whatever the engine derives from TMDB; the Watchmode fallback is later.
-- **Emulator verification is manual here.** The Admin-SDK adapter + the
-  `collectionGroup` query are unit-tested with a mocked SDK; the real-Firestore
-  check is a manual emulator gate in the user's terminal (loopback is blocked
-  under Claude Code tools — project memory). Risk: a subtle SDK/path mismatch
-  surfaces only at the manual gate — mitigated by the adapter being a thin map
-  onto the already-tested spec-0005 path builders + converters.
+- **Emulator verification is an automated CI gate (run locally by the agent).**
+  The Admin-SDK adapter + the `collectionGroup` query are unit-tested with a
+  mocked SDK; on top of that, the real-Firestore behaviour is an **automated
+  emulator-backed integration test wired into `.github/workflows/ci.yml`** (the
+  emulator runs fine in GitHub Actions), so a subtle SDK/path mismatch is caught
+  by CI as a regression gate rather than relying on an honor-system manual check.
+  The reason the **implementing agent** verifies it **locally in the user's own
+  terminal** rather than in-session is that the Firestore emulator (any Java NIO
+  loopback server) **cannot run under Claude Code tools here** (project memory) —
+  not because the check is optional. Mitigation remains that the adapter is a thin
+  map onto the already-tested spec-0005 path builders + converters, and the
+  integration test now exercises that map against real Firestore.
 - **Spec 0008 must be implemented (not just spec-merged) before this lands.**
   This spec's adapter implements 0008's `TitleCacheStore` port and the handler
   imports `createSyncEngine` + `traktId`-bearing `TitleCacheEntry` from 0008's
