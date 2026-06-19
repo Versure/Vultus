@@ -6,13 +6,5 @@
       "source": "PowerShell",
       "icon": "terminal-powershell"
     }
-  },
-  // Use PowerShell for task automation too (Nx Console, launch configs).
-  // Without this VS Code defaults to cmd.exe for tasks, which exits immediately
-  // when pnpm exec spawns a child process — causing serve to appear to "finish"
-  // while the Angular dev server is actually still running in a detached process.
-  "terminal.integrated.automationProfile.windows": {
-    "path": "powershell",
-    "args": ["-NonInteractive", "-NoLogo"]
   }
 }
