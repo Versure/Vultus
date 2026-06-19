@@ -1,0 +1,6 @@
+// Tabs shell — bottom tab bar surface uses the elevated navy-slate token
+// (shared/ui-kit theme, PLAN §2). Layout/spacing left to Ionic defaults.
+ion-tab-bar {
+  --background: var(--vultus-surface-elevated, #1e293b);
+  --border: 1px solid var(--vultus-border, #334155);
+}

@@ -1,0 +1,18 @@
+{
+  // Interactive terminal — PowerShell for day-to-day use.
+  "terminal.integrated.defaultProfile.windows": "PowerShell",
+  "terminal.integrated.profiles.windows": {
+    "PowerShell": {
+      "source": "PowerShell",
+      "icon": "terminal-powershell"
+    }
+  },
+  // Task automation (Nx Console, launch configs) — cmd.exe.
+  // Cursor/VS Code defaults to PowerShell for automation, but pnpm's .ps1
+  // wrapper spawns Node as a detached child and the PowerShell parent exits
+  // immediately, making long-running tasks (nx serve) appear to finish at once.
+  // cmd.exe uses pnpm.cmd which waits on the child process correctly.
+  "terminal.integrated.automationProfile.windows": {
+    "path": "cmd.exe"
+  }
+}

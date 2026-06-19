@@ -19,7 +19,7 @@ first launch, and **three minimal stub slice libs** (`libs/mobile/{watchlist,sea
 generated, Sheriff-tagged (`scope:mobile` + `slice:<slice>`), and lazy-routed —
 each with one placeholder `SettingsPage`/`SearchPage`/`WatchlistPage`, a barrel,
 a real README, and a render test. Spec 0010 deliberately **does not write any
-`users/**` document** — it states "The `users/{uid}` document … is owned and
+`users/**`document** — it states "The`users/{uid}` document … is owned and
 created by the **settings** slice (PLAN §6 item 16), NOT the shell."
 
 This spec fleshes out `libs/mobile/settings` (it does **not** regenerate the lib).
@@ -61,7 +61,7 @@ reflected on the next read.
      shared code; see Risks):** the canonical persisted `users/{uid}` shape is
      **already built** — `@vultus/shared/domain`'s `User` carries
      `notificationPrefs: NotificationPrefs` (`{ episodeAired, movieAvailable,
-     cameToPlatform }`, all booleans), with a working converter in
+cameToPlatform }`, all booleans), with a working converter in
      `@vultus/shared/firestore-schema` and matching PLAN §4. This spec **does NOT
      change the persisted shape** and does **NOT** introduce a `notificationsEnabled`
      field on the document. Instead, the single UI toggle is the **logical AND/OR
@@ -83,7 +83,7 @@ reflected on the next read.
 4. **`users/{uid}` document — created eagerly on first settings open.** On entering
    `SettingsPage` the slice reads `users/{uid}`. If the doc does **not** exist, it
    creates it with defaults `{ region: 'NL', notificationPrefs: { episodeAired:
-   true, movieAvailable: true, cameToPlatform: true }, fcmTokens: [] }`. If it
+true, movieAvailable: true, cameToPlatform: true }, fcmTokens: [] }`. If it
    exists, it reads and displays the current values. This guarantees downstream
    slices can always assume the doc exists. The uid comes from the shell's
    `ShellAuthService` (spec 0010); the slice never re-inits Firebase or calls
@@ -140,20 +140,19 @@ Out of scope (each its own later spec):
 
 ## Affected slices & Sheriff tags
 
-| Project              | Path                              | Sheriff tags                     | Change                                                                       |
-| -------------------- | --------------------------------- | -------------------------------- | ---------------------------------------------------------------------------- |
-| mobile-settings      | `libs/mobile/settings`            | `scope:mobile`, `slice:settings` | flesh out `SettingsPage` + add `SettingsService`; README; tests             |
-| shared-domain        | `libs/shared/domain`              | `scope:shared`                   | **extend `REGIONS`** from 6 → 10 entries (additive); `Region` widens         |
+| Project         | Path                   | Sheriff tags                     | Change                                                               |
+| --------------- | ---------------------- | -------------------------------- | -------------------------------------------------------------------- |
+| mobile-settings | `libs/mobile/settings` | `scope:mobile`, `slice:settings` | flesh out `SettingsPage` + add `SettingsService`; README; tests      |
+| shared-domain   | `libs/shared/domain`   | `scope:shared`                   | **extend `REGIONS`** from 6 → 10 entries (additive); `Region` widens |
 
 - **Tagging is by PATH GLOB in `sheriff.config.ts`** (per spec 0010) — the settings
   lib already inherits `['scope:mobile', 'slice:settings']` from the glob and
   `shared/domain` is `scope:shared`. **This spec does NOT edit `sheriff.config.ts`.**
 - **Import boundaries (verified against the spec-0010 Sheriff rules):**
   - `libs/mobile/settings` (`slice:settings`) may import `['scope:shared',
-    'slice:settings']` only. It imports `@vultus/shared/domain` (`Region`/`REGIONS`,
+'slice:settings']` only. It imports `@vultus/shared/domain` (`Region`/`REGIONS`,
     `User`/`NotificationPrefs`) and `@vultus/shared/firestore-schema`
-    (`userPath`, `userToData`/`dataToUser`) — **both `scope:shared`, allowed (rule
-    4)**. It imports **no other slice** (no `slice:search`/`slice:watchlist`).
+    (`userPath`, `userToData`/`dataToUser`) — **both `scope:shared`, allowed (rule 4)**. It imports **no other slice** (no `slice:search`/`slice:watchlist`).
   - The slice injects AngularFire `Firestore` and the shell's `ShellAuthService`.
     **AngularFire (`@angular/fire`), `firebase`, `@ionic/*` are third-party** — not
     policed by Sheriff (it governs only `scope:`/`slice:` workspace boundaries).
@@ -189,15 +188,15 @@ and converter-backed** (`@vultus/shared/domain` `User`, `@vultus/shared/firestor
 `userPath` / `userToData` / `dataToUser`) — this spec **reuses** it, it does not
 redefine it.
 
-| PLAN §4 path     | Access by this slice            | Fields                                                                                                  |
-| ---------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| PLAN §4 path     | Access by this slice             | Fields                                                                                                   |
+| ---------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `users/{uid}`    | **read**, **create**, **update** | `region: Region`; `notificationPrefs: { episodeAired, movieAvailable, cameToPlatform }`; `fcmTokens: []` |
-| `users/{uid}/**` | **none**                        | watchlist / episodes / notifications subcollections untouched                                           |
-| `title-cache/**` | **none**                        | not touched                                                                                             |
+| `users/{uid}/**` | **none**                         | watchlist / episodes / notifications subcollections untouched                                            |
+| `title-cache/**` | **none**                         | not touched                                                                                              |
 
 - **Read-or-create (decision 4):** read `users/{uid}` via `userPath(uid)`. If
   absent, create with defaults `{ region: 'NL', notificationPrefs: { episodeAired:
-  true, movieAvailable: true, cameToPlatform: true }, fcmTokens: [] }`.
+true, movieAvailable: true, cameToPlatform: true }, fcmTokens: [] }`.
 - **Region change:** update `region` only.
 - **Notifications toggle (decision 2):** update all three `notificationPrefs`
   booleans to the toggle value; **leaves `fcmTokens` untouched.**
@@ -222,7 +221,16 @@ redefine it.
   regions:
   ```ts
   export const REGIONS = [
-    'NL', 'DE', 'GB', 'US', 'FR', 'BE', 'ES', 'IT', 'CA', 'AU',
+    'NL',
+    'DE',
+    'GB',
+    'US',
+    'FR',
+    'BE',
+    'ES',
+    'IT',
+    'CA',
+    'AU',
   ] as const; // NL = v1 primary/default
   export type Region = (typeof REGIONS)[number];
   ```
@@ -370,7 +378,7 @@ mocked `ShellAuthService`):**
 
 - **Read-creates-doc-with-defaults:** when `getDoc(users/{uid})` reports the doc
   does **not** exist, `load()` writes the defaults `{ region: 'NL', notificationPrefs:
-  { episodeAired: true, movieAvailable: true, cameToPlatform: true }, fcmTokens: [] }`
+{ episodeAired: true, movieAvailable: true, cameToPlatform: true }, fcmTokens: [] }`
   (assert the converted write payload) and exposes `region === 'NL'`,
   `notificationsEnabled === true`.
 - **Read-uses-existing:** when the doc exists with e.g. `region: 'DE'` and one pref
@@ -501,8 +509,8 @@ PLAN §6 item 20 (decision 5).
 
 - **Emulator-backed e2e descoped (decision 5).** Consistent with spec 0010 and project
   memory (the emulator can't run under Claude Code tools here). This PR's gate is unit
-  + component + build; the full settings flow against the emulators is PLAN §6 item 20.
-  No `ci.yml` / `playwright.config.ts` change.
+  - component + build; the full settings flow against the emulators is PLAN §6 item 20.
+    No `ci.yml` / `playwright.config.ts` change.
 
 - **Depends on spec 0010 being present.** This spec fleshes out the `libs/mobile/settings`
   stub, the `ShellAuthService`, and the AngularFire DI contract — **all delivered by

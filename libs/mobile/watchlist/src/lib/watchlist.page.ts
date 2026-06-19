@@ -7,11 +7,9 @@ import {
 } from '@ionic/angular/standalone';
 
 @Component({
-  selector: 'app-home',
+  selector: 'lib-watchlist',
   imports: [IonHeader, IonToolbar, IonTitle, IonContent],
-  templateUrl: './home.page.html',
-  styleUrl: './home.page.scss',
+  templateUrl: './watchlist.page.html',
+  styleUrl: './watchlist.page.scss',
 })
-export class HomePage {
-  protected readonly appName = 'Vultus';
-}
+export class WatchlistPage {}

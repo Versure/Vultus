@@ -14,10 +14,12 @@ import { SheriffConfig, sameTag } from '@softarc/sheriff-core';
  *   scope:functions  apps/functions   + libs/functions/*
  *   scope:shared     libs/shared/*    (importable by anyone)
  *
- * Slice-tag vocabulary (declared now, no lib carries them yet — the slice libs
- * arrive in their own specs):
- *   slice:watchlist  slice:search  slice:title-detail  slice:settings
- *   slice:sync-titles  slice:dispatch-notifications
+ * Slice-tag vocabulary. The mobile tab slices below are now in use (spec 0010
+ * generated libs/mobile/{watchlist,search,settings}); the remaining tags are
+ * declared ahead of the libs that will carry them in their own specs:
+ *   slice:watchlist  slice:search  slice:settings   (in use — libs/mobile/*)
+ *   slice:title-detail                               (pushed later, not a tab)
+ *   slice:sync-titles  slice:dispatch-notifications  (functions slices)
  *
  * Boundary rules (PLAN §3 "Rules"):
  *   1. scope:mobile cannot import scope:functions, and vice versa.
@@ -44,11 +46,13 @@ export const config: SheriffConfig = {
     // the source actually lives in (and must carry the tag on) `<lib>/src`.
     // Tagging only the project root would leave `src` untagged (`noTag`), which
     // silently disables scope/slice enforcement for the lib's real source and
-    // blocks tagged consumers (e.g. apps/functions) from importing the barrel.
-    // Apps have no `src` barrel, so their whole tree is one module (tagged above).
+    // blocks tagged consumers (e.g. apps/functions importing the sync-titles
+    // barrel, or apps/mobile's lazy `import('@vultus/mobile/watchlist')`) from
+    // importing it. Apps have no `src` barrel, so their whole tree is one
+    // module (tagged above).
     'libs/shared/<name>/src': 'scope:shared',
 
-    // Future slice libs — tagged by glob so they inherit scope + slice on creation.
+    // Slice libs — tagged by glob so they inherit scope + slice on creation.
     'libs/mobile/<slice>/src': ['scope:mobile', 'slice:<slice>'],
     'libs/functions/<slice>/src': ['scope:functions', 'slice:<slice>'],
 
