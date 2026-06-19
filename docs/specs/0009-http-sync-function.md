@@ -2,7 +2,7 @@
 number: 0009
 slug: http-sync-function
 title: Add the HTTP sync function wrapping the sync engine in apps/functions
-status: implementing
+status: done
 slices: [slice:sync-titles]
 scopes: [scope:functions]
 created: 2026-06-19
@@ -361,13 +361,9 @@ convention.
    (`apps/functions`). Depends on task 1.**
    - Add the gather/dedupe, auth, rate-limit, and staleness logic as **pure,
      injectable helper functions** (so they unit-test without the SDK), e.g. in
-     `apps/functions/src/lib/`:
-     - `auth.ts` — `classifyAuth(headers, secret, verifyToken)` → `'cron' |
-'user' | null` (constant-time secret compare; token verify injected).
-     - `gather.ts` — `dedupeTitles(items)` → distinct `{ tmdbId, type }[]`.
-     - `staleness.ts` — `filterStale(titles, lastSyncedByTmdbId, now, windowMs,
-force)` → titles to sync.
-     - `rate-limit.ts` — `isRateLimited(lastRunAt, now, windowMs)` → boolean.
+     `apps/functions/src/lib/`: - `auth.ts` — `classifyAuth(headers, secret, verifyToken)` → `'cron' |
+'user' | null` (constant-time secret compare; token verify injected). - `gather.ts` — `dedupeTitles(items)` → distinct `{ tmdbId, type }[]`. - `staleness.ts` — `filterStale(titles, lastSyncedByTmdbId, now, windowMs,
+force)` → titles to sync. - `rate-limit.ts` — `isRateLimited(lastRunAt, now, windowMs)` → boolean.
    - Replace `healthcheck` in `src/main.ts` with `syncTitles` (`onRequest`):
      init `admin` (once), declare the params, run auth → rate-limit → gather →
      staleness → construct clients + `createFirestoreTitleCacheStore(db)` +
