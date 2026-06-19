@@ -13,6 +13,7 @@ import {
   getFirestore,
   provideFirestore,
 } from '@angular/fire/firestore';
+import { AUTH_UID } from '@vultus/shared/domain';
 import { appRoutes } from './app.routes';
 import { environment } from '../environments/environment';
 import {
@@ -60,5 +61,9 @@ export const appConfig: ApplicationConfig = {
         // Intentionally non-fatal — see comment above. Render proceeds.
       }
     }),
+    // Expose the shell's uid signal to slices via a scope:shared token, so a
+    // slice:* lib can read the current uid WITHOUT importing apps/mobile (which
+    // Sheriff forbids). See @vultus/shared/domain AUTH_UID.
+    { provide: AUTH_UID, useFactory: () => inject(ShellAuthService).uid },
   ],
 };

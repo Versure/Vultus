@@ -2,7 +2,7 @@
 number: 0011
 slug: settings-slice
 title: Flesh out the settings slice — region picker, global notifications toggle, and eager users/{uid} init
-status: approved
+status: done
 slices: [slice:settings]
 scopes: [scope:mobile, scope:shared]
 created: 2026-06-19

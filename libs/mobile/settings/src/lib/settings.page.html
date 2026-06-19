@@ -4,6 +4,46 @@
   </ion-toolbar>
 </ion-header>
 
-<ion-content class="ion-padding">
-  <p>Settings will appear here.</p>
+<ion-content>
+  @if (service.loaded()) {
+    <ion-list inset="true">
+      <ion-list-header>
+        <ion-label>Region</ion-label>
+      </ion-list-header>
+      <ion-item>
+        <ion-select
+          label="Region"
+          interface="popover"
+          [value]="service.region()"
+          (ionChange)="onRegionChange($event)"
+        >
+          @for (region of service.regions; track region) {
+            <ion-select-option [value]="region">{{ region }}</ion-select-option>
+          }
+        </ion-select>
+      </ion-item>
+      <ion-item lines="none">
+        <ion-note>Content availability is based on this region.</ion-note>
+      </ion-item>
+
+      <ion-list-header>
+        <ion-label>Notifications</ion-label>
+      </ion-list-header>
+      <ion-item>
+        <ion-toggle
+          [checked]="service.notificationsEnabled()"
+          (ionChange)="onNotificationsChange($event)"
+        >
+          <ion-label>Enable notifications</ion-label>
+        </ion-toggle>
+      </ion-item>
+      <ion-item lines="none">
+        <ion-note>Alerts for new episodes and availability changes.</ion-note>
+      </ion-item>
+    </ion-list>
+  } @else {
+    <div class="settings-loading">
+      <ion-spinner></ion-spinner>
+    </div>
+  }
 </ion-content>
