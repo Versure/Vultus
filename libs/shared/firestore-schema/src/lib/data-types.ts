@@ -101,11 +101,13 @@ export interface NotificationWriteData {
 // --- TitleCacheEntry: lastSyncedAt; metadata passes through ---
 export interface TitleCacheReadData {
   type: TitleType;
+  traktId: number | null;
   metadata: TitleMetadata;
   lastSyncedAt: FirestoreTimestampLike;
 }
 export interface TitleCacheWriteData {
   type: TitleType;
+  traktId: number | null;
   metadata: TitleMetadata;
   lastSyncedAt: Date;
 }
