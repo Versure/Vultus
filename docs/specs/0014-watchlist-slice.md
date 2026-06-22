@@ -2,7 +2,7 @@
 number: 0014
 slug: watchlist-slice
 title: Flesh out the watchlist slice — grouped status list, type filter, status action sheet, remove, and provider badges
-status: implementing
+status: done
 slices: [slice:watchlist]
 scopes: [scope:mobile, scope:shared]
 created: 2026-06-22
@@ -513,7 +513,7 @@ This spec's green gate is **unit + component + build** (what `ci.yml` runs:
 libs); `mobile` has `lint`/`test`/`build`/`typecheck`.
 
 - [ ] `pnpm nx run-many -t lint test -p mobile-watchlist shared-domain
-    shared-firestore-schema` passes **with Sheriff active** (lint includes
+  shared-firestore-schema` passes **with Sheriff active** (lint includes
       Sheriff): the watchlist slice imports `@vultus/shared/domain`,
       `@vultus/shared/firestore-schema`, AngularFire/Ionic (third-party), and the
       uid **only** via the `AUTH_UID` token — **no other slice import, no
