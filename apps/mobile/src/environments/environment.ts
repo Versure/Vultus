@@ -21,4 +21,12 @@ export const environment = {
     messagingSenderId: 'demo-sender-id',
     appId: 'demo-app-id',
   },
+  // TMDB search config (spec 0013). The api_key is intentionally EMPTY here —
+  // populate it manually from `.env.local` (gitignored) before running the dev
+  // server if you want live TMDB search locally. The base URLs are public.
+  tmdb: {
+    apiBaseUrl: 'https://api.themoviedb.org/3',
+    imageBaseUrl: 'https://image.tmdb.org/t/p/w185',
+    auth: { kind: 'apiKey' as const, apiKey: '' },
+  },
 };

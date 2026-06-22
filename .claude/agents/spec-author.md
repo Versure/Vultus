@@ -44,12 +44,13 @@ Frontmatter:
 number: NNNN
 slug: <kebab-case>
 title: <imperative, scoped — e.g. "Add region picker to settings slice">
-status: approved     # draft | approved | implementing | done — use what the orchestrator passes
-slices: [slice:settings]   # Sheriff slice tags; MAY BE EMPTY [] for foundation/
-                           # infra specs (Nx, Sheriff, CI, Firebase config) that
-                           # touch only scope/root files and no slice
-scopes: [scope:functions]  # optional: scope tags for scope-only/foundation work
-created: <YYYY-MM-DD>       # the orchestrator passes today's date; do not invent
+status: approved # draft | approved | implementing | done — use what the orchestrator passes
+slices:
+  [slice:settings] # Sheriff slice tags; MAY BE EMPTY [] for foundation/
+  # infra specs (Nx, Sheriff, CI, Firebase config) that
+  # touch only scope/root files and no slice
+scopes: [scope:functions] # optional: scope tags for scope-only/foundation work
+created: <YYYY-MM-DD> # the orchestrator passes today's date; do not invent
 ---
 ```
 
@@ -68,8 +69,20 @@ Body sections, in this order — keep each tight and concrete:
 5. **Public types / APIs** — new or changed types (prefer `shared/domain`),
    function signatures, HTTP endpoints, callable shapes.
 6. **UI / Stitch screen refs** — for mobile slices only: the relevant Stitch
-   screen and the design-system tokens to match (PLAN §2). Pull the screen via
-   the Stitch MCP (`get_screen`) when one exists and reference its ID.
+   screen and the design-system tokens to match (PLAN §2). **Actually pull the
+   screen** via the Stitch MCP (`list_screens` then `get_screen`) and **reference
+   its ID**; if the MCP errors, **retry** before giving up. If it is genuinely
+   unreachable, do **not** quietly ship a token-only section — record
+   "Stitch screen NOT captured" as a **blocking open item** so the implementer
+   knows the visual contract is unverified. Make the section a **checkable
+   contract, not prose**: pin concrete values the implementer can't misread —
+   element **dimensions** (control/input heights, not "taller"), spacing/insets
+   (which must agree across sibling elements, e.g. list items aligned to the
+   input), radius, and **every interactive state** (default / **focus** / hover /
+   active / disabled, including transitions/animations). Call out token _wiring_
+   that's easy to miss (e.g. the design font must be **loaded** as a web-font, not
+   just named in the family stack). Prefer a per-state acceptance list the
+   feature-reviewer and a human can tick off.
 7. **Implementation task graph** — ordered tasks mapped to slices. Mark each
    task **[sequential]** (shared deps like `shared/domain`,
    `shared/firestore-schema`, new-slice generation, root/config wiring — must

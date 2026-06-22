@@ -2,7 +2,7 @@
 number: 0013
 slug: search-slice
 title: Build the search slice — debounced TMDB search with inline add-to-watchlist
-status: approved
+status: done
 slices: [slice:search]
 scopes: [scope:mobile]
 created: 2026-06-22
@@ -75,7 +75,7 @@ render in the added state from the first render.
    the 3+-slice rule).
 9. **No new e2e in this spec.** e2e + emulator wiring is PLAN §6 item 20. The
    green gate here is **unit + component + build** (what `ci.yml` runs: `lint test
-   build`). All Firebase and all TMDB HTTP access in tests is **mocked** — no live
+build`). All Firebase and all TMDB HTTP access in tests is **mocked** — no live
    Firebase, no emulator (project memory: the emulator cannot run under Claude
    Code tools here), no real TMDB network, no secrets.
 
@@ -150,10 +150,10 @@ The TMDB key is delivered to the bundle by environment injection, never committe
 
 ## Affected slices & Sheriff tags
 
-| Project       | Path                       | Sheriff tags                 | Change                                                                                            |
-| ------------- | -------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------- |
-| mobile-search | `libs/mobile/search`       | `scope:mobile`, `slice:search` | flesh out `SearchPage`; add `TmdbSearchClient` + `SearchService` + config token; README; tests   |
-| mobile (app)  | `apps/mobile`              | `scope:mobile`               | add TMDB config to `environment.ts`/`environment.prod.ts`; provide `TMDB_SEARCH_CONFIG` at root   |
+| Project       | Path                 | Sheriff tags                   | Change                                                                                          |
+| ------------- | -------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------- |
+| mobile-search | `libs/mobile/search` | `scope:mobile`, `slice:search` | flesh out `SearchPage`; add `TmdbSearchClient` + `SearchService` + config token; README; tests  |
+| mobile (app)  | `apps/mobile`        | `scope:mobile`                 | add TMDB config to `environment.ts`/`environment.prod.ts`; provide `TMDB_SEARCH_CONFIG` at root |
 
 - **Tagging is by PATH GLOB in `sheriff.config.ts`** (spec 0010): the search lib
   already inherits `['scope:mobile', 'slice:search']` from the
@@ -161,7 +161,7 @@ The TMDB key is delivered to the bundle by environment injection, never committe
   does NOT edit `sheriff.config.ts`.**
 - **Import boundaries (verified against the spec-0010 Sheriff rules):**
   - `libs/mobile/search` (`slice:search`) is governed by `'slice:*': ['scope:shared',
-    sameTag]` — it may import **only** `scope:shared` and other `slice:search`
+sameTag]` — it may import **only** `scope:shared` and other `slice:search`
     modules. It imports `@vultus/shared/domain` (`WatchlistItem`, `WatchStatus`,
     `TitleType`, `AUTH_UID`) and `@vultus/shared/firestore-schema`
     (`watchlistPath`/`watchlistItemPath`, `watchlistItemToData`) — **both
@@ -201,13 +201,13 @@ The shape is **already defined and converter-backed** (`@vultus/shared/domain`
 `dataToWatchlistItem` + `watchlistPath` / `watchlistItemPath`) — this spec
 **reuses** it, it does not redefine it. TMDB is read over HTTP (not Firestore).
 
-| PLAN §4 path                          | Access by this slice           | Fields                                                                  |
-| ------------------------------------- | ------------------------------ | ----------------------------------------------------------------------- |
-| `users/{uid}/watchlist`               | **read** (collection)          | snapshot the user's items to compute the already-added set (by `tmdbId`/`titleId`) |
-| `users/{uid}/watchlist/{titleId}`     | **create**                     | `type`, `tmdbId`, `traktId: null`, `title`, `addedAt`, `status: 'planned'` |
-| `users/{uid}/watchlist/{titleId}/**`  | **none**                       | episodes subcollection NOT written on add                               |
-| `title-cache/**`                      | **none**                       | not read, not written by this slice                                     |
-| `users/{uid}` (root doc)              | **none**                       | settings slice owns it (spec 0011); search does not touch it            |
+| PLAN §4 path                         | Access by this slice  | Fields                                                                             |
+| ------------------------------------ | --------------------- | ---------------------------------------------------------------------------------- |
+| `users/{uid}/watchlist`              | **read** (collection) | snapshot the user's items to compute the already-added set (by `tmdbId`/`titleId`) |
+| `users/{uid}/watchlist/{titleId}`    | **create**            | `type`, `tmdbId`, `traktId: null`, `title`, `addedAt`, `status: 'planned'`         |
+| `users/{uid}/watchlist/{titleId}/**` | **none**              | episodes subcollection NOT written on add                                          |
+| `title-cache/**`                     | **none**              | not read, not written by this slice                                                |
+| `users/{uid}` (root doc)             | **none**              | settings slice owns it (spec 0011); search does not touch it                       |
 
 - **Document id (`titleId`).** Use the **TMDB id as the doc id**:
   `titleId = String(tmdbId)`. This makes the doc deterministic per title (a natural
@@ -233,8 +233,8 @@ The shape is **already defined and converter-backed** (`@vultus/shared/domain`
   (state which is chosen in the README).
 - **No `firestore.rules` change.** Spec 0004's rules grant the owner read/write to
   `users/{uid}/**` for any authenticated uid (anonymous counts). The watchlist read
-  + the `watchlist/{titleId}` create are owner operations on the user's own subtree
-  — already permitted. **Do NOT edit `firestore.rules`.**
+  - the `watchlist/{titleId}` create are owner operations on the user's own subtree
+    — already permitted. **Do NOT edit `firestore.rules`.**
 - **No `firestore.indexes.json` change** — the watchlist read is a single
   collection read (no `where`/`orderBy` compound query). **Do NOT edit it.**
 
@@ -267,9 +267,7 @@ export interface TmdbSearchConfig {
   imageBaseUrl: string; // e.g. https://image.tmdb.org/t/p/w185
   /** TMDB auth: a v4 bearer token (Authorization: Bearer …) OR a v3 api_key
    *  query param — the implementer picks one and documents it. See Risks. */
-  auth:
-    | { kind: 'bearer'; token: string }
-    | { kind: 'apiKey'; apiKey: string };
+  auth: { kind: 'bearer'; token: string } | { kind: 'apiKey'; apiKey: string };
 }
 
 export interface TmdbSearchClient {
@@ -568,7 +566,7 @@ AngularFire `Firestore` + mocked `AUTH_UID` signal):**
 - **add() write shape (decisions 3/4):** `add(result)` writes to
   `watchlistItemPath(uid, String(result.tmdbId))` a payload equal to
   `watchlistItemToData({ type, tmdbId, traktId: null, title, addedAt, status:
-  'planned' })` — assert `status === 'planned'`, `traktId === null`, the id is the
+'planned' })` — assert `status === 'planned'`, `traktId === null`, the id is the
   stringified tmdbId.
 - **Duplicate guard (decision 5):** `add()` on an already-added result is a no-op
   (no second write); after a successful add the result's `added` flips to `true`.
@@ -680,10 +678,10 @@ PLAN §6 item 20 (decision 9).
     placeholder before `nx build mobile --configuration=production`). **This CI wiring
     is a prerequisite/follow-up, not in this spec's DoD** — the implementer flags it in
     the PR description and the CI change is its own follow-up spec.
-  The `TmdbSearchConfig.auth` union supports both a bearer token and a v3 api_key so the
-  implementer picks one without reworking the client. **No real TMDB key is committed**
-  (`environment.ts` placeholder/empty, `environment.prod.ts` a `REPLACE_WITH_REAL_TMDB_API_KEY`
-  placeholder) and `.env.local` is never read or written by the slice.
+    The `TmdbSearchConfig.auth` union supports both a bearer token and a v3 api_key so the
+    implementer picks one without reworking the client. **No real TMDB key is committed**
+    (`environment.ts` placeholder/empty, `environment.prod.ts` a `REPLACE_WITH_REAL_TMDB_API_KEY`
+    placeholder) and `.env.local` is never read or written by the slice.
 - **Slice-local TMDB client duplicates `libs/functions/sync-titles` (intended —
   decision 8).** The duplication is **required** by vertical slice + Sheriff (a
   `scope:mobile` slice cannot import the `scope:functions` client) and is **far
@@ -729,5 +727,5 @@ PLAN §6 item 20 (decision 9).
   TMDB key location — was surfaced and **resolved with the user** (option 2: key in
   the client via `.env.local` locally + the `TMDB_API_KEY` GitHub Actions secret in
   CI/prod; see the TMDB-key risk above). No silent design-around.
-</content>
-</invoke>
+  </content>
+  </invoke>

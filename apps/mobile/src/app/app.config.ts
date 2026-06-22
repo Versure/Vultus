@@ -14,6 +14,7 @@ import {
   provideFirestore,
 } from '@angular/fire/firestore';
 import { AUTH_UID } from '@vultus/shared/domain';
+import { TMDB_SEARCH_CONFIG } from '@vultus/mobile/search';
 import { appRoutes } from './app.routes';
 import { environment } from '../environments/environment';
 import {
@@ -65,5 +66,8 @@ export const appConfig: ApplicationConfig = {
     // slice:* lib can read the current uid WITHOUT importing apps/mobile (which
     // Sheriff forbids). See @vultus/shared/domain AUTH_UID.
     { provide: AUTH_UID, useFactory: () => inject(ShellAuthService).uid },
+    // TMDB search config (spec 0013) — provided at root from `environment.tmdb`
+    // so the search slice can inject it without importing apps/mobile.
+    { provide: TMDB_SEARCH_CONFIG, useValue: environment.tmdb },
   ],
 };

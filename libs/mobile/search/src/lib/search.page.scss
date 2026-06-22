@@ -1,2 +1,169 @@
-// Search slice placeholder page — styling arrives with the search feature
-// (PLAN §6 item 17). Theming comes from the global @vultus/shared/ui-kit tokens.
+ion-header {
+  ion-toolbar {
+    --background: var(--vultus-surface);
+    --border-width: 0;
+    --box-shadow: none;
+
+    ion-title {
+      font-family: var(--vultus-font-family);
+      font-weight: 600;
+      color: var(--ion-text-color);
+    }
+  }
+}
+
+ion-content {
+  --background: var(--vultus-surface);
+}
+
+.search-container {
+  background: var(--vultus-surface);
+  padding: var(--vultus-space-1) var(--vultus-space-1) 0;
+
+  ion-searchbar {
+    --background: var(--vultus-surface-elevated);
+    --border-radius: var(--vultus-radius);
+    // --box-shadow is applied by Ionic to the inner .searchbar-input element,
+    // so the focus ring hugs the input itself with no wrapper gap.
+    --box-shadow: none;
+    --cancel-button-color: var(--vultus-text-muted);
+    --clear-button-color: var(--vultus-text-muted);
+    --color: var(--ion-text-color);
+    --icon-color: var(--ion-color-primary);
+    --placeholder-color: var(--vultus-text-muted);
+    --placeholder-font-style: normal;
+    --placeholder-opacity: 1;
+    font-family: var(--vultus-font-family);
+    padding-top: 0;
+    padding-bottom: var(--vultus-space-1);
+
+    &.searchbar-has-focus {
+      --box-shadow: 0 0 0 2px var(--ion-color-primary);
+    }
+
+    // Target the actual input element (Ionic renders it outside this
+    // component's view scope, hence ::ng-deep): taller height per the Stitch
+    // design, and the transition that animates the focus ring above.
+    ::ng-deep .searchbar-input {
+      height: 52px;
+      transition: box-shadow 200ms ease-in-out;
+    }
+
+    // Ionic absolutely-positions the search icon with a fixed `top` tuned to
+    // the default input height, so the taller input above leaves it off-centre.
+    // Re-centre it vertically (md mode only toggles the icon's display on
+    // focus, never its position, so this is safe).
+    ::ng-deep .searchbar-search-icon {
+      top: 50%;
+      margin-top: 0;
+      transform: translateY(-50%);
+    }
+  }
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 60vh;
+  gap: var(--vultus-space-1);
+}
+
+.empty-icon {
+  font-size: 3rem;
+  color: var(--vultus-text-muted);
+}
+
+.empty-text {
+  color: var(--vultus-text-muted);
+  font-family: var(--vultus-font-family);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.results-list {
+  background: transparent;
+  // Horizontal inset (16px) matches the visible search input edge: the input
+  // sits at 8px (.search-container) + 8px (Ionic searchbar host padding) from
+  // the page edge, so the cards align with it. Vertical stays 8px.
+  padding: var(--vultus-space-1) var(--vultus-space-2);
+}
+
+.result-card {
+  display: flex;
+  align-items: center;
+  background: var(--vultus-surface-elevated);
+  border-radius: var(--vultus-radius);
+  border: 1px solid var(--vultus-border);
+  padding: var(--vultus-space-2);
+  margin-bottom: var(--vultus-space-1);
+  gap: var(--vultus-space-1);
+}
+
+.poster-wrap {
+  flex-shrink: 0;
+  width: 50px;
+  height: 75px;
+}
+
+.poster-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--vultus-radius-sm);
+}
+
+.poster-placeholder {
+  width: 100%;
+  height: 100%;
+  background: var(--vultus-surface-overlay);
+  border-radius: var(--vultus-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--vultus-text-muted);
+  font-size: 1.5rem;
+}
+
+.card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  color: var(--ion-text-color);
+  font-family: var(--vultus-font-family);
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.year {
+  color: var(--vultus-text-muted);
+  font-size: 0.875rem;
+  margin: 0 0 6px;
+}
+
+.type-badge {
+  --background: var(--vultus-surface-overlay);
+  --color: var(--vultus-text-muted);
+  border-radius: var(--vultus-radius-pill);
+  font-size: 0.75rem;
+}
+
+.card-action {
+  flex-shrink: 0;
+}
+
+.add-btn {
+  --background: var(--ion-color-primary);
+  --border-radius: var(--vultus-radius);
+}
+
+.added-btn {
+  --color: var(--ion-color-primary);
+}

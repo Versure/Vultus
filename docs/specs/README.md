@@ -49,9 +49,9 @@ the spec PR lands it as `approved` on `main` whether or not `/rework-spec` ran
 number: 0001
 slug: region-picker
 title: Add region picker to settings slice
-status: approved     # draft | approved | implementing | done (no 'in-review')
-slices: [slice:settings]   # may be [] for foundation/infra specs (no slice)
-scopes: [scope:mobile]     # optional; for scope-only/foundation work
+status: approved # draft | approved | implementing | done (no 'in-review')
+slices: [slice:settings] # may be [] for foundation/infra specs (no slice)
+scopes: [scope:mobile] # optional; for scope-only/foundation work
 created: 2026-06-16
 # Note: slices/scopes are DESCRIPTIVE (for humans + spec-reviewer). Agent
 # routing is driven by the per-task scope tags in the task graph, not these.
@@ -65,7 +65,13 @@ created: 2026-06-16
 3. **Affected slices & Sheriff tags** — libs/apps + their scope/slice tags (PLAN §3).
 4. **Data model touchpoints** — Firestore collections/fields (PLAN §4).
 5. **Public types / APIs** — new/changed types, signatures, endpoints.
-6. **UI / Stitch screen refs** — mobile only; screen ID + design tokens (PLAN §2).
+6. **UI / Stitch screen refs** — mobile only; **the actual Stitch screen ID**
+   (pulled via the MCP — retry, don't silently fall back to tokens) + design
+   tokens (PLAN §2). A **checkable** contract, not prose: concrete dimensions
+   (control heights), insets that agree across sibling elements, radius, and
+   **every interactive state** (default/focus/hover/active/disabled + animations).
+   Note token wiring that's easy to miss (e.g. the font must be _loaded_, not just
+   named).
 7. **Implementation task graph** — tasks mapped to slices, marked `[sequential]`
    (shared deps, new-slice generation, root config first) or `[parallel]`
    (independent slices). Every `[parallel]` task carries a **file manifest** (the
