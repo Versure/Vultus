@@ -30,6 +30,17 @@ scoped to the change over running the whole repo.
    the Firebase emulators (`firebase emulators:start` / `firebase emulators:exec`).
 7. **Smoke / boots** — when feasible, launch the app via `nx serve` (background),
    confirm it starts without console errors, then stop it.
+8. **Visual fidelity (UI slices)** — typecheck/lint/test/build **cannot** confirm
+   a UI matches the design; that blind spot is what drives repeated UI-rework
+   passes. For a `scope:mobile` UI change, **attempt a visual check**: render the
+   page or serve the mock target and compare against the Stitch screen the spec
+   names — control heights, **focus/active states**, font actually loaded (not
+   just named), icon alignment, sibling insets. If the environment blocks a live
+   dev server + browser (loopback-restricted sandboxes often do), report
+   `SKIPPED (visual unverified — needs human eyeball)` with the exact view command
+   (e.g. `nx serve mobile --configuration=mock`) and a per-item checklist.
+   **Never report `PASS` for a UI change that was only compiled** — surface it so
+   the orchestrator routes a human eyeball; this is not a silent skip.
 
 ## Degradation vs. unmet gates (be honest)
 
@@ -60,6 +71,7 @@ a gate pass. Report failures with enough detail that an implementer can fix them
 | build | ... | ... |
 | e2e | ... | ... |
 | smoke | ... | ... |
+| visual (UI) | ... | ... |
 
 ### Failures
 - <gate>: <failing test/file> — <error excerpt + likely cause>

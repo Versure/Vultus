@@ -38,14 +38,23 @@ Evaluate the spec against each of these and record concrete findings:
    Are signatures coherent?
 5. **Testability** — does the test plan follow the pyramid (PLAN §5)? Is the
    logic actually unit-testable as specified? Are e2e flows named and minimal?
-6. **Task graph** — are sequential vs parallel tasks marked? Does **every
+6. **UI fidelity (mobile slices)** — does the spec reference an **actual Stitch
+   screen ID** (not "MCP unreachable, tokens only")? Is the UI section a
+   **checkable contract** — concrete control **dimensions**, insets that agree
+   across sibling elements, radius, and **all interactive states** (default /
+   focus / hover / active / disabled, including animations) — rather than vague
+   prose? Is token _wiring_ addressed (e.g. the design font actually **loaded**,
+   not just named)? Flag a deferred screen capture, a missing focus/active state,
+   or "match the design" hand-waving — these are exactly what send the implementer
+   through repeated UI-rework passes.
+7. **Task graph** — are sequential vs parallel tasks marked? Does **every
    [parallel] task carry a file manifest**, and are those manifests genuinely
    **pairwise disjoint** (so concurrent implementers can't collide)? Flag any
    parallel task missing a manifest, or two parallel manifests that overlap
    (they must be marked sequential instead). Is new-slice generation / root
    config wiring kept in the sequential foundation, not parallelized?
-7. **Definition of done** — present and tailored, not generic?
-8. **Risks** — are the real risks (data-source accuracy, PLAN conflicts)
+8. **Definition of done** — present and tailored, not generic?
+9. **Risks** — are the real risks (data-source accuracy, PLAN conflicts)
    surfaced?
 
 ## Output

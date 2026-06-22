@@ -117,15 +117,31 @@ Sheriff is an import linter — it does **not** make files disjoint. Therefore:
   `SKIPPED` is a **blocking** unmet DoD gate, not an acceptable skip (only
   genuinely-not-bootstrapped tooling is an OK skip). For `FAIL`/unmet, dispatch
   the relevant specialist with details, re-run QA, up to the bound.
+- **UI fidelity is not provable by the green gates.** typecheck/lint/test/build
+  passing says nothing about whether a `scope:mobile` change _looks_ like the
+  Stitch screen — that blind spot is what causes round-trip UI-rework passes. If
+  qa-runner could render+compare, treat its visual result as a gate. If it
+  reported `visual unverified` (this environment usually blocks a live dev
+  server + browser), **carry that forward to the PR as an explicit human-eyeball
+  ask** (next step) — do **not** report the UI as done. Confirm the implementer
+  fetched the Stitch screen (has an ID) and wired the design font; a UI task that
+  fell back to "tokens only, screen never seen" is an unmet contract worth a
+  re-dispatch, not a pass.
 
 ### 7. Open the PR
 
 - Flip the spec to `status: done` **in the diff** by reading the frontmatter and
   setting `status:` (inserting it if absent — don't assume a line exists).
   Merging marks it done. Commit all work, push `feat/NNNN-slug`.
-- `gh pr create --base main` referencing the spec, summarizing the change, with a
-  screenshot note for UI (`--draft` if any loop hit its bound or a required gate
-  is unmet). Label best-effort: `gh label create needs-human --color D93F0B
+- `gh pr create --base main` referencing the spec, summarizing the change
+  (`--draft` if any loop hit its bound or a required gate is unmet). **For a UI
+  change whose visual fidelity could not be auto-verified, the PR body must make
+  the human eyeball easy and explicit:** the **Stitch screen ID** used, the exact
+  view command (e.g. `pnpm nx serve mobile --configuration=mock`), and a
+  per-item visual checklist (heights, focus/active states, font loaded, icon
+  alignment, insets). State plainly that visual fidelity is _unverified by the
+  automated gates_ — don't imply the UI is confirmed. Label best-effort:
+  `gh label create needs-human --color D93F0B
 --force 2>$null`; `gh pr edit <pr> --add-label needs-human 2>$null` when
   surfacing to the human.
 
