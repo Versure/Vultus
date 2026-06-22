@@ -20,7 +20,7 @@ import {
   IonToolbar,
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
-import { personCircleOutline, trashOutline } from 'ionicons/icons';
+import { filmOutline, personCircleOutline, trashOutline } from 'ionicons/icons';
 import {
   AUTH_UID,
   type Region,
@@ -128,7 +128,7 @@ export class WatchlistPage {
   ];
 
   constructor() {
-    addIcons({ personCircleOutline, trashOutline });
+    addIcons({ filmOutline, personCircleOutline, trashOutline });
   }
 
   /** Action-sheet buttons generated from the display order + a Cancel row. */

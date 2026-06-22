@@ -4,19 +4,42 @@
 // semantics + card layout live here. 8px grid, 0.5rem radius. Reconciled with
 // the Stitch "Watchlist - Vultus" screen
 // (projects/13590348714018893783/screens/f8f264de01dd46e7ad9dbea30796e757):
-// status-colored section headers (dot + count), surface-elevated cards with a
-// 1px border, 64x96 posters, status-colored progress + percent.
+// emerald brand title + film icon on a level-0 toolbar with a 1px bottom
+// rule, pill type-filter segment (emerald active), background-less section
+// headers (title left, status-colored count right), 64x96-poster cards whose
+// surface tint shifts subtly per status, plain-text meta line ("Movie • 65%"),
+// and a provider pill on the meta column.
 
+// -----------------------------------------------------------------------------
+// Header — Stitch: bg-surface-dim (level 0, #0F172A) with a 1px bottom rule;
+// brand mark = film icon + "Vultus", both emerald (--ion-color-primary), bold.
+// -----------------------------------------------------------------------------
 ion-header {
   ion-toolbar {
-    --background: var(--vultus-surface-elevated);
-    --border-width: 0;
+    --background: var(--vultus-surface);
+    --border-width: 0 0 1px 0;
+    --border-color: var(--vultus-border);
+    --border-style: solid;
     --box-shadow: none;
 
     ion-title {
       font-family: var(--vultus-font-family);
-      font-weight: 600;
-      color: var(--ion-text-color);
+      font-weight: 700;
+      color: var(--ion-color-primary);
+    }
+
+    // Ionic renders the title text inside a .toolbar-title element outside this
+    // component's view scope, so the emerald color must be pushed through.
+    ::ng-deep .toolbar-title {
+      color: var(--ion-color-primary);
+      display: flex;
+      align-items: center;
+      gap: var(--vultus-space-1);
+    }
+
+    .brand-icon {
+      color: var(--ion-color-primary);
+      font-size: 1.25rem;
     }
   }
 }
@@ -25,58 +48,121 @@ ion-content {
   --background: var(--vultus-surface);
 }
 
+// -----------------------------------------------------------------------------
+// Type filter — Stitch: a row of rounded-full pills; active pill is emerald
+// with white text, inactive pills sit on the elevated surface in muted text.
+// Rendered here as an Ionic segment styled into a pill group.
+// -----------------------------------------------------------------------------
 ion-segment {
   --background: var(--vultus-surface-elevated);
-  margin: var(--vultus-space-1) var(--vultus-space-2);
+  border-radius: var(--vultus-radius-pill);
+  padding: 3px;
+  margin: var(--vultus-space-2) var(--vultus-space-2) var(--vultus-space-1);
 
   ion-segment-button {
+    --background: transparent;
+    --background-checked: var(--ion-color-primary);
+    --background-hover: transparent;
     --color: var(--vultus-text-muted);
-    --color-checked: var(--ion-text-color);
-    --indicator-color: var(--ion-color-primary);
+    --color-checked: #fff;
+    --border-radius: var(--vultus-radius-pill);
+    --indicator-height: 0;
+    --indicator-color: transparent;
+    --indicator-box-shadow: none;
+    min-height: 36px;
     font-family: var(--vultus-font-family);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: none;
   }
 }
 
 .status-section {
-  margin-bottom: var(--vultus-space-1);
+  margin-bottom: var(--vultus-space-3);
 }
 
-// Section header — per Stitch, the section title carries a status-colored
-// accent: a left dot/border + the status color on the label, driven by the
-// `data-status` attribute on the divider.
+// -----------------------------------------------------------------------------
+// Section header — Stitch: NO background. Title on the left (20px / 600), the
+// item count right-aligned in the status color at a smaller label size.
+// -----------------------------------------------------------------------------
 ion-item-divider {
-  --background: var(--vultus-surface-elevated);
+  --background: transparent;
   --color: var(--ion-text-color);
+  --inner-padding-end: 0;
+  --padding-start: 0;
+  margin: 0 var(--vultus-space-2);
+  padding: 0;
+  min-height: auto;
   font-family: var(--vultus-font-family);
-  font-weight: 600;
-  font-size: 0.875rem;
-  letter-spacing: 0.02em;
-  border-left: 3px solid var(--vultus-text-muted);
-}
-ion-item-divider[data-status='watching'] {
-  border-left-color: var(--vultus-status-watching);
-}
-ion-item-divider[data-status='completed'] {
-  border-left-color: var(--vultus-status-completed);
-}
-ion-item-divider[data-status='dropped'] {
-  border-left-color: var(--vultus-status-dropped);
-}
-ion-item-divider[data-status='planned'] {
-  border-left-color: var(--vultus-status-planned);
+
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .section-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--ion-text-color);
+  }
+
+  .section-count {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: var(--vultus-text-muted);
+  }
 }
 
+// The count adopts the section's status color (the title for active sections
+// stays full-contrast white per Stitch).
+ion-item-divider[data-status='watching'] .section-count {
+  color: var(--vultus-status-watching);
+}
+ion-item-divider[data-status='completed'] .section-count {
+  color: var(--vultus-status-completed);
+}
+ion-item-divider[data-status='dropped'] .section-count {
+  color: var(--vultus-status-dropped);
+}
+// planned keeps the muted slate already set on .section-count.
+
+// -----------------------------------------------------------------------------
+// Card — Stitch: rounded-xl (0.75rem), 8px padding, 16px gap, vertically
+// centered content, thin hairline border. The card surface shifts subtly per
+// status (a low-opacity status tint over the elevated surface).
+// -----------------------------------------------------------------------------
 .watchlist-card {
   position: relative;
   display: flex;
   flex-direction: row;
+  align-items: center;
   gap: var(--vultus-space-2);
   padding: var(--vultus-space-1);
   margin: var(--vultus-space-1) var(--vultus-space-2);
   border-radius: var(--vultus-radius-md);
   border: 1px solid var(--vultus-border);
-  background: var(--vultus-surface-elevated);
+  // Per-status surface tint: each status sets --st (its semantic color), and a
+  // single color-mix blends it 8% over the elevated surface.
+  --st: var(--vultus-surface-elevated);
+  background: color-mix(in srgb, var(--st) 8%, var(--vultus-surface-elevated));
   cursor: pointer;
+
+  &.status-watching {
+    --st: var(--vultus-status-watching);
+  }
+  &.status-completed {
+    --st: var(--vultus-status-completed);
+  }
+  &.status-dropped {
+    --st: var(--vultus-status-dropped);
+  }
+  &.status-planned {
+    --st: var(--vultus-status-planned);
+  }
 }
 
 .poster {
@@ -102,11 +188,31 @@ ion-item-divider[data-status='planned'] {
   }
 }
 
+// Delete control — Stitch reveals delete on swipe; on this Ionic list it lives
+// as a top-right overlay on the poster (per spec), tinted destructive-red.
+.delete-overlay {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--vultus-radius);
+  background: rgba(15, 23, 42, 0.6);
+  color: var(--vultus-status-dropped);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
 .card-body {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  gap: var(--vultus-space-1);
+  justify-content: center;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -121,36 +227,68 @@ ion-item-divider[data-status='planned'] {
   white-space: nowrap;
 }
 
+// Meta line — Stitch: plain text "Movie • 65%" in muted slate; type is NOT a
+// badge. The dot separator and the vote percent sit inline.
 .card-meta {
+  margin: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--vultus-space-1);
+  gap: 6px;
   font-family: var(--vultus-font-family);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--vultus-text-muted);
 }
 
-.type-badge,
-.vote-badge,
-.provider-badge {
-  padding: 2px var(--vultus-space-1);
-  border-radius: var(--vultus-radius);
-  background: var(--vultus-surface-overlay);
+.meta-sep {
+  color: var(--vultus-text-muted);
 }
 
-.vote-badge {
+.meta-vote {
   color: var(--ion-color-primary);
+}
+
+// Provider — Stitch: a low-opacity status-tinted pill ("Available on Hulu") on
+// the meta column. Keeps the pill shape; the tint follows the item status.
+// Provider pill: --pc is the pill's accent color (status-derived; planned
+// borrows emerald per Stitch's "Watch with Prime" green pill).
+.provider-badge {
+  align-self: flex-start;
+  padding: 2px var(--vultus-space-1);
+  border-radius: var(--vultus-radius-pill);
+  font-family: var(--vultus-font-family);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  --pc: var(--ion-color-primary);
+  background: color-mix(in srgb, var(--pc) 15%, transparent);
+  color: var(--pc);
+
+  &.status-watching {
+    --pc: var(--vultus-status-watching);
+  }
+  &.status-completed {
+    --pc: var(--vultus-status-completed);
+  }
+  &.status-dropped {
+    --pc: var(--vultus-status-dropped);
+  }
+  &.status-planned {
+    --pc: var(--ion-color-primary);
+  }
 }
 
 .status-chip {
   align-self: flex-start;
   padding: 2px 12px;
   border: none;
-  border-radius: var(--vultus-radius);
+  border-radius: var(--vultus-radius-pill);
   font-family: var(--vultus-font-family);
   font-size: 0.75rem;
+  font-weight: 600;
   text-transform: capitalize;
   color: #fff;
+  cursor: pointer;
 }
 .status-chip.status-watching {
   background: var(--vultus-status-watching);
@@ -164,22 +302,6 @@ ion-item-divider[data-status='planned'] {
 .status-chip.status-planned {
   background: var(--vultus-status-planned);
   color: var(--vultus-surface);
-}
-
-.delete-overlay {
-  position: absolute;
-  top: var(--vultus-space-1);
-  right: var(--vultus-space-1);
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: var(--vultus-radius);
-  background: rgba(15, 23, 42, 0.6);
-  color: var(--vultus-status-dropped);
-  font-size: 1.1rem;
 }
 
 .empty-state {
