@@ -27,13 +27,22 @@ ion-content {
     --cancel-button-color: var(--vultus-text-muted);
     --clear-button-color: var(--vultus-text-muted);
     --color: var(--ion-text-color);
-    --icon-color: var(--vultus-text-muted);
+    --icon-color: var(--ion-color-primary);
     --placeholder-color: var(--vultus-text-muted);
     --placeholder-font-style: normal;
     --placeholder-opacity: 1;
     font-family: var(--vultus-font-family);
+    height: 52px;
     padding-top: 0;
     padding-bottom: var(--vultus-space-1);
+    // Focus ring: box-shadow on the host element animates cleanly
+    border-radius: var(--vultus-radius);
+    box-shadow: 0 0 0 0 transparent;
+    transition: box-shadow 200ms ease-in-out;
+
+    &.searchbar-has-focus {
+      box-shadow: 0 0 0 2px var(--ion-color-primary);
+    }
   }
 }
 
