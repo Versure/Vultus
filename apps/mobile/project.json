@@ -59,7 +59,7 @@
       "executor": "nx:run-commands",
       "options": {
         "commands": [
-          "npx firebase emulators:start",
+          "npx firebase emulators:start --project vultus-cab62",
           "pnpm nx serve mobile"
         ],
         "parallel": true
