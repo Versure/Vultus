@@ -1,3 +1,188 @@
-// Watchlist tab placeholder — styling arrives with the watchlist slice feature
-// (PLAN §6 item 18). Theme tokens come from @vultus/shared/ui-kit via the
-// app-wide styles.
+// Watchlist tab styling. Consumes the dark-first ui-kit theme tokens (Inter,
+// emerald primary, navy-slate surfaces) via Ionic CSS variables; only the
+// slice-local status semantics + card layout live here. 8px grid, 0.5rem radius.
+
+// Status semantic colors (PLAN §2 watchlist status mapping).
+:host {
+  --status-watching: #3b82f6;
+  --status-completed: #10b981;
+  --status-dropped: #ef4444;
+  --status-planned: #94a3b8;
+}
+
+ion-segment {
+  margin: 8px;
+}
+
+.status-section {
+  margin-bottom: 8px;
+}
+
+ion-item-divider {
+  --background: var(--ion-color-step-100, #1e293b);
+  font-weight: 600;
+}
+
+.watchlist-card {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  padding: 8px;
+  margin: 8px;
+  border-radius: 0.5rem;
+  background: var(--ion-color-step-100, #1e293b);
+  cursor: pointer;
+}
+
+.poster {
+  position: relative;
+  flex: 0 0 auto;
+  width: 64px;
+  height: 96px;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: var(--ion-color-step-150, #0f172a);
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .poster-fallback {
+    width: 100%;
+    height: 100%;
+    background: var(--ion-color-step-150, #0f172a);
+  }
+}
+
+// Status accent stripe down the left edge of the poster.
+.poster.status-bar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 4px;
+}
+.poster[data-status='watching']::before {
+  background: var(--status-watching);
+}
+.poster[data-status='completed']::before {
+  background: var(--status-completed);
+}
+.poster[data-status='dropped']::before {
+  background: var(--status-dropped);
+}
+.poster[data-status='planned']::before {
+  background: var(--status-planned);
+}
+
+.card-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.card-title {
+  margin: 0;
+  font-weight: 600;
+  font-size: 1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+}
+
+.type-badge,
+.vote-badge,
+.provider-badge {
+  padding: 2px 8px;
+  border-radius: 0.5rem;
+  background: var(--ion-color-step-200, #334155);
+}
+
+.vote-badge {
+  color: var(--ion-color-primary, #10b981);
+}
+
+.status-chip {
+  align-self: flex-start;
+  padding: 2px 12px;
+  border: none;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  text-transform: capitalize;
+  color: #fff;
+}
+.status-chip.status-watching {
+  background: var(--status-watching);
+}
+.status-chip.status-completed {
+  background: var(--status-completed);
+}
+.status-chip.status-dropped {
+  background: var(--status-dropped);
+}
+.status-chip.status-planned {
+  background: var(--status-planned);
+  color: #0f172a;
+}
+
+.delete-overlay {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 0.5rem;
+  background: rgba(15, 23, 42, 0.6);
+  color: var(--status-dropped);
+  font-size: 1.1rem;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 60vh;
+  padding: 16px;
+
+  .empty-title {
+    margin: 0 0 8px;
+    font-size: 1.1rem;
+    font-weight: 600;
+  }
+
+  .empty-sub {
+    margin: 0;
+    color: var(--ion-color-medium, #94a3b8);
+  }
+}
+
+.skeleton-list .skeleton-card {
+  align-items: center;
+}
+
+.skeleton-poster {
+  width: 64px;
+  height: 96px;
+  border-radius: 0.5rem;
+}

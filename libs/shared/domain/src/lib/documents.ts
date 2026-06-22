@@ -32,6 +32,8 @@ export interface WatchlistItem {
   title: string;
   addedAt: string; // ISO 8601
   status: WatchStatus;
+  posterPath?: string | null; // TMDB poster path, e.g. '/abc123.jpg'; null when unknown
+  voteAverage?: number | null; // TMDB vote average 0–10; null when unknown
 }
 
 // users/{userId}/watchlist/{titleId}/episodes/{episodeId} — tv only.

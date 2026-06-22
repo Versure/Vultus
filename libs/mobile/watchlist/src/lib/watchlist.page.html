@@ -1,9 +1,131 @@
 <ion-header>
   <ion-toolbar>
-    <ion-title>Watchlist</ion-title>
+    <ion-title>Vultus</ion-title>
+    <ion-buttons slot="end">
+      <ion-button aria-label="Account">
+        <ion-icon name="person-circle-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
   </ion-toolbar>
 </ion-header>
 
-<ion-content class="ion-padding">
-  <p>Your watchlist will appear here.</p>
+<ion-content>
+  <ion-refresher slot="fixed" (ionRefresh)="onRefresh($event)">
+    <ion-refresher-content></ion-refresher-content>
+  </ion-refresher>
+
+  <ion-segment value="all" (ionChange)="onTypeChange($event)">
+    <ion-segment-button value="all">
+      <ion-label>All</ion-label>
+    </ion-segment-button>
+    <ion-segment-button value="movie">
+      <ion-label>Movies</ion-label>
+    </ion-segment-button>
+    <ion-segment-button value="tv">
+      <ion-label>TV Shows</ion-label>
+    </ion-segment-button>
+  </ion-segment>
+
+  @if ((vm$ | async); as vm) { @if (vm.groups === null) {
+  <div class="skeleton-list">
+    @for (s of skeletons; track s) {
+    <div class="watchlist-card skeleton-card">
+      <ion-skeleton-text
+        [animated]="true"
+        class="skeleton-poster"
+      ></ion-skeleton-text>
+      <div class="card-body">
+        <ion-skeleton-text
+          [animated]="true"
+          style="width: 70%"
+        ></ion-skeleton-text>
+        <ion-skeleton-text
+          [animated]="true"
+          style="width: 40%"
+        ></ion-skeleton-text>
+      </div>
+    </div>
+    }
+  </div>
+  } @else { @if (vm.groups.length === 0) {
+  <div class="empty-state">
+    <p class="empty-title">Your watchlist is empty</p>
+    <p class="empty-sub">Search for a title to get started</p>
+  </div>
+  } @else { @for (group of vm.groups; track group.status) {
+  <div class="status-section">
+    <ion-item-divider [class]="'status-' + group.status">
+      <ion-label>{{ group.label }} — {{ group.count }} items</ion-label>
+    </ion-item-divider>
+    @for (item of group.items; track item.tmdbId) {
+    <div
+      class="watchlist-card"
+      role="button"
+      tabindex="0"
+      (click)="navigateToDetail(titleId(item))"
+      (keyup.enter)="navigateToDetail(titleId(item))"
+      (keyup.space)="openStatusSheet(item)"
+      (contextmenu)="openStatusSheet(item); $event.preventDefault()"
+    >
+      <div
+        class="poster"
+        [class.status-bar]="true"
+        [attr.data-status]="item.status"
+      >
+        @if (posterUrl(item); as url) {
+        <img [src]="url" [alt]="item.title" />
+        } @else {
+        <div class="poster-fallback"></div>
+        }
+      </div>
+
+      <div class="card-body">
+        <p class="card-title">{{ item.title }}</p>
+        <div class="card-meta">
+          <span class="type-badge"
+            >{{ item.type === 'movie' ? 'Movie' : 'TV' }}</span
+          >
+          @if (votePercent(item); as pct) {
+          <span class="vote-badge">{{ pct }}%</span>
+          } @if (getProviderName$(item, (region$ | async)) | async; as provider)
+          {
+          <span class="provider-badge">{{ provider }}</span>
+          }
+        </div>
+        <button
+          type="button"
+          class="status-chip status-{{ item.status }}"
+          (click)="openStatusSheet(item); $event.stopPropagation()"
+        >
+          {{ item.status }}
+        </button>
+      </div>
+
+      <button
+        type="button"
+        class="delete-overlay"
+        aria-label="Remove from watchlist"
+        (click)="onDeleteConfirm(item); $event.stopPropagation()"
+      >
+        <ion-icon name="trash-outline"></ion-icon>
+      </button>
+    </div>
+    }
+  </div>
+  } } } }
+
+  <ion-action-sheet
+    [isOpen]="actionSheetOpen"
+    header="Set status"
+    [buttons]="actionSheetButtons"
+    (didDismiss)="actionSheetOpen = false"
+  ></ion-action-sheet>
+
+  <ion-alert
+    [isOpen]="alertOpen"
+    header="Remove title"
+    [message]="alertDeleteItem ? 'Remove ' + alertDeleteItem.title + ' from your watchlist?' : ''"
+    [buttons]="alertButtons"
+    (didDismiss)="alertOpen = false"
+  ></ion-alert>
 </ion-content>

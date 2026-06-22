@@ -2,7 +2,7 @@
 number: 0014
 slug: watchlist-slice
 title: Flesh out the watchlist slice — grouped status list, type filter, status action sheet, remove, and provider badges
-status: approved
+status: implementing
 slices: [slice:watchlist]
 scopes: [scope:mobile, scope:shared]
 created: 2026-06-22
@@ -124,7 +124,7 @@ state; and a loading skeleton shows before the stream first emits.
   callable is deferred (no functions endpoint is consumed in this PR).
 - **Push notification badge / unread count** on the tab.
 - **Offline mode beyond Firestore's built-in cache** (PLAN §1).
-- **`title-detail` slice / route creation** — this slice only *navigates toward*
+- **`title-detail` slice / route creation** — this slice only _navigates toward_
   it and degrades gracefully if absent (PLAN §6 item 19).
 - **Rich empty/loading polish across slices** — PLAN §6 item 23; a focused empty
   state + skeleton for this screen is in scope, app-wide polish is not.
@@ -136,12 +136,12 @@ PLAN §4 `users/{uid}/watchlist/{titleId}` gains **two new denormalized fields**
 (decision 1/4). `title-cache/{tmdbId}/availability/{region}` and
 `users/{uid}.region` are **read-only** here (already converter-backed).
 
-| PLAN §4 path                                  | Access by this slice         | Fields                                                              |
-| --------------------------------------------- | ---------------------------- | ------------------------------------------------------------------ |
-| `users/{uid}/watchlist` (collection)          | **read** (realtime)          | the full watchlist stream, optionally filtered by `type`           |
-| `users/{uid}/watchlist/{titleId}`             | **update**, **delete**       | `status` (update); whole doc (delete). **NOT** created here        |
-| `users/{uid}` (doc)                           | **read**                     | `region: Region` (settings slice owns the write)                   |
-| `title-cache/{tmdbId}/availability/{region}`  | **read**                     | `providers: WatchProvider[]` — for the provider badge              |
+| PLAN §4 path                                 | Access by this slice   | Fields                                                      |
+| -------------------------------------------- | ---------------------- | ----------------------------------------------------------- |
+| `users/{uid}/watchlist` (collection)         | **read** (realtime)    | the full watchlist stream, optionally filtered by `type`    |
+| `users/{uid}/watchlist/{titleId}`            | **update**, **delete** | `status` (update); whole doc (delete). **NOT** created here |
+| `users/{uid}` (doc)                          | **read**               | `region: Region` (settings slice owns the write)            |
+| `title-cache/{tmdbId}/availability/{region}` | **read**               | `providers: WatchProvider[]` — for the provider badge       |
 
 ### New `WatchlistItem` fields (shared/domain + shared/firestore-schema)
 
@@ -242,10 +242,17 @@ type filter and status grouping are client-side per decision 3).
   export class WatchlistService {
     /** Realtime watchlist for {uid}, optionally filtered to a single type.
         Emits [] when uid is null (not-ready) rather than throwing. */
-    watchlist$(uid: string | null, type?: TitleType): Observable<WatchlistItem[]>;
+    watchlist$(
+      uid: string | null,
+      type?: TitleType,
+    ): Observable<WatchlistItem[]>;
 
     /** Update one item's status. No-op when uid is null. */
-    updateStatus(uid: string | null, titleId: string, status: WatchStatus): Promise<void>;
+    updateStatus(
+      uid: string | null,
+      titleId: string,
+      status: WatchStatus,
+    ): Promise<void>;
 
     /** Remove one item. No-op when uid is null. */
     removeTitle(uid: string | null, titleId: string): Promise<void>;
@@ -254,7 +261,10 @@ type filter and status grouping are client-side per decision 3).
     userRegion$(uid: string | null): Observable<Region | null>;
 
     /** Availability doc for a title in a region; emits null when absent/unsynced. */
-    availability$(tmdbId: number, region: Region | null): Observable<RegionAvailability | null>;
+    availability$(
+      tmdbId: number,
+      region: Region | null,
+    ): Observable<RegionAvailability | null>;
   }
   ```
 
@@ -298,8 +308,7 @@ layout (header, type toggle, status section grouping + counts, card composition,
 delete overlay, empty state) to it.
 
 > **Graceful degradation:** if the `stitch` MCP is **unavailable in-session**,
-> apply the PLAN §2 design tokens below (seeded into `shared/ui-kit` by spec
-> 0010) and **note in the PR that the MCP was unreachable** — a Stitch outage
+> apply the PLAN §2 design tokens below (seeded into `shared/ui-kit` by spec 0010) and **note in the PR that the MCP was unreachable** — a Stitch outage
 > must not block an otherwise-correct PR.
 
 Layout (Ionic, consuming the spec-0010 `shared/ui-kit` theme tokens):
@@ -378,9 +387,9 @@ files / the page composition), not parallelisable.
      `removeTitle` (delete at `watchlistItemPath`), `userRegion$` (read
      `users/{uid}.region` via `userPath` + `dataToUser`), and `availability$`
      (read `title-cache/{tmdbId}/availability/{region}` via `availabilityDocPath`
-     + `dataToAvailability`, emit `null` when the doc is absent). **Guard a null
-     uid** before any Firestore call (emit `[]`/`null`; no throw). Implement the
-     pure `groupByStatus` and `filterByType` helpers (slice-local).
+     - `dataToAvailability`, emit `null` when the doc is absent). **Guard a null
+       uid** before any Firestore call (emit `[]`/`null`; no throw). Implement the
+       pure `groupByStatus` and `filterByType` helpers (slice-local).
    - Files: `libs/mobile/watchlist/src/lib/watchlist.service.ts`,
      and a slice-local helpers file if the implementer separates the pure
      functions (e.g. `libs/mobile/watchlist/src/lib/watchlist.helpers.ts`) —
@@ -504,7 +513,7 @@ This spec's green gate is **unit + component + build** (what `ci.yml` runs:
 libs); `mobile` has `lint`/`test`/`build`/`typecheck`.
 
 - [ ] `pnpm nx run-many -t lint test -p mobile-watchlist shared-domain
-      shared-firestore-schema` passes **with Sheriff active** (lint includes
+    shared-firestore-schema` passes **with Sheriff active** (lint includes
       Sheriff): the watchlist slice imports `@vultus/shared/domain`,
       `@vultus/shared/firestore-schema`, AngularFire/Ionic (third-party), and the
       uid **only** via the `AUTH_UID` token — **no other slice import, no
@@ -635,9 +644,9 @@ libs); `mobile` has `lint`/`test`/`build`/`typecheck`.
 
 - **No PLAN conflict.** This implements PLAN §6 item 18 (the watchlist list with
   status, remove, and pull-to-refresh) using the PLAN §4 `users/{uid}/watchlist`
-  + `title-cache/*/availability/*` shapes and the spec-0010 AngularFire DI
-  contract. The two additive `WatchlistItem` fields (`posterPath`, `voteAverage`)
-  extend the PLAN §4 watchlist doc to support the denormalized card render
-  (decision 1/4) without forking the model. The pull-to-refresh narrowing (stream
-  re-subscribe vs HTTP sync) and the per-card availability read are noted above as
-  deliberate, in-scope decisions — not silent departures from PLAN.
+  - `title-cache/*/availability/*` shapes and the spec-0010 AngularFire DI
+    contract. The two additive `WatchlistItem` fields (`posterPath`, `voteAverage`)
+    extend the PLAN §4 watchlist doc to support the denormalized card render
+    (decision 1/4) without forking the model. The pull-to-refresh narrowing (stream
+    re-subscribe vs HTTP sync) and the per-card availability read are noted above as
+    deliberate, in-scope decisions — not silent departures from PLAN.
