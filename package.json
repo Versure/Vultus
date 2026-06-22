@@ -5,7 +5,7 @@
   "scripts": {
     "prepare": "husky",
     "emulators": "firebase emulators:start --import ./.emulator-data --export-on-exit ./.emulator-data",
-    "emulators:clean": "firebase emulators:start",
+    "emulators:clean": "firebase emulators:start --project vultus-cab62",
     "test:rules": "firebase emulators:exec --only firestore \"vitest run -c tools/firestore-rules-test/vitest.rules.config.mts\""
   },
   "private": true,
