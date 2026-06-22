@@ -45,15 +45,44 @@ PushNotifications API from a component); the **native** Capacitor setup
 
 ## Frontend domain guidance
 
-- **Match the design.** Pull the relevant Stitch screen with `get_screen` (the
-  ID is in the spec; use `list_screens`/`get_project` for project
-  `projects/13590348714018893783` if you need to find it). Align component
-  structure, spacing, and layout to it.
+- **Match the design — and actually fetch it.** Pull the relevant Stitch screen
+  with `get_screen` (ID in the spec; use `list_screens`/`get_project` for project
+  `projects/13590348714018893783` to find it). **If `get_screen` errors or seems
+  unreachable, retry it** (transient failures are common) — do **not** silently
+  fall back to "tokens only" and proceed. A `scope:mobile` UI task where you could
+  not see the screen is **blocked**: implement to the spec's stated values, but
+  **report "Stitch screen unverified" prominently** so the orchestrator surfaces it
+  rather than shipping a guess. Always record the screen ID you used.
+- **Translate the design to concrete CSS, not vibes.** Before writing SCSS, pin
+  the exact values the screen implies: element dimensions (input/control
+  **heights**, not just "taller"), spacing/insets, radius, and **every interactive
+  state** — default / **focus** / hover / active / disabled, including transitions
+  and animations (e.g. "green border on focus, ease-in-out"). A control's focus/
+  active styling is part of the design, not an afterthought.
 - **Design tokens (PLAN §2)** are the contract for `shared/ui-kit` theming:
   dark-first, **Inter**, primary **Emerald `#10B981`**, navy-slate surfaces
   (`#0F172A`/`#1E293B`), 8px grid, 0.5rem radius. Map the watchlist `status`
   field to its semantic color: watching `#3B82F6`, completed `#10B981`,
-  dropped `#EF4444`, planned `#94A3B8`.
+  dropped `#EF4444`, planned `#94A3B8`. **A token only renders if it's actually
+  wired:** a font named in `--vultus-font-family` is _not loaded_ unless a
+  web-font (`@font-face` / Google Fonts link in `apps/mobile/src/index.html`)
+  provides it — otherwise it silently falls back to system-ui. If the design's
+  font isn't loaded, that's a setup gap to fix (or report), not "good enough".
+- **Ionic component internals — style the part that renders, not the host.**
+  Ionic components render inner shadow/scoped elements; theming the host alone
+  misses them. Known gotchas:
+  - **`ion-searchbar`**: the visible field is the inner **`.searchbar-input`**
+    (height, `box-shadow`/focus ring, border live there — set via the `--box-shadow`
+    CSS var or `::ng-deep .searchbar-input`, **not** the `ion-searchbar` host, or
+    the ring floats around the wrapper with a gap). The search **icon is
+    absolutely positioned** with a fixed `top` tuned to the default height — if you
+    change the input height, re-center the icon (`top:50%; transform:translateY(-50%)`).
+  - **General**: prefer the component's documented CSS custom properties / `::part`
+    first; reach for `::ng-deep <inner-class>` only when no var exists. When unsure
+    of the inner structure, **read the Ionic component CSS in
+    `node_modules/@ionic/core/dist/collection/components/<name>/*.md.css`** rather
+    than guessing — it shows the exact selectors, defaults, and which element each
+    `--var` maps to.
 - **Angular/Ionic idioms**: standalone components + DI, RxJS for streams,
   Firestore real-time bindings via the data layer, Ionic components over custom
   markup. Keep UI thin; logic testable.
@@ -61,10 +90,28 @@ PushNotifications API from a component); the **native** Capacitor setup
   components with non-trivial state/branching; skip pure presentational ones.
   Unit-test any logic.
 
+## Verify the render, don't just compile it
+
+Build/lint/test passing says nothing about whether the UI **looks** right — that
+is where rework loops come from. Before returning:
+
+- Build the affected app/slice and confirm it compiles.
+- **Attempt a visual check** when the environment allows it (e.g. render the page
+  and screenshot it, or serve the mock/dev target and inspect), and compare each
+  pinned value + state against the Stitch screen.
+- **If you cannot render here** (sandboxed/loopback-restricted environments block a
+  live dev server + browser), say so explicitly and return a **visual checklist**:
+  the screen ID, the exact command to view it (e.g.
+  `pnpm nx serve mobile --configuration=mock`), and the specific things a human must
+  eyeball (heights, focus ring, font, icon centering, insets). Never imply UI
+  fidelity is confirmed when only the compiler ran.
+
 ## Workflow & output
 
 Read the spec (Scope, Public types, UI/Stitch refs, Test plan) and your assigned
-tasks. Pull the Stitch screen, implement components + tests together. Run the
-narrowest available checks (`nx test <project>`, `nx lint <project>`) when the
-workspace supports them; note + skip if not bootstrapped. Return: files changed,
-a short summary, check output, and anything you couldn't do.
+tasks. **Fetch the Stitch screen and pin its concrete values/states first**, then
+implement components + tests together. Run the narrowest available checks
+(`nx test <project>`, `nx lint <project>`) when the workspace supports them; note +
+skip if not bootstrapped. Return: files changed, a short summary, check output, the
+**Stitch screen ID used (or "unverified — why")**, the **visual-verification result
+or checklist**, and anything you couldn't do.

@@ -51,6 +51,17 @@
           "optimization": false,
           "extractLicenses": false,
           "sourceMap": true
+        },
+        "mock": {
+          "fileReplacements": [
+            {
+              "replace": "apps/mobile/src/environments/environment.ts",
+              "with": "apps/mobile/src/environments/environment.mock.ts"
+            }
+          ],
+          "optimization": false,
+          "extractLicenses": false,
+          "sourceMap": true
         }
       },
       "defaultConfiguration": "production"
@@ -74,6 +85,9 @@
         },
         "development": {
           "buildTarget": "mobile:build:development"
+        },
+        "mock": {
+          "buildTarget": "mobile:build:mock"
         }
       },
       "defaultConfiguration": "development"

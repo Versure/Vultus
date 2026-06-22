@@ -23,4 +23,12 @@ export const environment = {
     messagingSenderId: 'REPLACE_WITH_REAL_MESSAGING_SENDER_ID',
     appId: 'REPLACE_WITH_REAL_APP_ID',
   },
+  // TMDB search config (spec 0013). The api_key placeholder is substituted at
+  // build time by CI from the `TMDB_API_KEY` GitHub Actions secret (CI wiring
+  // is a separate follow-up spec). The base URLs are public, not secrets.
+  tmdb: {
+    apiBaseUrl: 'https://api.themoviedb.org/3',
+    imageBaseUrl: 'https://image.tmdb.org/t/p/w185',
+    auth: { kind: 'apiKey' as const, apiKey: 'REPLACE_WITH_REAL_TMDB_API_KEY' },
+  },
 };
