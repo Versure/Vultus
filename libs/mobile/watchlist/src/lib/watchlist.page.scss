@@ -325,6 +325,70 @@ ion-content {
   align-items: center;
 }
 
+// -----------------------------------------------------------------------------
+// Delete-confirm alert overlay — ion-alert renders in the Ionic overlay DOM
+// (outside this component's shadow), so ::ng-deep is required to reach it via
+// the cssClass="vultus-alert" hook. Design.md Level-2 overlay spec:
+//   bg surface-container-highest (#2d3449), 1rem radius, ambient shadow.
+// -----------------------------------------------------------------------------
+// stylelint-disable selector-pseudo-element-no-unknown
+::ng-deep .vultus-alert {
+  .alert-wrapper {
+    background: #2d3449;
+    border-radius: 1rem;
+    border: 1px solid rgba(60, 74, 66, 0.25);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+  }
+
+  .alert-head {
+    padding: 20px 20px 8px;
+  }
+
+  .alert-title {
+    color: #dae2fd;
+    font-family: 'Inter', sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .alert-message {
+    color: #bbcabf;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    padding: 0 20px 16px;
+  }
+
+  .alert-button-group {
+    padding: 8px 12px 12px;
+    gap: 8px;
+    border-top: 1px solid rgba(60, 74, 66, 0.25);
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+
+  .alert-button {
+    border-radius: 0.5rem;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: 8px 16px;
+    margin: 0;
+  }
+
+  .vultus-alert-cancel {
+    color: #bbcabf;
+    background: transparent;
+  }
+
+  .vultus-alert-remove {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.12);
+  }
+}
+
 .skeleton-poster {
   width: 64px;
   height: 96px;

@@ -112,10 +112,11 @@ export class WatchlistPage {
   alertOpen = false;
 
   readonly alertButtons = [
-    { text: 'Cancel', role: 'cancel' },
+    { text: 'Cancel', role: 'cancel', cssClass: 'vultus-alert-cancel' },
     {
       text: 'Remove',
       role: 'destructive',
+      cssClass: 'vultus-alert-remove',
       handler: () => {
         this.onDeleteItem();
       },
