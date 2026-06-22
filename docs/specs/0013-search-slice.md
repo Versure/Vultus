@@ -366,35 +366,92 @@ This is a mobile slice — the implementer **must pull the Search screen** via t
 `stitch` MCP from project **`projects/13590348714018893783`** ("Vultus Android App
 Design"): run `list_screens`, find the **Search** screen, then `get_screen` on it;
 **reference its screen ID in the PR** and align layout (searchbar placement, result
-card structure — poster left, title/year/badge right — empty/no-results states) to
-it.
+card structure, empty/no-results states, the added-state control) to it.
 
-> **Graceful degradation:** if the `stitch` MCP is **unavailable in-session**, apply
-> the PLAN §2 design tokens below (seeded into `shared/ui-kit` by spec 0010) and
-> **note in the PR that the MCP was unreachable** — a Stitch outage must not block
-> an otherwise-correct PR.
+> **Stitch MCP status (spec-author, 2026-06-22):** the `stitch` MCP was **NOT
+> reachable in the spec-authoring session** (no `stitch` server / `get_screen`
+> tool available), so the specific Search screen ID could not be captured here.
+> **Stitch Search screen not found in-session; PLAN §2 design tokens applied as
+> fallback** — the layout and token contract below is derived from the canonical
+> "Vultus Design System" tokens in PLAN §2, already seeded into `shared/ui-kit`
+> by spec 0010 (`libs/shared/ui-kit/src/lib/theme.scss`). The implementer **must
+> still attempt `list_screens` / `get_screen` for the Search screen when the MCP
+> is reachable**, reconcile any layout/visual divergence against the tokens below,
+> and **record the resolved Stitch screen ID (or "MCP unreachable") in the PR**. A
+> Stitch outage must not block an otherwise-correct PR.
 
-Layout (Ionic, consuming the spec-0010 `shared/ui-kit` theme tokens):
+Layout (Ionic, consuming the spec-0010 `shared/ui-kit` theme tokens — use the
+**seeded CSS custom properties**, do not hard-code hex):
 
-- `IonHeader` / `IonToolbar` / `IonTitle` ("Search") + an `IonSearchbar` (its
-  `ionInput`/`debounce` drives `SearchService.setQuery`; Ionic's searchbar has a
-  built-in `debounce` — set it to ~400 ms, or debounce in the service, not both).
-- `IonContent` rendering one of the five view-states:
-  - **prompt** (decision 6): centered icon + "Search for movies and TV shows".
-  - **loading**: an `IonSpinner` (or skeleton) while a fetch is in flight.
-  - **results**: an `IonList` of result cards. Each card (decision 2): poster
-    thumbnail (`posterUrl`, or a placeholder when `null`), **title**, **year**, a
-    **media-type badge** (`IonBadge` "Movie" / "TV Show"), and an **Add**
-    control. When `added === true`: show the checked/added state (a checkmark icon
-    / disabled "Added" button) instead of an active Add button (decision 5).
-  - **no-results** (decision 7): centered icon/illustration + "No results for
-    '<query>'".
-  - **error**: a friendly "Something went wrong" with a retry affordance.
-- Apply PLAN §2 tokens: **dark-first**, **Inter**, primary **Emerald `#10B981`**
-  (the Add button / badge accents; map the "Planned" status to `#94A3B8` neutral
-  slate per PLAN §2 if the added state references status color), navy-slate
-  surfaces (`#0F172A` background / `#1E293B` cards), **8px grid**, **0.5rem**
-  radius — consumed from the `shared/ui-kit` theme seeded in 0010, not redefined.
+- **Header / search bar.** `IonHeader` / `IonToolbar` / `IonTitle` ("Search") over
+  an `IonSearchbar`. The searchbar sits on the **elevated surface**
+  (`--vultus-surface-elevated` `#1E293B`) above the **`--vultus-surface` `#0F172A`**
+  page background, **0.5rem** radius (`--vultus-radius`), muted placeholder text
+  (`--vultus-text-muted` `#94A3B8`). Its `ionInput`/`debounce` drives
+  `SearchService.setQuery`; Ionic's searchbar has a built-in `debounce` — set it to
+  ~400 ms, **or** debounce in the service, not both.
+- `IonContent` (page background `--vultus-surface` `#0F172A`) rendering one of the
+  five view-states:
+  - **prompt** (decision 6): a vertically-centered empty state — a large muted
+    search/film icon (`--vultus-text-muted` `#94A3B8`) above the copy "Search for
+    movies and TV shows" in muted text. No card list.
+  - **loading**: an `IonSpinner` (Emerald accent, `--ion-color-primary` `#10B981`)
+    or skeleton cards while a fetch is in flight.
+  - **results**: an `IonList` (transparent over the page background) of result
+    **cards** on the **elevated surface** (`--vultus-surface-elevated` `#1E293B`,
+    `--vultus-radius` `0.5rem`, optional 1px `--vultus-border` `#334155` outline,
+    `--vultus-space-2` `16px` internal padding, `--vultus-space-1` `8px` vertical
+    gap between cards — 8px grid). **Card structure (decision 2), poster-left:**
+    - **Poster thumbnail** on the leading edge: `posterUrl` (TMDB `w185`) in a
+      fixed-ratio (2:3) rounded-corner (`--vultus-radius-sm` `0.25rem`) frame; a
+      neutral slate placeholder with a film icon when `posterUrl === null` (no
+      broken image).
+    - **Text block** (trailing the poster): **title** in primary text
+      (`--ion-text-color` `#F8FAFC`, Inter, ~`1rem`/16px, semibold, 1–2 lines
+      truncated), **release/first-air year** beneath it in muted text
+      (`--vultus-text-muted` `#94A3B8`, ~`0.875rem`/14px), and a **media-type
+      badge** — an `IonBadge` reading **"Movie"** or **"TV Show"** in a low-emphasis
+      slate fill (`--vultus-surface-overlay` `#2D3748` background, muted text),
+      pill radius (`--vultus-radius-pill`). The badge is a neutral chip, **not**
+      Emerald (Emerald is reserved for the primary Add affordance).
+    - **Add control** on the trailing edge of the card:
+      - **Not-added** (`added === false`): an active **Add** button — Emerald
+        primary (`--ion-color-primary` `#10B981`, white contrast text/icon), a
+        compact `IonButton` (or icon-button with a `+`/`add` icon), `--vultus-radius`
+        `0.5rem`. This is the **only** Emerald-filled element on the card.
+      - **Added** (`added === true`, decision 5): replace the active button with a
+        **checked, non-actionable** state — a **checkmark** (`checkmark`/
+        `checkmark-circle` icon) in Emerald (`#10B981`) with an "Added" label in
+        muted text, rendered as a `disabled` button (or a plain checkmark chip) so
+        it is visibly settled and **cannot** be tapped to re-add. Maps to the
+        **Planned** status semantically, but the **added affirmation uses Emerald**
+        (the "done/added" success accent); the `#94A3B8` Planned status color is a
+        watchlist-slice concern and is **not** required on this search card.
+  - **no-results** (decision 7): a vertically-centered empty state — a muted
+    icon/illustration (`--vultus-text-muted` `#94A3B8`) above "No results for
+    '<query>'" in muted text. Same visual family as the prompt state, different copy.
+  - **error**: a friendly centered "Something went wrong" in muted text with a
+    **retry** affordance — an outline/secondary `IonButton` (Emerald text/border,
+    not a filled Emerald block) so it reads as a recovery action, not a primary CTA.
+- **Token contract (PLAN §2, via `shared/ui-kit` CSS custom properties — do not
+  redefine or hard-code):**
+  - **dark-first**, **Inter** (`--vultus-font-family`).
+  - **Primary Emerald `#10B981`** (`--ion-color-primary`): the Add button and the
+    added-state checkmark accent — and **only** those, to keep the CTA unambiguous.
+  - **Surfaces:** `--vultus-surface` `#0F172A` (page), `--vultus-surface-elevated`
+    `#1E293B` (cards / searchbar / toolbar), `--vultus-surface-overlay` `#2D3748`
+    (the media-type badge chip), `--vultus-border` `#334155` (card outline).
+  - **Text:** `--ion-text-color` `#F8FAFC` (title), `--vultus-text-muted` `#94A3B8`
+    (year, badge label, empty-state copy, placeholders).
+  - **Spacing** on the **8px grid** (`--vultus-space-*`); **radius** `--vultus-radius`
+    `0.5rem` (cards/buttons/searchbar), `--vultus-radius-sm` `0.25rem` (poster),
+    `--vultus-radius-pill` (badge).
+  - **Status colors** (`--vultus-status-*`): not surfaced on the search card in v1
+    (search creates only a `planned` entry and shows a generic added affirmation);
+    the full status-color map (Watching `#3B82F6`, Completed/`#10B981`, Dropped
+    `#EF4444`, Planned `#94A3B8`) is the **watchlist slice's** concern (PLAN §6
+    item 18). Noted here so the implementer does not invent a status legend on the
+    search card.
 
 ## Implementation task graph
 
@@ -528,12 +585,14 @@ the spec-0010 stub render test; `SearchService` mocked):**
 - **Prompt state:** with no query, the prompt copy renders and no card list shows
   (decision 6).
 - **Results list:** given mock results, the page renders one card per result with
-  poster (or placeholder), title, year, and the correct media-type badge
-  ("Movie"/"TV Show") (decision 2).
-- **Add interaction:** tapping a card's Add button calls `SearchService.add` with
-  that result (decision 3).
+  the poster image when `posterUrl` is set, the **placeholder** when `posterUrl` is
+  `null` (no broken `<img>`), the title, the muted year, and the correct media-type
+  badge text ("Movie"/"TV Show") (decision 2, UI section).
+- **Add interaction:** tapping a card's Emerald Add button calls `SearchService.add`
+  with that result (decision 3).
 - **Added-state (decision 5):** a result with `added: true` renders the
-  checked/"Added" state and **no** active Add button (can't re-add).
+  checkmark/"Added" settled state (disabled / non-actionable) and **no** active Add
+  button — tapping it does not call `add` again (can't re-add).
 - **No-results + loading states:** the `'no-results'` view shows the "No results
   for '<query>'" copy (decision 7); the `'loading'` view shows the spinner.
 
@@ -584,6 +643,15 @@ PLAN §6 item 20 (decision 9).
       `REPLACE_WITH_REAL_TMDB_API_KEY` placeholder (CI-substituted from the
       `TMDB_API_KEY` secret — that CI wiring is a follow-up, not this spec's DoD);
       `.env.local` is never read/written (see Risks on the TMDB-key-in-client caveat).
+- [ ] **UI matches the Stitch design contract:** the page renders the
+      poster-left result card (poster / title / muted year / neutral media-type
+      badge / trailing Add control), the Emerald-only Add button, the
+      checkmark/"Added" settled state, and the prompt / no-results / error empty
+      states, using the **`shared/ui-kit` CSS custom properties** (no hard-coded
+      hex) per the UI section. **Spec-authoring note:** the `stitch` MCP was
+      unreachable in the spec session (Search screen ID not captured); the
+      implementer pulls the Search screen when the MCP is reachable, reconciles any
+      divergence, and records the resolved screen ID (or "MCP unreachable") in the PR.
 - [ ] PR description records: the **Stitch Search screen ID** used (or that the MCP
       was unreachable and PLAN §2 tokens were applied), the exact verification
       commands, the writes-only-to-`users/{uid}/watchlist` / no-cross-slice /
