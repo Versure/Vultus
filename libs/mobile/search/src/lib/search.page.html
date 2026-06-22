@@ -2,8 +2,85 @@
   <ion-toolbar>
     <ion-title>Search</ion-title>
   </ion-toolbar>
+  <ion-toolbar>
+    <ion-searchbar
+      placeholder="Search for movies and TV shows"
+      (ionInput)="onSearch($event)"
+    ></ion-searchbar>
+  </ion-toolbar>
 </ion-header>
 
-<ion-content class="ion-padding">
-  <p>Search for movies and shows.</p>
+<ion-content>
+  <!-- Prompt state -->
+  @if (service.viewState() === 'prompt') {
+  <div class="empty-state">
+    <ion-icon name="film-outline" class="empty-icon"></ion-icon>
+    <p class="empty-text">Search for movies and TV shows</p>
+  </div>
+  }
+
+  <!-- Loading state -->
+  @if (service.viewState() === 'loading') {
+  <div class="empty-state">
+    <ion-spinner></ion-spinner>
+  </div>
+  }
+
+  <!-- No results state -->
+  @if (service.viewState() === 'no-results') {
+  <div class="empty-state">
+    <ion-icon name="search" class="empty-icon"></ion-icon>
+    <p class="empty-text">No results for '{{ service.lastQuery() }}'</p>
+  </div>
+  }
+
+  <!-- Error state -->
+  @if (service.viewState() === 'error') {
+  <div class="empty-state">
+    <ion-icon name="alert-circle-outline" class="empty-icon"></ion-icon>
+    <p class="empty-text">Something went wrong</p>
+    <ion-button fill="outline" (click)="retry()">Try again</ion-button>
+  </div>
+  }
+
+  <!-- Results -->
+  @if (service.viewState() === 'results') {
+  <ion-list class="results-list">
+    @for (result of service.results(); track trackByTmdbId($index, result)) {
+    <div class="result-card">
+      <div class="poster-wrap">
+        @if (result.posterUrl) {
+        <img [src]="result.posterUrl" [alt]="result.title" class="poster-img" />
+        } @else {
+        <div class="poster-placeholder">
+          <ion-icon name="film-outline"></ion-icon>
+        </div>
+        }
+      </div>
+      <div class="card-body">
+        <p class="title">{{ result.title }}</p>
+        <p class="year">{{ result.year ?? '—' }}</p>
+        <ion-badge class="type-badge">
+          {{ result.type === 'movie' ? 'Movie' : 'TV Show' }}
+        </ion-badge>
+      </div>
+      <div class="card-action">
+        @if (result.added) {
+        <ion-button fill="clear" disabled class="added-btn">
+          <ion-icon slot="icon-only" name="checkmark-circle"></ion-icon>
+        </ion-button>
+        } @else {
+        <ion-button
+          fill="solid"
+          class="add-btn"
+          (click)="onAdd(result, $event)"
+        >
+          <ion-icon slot="icon-only" name="add"></ion-icon>
+        </ion-button>
+        }
+      </div>
+    </div>
+    }
+  </ion-list>
+  }
 </ion-content>

@@ -1,2 +1,118 @@
-// Search slice placeholder page — styling arrives with the search feature
-// (PLAN §6 item 17). Theming comes from the global @vultus/shared/ui-kit tokens.
+ion-content {
+  --background: var(--vultus-surface);
+}
+
+ion-toolbar {
+  --background: var(--vultus-surface-elevated);
+}
+
+ion-searchbar {
+  --background: var(--vultus-surface-elevated);
+  --border-radius: var(--vultus-radius);
+  --placeholder-color: var(--vultus-text-muted);
+  --color: var(--ion-text-color);
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 60vh;
+  gap: var(--vultus-space-1);
+}
+
+.empty-icon {
+  font-size: 3rem;
+  color: var(--vultus-text-muted);
+}
+
+.empty-text {
+  color: var(--vultus-text-muted);
+  font-family: var(--vultus-font-family);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.results-list {
+  background: transparent;
+  padding: var(--vultus-space-1);
+}
+
+.result-card {
+  display: flex;
+  align-items: center;
+  background: var(--vultus-surface-elevated);
+  border-radius: var(--vultus-radius);
+  border: 1px solid var(--vultus-border);
+  padding: var(--vultus-space-2);
+  margin-bottom: var(--vultus-space-1);
+  gap: var(--vultus-space-1);
+}
+
+.poster-wrap {
+  flex-shrink: 0;
+  width: 50px;
+  height: 75px;
+}
+
+.poster-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--vultus-radius-sm);
+}
+
+.poster-placeholder {
+  width: 100%;
+  height: 100%;
+  background: var(--vultus-surface-overlay);
+  border-radius: var(--vultus-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--vultus-text-muted);
+  font-size: 1.5rem;
+}
+
+.card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  color: var(--ion-text-color);
+  font-family: var(--vultus-font-family);
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.year {
+  color: var(--vultus-text-muted);
+  font-size: 0.875rem;
+  margin: 0 0 6px;
+}
+
+.type-badge {
+  --background: var(--vultus-surface-overlay);
+  --color: var(--vultus-text-muted);
+  border-radius: var(--vultus-radius-pill);
+  font-size: 0.75rem;
+}
+
+.card-action {
+  flex-shrink: 0;
+}
+
+.add-btn {
+  --background: var(--ion-color-primary);
+  --border-radius: var(--vultus-radius);
+}
+
+.added-btn {
+  --color: var(--ion-color-primary);
+}
