@@ -1,0 +1,9 @@
+{
+  "name": "dispatch-notifications",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/functions/dispatch-notifications/src",
+  "projectType": "library",
+  "tags": [],
+  "// targets": "to see all targets run: nx show project dispatch-notifications --web",
+  "targets": {}
+}

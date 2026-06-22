@@ -48,6 +48,7 @@ export default tseslint.config(
             '*.config.ts',
             '*.config.mts',
             '*.config.cts',
+            'vitest.workspace.ts',
           ],
         },
         tsconfigRootDir: import.meta.dirname,
