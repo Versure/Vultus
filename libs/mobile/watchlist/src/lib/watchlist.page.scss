@@ -1,37 +1,81 @@
 // Watchlist tab styling. Consumes the dark-first ui-kit theme tokens (Inter,
-// emerald primary, navy-slate surfaces) via Ionic CSS variables; only the
-// slice-local status semantics + card layout live here. 8px grid, 0.5rem radius.
+// emerald primary, navy-slate surfaces) from libs/shared/ui-kit/theme.scss via
+// the shared --vultus-* CSS custom properties; only the slice-local status
+// semantics + card layout live here. 8px grid, 0.5rem radius. Reconciled with
+// the Stitch "Watchlist - Vultus" screen
+// (projects/13590348714018893783/screens/f8f264de01dd46e7ad9dbea30796e757):
+// status-colored section headers (dot + count), surface-elevated cards with a
+// 1px border, 64x96 posters, status-colored progress + percent.
 
-// Status semantic colors (PLAN §2 watchlist status mapping).
-:host {
-  --status-watching: #3b82f6;
-  --status-completed: #10b981;
-  --status-dropped: #ef4444;
-  --status-planned: #94a3b8;
+ion-header {
+  ion-toolbar {
+    --background: var(--vultus-surface-elevated);
+    --border-width: 0;
+    --box-shadow: none;
+
+    ion-title {
+      font-family: var(--vultus-font-family);
+      font-weight: 600;
+      color: var(--ion-text-color);
+    }
+  }
+}
+
+ion-content {
+  --background: var(--vultus-surface);
 }
 
 ion-segment {
-  margin: 8px;
+  --background: var(--vultus-surface-elevated);
+  margin: var(--vultus-space-1) var(--vultus-space-2);
+
+  ion-segment-button {
+    --color: var(--vultus-text-muted);
+    --color-checked: var(--ion-text-color);
+    --indicator-color: var(--ion-color-primary);
+    font-family: var(--vultus-font-family);
+  }
 }
 
 .status-section {
-  margin-bottom: 8px;
+  margin-bottom: var(--vultus-space-1);
 }
 
+// Section header — per Stitch, the section title carries a status-colored
+// accent: a left dot/border + the status color on the label, driven by the
+// `data-status` attribute on the divider.
 ion-item-divider {
-  --background: var(--ion-color-step-100, #1e293b);
+  --background: var(--vultus-surface-elevated);
+  --color: var(--ion-text-color);
+  font-family: var(--vultus-font-family);
   font-weight: 600;
+  font-size: 0.875rem;
+  letter-spacing: 0.02em;
+  border-left: 3px solid var(--vultus-text-muted);
+}
+ion-item-divider[data-status='watching'] {
+  border-left-color: var(--vultus-status-watching);
+}
+ion-item-divider[data-status='completed'] {
+  border-left-color: var(--vultus-status-completed);
+}
+ion-item-divider[data-status='dropped'] {
+  border-left-color: var(--vultus-status-dropped);
+}
+ion-item-divider[data-status='planned'] {
+  border-left-color: var(--vultus-status-planned);
 }
 
 .watchlist-card {
   position: relative;
   display: flex;
   flex-direction: row;
-  gap: 12px;
-  padding: 8px;
-  margin: 8px;
-  border-radius: 0.5rem;
-  background: var(--ion-color-step-100, #1e293b);
+  gap: var(--vultus-space-2);
+  padding: var(--vultus-space-1);
+  margin: var(--vultus-space-1) var(--vultus-space-2);
+  border-radius: var(--vultus-radius-md);
+  border: 1px solid var(--vultus-border);
+  background: var(--vultus-surface-elevated);
   cursor: pointer;
 }
 
@@ -40,9 +84,9 @@ ion-item-divider {
   flex: 0 0 auto;
   width: 64px;
   height: 96px;
-  border-radius: 0.5rem;
+  border-radius: var(--vultus-radius);
   overflow: hidden;
-  background: var(--ion-color-step-150, #0f172a);
+  background: var(--vultus-surface-overlay);
 
   img {
     width: 100%;
@@ -54,44 +98,24 @@ ion-item-divider {
   .poster-fallback {
     width: 100%;
     height: 100%;
-    background: var(--ion-color-step-150, #0f172a);
+    background: var(--vultus-surface-overlay);
   }
-}
-
-// Status accent stripe down the left edge of the poster.
-.poster.status-bar::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  width: 4px;
-}
-.poster[data-status='watching']::before {
-  background: var(--status-watching);
-}
-.poster[data-status='completed']::before {
-  background: var(--status-completed);
-}
-.poster[data-status='dropped']::before {
-  background: var(--status-dropped);
-}
-.poster[data-status='planned']::before {
-  background: var(--status-planned);
 }
 
 .card-body {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--vultus-space-1);
   min-width: 0;
 }
 
 .card-title {
   margin: 0;
+  font-family: var(--vultus-font-family);
   font-weight: 600;
   font-size: 1rem;
+  color: var(--ion-text-color);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -101,58 +125,60 @@ ion-item-divider {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--vultus-space-1);
+  font-family: var(--vultus-font-family);
   font-size: 0.75rem;
 }
 
 .type-badge,
 .vote-badge,
 .provider-badge {
-  padding: 2px 8px;
-  border-radius: 0.5rem;
-  background: var(--ion-color-step-200, #334155);
+  padding: 2px var(--vultus-space-1);
+  border-radius: var(--vultus-radius);
+  background: var(--vultus-surface-overlay);
 }
 
 .vote-badge {
-  color: var(--ion-color-primary, #10b981);
+  color: var(--ion-color-primary);
 }
 
 .status-chip {
   align-self: flex-start;
   padding: 2px 12px;
   border: none;
-  border-radius: 0.5rem;
+  border-radius: var(--vultus-radius);
+  font-family: var(--vultus-font-family);
   font-size: 0.75rem;
   text-transform: capitalize;
   color: #fff;
 }
 .status-chip.status-watching {
-  background: var(--status-watching);
+  background: var(--vultus-status-watching);
 }
 .status-chip.status-completed {
-  background: var(--status-completed);
+  background: var(--vultus-status-completed);
 }
 .status-chip.status-dropped {
-  background: var(--status-dropped);
+  background: var(--vultus-status-dropped);
 }
 .status-chip.status-planned {
-  background: var(--status-planned);
-  color: #0f172a;
+  background: var(--vultus-status-planned);
+  color: var(--vultus-surface);
 }
 
 .delete-overlay {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: var(--vultus-space-1);
+  right: var(--vultus-space-1);
   width: 32px;
   height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 0.5rem;
+  border-radius: var(--vultus-radius);
   background: rgba(15, 23, 42, 0.6);
-  color: var(--status-dropped);
+  color: var(--vultus-status-dropped);
   font-size: 1.1rem;
 }
 
@@ -163,17 +189,19 @@ ion-item-divider {
   justify-content: center;
   text-align: center;
   min-height: 60vh;
-  padding: 16px;
+  padding: var(--vultus-space-2);
 
   .empty-title {
-    margin: 0 0 8px;
+    margin: 0 0 var(--vultus-space-1);
+    font-family: var(--vultus-font-family);
     font-size: 1.1rem;
     font-weight: 600;
   }
 
   .empty-sub {
     margin: 0;
-    color: var(--ion-color-medium, #94a3b8);
+    font-family: var(--vultus-font-family);
+    color: var(--vultus-text-muted);
   }
 }
 
@@ -184,5 +212,5 @@ ion-item-divider {
 .skeleton-poster {
   width: 64px;
   height: 96px;
-  border-radius: 0.5rem;
+  border-radius: var(--vultus-radius);
 }

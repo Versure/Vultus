@@ -54,7 +54,10 @@
   </div>
   } @else { @for (group of vm.groups; track group.status) {
   <div class="status-section">
-    <ion-item-divider [class]="'status-' + group.status">
+    <ion-item-divider
+      [class]="'status-' + group.status"
+      [attr.data-status]="group.status"
+    >
       <ion-label>{{ group.label }} — {{ group.count }} items</ion-label>
     </ion-item-divider>
     @for (item of group.items; track titleId(item)) {
@@ -67,11 +70,7 @@
       (keyup.space)="openStatusSheet(item)"
       (contextmenu)="openStatusSheet(item); $event.preventDefault()"
     >
-      <div
-        class="poster"
-        [class.status-bar]="true"
-        [attr.data-status]="item.status"
-      >
+      <div class="poster">
         @if (posterUrl(item); as url) {
         <img [src]="url" [alt]="item.title" />
         } @else {
