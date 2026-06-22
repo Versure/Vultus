@@ -254,3 +254,5 @@ export const syncTitles = onRequest(
     res.status(output.status).json(output.body);
   },
 );
+
+export { dispatchNotifications } from './dispatch-notifications';

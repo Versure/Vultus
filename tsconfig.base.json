@@ -30,7 +30,10 @@
       ],
       "@vultus/mobile/watchlist": ["./libs/mobile/watchlist/src/index.ts"],
       "@vultus/mobile/search": ["./libs/mobile/search/src/index.ts"],
-      "@vultus/mobile/settings": ["./libs/mobile/settings/src/index.ts"]
+      "@vultus/mobile/settings": ["./libs/mobile/settings/src/index.ts"],
+      "@vultus/functions/dispatch-notifications": [
+        "./libs/functions/dispatch-notifications/src/index.ts"
+      ]
     }
   },
   "exclude": ["node_modules", "tmp"]

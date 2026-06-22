@@ -130,6 +130,7 @@ describe('converters — round-trip identity', () => {
       titleId: 'title-9',
       kind: 'show-came-to-platform',
       payload: {
+        tmdbId: 98765,
         titleId: 'title-9',
         title: 'The Bear',
         region: 'NL',
@@ -138,9 +139,11 @@ describe('converters — round-trip identity', () => {
       sentAt: '2026-05-01T10:00:00.000Z',
       readAt: '2026-05-01T11:00:00.000Z',
     };
-    expect(
-      dataToNotification(simulateStored(notificationToData(n)) as never),
-    ).toEqual(n);
+    const result = dataToNotification(
+      simulateStored(notificationToData(n)) as never,
+    );
+    expect(result).toEqual(n);
+    expect(result.payload.tmdbId).toBe(98765);
   });
 
   it('NotificationDoc: readAt null; payload without providerName', () => {
@@ -148,6 +151,7 @@ describe('converters — round-trip identity', () => {
       titleId: 'title-3',
       kind: 'episode-aired',
       payload: {
+        tmdbId: 11111,
         titleId: 'title-3',
         title: 'Severance',
         region: 'US',
@@ -155,9 +159,11 @@ describe('converters — round-trip identity', () => {
       sentAt: '2026-05-02T10:00:00.000Z',
       readAt: null,
     };
-    expect(
-      dataToNotification(simulateStored(notificationToData(n)) as never),
-    ).toEqual(n);
+    const result = dataToNotification(
+      simulateStored(notificationToData(n)) as never,
+    );
+    expect(result).toEqual(n);
+    expect(result.payload.tmdbId).toBe(11111);
   });
 
   it('TitleCacheEntry: lastSyncedAt; metadata posterPath/releaseDate null; traktId null', () => {
