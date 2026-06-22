@@ -9,12 +9,8 @@ import {
   IonContent,
   IonHeader,
   IonIcon,
-  IonItemDivider,
-  IonLabel,
   IonRefresher,
   IonRefresherContent,
-  IonSegment,
-  IonSegmentButton,
   IonSkeletonText,
   IonTitle,
   IonToolbar,
@@ -56,12 +52,8 @@ const TMDB_POSTER_BASE = 'https://image.tmdb.org/t/p/w185';
     IonButtons,
     IonButton,
     IonIcon,
-    IonSegment,
-    IonSegmentButton,
-    IonLabel,
     IonRefresher,
     IonRefresherContent,
-    IonItemDivider,
     IonSkeletonText,
     IonAlert,
     IonActionSheet,
@@ -153,11 +145,16 @@ export class WatchlistPage {
     this.actionSheetOpen = true;
   }
 
-  /** Type segment change → update filter and re-subscribe the stream. */
+  /** Plain-button filter click — updates selectedType and re-subscribes the stream. */
+  onFilterClick(type: TitleType | undefined): void {
+    this.selectedType = type;
+    this.typeFilter$.next(type);
+  }
+
+  /** @deprecated kept for test backward-compat; use onFilterClick for new code. */
   onTypeChange(event: CustomEvent): void {
     const value = (event.detail as { value: string }).value;
-    this.selectedType = value === 'movie' || value === 'tv' ? value : undefined;
-    this.typeFilter$.next(this.selectedType);
+    this.onFilterClick(value === 'movie' || value === 'tv' ? value : undefined);
   }
 
   /** Pull-to-refresh: re-subscribe the realtime stream, then complete. */

@@ -191,12 +191,12 @@ describe('WatchlistPage', () => {
       item({ tmdbId: 3, status: 'planned', title: 'P1' }),
     ]);
     const { el } = await setup(service);
-    const dividers = Array.from(el.querySelectorAll('ion-item-divider')).map(
+    const headers = Array.from(el.querySelectorAll('.section-header')).map(
       (d) => d.textContent?.trim() ?? '',
     );
-    expect(dividers[0]).toContain('Watching');
-    expect(dividers[1]).toContain('Planned');
-    expect(dividers[2]).toContain('Completed');
-    expect(dividers[0]).toContain('1 items');
+    expect(headers[0]).toContain('Watching');
+    expect(headers[1]).toContain('Planned');
+    expect(headers[2]).toContain('Completed');
+    expect(headers[0]).toContain('1 Items');
   });
 });

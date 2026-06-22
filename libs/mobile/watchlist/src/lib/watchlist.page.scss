@@ -1,15 +1,16 @@
-// Watchlist tab — Stitch design.md tokens applied directly where they diverge
-// from the shared --vultus-* props. All literals come from the Stitch palette.
-
-// Design.md literals used below:
-//   surface-container:        #171f33  (card base bg)
-//   surface-container-high:   #222a3d  (watching card, higher elevation)
-//   surface-container-low:    #131b2e  (planned card, lower elevation)
-//   on-surface:               #dae2fd  (primary text)
-//   on-surface-variant:       #bbcabf  (muted text / meta)
-//   outline-variant:          #3c4a42  (card border)
-//   primary:                  #4edea3  (active pill bg, brand color)
-//   on-primary:               #003824  (text on primary bg)
+// Watchlist tab — Stitch design.md + HTML reference applied.
+// All color literals come from the Stitch palette (watchlist-stitch.html).
+//
+// Key design.md tokens used as literals (diverge from --vultus-* where noted):
+//   surface / background:      #0b1326  (page bg)
+//   surface-container:         #171f33  (card base — watching/completed/dropped)
+//   surface-container-low:     #131b2e  (planned card — lower elevation = passive)
+//   surface-container-high:    #222a3d  (inactive pill bg)
+//   on-surface:                #dae2fd  (primary text)
+//   on-surface-variant:        #bbcabf  (muted text / meta / inactive pill text)
+//   primary:                   #4edea3  (active pill bg, availability badge)
+//   on-primary:                #003824  (text on primary bg)
+//   status-completed:          #10b981  (used for availability badge alt)
 
 // -----------------------------------------------------------------------------
 // Header
@@ -28,7 +29,6 @@ ion-header {
   }
 }
 
-// Brand mark: icon + "Vultus" as a flex row so the icon centres on the cap-line.
 .brand-mark {
   display: inline-flex;
   align-items: center;
@@ -43,7 +43,6 @@ ion-header {
   font-size: 1.25rem;
   color: #4edea3;
   flex-shrink: 0;
-  // Ionic web-component icons sit 1-2px below text baseline by default; nudge up.
   position: relative;
   top: -1px;
 }
@@ -53,34 +52,38 @@ ion-content {
 }
 
 // -----------------------------------------------------------------------------
-// Type filter — separated pills, no segment container background.
-// Active pill: design.md primary #4edea3 with dark on-primary #003824 text.
-// Inactive: transparent bg, on-surface-variant text.
+// Type filter — plain flex row of rounded-full pills.
+// Stitch: active = bg-primary (#4edea3) text-on-primary (#003824);
+//         inactive = bg-surface-container-high (#222a3d) text-on-surface-variant (#bbcabf)
+// px-lg (24px) py-sm (8px) text-label-md (12px/600/0.05em)
 // -----------------------------------------------------------------------------
-ion-segment {
-  --background: transparent;
-  padding: 4px var(--vultus-space-2);
-  margin: var(--vultus-space-1) 0 0;
+.type-filter {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  padding: 8px var(--vultus-space-2);
+  margin-bottom: 8px;
+}
 
-  ion-segment-button {
-    --background: transparent;
-    --background-checked: #4edea3;
-    --background-hover: transparent;
-    --color: #bbcabf;
-    --color-checked: #003824;
-    --border-radius: 9999px;
-    --indicator-height: 0;
-    --indicator-color: transparent;
-    --indicator-box-shadow: none;
-    min-height: 28px;
-    min-width: 0;
-    margin: 0 4px;
-    font-family: var(--vultus-font-family);
-    font-size: 0.75rem;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: none;
-    flex: 0 0 auto;
+.filter-pill {
+  flex: 0 0 auto;
+  padding: 8px 24px;
+  border: none;
+  border-radius: 9999px;
+  background: #222a3d;
+  color: #bbcabf;
+  font-family: var(--vultus-font-family);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+
+  &.active {
+    background: #4edea3;
+    color: #003824;
   }
 }
 
@@ -89,89 +92,63 @@ ion-segment {
 }
 
 // -----------------------------------------------------------------------------
-// Section header — transparent bg; title left, status-coloured count right.
-// ion-label clips by default; override so "5 items" never truncates.
+// Section header — plain div with flex+space-between.
+// Replaces ion-item-divider which clipped the count text.
+// Stitch: title = text-headline-sm (20px/600); count = text-label-md (12px/600)
+//         count color = status color; planned = on-surface-variant.
 // -----------------------------------------------------------------------------
-ion-item-divider {
-  --background: transparent;
-  --color: #dae2fd;
-  --inner-padding-end: 0;
-  --padding-start: 0;
-  margin: 0 var(--vultus-space-2);
-  padding: 4px 0;
-  min-height: auto;
-  font-family: var(--vultus-font-family);
-
-  // Ionic's ion-label hides overflow by default; make it visible so the count
-  // is never clipped to "5 ite…".
-  ::ng-deep .label-text-wrapper {
-    overflow: visible;
-    display: flex;
-    width: 100%;
-  }
-
-  .section-header {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    width: 100%;
-    gap: 8px;
-  }
-
-  .section-title {
-    font-size: 1.125rem;
-    font-weight: 600;
-    line-height: 1.4;
-    color: #dae2fd;
-    min-width: 0;
-  }
-
-  .section-count {
-    font-size: 0.75rem;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    color: #bbcabf;
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px var(--vultus-space-2);
+  margin-bottom: 8px;
 }
 
-ion-item-divider[data-status='watching'] .section-count {
+.section-title {
+  font-family: var(--vultus-font-family);
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #dae2fd;
+}
+
+.section-count {
+  font-family: var(--vultus-font-family);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: #bbcabf;
+  white-space: nowrap;
+}
+
+// Per-status count color
+.section-header[data-status='watching'] .section-count {
   color: var(--vultus-status-watching);
 }
-ion-item-divider[data-status='completed'] .section-count {
+.section-header[data-status='completed'] .section-count {
   color: var(--vultus-status-completed);
 }
-ion-item-divider[data-status='dropped'] .section-count {
+.section-header[data-status='dropped'] .section-count {
   color: var(--vultus-status-dropped);
 }
 
 // -----------------------------------------------------------------------------
-// Card — surface-container bg per status; outline-variant border; delete btn
-// lives as a flex sibling (right-aligned), not an overlay on the poster.
+// Card — no explicit border (contrast via bg delta); backgrounds per Stitch.
+// watching/completed/dropped: surface-container (#171f33)
+// planned: surface-container-low (#131b2e)
 // -----------------------------------------------------------------------------
 .watchlist-card {
-  position: relative;
   display: flex;
   flex-direction: row;
   align-items: center;
   gap: var(--vultus-space-2);
   padding: var(--vultus-space-1);
-  margin: var(--vultus-space-1) var(--vultus-space-2);
+  margin: 0 var(--vultus-space-2) var(--vultus-space-1);
   border-radius: var(--vultus-radius-md);
-  border: 1px solid #3c4a42;
   background: #171f33;
   cursor: pointer;
 
-  &.status-watching {
-    background: #222a3d;
-  }
-  &.status-completed {
-    background: #171f33;
-  }
-  &.status-dropped {
-    background: #171f33;
-  }
   &.status-planned {
     background: #131b2e;
   }
@@ -208,7 +185,7 @@ ion-item-divider[data-status='dropped'] .section-count {
   min-width: 0;
 }
 
-// body-lg from design.md: 16px / 400 / 24px line-height, on-surface text.
+// body-lg: 16px / 400 / 24px — Stitch: text-body-lg text-on-surface
 .card-title {
   margin: 0;
   font-family: var(--vultus-font-family);
@@ -221,7 +198,7 @@ ion-item-divider[data-status='dropped'] .section-count {
   white-space: nowrap;
 }
 
-// body-md from design.md: 14px / 400 / 20px line-height, on-surface-variant.
+// label-sm: 11px / 500 — Stitch: text-label-sm text-on-surface-variant
 .card-meta {
   margin: 0;
   display: flex;
@@ -229,9 +206,8 @@ ion-item-divider[data-status='dropped'] .section-count {
   align-items: center;
   gap: 4px;
   font-family: var(--vultus-font-family);
-  font-size: 0.875rem;
-  font-weight: 400;
-  line-height: 1.43;
+  font-size: 0.6875rem;
+  font-weight: 500;
   color: #bbcabf;
 }
 
@@ -243,10 +219,26 @@ ion-item-divider[data-status='dropped'] .section-count {
   color: #4edea3;
 }
 
-// Provider badge (non-planned statuses only).
+// Availability badge for planned items — Stitch: bg-primary/10 text-primary
+// text-[10px] font-label-md (600 weight), rounded-full
+.availability-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: rgba(78, 222, 163, 0.1);
+  color: #4edea3;
+  font-family: var(--vultus-font-family);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  align-self: flex-start;
+}
+
+// Provider badge (non-planned statuses)
 .provider-badge {
   align-self: flex-start;
-  padding: 2px var(--vultus-space-1);
+  padding: 2px 8px;
   border-radius: 9999px;
   font-family: var(--vultus-font-family);
   font-size: 0.6875rem;
@@ -275,7 +267,6 @@ ion-item-divider[data-status='dropped'] .section-count {
   font-family: var(--vultus-font-family);
   font-size: 0.75rem;
   font-weight: 600;
-  text-transform: capitalize;
   color: #fff;
   cursor: pointer;
 }
@@ -288,12 +279,8 @@ ion-item-divider[data-status='dropped'] .section-count {
 .status-chip.status-dropped {
   background: var(--vultus-status-dropped);
 }
-.status-chip.status-planned {
-  background: var(--vultus-status-planned);
-  color: #171f33;
-}
 
-// Delete button — right-aligned flex sibling of the card body; not an overlay.
+// Delete button — right-aligned flex sibling on the card.
 .delete-btn {
   flex-shrink: 0;
   width: 36px;
