@@ -48,6 +48,16 @@ ion-content {
       height: 52px;
       transition: box-shadow 200ms ease-in-out;
     }
+
+    // Ionic absolutely-positions the search icon with a fixed `top` tuned to
+    // the default input height, so the taller input above leaves it off-centre.
+    // Re-centre it vertically (md mode only toggles the icon's display on
+    // focus, never its position, so this is safe).
+    ::ng-deep .searchbar-search-icon {
+      top: 50%;
+      margin-top: 0;
+      transform: translateY(-50%);
+    }
   }
 }
 
