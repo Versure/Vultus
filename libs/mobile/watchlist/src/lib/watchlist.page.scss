@@ -61,8 +61,8 @@ ion-content {
   display: flex;
   flex-direction: row;
   gap: 8px;
-  padding: 8px var(--vultus-space-2);
-  margin-bottom: 8px;
+  padding: var(--vultus-space-2) var(--vultus-space-2) var(--vultus-space-1);
+  margin-bottom: var(--vultus-space-1);
 }
 
 .filter-pill {
