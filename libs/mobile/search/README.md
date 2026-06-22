@@ -15,12 +15,12 @@ The **Search** tab slice of the Vultus mobile app. It provides live, debounced T
 
 The barrel (`@vultus/mobile/search`) exports:
 
-| Export               | Description                                                            |
-| -------------------- | ---------------------------------------------------------------------- |
-| `SearchPage`         | Standalone Ionic page component for the Search tab                     |
-| `TMDB_SEARCH_CONFIG` | `InjectionToken<TmdbSearchConfig>` — provided at root by `apps/mobile` |
-| `TmdbSearchConfig`   | Config type: `apiBaseUrl`, `imageBaseUrl`, `auth` (bearer or apiKey)   |
-| `SearchResult`       | Normalized TMDB hit: `tmdbId`, `type`, `title`, `year`, `posterUrl`    |
+| Export               | Description                                                                                                          |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `SearchPage`         | Standalone Ionic page component for the Search tab                                                                   |
+| `TMDB_SEARCH_CONFIG` | `InjectionToken<TmdbSearchConfig>` — provided at root by `apps/mobile`                                               |
+| `TmdbSearchConfig`   | Config type: `apiBaseUrl`, `imageBaseUrl`, `auth` (bearer or apiKey), optional `fetchImpl` (mock/dev fetch override) |
+| `SearchResult`       | Normalized TMDB hit: `tmdbId`, `type`, `title`, `year`, `posterUrl`                                                  |
 
 ## DI contract
 
@@ -35,6 +35,25 @@ Two tokens must be provided above this slice:
 
 - **Local dev:** `environment.ts` carries an **empty placeholder** key. Populate it manually from `.env.local` (gitignored) before running the dev server if you want live TMDB search locally.
 - **Production:** `environment.prod.ts` carries `REPLACE_WITH_REAL_TMDB_API_KEY`. The GitHub Actions workflow substitutes the real key from the `TMDB_API_KEY` secret at build time (CI wiring is a separate follow-up spec).
+
+## Mock / local dev
+
+To test all search states locally **without a real TMDB API key**, run:
+
+```sh
+pnpm nx serve mobile --configuration=mock
+```
+
+The mock environment intercepts TMDB fetch calls and returns fixture data based on the search query:
+
+| Query contains | State shown                       |
+| -------------- | --------------------------------- |
+| `error`        | Error state                       |
+| `empty`        | No-results                        |
+| `slow`         | Loading (2 s delay, then results) |
+| anything else  | 5 fixture results                 |
+
+Poster thumbnails are omitted from mock data (placeholder shown). Firebase still uses the emulator (same as dev). No real API key needed.
 
 ## Data access
 

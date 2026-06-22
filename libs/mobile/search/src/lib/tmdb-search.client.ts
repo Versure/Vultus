@@ -21,6 +21,12 @@ export interface TmdbSearchConfig {
   apiBaseUrl: string; // e.g. https://api.themoviedb.org/3
   imageBaseUrl: string; // e.g. https://image.tmdb.org/t/p/w185
   auth: { kind: 'bearer'; token: string } | { kind: 'apiKey'; apiKey: string };
+  /**
+   * Optional fetch override — used in mock/dev environments to return fixture
+   * data without hitting the real TMDB API. Production leaves this unset and
+   * the global `fetch` is used. Tests inject via the factory's second param.
+   */
+  fetchImpl?: typeof fetch;
 }
 
 export interface TmdbSearchClient {
@@ -56,7 +62,7 @@ export function createTmdbSearchClient(
   config: TmdbSearchConfig,
   fetchImpl?: typeof fetch,
 ): TmdbSearchClient {
-  const doFetch = fetchImpl ?? fetch;
+  const doFetch = config.fetchImpl ?? fetchImpl ?? fetch;
 
   return {
     async searchMulti(

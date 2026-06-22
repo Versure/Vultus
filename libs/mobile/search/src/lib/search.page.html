@@ -2,15 +2,16 @@
   <ion-toolbar>
     <ion-title>Search</ion-title>
   </ion-toolbar>
-  <ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <div class="search-container">
     <ion-searchbar
       placeholder="Search for movies and TV shows"
       (ionInput)="onSearch($event)"
     ></ion-searchbar>
-  </ion-toolbar>
-</ion-header>
+  </div>
 
-<ion-content>
   <!-- Prompt state -->
   @if (service.viewState() === 'prompt') {
   <div class="empty-state">

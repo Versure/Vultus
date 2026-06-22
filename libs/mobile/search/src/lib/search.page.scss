@@ -1,16 +1,40 @@
+ion-header {
+  ion-toolbar {
+    --background: var(--vultus-surface);
+    --border-width: 0;
+    --box-shadow: none;
+
+    ion-title {
+      font-family: var(--vultus-font-family);
+      font-weight: 600;
+      color: var(--ion-text-color);
+    }
+  }
+}
+
 ion-content {
   --background: var(--vultus-surface);
 }
 
-ion-toolbar {
-  --background: var(--vultus-surface-elevated);
-}
+.search-container {
+  background: var(--vultus-surface);
+  padding: var(--vultus-space-1) var(--vultus-space-1) 0;
 
-ion-searchbar {
-  --background: var(--vultus-surface-elevated);
-  --border-radius: var(--vultus-radius);
-  --placeholder-color: var(--vultus-text-muted);
-  --color: var(--ion-text-color);
+  ion-searchbar {
+    --background: var(--vultus-surface-elevated);
+    --border-radius: var(--vultus-radius);
+    --box-shadow: none;
+    --cancel-button-color: var(--vultus-text-muted);
+    --clear-button-color: var(--vultus-text-muted);
+    --color: var(--ion-text-color);
+    --icon-color: var(--vultus-text-muted);
+    --placeholder-color: var(--vultus-text-muted);
+    --placeholder-font-style: normal;
+    --placeholder-opacity: 1;
+    font-family: var(--vultus-font-family);
+    padding-top: 0;
+    padding-bottom: var(--vultus-space-1);
+  }
 }
 
 .empty-state {
