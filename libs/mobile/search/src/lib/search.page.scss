@@ -23,6 +23,8 @@ ion-content {
   ion-searchbar {
     --background: var(--vultus-surface-elevated);
     --border-radius: var(--vultus-radius);
+    // --box-shadow is applied by Ionic to the inner .searchbar-input element,
+    // so the focus ring hugs the input itself with no wrapper gap.
     --box-shadow: none;
     --cancel-button-color: var(--vultus-text-muted);
     --clear-button-color: var(--vultus-text-muted);
@@ -32,16 +34,19 @@ ion-content {
     --placeholder-font-style: normal;
     --placeholder-opacity: 1;
     font-family: var(--vultus-font-family);
-    height: 52px;
     padding-top: 0;
     padding-bottom: var(--vultus-space-1);
-    // Focus ring: box-shadow on the host element animates cleanly
-    border-radius: var(--vultus-radius);
-    box-shadow: 0 0 0 0 transparent;
-    transition: box-shadow 200ms ease-in-out;
 
     &.searchbar-has-focus {
-      box-shadow: 0 0 0 2px var(--ion-color-primary);
+      --box-shadow: 0 0 0 2px var(--ion-color-primary);
+    }
+
+    // Target the actual input element (Ionic renders it outside this
+    // component's view scope, hence ::ng-deep): taller height per the Stitch
+    // design, and the transition that animates the focus ring above.
+    ::ng-deep .searchbar-input {
+      height: 52px;
+      transition: box-shadow 200ms ease-in-out;
     }
   }
 }
