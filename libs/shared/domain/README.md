@@ -1,7 +1,61 @@
 # shared-domain
 
-This library was generated with [Nx](https://nx.dev).
+`@vultus/shared/domain` — the cross-slice domain vocabulary for Vultus. Pure
+TypeScript types plus `as const` literal arrays and cross-scope DI tokens. It
+maps the Firestore data model from PLAN §4 one-to-one in a persistence-agnostic
+way: **no Firebase import, no `Date`/`Timestamp`** — all timestamps are ISO 8601
+strings. The ISO ↔ Firestore `Timestamp` mapping lives in
+`@vultus/shared/firestore-schema`.
+
+## Public surface (barrel exports)
+
+The barrel (`src/index.ts`) re-exports:
+
+- **`./lib/enums`** — union types and their `as const` source arrays:
+  `Region`/`REGIONS`, `WatchStatus`/`WATCH_STATUSES`,
+  `NotificationKind`/`NOTIFICATION_KINDS`, `TitleType`.
+- **`./lib/entities`** — non-document domain entities: `Title` (movie/tv
+  discriminated union), `WatchProvider`.
+- **`./lib/documents`** — Firestore document shapes (PLAN §4):
+  - `User`, `NotificationPrefs`, `FcmToken`
+  - `WatchlistItem`, `EpisodeDoc`
+  - `NotificationDoc`, `NotificationPayload`
+  - `TitleCacheEntry`, `TitleMetadata`, `RegionAvailability`
+- **`./lib/tokens`** — cross-scope dependency-injection tokens.
+
+`NotificationPayload` carries the data a notification renders from:
+`tmdbId: number` (the TMDB id of the affected title), `titleId`, `title`,
+`region`, and an optional `providerName` (present for availability/platform
+kinds).
+
+`src/lib/type-assertions.ts` is a compile-time-only type gate (representative
+document literals + union exhaustiveness checks); it is intentionally **not**
+re-exported from the barrel and has no runtime behavior.
+
+## Usage
+
+```ts
+import type {
+  NotificationDoc,
+  NotificationPayload,
+} from '@vultus/shared/domain';
+import { REGIONS, type Region } from '@vultus/shared/domain';
+
+const payload: NotificationPayload = {
+  tmdbId: 1399,
+  titleId: 'tmdb-1399',
+  title: 'Game of Thrones',
+  region: 'NL',
+};
+```
+
+## Boundaries (Sheriff)
+
+- **Scope:** `scope:shared` — importable by any slice (`scope:mobile`,
+  `scope:functions`, and other `scope:shared` libs).
+- Must stay free of Firebase, platform, and slice-specific imports so both the
+  mobile app and Cloud Functions can depend on it.
 
 ## Running unit tests
 
-Run `nx test shared-domain` to execute the unit tests via [Jest](https://jestjs.io).
+Run `nx test shared-domain` to execute the unit tests via [Vitest](https://vitest.dev).

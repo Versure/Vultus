@@ -2,7 +2,7 @@
 number: 0012
 slug: notification-dispatcher
 title: Add the notification dispatcher — Firestore trigger, transition detection, FCM dispatch
-status: approved
+status: done
 slices: [slice:dispatch-notifications]
 scopes: [scope:functions]
 created: 2026-06-19
@@ -158,12 +158,12 @@ Out of scope (each its own spec/slice):
 
 ## Affected slices & Sheriff tags
 
-| Project                         | Path                                    | Sheriff tags                                       | Change                                                                  |
-| ------------------------------- | --------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------- |
-| functions-dispatch-notifications | `libs/functions/dispatch-notifications` | `scope:functions`, `slice:dispatch-notifications`  | **new lib** — transitions, dispatcher factory, ports, barrel, README, tests |
-| functions (app)                 | `apps/functions`                        | `scope:functions`                                  | **add** `dispatch-notifications.ts` Admin-SDK trigger wiring; register in `main.ts` |
-| shared-domain (edit)            | `libs/shared/domain`                    | `scope:shared`                                     | **add** `tmdbId: number` to `NotificationPayload` (additive)            |
-| shared-firestore-schema (edit)  | `libs/shared/firestore-schema`          | `scope:shared`                                     | extend the notification round-trip test for `payload.tmdbId` (converter unchanged — `payload` is a passthrough) |
+| Project                          | Path                                    | Sheriff tags                                      | Change                                                                                                          |
+| -------------------------------- | --------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| functions-dispatch-notifications | `libs/functions/dispatch-notifications` | `scope:functions`, `slice:dispatch-notifications` | **new lib** — transitions, dispatcher factory, ports, barrel, README, tests                                     |
+| functions (app)                  | `apps/functions`                        | `scope:functions`                                 | **add** `dispatch-notifications.ts` Admin-SDK trigger wiring; register in `main.ts`                             |
+| shared-domain (edit)             | `libs/shared/domain`                    | `scope:shared`                                    | **add** `tmdbId: number` to `NotificationPayload` (additive)                                                    |
+| shared-firestore-schema (edit)   | `libs/shared/firestore-schema`          | `scope:shared`                                    | extend the notification round-trip test for `payload.tmdbId` (converter unchanged — `payload` is a passthrough) |
 
 - **Tagging is by PATH GLOB in `sheriff.config.ts`** (per specs 0008/0009), **never
   via `project.json` `tags`**: the glob `'libs/functions/<slice>/src'` assigns
@@ -217,14 +217,14 @@ The dispatcher is **triggered by** a write to the global `title-cache` availabil
 doc and **writes** per-user `notifications` docs; it also **reads** watchlists,
 episodes, and `fcmTokens`, and **mutates `fcmTokens`** only to prune a stale token.
 
-| PLAN §4 path                                              | Access                  | By                                                                                       |
-| --------------------------------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------- |
-| `title-cache/{tmdbId}/availability/{region}`              | **trigger source** (read via event) | the `onDocumentWritten` event's `after` (new `providers`) + `before`/`previousSnapshot` |
-| `title-cache/{tmdbId}`                                    | **read**                | to get the title `type` (`movie`/`tv`) for the kind decision (via the title-cache doc)   |
-| `users/{userId}/watchlist/{titleId}`                      | **read**                | `collectionGroup('watchlist')` filtered to the changed `tmdbId` → the users tracking it  |
-| `users/{userId}/watchlist/{titleId}/episodes/{episodeId}` | **read**                | per-tracking-user episodes for the `episode-aired` decision (`airDate ≤ now`)            |
-| `users/{userId}`                                          | **read**, **update**    | read `region` + `notificationPrefs` + `fcmTokens`; **update** only to delete a stale token |
-| `users/{userId}/notifications/{notificationId}`           | **create**              | one doc per dispatched kind (`NotificationDoc` via the spec-0005 converter)              |
+| PLAN §4 path                                              | Access                              | By                                                                                         |
+| --------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------ |
+| `title-cache/{tmdbId}/availability/{region}`              | **trigger source** (read via event) | the `onDocumentWritten` event's `after` (new `providers`) + `before`/`previousSnapshot`    |
+| `title-cache/{tmdbId}`                                    | **read**                            | to get the title `type` (`movie`/`tv`) for the kind decision (via the title-cache doc)     |
+| `users/{userId}/watchlist/{titleId}`                      | **read**                            | `collectionGroup('watchlist')` filtered to the changed `tmdbId` → the users tracking it    |
+| `users/{userId}/watchlist/{titleId}/episodes/{episodeId}` | **read**                            | per-tracking-user episodes for the `episode-aired` decision (`airDate ≤ now`)              |
+| `users/{userId}`                                          | **read**, **update**                | read `region` + `notificationPrefs` + `fcmTokens`; **update** only to delete a stale token |
+| `users/{userId}/notifications/{notificationId}`           | **create**                          | one doc per dispatched kind (`NotificationDoc` via the spec-0005 converter)                |
 
 - **Trigger doc selection.** The trigger path is
   `title-cache/{tmdbId}/availability/{region}`. The wildcards give the `tmdbId`
@@ -270,7 +270,7 @@ episodes, and `fcmTokens`, and **mutates `fcmTokens`** only to prune a stale tok
   `@vultus/shared/domain`. The firestore-schema converter
   (`notificationToData`/`dataToNotification`) treats `payload` as an **opaque
   wholesale passthrough** typed `NotificationPayload` (`payload: n.payload` / `payload:
-  data.payload`), so the new field flows through with **no converter-body edit** and
+data.payload`), so the new field flows through with **no converter-body edit** and
   **no new top-level field** on `NotificationReadData`/`NotificationWriteData` — the
   only firestore-schema change is extending the round-trip test to set + assert
   `payload.tmdbId`. This is the only `shared/` data change. See Public types / APIs +
@@ -327,7 +327,11 @@ export interface TrackedEpisode {
 
 export interface EpisodeStore {
   /** Episodes for a user's tracked tv title (the dispatcher selects airDate <= now). */
-  getEpisodes(uid: string, titleId: string, tmdbId: number): Promise<TrackedEpisode[]>;
+  getEpisodes(
+    uid: string,
+    titleId: string,
+    tmdbId: number,
+  ): Promise<TrackedEpisode[]>;
 }
 
 export interface NotificationStore {
@@ -466,7 +470,7 @@ export function createNotificationDispatcher(
    (`payload.tmdbId = change.tmdbId`, `payload.region = change.region`,
    `payload.title` from the title metadata, `sentAt = now()`, `readAt = null`),
    `notifications.write(uid, doc)`, then for each `fcmToken` `fcm.send(token,
-   { notificationId, titleId, kind, region, tmdbId })`.
+{ notificationId, titleId, kind, region, tmdbId })`.
 4. For every `FcmSendResult.unregistered === true`, call
    `watchlist.removeFcmToken(uid, token)` (decision 4 — cleanup only).
 5. Per-user error isolation: a thrown error for one user/token is caught and does
@@ -716,7 +720,7 @@ with fake in-memory stores + a fake `FcmSender`, the design's whole point).
   notification + sends each; the `DispatchSummary` counts are correct.
 - **Stale-token prune (decision 4):** a `FcmSender` that returns
   `{ unregistered: true }` for one of a user's two tokens → `removeFcmToken(uid,
-  token)` called **once** for that token, **not** for the good token; the
+token)` called **once** for that token, **not** for the good token; the
   notification is still written and the good token still sent.
 - **FCM-not-registered does not throw:** the `send` for an unregistered token
   resolves (not rejects) and the run completes; `DispatchSummary.staleTokensPruned`
@@ -726,8 +730,8 @@ with fake in-memory stores + a fake `FcmSender`, the design's whole point).
   notification + send; `dispatch` does not reject.
 - **Clock determinism:** every `sentAt` equals the injected `now()`.
 - **No write outside `users/**`:** the fake stores assert that the dispatcher only
-  calls `NotificationStore.write` (→ `users/{uid}/notifications/**`) and
-  `WatchlistStore.removeFcmToken` (→ `users/{uid}`) — **never** a `title-cache` or
+calls `NotificationStore.write`(→`users/{uid}/notifications/**`) and
+`WatchlistStore.removeFcmToken`(→`users/{uid}`) — **never\*\* a `title-cache` or
   `system` write. (The load-bearing boundary, mirroring 0008/0009.)
 - **Best-effort idempotency (decision 3):** calling `dispatch` **twice** with the
   same change writes the notification **twice** (no dedup) — asserted so the
@@ -760,7 +764,7 @@ UI). `<lib>` = `functions-dispatch-notifications`; touched shared libs are
 - [ ] `pnpm nx typecheck functions-dispatch-notifications` passes — the core
       compiles against the ports + the `tmdbId`-bearing `NotificationPayload`.
 - [ ] `pnpm nx typecheck shared-domain` and `pnpm nx typecheck
-      shared-firestore-schema` pass — the additive `tmdbId` + converter compile.
+    shared-firestore-schema` pass — the additive `tmdbId` + converter compile.
 - [ ] `pnpm nx typecheck functions` passes — the trigger + adapters + `main.ts`
       registration compile.
 - [ ] `pnpm nx lint functions-dispatch-notifications` passes **with Sheriff
@@ -776,8 +780,7 @@ UI). `<lib>` = `functions-dispatch-notifications`; touched shared libs are
       and unchanged.
 - [ ] `pnpm nx lint shared-domain` and `pnpm nx lint shared-firestore-schema` pass
       (still Firebase-free; `scope:shared → scope:shared` only).
-- [ ] `pnpm nx test functions-dispatch-notifications` passes — transition/decision
-      + dispatcher unit tests green (fakes + fixed clock; no Firebase, no FCM, no
+- [ ] `pnpm nx test functions-dispatch-notifications` passes — transition/decision + dispatcher unit tests green (fakes + fixed clock; no Firebase, no FCM, no
       network, no secrets).
 - [ ] `pnpm nx test functions` passes — the trigger-wiring + adapter unit tests
       green (fake `db`/`messaging`); **the existing 0009 tests still pass**.
@@ -800,17 +803,16 @@ UI). `<lib>` = `functions-dispatch-notifications`; touched shared libs are
       (unexported from the lib).
 - [ ] `libs/functions/dispatch-notifications/README.md` is **complete** (not Nx
       scaffold text): what the lib is, its barrel surface, the port/adapter design,
-      decisions 1–4, and the Sheriff tags (CLAUDE.md lib-README rule). `shared/domain`
-      + `shared/firestore-schema` READMEs updated only if they enumerate the payload/
+      decisions 1–4, and the Sheriff tags (CLAUDE.md lib-README rule). `shared/domain` + `shared/firestore-schema` READMEs updated only if they enumerate the payload/
       notification fields. `apps/functions` README updated only if one exists.
 - [ ] **Boundary verifications (review-checked, like 0008/0009):** (a) **no secret
       is read or written** — FCM uses the function's ambient Admin credentials, no
       `.env.local`, nothing logged; (b) **the only writes are
-      `users/{uid}/notifications/**` creates and the `users/{uid}.fcmTokens` stale-
-      token prune** — **no** `title-cache`/`system` write, **no** token registration;
-      (c) **the core lib imports no Firebase SDK and no other slice** — the SDK lives
-      only in `apps/functions`; (d) **no `firestore.rules` change** (Admin SDK bypasses
-      rules); the `collectionGroup('watchlist')` gather uses the in-memory `tmdbId`
+      `users/{uid}/notifications/**`creates and the`users/{uid}.fcmTokens`stale-
+    token prune** — **no**`title-cache`/`system`write, **no** token registration;
+    (c) **the core lib imports no Firebase SDK and no other slice** — the SDK lives
+    only in`apps/functions`; (d) **no `firestore.rules`change** (Admin SDK bypasses
+    rules); the`collectionGroup('watchlist')`gather uses the in-memory`tmdbId`
       filter (no new composite index) unless the implementer deliberately adds the
       documented collection-group field index.
 - [ ] PR description records the exact verification commands (all four projects),

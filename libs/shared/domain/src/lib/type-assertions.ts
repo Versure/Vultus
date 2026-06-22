@@ -140,6 +140,7 @@ const _notificationDoc = {
   titleId: 'tmdb-1399',
   kind: 'show-came-to-platform',
   payload: {
+    tmdbId: 1399,
     titleId: 'tmdb-1399',
     title: 'Game of Thrones',
     region: 'NL',

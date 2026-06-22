@@ -46,6 +46,7 @@ export interface EpisodeDoc {
 // Provisional minimal payload — see Risks. Firms up when dispatch-notifications
 // is specced. Typed object, NOT `any`.
 export interface NotificationPayload {
+  tmdbId: number;
   titleId: string;
   title: string;
   region: Region;
