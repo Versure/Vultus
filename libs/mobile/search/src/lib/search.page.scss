@@ -84,7 +84,10 @@ ion-content {
 
 .results-list {
   background: transparent;
-  padding: var(--vultus-space-1);
+  // Horizontal inset (16px) matches the visible search input edge: the input
+  // sits at 8px (.search-container) + 8px (Ionic searchbar host padding) from
+  // the page edge, so the cards align with it. Vertical stays 8px.
+  padding: var(--vultus-space-1) var(--vultus-space-2);
 }
 
 .result-card {
