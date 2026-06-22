@@ -66,6 +66,10 @@ function assertRegionExhaustive(r: Region): void {
     case 'US':
     case 'FR':
     case 'BE':
+    case 'ES':
+    case 'IT':
+    case 'CA':
+    case 'AU':
       return;
     default: {
       const _never: never = r;

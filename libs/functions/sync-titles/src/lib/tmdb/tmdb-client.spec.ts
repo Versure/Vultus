@@ -168,7 +168,7 @@ describe('getWatchProviders', () => {
         ads: [{ provider_id: 99, provider_name: 'AdSupported' }],
         free: [{ provider_id: 100, provider_name: 'FreeTV' }],
       },
-      IT: {
+      JP: {
         // Non-REGIONS country → dropped entirely.
         flatrate: [{ provider_id: 8, provider_name: 'Netflix' }],
       },
@@ -188,7 +188,7 @@ describe('getWatchProviders', () => {
     // REGIONS country present but only ads/free → key present, empty array.
     expect(result?.DE).toEqual([]);
     // Non-REGIONS dropped.
-    expect(result).not.toHaveProperty('IT');
+    expect(result).not.toHaveProperty('JP');
     // Absent REGIONS countries → no key.
     expect(result).not.toHaveProperty('GB');
     expect(result).not.toHaveProperty('US');

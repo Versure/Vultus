@@ -10,7 +10,18 @@ export const WATCH_STATUSES = [
 ] as const;
 export type WatchStatus = (typeof WATCH_STATUSES)[number];
 
-export const REGIONS = ['NL', 'DE', 'GB', 'US', 'FR', 'BE'] as const; // NL = v1 primary/default
+export const REGIONS = [
+  'NL',
+  'DE',
+  'GB',
+  'US',
+  'FR',
+  'BE',
+  'ES',
+  'IT',
+  'CA',
+  'AU',
+] as const; // NL = v1 primary/default
 export type Region = (typeof REGIONS)[number];
 
 export const NOTIFICATION_KINDS = [

@@ -1,2 +1,10 @@
-// SettingsPage is a placeholder stub — region/notification prefs styling
-// arrives with the settings slice feature spec (PLAN §6 item 16).
+// Theming (PLAN §2 tokens) comes from the shared/ui-kit Ionic theme seeded in
+// spec 0010 (dark-first, Inter, Emerald --ion-color-primary, navy-slate
+// surfaces, 8px grid, 0.5rem radius). This file only handles slice-local
+// layout the theme does not cover.
+
+.settings-loading {
+  display: flex;
+  justify-content: center;
+  padding-top: 32px; // 4 * 8px grid
+}

@@ -1,34 +1,50 @@
 # mobile-settings
 
-The **Settings tab** slice of the Vultus mobile app. Right now it is a **stub**:
-a single placeholder Ionic page that the tabs shell lazy-loads so the Settings
-tab renders. A later spec (PLAN §6 item 16) fleshes this slice out to own the
-region picker, notification preferences, FCM token registration, and the
-`users/{uid}` Firestore document — none of which exist yet.
+Region picker, global notifications toggle, and eager `users/{uid}` init for the
+Vultus settings tab (PLAN §6 item 16, spec 0011).
 
-## Public surface
+## Public API
 
 The barrel (`@vultus/mobile/settings`) exports:
 
-- `SettingsPage` — a standalone Ionic page component (selector `lib-settings`)
-  rendering an `ion-header`/`ion-toolbar`/`ion-title` ("Settings") and an
-  `ion-content` placeholder. It is **lazy-loaded by the tabs shell** in
-  `apps/mobile` via `loadComponent: () => import('@vultus/mobile/settings').then(m => m.SettingsPage)`.
+- `SettingsPage` — standalone Ionic page (selector `lib-settings`); lazy-loaded
+  by the tabs shell in `apps/mobile` via
+  `loadComponent: () => import('@vultus/mobile/settings').then(m => m.SettingsPage)`.
 
-## Usage
+`SettingsService` is an internal data-access service used only by `SettingsPage`
+and is intentionally **not** barrel-exported (keeps the public surface minimal).
 
-```ts
-// apps/mobile — tabs child route
-{ path: 'settings', loadComponent: () => import('@vultus/mobile/settings').then((m) => m.SettingsPage) }
-```
+## Behaviour
 
-## Boundaries (Sheriff)
+On mount, `SettingsPage` calls `SettingsService.load()`, which reads
+`users/{uid}` (path + wire mapping via `@vultus/shared/firestore-schema`'s
+`userPath` / `dataToUser` / `userToData`). If the doc is absent it is created
+with defaults `{ region: 'NL', notificationPrefs: { episodeAired: true,
+movieAvailable: true, cameToPlatform: true }, fcmTokens: [] }`, guaranteeing
+downstream slices can assume it exists.
 
-- **Scope:** `scope:mobile` — **Slice:** `slice:settings` (tagged by path glob in
-  `sheriff.config.ts`, not `project.json`).
-- May import `scope:shared` (e.g. `@vultus/shared/ui-kit` theming), its **own**
-  slice, and third-party packages (Ionic, AngularFire, etc.) only. It must **not**
-  import another slice, and `scope:mobile` must never import `scope:functions`.
-- The stub page imports Ionic standalone components only — no AngularFire init,
-  and it writes **no** Firestore document (the `users/{uid}` doc is owned by this
-  slice in the later feature spec, not by this stub).
+The page exposes:
+
+- a **Region** `ion-select` over the shared `REGIONS` list, writing
+  `users/{uid}.region` on change;
+- a global **Notifications** `ion-toggle` — a UI projection over the three
+  `notificationPrefs` booleans (reads on when all three are true; writing sets
+  all three at once). No `notificationsEnabled` field is persisted; per-type
+  toggles are a later spec.
+
+Writes happen on user interaction (no Save button). The form is render-gated on
+`load()` (an `ion-spinner` shows until the doc resolves). `fcmTokens` is never
+written beyond the `[]` default (FCM registration is PLAN §6 item 21).
+
+The current uid is obtained via the `scope:shared` `AUTH_UID` injection token
+(provided at the app root by the shell), so this slice never imports
+`apps/mobile`.
+
+## Sheriff boundaries
+
+- Tags: `scope:mobile`, `slice:settings` (by path glob in `sheriff.config.ts`).
+- May import: `scope:shared` libs (`@vultus/shared/domain`,
+  `@vultus/shared/firestore-schema`) and third-party packages (Ionic,
+  AngularFire).
+- Must not import: other slices (`slice:search` / `slice:watchlist`),
+  `apps/mobile`, or any `scope:functions` code.
