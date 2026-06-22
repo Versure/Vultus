@@ -38,7 +38,7 @@ slice-internal.
 - **Writes:** only `users/{uid}/watchlist/{titleId}` — status update and delete.
   Never writes to `users/{uid}`, `title-cache`, or any other path.
 
-The watchlist doc id is `{tmdbId}-{type}` (e.g. `1399-tv`).
+The watchlist doc id is `String(tmdbId)` (e.g. `1399`), matching spec 0013's write binding.
 
 ## Usage
 

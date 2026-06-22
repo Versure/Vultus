@@ -189,11 +189,9 @@ export class WatchlistPage {
 
   /** Navigates toward the (not-yet-existing) title-detail route; never crashes. */
   navigateToDetail(titleId: string): void {
-    try {
-      void this.router.navigate(['tabs', 'title-detail', titleId]);
-    } catch {
+    this.router.navigate(['tabs', 'title-detail', titleId]).catch(() => {
       // title-detail route not registered yet — graceful no-op.
-    }
+    });
   }
 
   /** First provider name for an item, in the user's region (badge). */
@@ -219,8 +217,8 @@ export class WatchlistPage {
     return Math.round(item.voteAverage * 10);
   }
 
-  /** The watchlist doc id for an item (tmdbId + type discriminant). */
+  /** The watchlist doc id for an item — matches spec 0013's binding: String(tmdbId). */
   titleId(item: WatchlistItem): string {
-    return `${item.tmdbId}-${item.type}`;
+    return String(item.tmdbId);
   }
 }

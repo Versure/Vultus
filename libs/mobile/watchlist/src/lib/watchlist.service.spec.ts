@@ -164,20 +164,20 @@ describe('WatchlistService', () => {
 
   it('updateStatus calls updateDoc with the item path + { status }', () => {
     const service = createService(UID);
-    service.updateStatus(UID, '1-movie', 'completed');
-    expect(docMock).toHaveBeenCalledWith({}, watchlistItemPath(UID, '1-movie'));
+    service.updateStatus(UID, '1', 'completed');
+    expect(docMock).toHaveBeenCalledWith({}, watchlistItemPath(UID, '1'));
     expect(updateDocMock).toHaveBeenCalledTimes(1);
     const [ref, payload] = updateDocMock.mock.calls[0];
-    expect(ref).toEqual({ path: watchlistItemPath(UID, '1-movie') });
+    expect(ref).toEqual({ path: watchlistItemPath(UID, '1') });
     expect(payload).toEqual({ status: 'completed' });
   });
 
   it('removeTitle calls deleteDoc with the item path', () => {
     const service = createService(UID);
-    service.removeTitle(UID, '7-tv');
+    service.removeTitle(UID, '7');
     expect(deleteDocMock).toHaveBeenCalledTimes(1);
     expect(deleteDocMock.mock.calls[0][0]).toEqual({
-      path: watchlistItemPath(UID, '7-tv'),
+      path: watchlistItemPath(UID, '7'),
     });
   });
 
@@ -225,8 +225,8 @@ describe('WatchlistService', () => {
     );
     expect(region).toBeNull();
 
-    service.updateStatus(null, '1-movie', 'completed');
-    service.removeTitle(null, '1-movie');
+    service.updateStatus(null, '1', 'completed');
+    service.removeTitle(null, '1');
     expect(updateDocMock).not.toHaveBeenCalled();
     expect(deleteDocMock).not.toHaveBeenCalled();
     expect(collectionDataMock).not.toHaveBeenCalled();
@@ -243,8 +243,8 @@ describe('WatchlistService', () => {
 
   it('every write targets a watchlist item doc (never user/title-cache)', () => {
     const service = createService(UID);
-    service.updateStatus(UID, '1-movie', 'dropped');
-    service.removeTitle(UID, '2-tv');
+    service.updateStatus(UID, '1', 'dropped');
+    service.removeTitle(UID, '2');
     const writtenPaths = [
       ...updateDocMock.mock.calls,
       ...deleteDocMock.mock.calls,

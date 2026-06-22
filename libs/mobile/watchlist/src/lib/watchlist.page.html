@@ -57,7 +57,7 @@
     <ion-item-divider [class]="'status-' + group.status">
       <ion-label>{{ group.label }} — {{ group.count }} items</ion-label>
     </ion-item-divider>
-    @for (item of group.items; track item.tmdbId) {
+    @for (item of group.items; track titleId(item)) {
     <div
       class="watchlist-card"
       role="button"

@@ -166,7 +166,7 @@ describe('WatchlistPage', () => {
     component.onStatusSelected('completed');
     expect(service.updateStatus).toHaveBeenCalledWith(
       'uid-123',
-      '1-movie',
+      '1',
       'completed',
     );
   });
@@ -181,7 +181,7 @@ describe('WatchlistPage', () => {
     expect(component.alertOpen).toBe(true);
 
     component.onDeleteItem();
-    expect(service.removeTitle).toHaveBeenCalledWith('uid-123', '9-tv');
+    expect(service.removeTitle).toHaveBeenCalledWith('uid-123', '9');
   });
 
   it('renders status section headers in display order with counts', async () => {
