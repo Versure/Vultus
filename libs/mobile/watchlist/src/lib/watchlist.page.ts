@@ -73,6 +73,9 @@ export class WatchlistPage {
   private readonly watchlistService = inject(WatchlistService);
   private readonly router = inject(Router);
 
+  /** Exposed for template bindings (status chip label). */
+  readonly STATUS_LABELS = STATUS_LABELS;
+
   /** Resolved auth uid (Signal); null before the anonymous session resolves. */
   readonly uid = inject(AUTH_UID);
 

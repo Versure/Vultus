@@ -1,8 +1,10 @@
 <ion-header>
   <ion-toolbar>
     <ion-title>
-      <ion-icon name="film-outline" class="brand-icon"></ion-icon>
-      Vultus
+      <span class="brand-mark">
+        <ion-icon name="film-outline" class="brand-icon"></ion-icon>
+        Vultus
+      </span>
     </ion-title>
     <ion-buttons slot="end">
       <ion-button aria-label="Account">
@@ -82,14 +84,6 @@
         } @else {
         <div class="poster-fallback"></div>
         }
-        <button
-          type="button"
-          class="delete-overlay"
-          aria-label="Remove from watchlist"
-          (click)="onDeleteConfirm(item); $event.stopPropagation()"
-        >
-          <ion-icon name="trash-outline"></ion-icon>
-        </button>
       </div>
 
       <div class="card-body">
@@ -103,7 +97,25 @@
           <span class="meta-vote">{{ pct }}%</span>
           }
         </p>
-        @if (getProviderName$(item, (region$ | async)) | async; as provider) {
+        @if (item.status === 'planned') { @if (getProviderName$(item, (region$ |
+        async)) | async; as provider) {
+        <button
+          type="button"
+          class="status-chip status-planned"
+          (click)="openStatusSheet(item); $event.stopPropagation()"
+        >
+          {{ provider }}
+        </button>
+        } @else {
+        <button
+          type="button"
+          class="status-chip status-planned"
+          (click)="openStatusSheet(item); $event.stopPropagation()"
+        >
+          Planned
+        </button>
+        } } @else { @if (getProviderName$(item, (region$ | async)) | async; as
+        provider) {
         <span class="provider-badge status-{{ item.status }}"
           >{{ provider }}</span
         >
@@ -113,9 +125,19 @@
           class="status-chip status-{{ item.status }}"
           (click)="openStatusSheet(item); $event.stopPropagation()"
         >
-          {{ item.status }}
+          {{ STATUS_LABELS[item.status] }}
         </button>
+        }
       </div>
+
+      <button
+        type="button"
+        class="delete-btn"
+        aria-label="Remove from watchlist"
+        (click)="onDeleteConfirm(item); $event.stopPropagation()"
+      >
+        <ion-icon name="trash-outline"></ion-icon>
+      </button>
     </div>
     }
   </div>
