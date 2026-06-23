@@ -2,7 +2,7 @@
 number: 0018
 slug: settings-design-alignment
 title: Align settings page visual design to Stitch
-status: approved
+status: done
 slices: [slice:settings]
 scopes: [scope:mobile]
 created: 2026-06-23
@@ -113,15 +113,15 @@ Out of scope (do **not** touch):
   see the UI section's reconciliation note (render them as **non-functional
   visual placeholders only if the screen's layout depends on them**, and flag
   each as a deferred feature — preferred is to omit purely-decorative extras and
-  match the screen's *styling* of the two real controls).
+  match the screen's _styling_ of the two real controls).
 - **Emulator-backed e2e** — descoped (consistent with spec 0011 decision 5 and
   project memory: the emulator can't run under Claude Code tools here). No
   `ci.yml` / `playwright.config.ts` change.
 
 ## Affected slices & Sheriff tags
 
-| Project         | Path                   | Sheriff tags                     | Change                                                                 |
-| --------------- | ---------------------- | -------------------------------- | ---------------------------------------------------------------------- |
+| Project         | Path                   | Sheriff tags                     | Change                                                                                     |
+| --------------- | ---------------------- | -------------------------------- | ------------------------------------------------------------------------------------------ |
 | mobile-settings | `libs/mobile/settings` | `scope:mobile`, `slice:settings` | rewrite page template + SCSS for visual fidelity; test selectors; README if surface shifts |
 
 - **Single slice, single scope.** No new project, no new dependency edge. The
@@ -268,7 +268,7 @@ For **each** interactive element, verify all states:
   overlay) matches the screen's timing; if the screen shows none, do not add one.
 
 If the screen depicts controls beyond the region picker + notifications toggle,
-**do not wire them** (decision 4 / Out of scope) — match the *styling* of the two
+**do not wire them** (decision 4 / Out of scope) — match the _styling_ of the two
 real controls and flag the extras as deferred features in the PR.
 
 ## Implementation task graph
