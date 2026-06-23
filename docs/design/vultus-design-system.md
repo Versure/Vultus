@@ -29,125 +29,113 @@
   ============================================================================
 -->
 
----
+# Vultus Design System
 
+## Tokens (authoritative)
+
+```yaml
 name: Vultus Design System
 colors:
-surface: '#0b1326'
-surface-dim: '#0b1326'
-surface-bright: '#31394d'
-surface-container-lowest: '#060e20'
-surface-container-low: '#131b2e'
-surface-container: '#171f33'
-surface-container-high: '#222a3d'
-surface-container-highest: '#2d3449'
-on-surface: '#dae2fd'
-on-surface-variant: '#bbcabf'
-inverse-surface: '#dae2fd'
-inverse-on-surface: '#283044'
-outline: '#86948a'
-outline-variant: '#3c4a42'
-surface-tint: '#4edea3'
-primary: '#4edea3'
-on-primary: '#003824'
-primary-container: '#10b981'
-on-primary-container: '#00422b'
-inverse-primary: '#006c49'
-secondary: '#45dfa4'
-on-secondary: '#003825'
-secondary-container: '#00bd85'
-on-secondary-container: '#00452e'
-tertiary: '#68dba9'
-on-tertiary: '#003825'
-tertiary-container: '#3eb686'
-on-tertiary-container: '#00422c'
-error: '#ffb4ab'
-on-error: '#690005'
-error-container: '#93000a'
-on-error-container: '#ffdad6'
-primary-fixed: '#6ffbbe'
-primary-fixed-dim: '#4edea3'
-on-primary-fixed: '#002113'
-on-primary-fixed-variant: '#005236'
-secondary-fixed: '#68fcbf'
-secondary-fixed-dim: '#45dfa4'
-on-secondary-fixed: '#002114'
-on-secondary-fixed-variant: '#005137'
-tertiary-fixed: '#85f8c4'
-tertiary-fixed-dim: '#68dba9'
-on-tertiary-fixed: '#002114'
-on-tertiary-fixed-variant: '#005137'
-background: '#0b1326'
-on-background: '#dae2fd'
-surface-variant: '#2d3449'
-status-watching: '#3B82F6'
-status-completed: '#10B981'
-status-dropped: '#EF4444'
-status-planned: '#94A3B8'
-surface-dark: '#1E293B'
-surface-light: '#F8FAFC'
+  surface: '#0b1326'
+  surface-dim: '#0b1326'
+  surface-bright: '#31394d'
+  surface-container-lowest: '#060e20'
+  surface-container-low: '#131b2e'
+  surface-container: '#171f33'
+  surface-container-high: '#222a3d'
+  surface-container-highest: '#2d3449'
+  on-surface: '#dae2fd'
+  on-surface-variant: '#bbcabf'
+  inverse-surface: '#dae2fd'
+  inverse-on-surface: '#283044'
+  outline: '#86948a'
+  outline-variant: '#3c4a42'
+  surface-tint: '#4edea3'
+  primary: '#4edea3'
+  on-primary: '#003824'
+  primary-container: '#10b981'
+  on-primary-container: '#00422b'
+  inverse-primary: '#006c49'
+  secondary: '#45dfa4'
+  on-secondary: '#003825'
+  secondary-container: '#00bd85'
+  on-secondary-container: '#00452e'
+  tertiary: '#68dba9'
+  on-tertiary: '#003825'
+  tertiary-container: '#3eb686'
+  on-tertiary-container: '#00422c'
+  error: '#ffb4ab'
+  on-error: '#690005'
+  error-container: '#93000a'
+  on-error-container: '#ffdad6'
+  primary-fixed: '#6ffbbe'
+  primary-fixed-dim: '#4edea3'
+  on-primary-fixed: '#002113'
+  on-primary-fixed-variant: '#005236'
+  secondary-fixed: '#68fcbf'
+  secondary-fixed-dim: '#45dfa4'
+  on-secondary-fixed: '#002114'
+  on-secondary-fixed-variant: '#005137'
+  tertiary-fixed: '#85f8c4'
+  tertiary-fixed-dim: '#68dba9'
+  on-tertiary-fixed: '#002114'
+  on-tertiary-fixed-variant: '#005137'
+  background: '#0b1326'
+  on-background: '#dae2fd'
+  surface-variant: '#2d3449'
+  status-watching: '#3B82F6'
+  status-completed: '#10B981'
+  status-dropped: '#EF4444'
+  status-planned: '#94A3B8'
+  surface-dark: '#1E293B'
+  surface-light: '#F8FAFC'
 typography:
-display-lg:
-fontFamily: Inter
-fontSize: 32px
-fontWeight: '700'
-lineHeight: 40px
-letterSpacing: -0.02em
-headline-md:
-fontFamily: Inter
-fontSize: 24px
-fontWeight: '600'
-lineHeight: 32px
-headline-sm:
-fontFamily: Inter
-fontSize: 20px
-fontWeight: '600'
-lineHeight: 28px
-body-lg:
-fontFamily: Inter
-fontSize: 16px
-fontWeight: '400'
-lineHeight: 24px
-body-md:
-fontFamily: Inter
-fontSize: 14px
-fontWeight: '400'
-lineHeight: 20px
-label-md:
-fontFamily: Inter
-fontSize: 12px
-fontWeight: '600'
-lineHeight: 16px
-letterSpacing: 0.05em
-label-sm:
-fontFamily: Inter
-fontSize: 11px
-fontWeight: '500'
-lineHeight: 16px
-display-lg-mobile:
-fontFamily: Inter
-fontSize: 28px
-fontWeight: '700'
-lineHeight: 36px
+  display-lg:
+    {
+      fontFamily: Inter,
+      fontSize: 32px,
+      fontWeight: '700',
+      lineHeight: 40px,
+      letterSpacing: -0.02em,
+    }
+  headline-md:
+    { fontFamily: Inter, fontSize: 24px, fontWeight: '600', lineHeight: 32px }
+  headline-sm:
+    { fontFamily: Inter, fontSize: 20px, fontWeight: '600', lineHeight: 28px }
+  body-lg:
+    { fontFamily: Inter, fontSize: 16px, fontWeight: '400', lineHeight: 24px }
+  body-md:
+    { fontFamily: Inter, fontSize: 14px, fontWeight: '400', lineHeight: 20px }
+  label-md:
+    {
+      fontFamily: Inter,
+      fontSize: 12px,
+      fontWeight: '600',
+      lineHeight: 16px,
+      letterSpacing: 0.05em,
+    }
+  label-sm:
+    { fontFamily: Inter, fontSize: 11px, fontWeight: '500', lineHeight: 16px }
+  display-lg-mobile:
+    { fontFamily: Inter, fontSize: 28px, fontWeight: '700', lineHeight: 36px }
 rounded:
-sm: 0.25rem
-DEFAULT: 0.5rem
-md: 0.75rem
-lg: 1rem
-xl: 1.5rem
-full: 9999px
+  sm: 0.25rem
+  DEFAULT: 0.5rem
+  md: 0.75rem
+  lg: 1rem
+  xl: 1.5rem
+  full: 9999px
 spacing:
-base: 4px
-xs: 4px
-sm: 8px
-md: 16px
-lg: 24px
-xl: 32px
-gutter: 16px
-margin-mobile: 16px
-margin-tablet: 32px
-
----
+  base: 4px
+  xs: 4px
+  sm: 8px
+  md: 16px
+  lg: 24px
+  xl: 32px
+  gutter: 16px
+  margin-mobile: 16px
+  margin-tablet: 32px
+```
 
 ## Brand & Style
 
