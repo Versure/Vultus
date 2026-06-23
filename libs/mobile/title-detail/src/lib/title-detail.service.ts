@@ -31,7 +31,7 @@ import type {
   UserReadData,
   WatchlistItemReadData,
 } from '@vultus/shared/firestore-schema';
-import { type Observable, from, map, of, startWith } from 'rxjs';
+import { type Observable, catchError, from, map, of, startWith } from 'rxjs';
 import {
   type GroupedProviders,
   type TitleDetail,
@@ -168,6 +168,11 @@ export class TitleDetailService {
     }
     return from(this.client.getProviders(tmdbId, type, region)).pipe(
       startWith(EMPTY_PROVIDERS),
+      // A failed /watch/providers call (non-2xx → TmdbDetailError, or network
+      // error) must NOT error the stream and tear down an already-loaded page;
+      // degrade to the empty-providers state (spec 0016: empty/error providers
+      // is NOT an error). The cache (docData) path is already safe.
+      catchError(() => of(EMPTY_PROVIDERS)),
     );
   }
 

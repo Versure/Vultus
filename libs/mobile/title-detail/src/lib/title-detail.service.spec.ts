@@ -230,6 +230,37 @@ describe('TitleDetailService', () => {
     expect(docDataMock).not.toHaveBeenCalled();
   });
 
+  it('live path: getProviders rejects but getDetail resolves → detail$ stays loaded:live and providers$ degrades to empty (stream does NOT error)', async () => {
+    // Cache miss → live detail resolves, but the /watch/providers call rejects.
+    getDocMock.mockResolvedValue(snap(undefined));
+    getDetailMock.mockResolvedValue(liveDetail({ type: 'movie' }));
+    getProvidersMock.mockRejectedValue(new Error('providers 500'));
+    const service = createService(UID);
+
+    // detail$ still resolves to loaded:live (independent of providers).
+    const state = await lastState(service, 27205);
+    expect(state.kind).toBe('loaded');
+    if (state.kind === 'loaded') {
+      expect(state.source).toBe('live');
+    }
+
+    // providers$ degrades to empty groups and the stream completes without error.
+    const result = await new Promise<{
+      errored: boolean;
+      last: unknown;
+    }>((resolve) => {
+      let last: unknown;
+      service.providers$(27205, 'movie', 'NL', 'live').subscribe({
+        next: (g) => (last = g),
+        error: () => resolve({ errored: true, last }),
+        complete: () => resolve({ errored: false, last }),
+      });
+    });
+    expect(result.errored).toBe(false);
+    expect(result.last).toEqual({ flatrate: [], rent: [], buy: [] });
+    expect(getProvidersMock).toHaveBeenCalledTimes(1);
+  });
+
   it('tracked$ emits the mapped item, and null when absent', async () => {
     docDataMock.mockReturnValue(
       of({

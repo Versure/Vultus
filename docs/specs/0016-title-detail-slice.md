@@ -2,7 +2,7 @@
 number: 0016
 slug: title-detail-slice
 title: Build the title-detail slice — per-title detail page with metadata, regional providers, and watchlist actions
-status: implementing
+status: done
 slices: [slice:title-detail]
 scopes: [scope:mobile]
 created: 2026-06-22
@@ -1073,7 +1073,7 @@ targets: `mobile-title-detail` and `mobile-search` have `lint`/`test`/`typecheck
       `208cb8d7a679490b8d13672c6943d6d3`, "Movie Detail - Vultus", already captured + reconciled in the UI section).** The implementer **re-fetched** the screen
       via the MCP (retried on failure) to **visually verify**, and the PR records the
       **screen id**. The page honors **recon A–D**: filled Add CTA (`ion-button
-    color="primary"` → `--ion-color-primary` `#4edea3` / `--ion-color-primary-contrast`
+  color="primary"` → `--ion-color-primary` `#4edea3` / `--ion-color-primary-contrast`
       `#003824` per the FIX-1 deviation note — NOT the screen's `primary-container`)
       is the only filled button and the
       **tracked state shows the status control, NOT a "Mark as Watched" button**;
