@@ -76,6 +76,8 @@ export function watchlistItemToData(
     title: item.title,
     addedAt: new Date(item.addedAt),
     status: item.status,
+    posterPath: item.posterPath ?? null,
+    voteAverage: item.voteAverage ?? null,
   };
 }
 export function dataToWatchlistItem(
@@ -88,6 +90,8 @@ export function dataToWatchlistItem(
     title: data.title,
     addedAt: data.addedAt.toDate().toISOString(),
     status: data.status,
+    posterPath: data.posterPath ?? null,
+    voteAverage: data.voteAverage ?? null,
   };
 }
 

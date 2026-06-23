@@ -1,13 +1,17 @@
 // =============================================================================
-// Vultus global theme — Stitch design-system tokens (PLAN §2)
+// Vultus global theme — Stitch design-system tokens
 // =============================================================================
 //
 // This file is the SCSS entrypoint for @vultus/shared/ui-kit. It carries the
-// "Vultus Design System" Stitch tokens (Google Stitch project
-// projects/13590348714018893783) as CSS custom properties plus the Ionic theme
-// variables they map onto. shared/ui-kit is the design-system theming contract
-// for the whole app (PLAN §2: "Treat the Stitch design system as the contract
-// for shared/ui-kit theming").
+// "Vultus Design System" tokens as CSS custom properties plus the Ionic theme
+// variables they map onto.
+//
+// SOURCE OF TRUTH: docs/design/vultus-design-system.md (exported from the Google
+// Stitch project projects/13590348714018893783). Every value below is copied
+// from that file's authoritative YAML frontmatter — do NOT hand-edit a hex here
+// from memory or from PLAN §2 prose. When the design system changes, re-export
+// that doc and re-map it here. (PLAN §2: "Treat the Stitch design system as the
+// contract for shared/ui-kit theming.")
 //
 // HOW apps/mobile CONSUMES THIS
 // -----------------------------
@@ -24,43 +28,100 @@
 
 :root {
   // ---------------------------------------------------------------------------
-  // Primary — Emerald #10B981 (Ionic --ion-color-primary + companions)
+  // Primary — Emerald #4edea3 (design token `primary`).
+  // NOTE: #10B981 is `primary-container`, NOT primary — it survives only as the
+  // `--vultus-status-completed` semantic color below.
   // ---------------------------------------------------------------------------
-  --ion-color-primary: #10b981;
-  --ion-color-primary-rgb: 16, 185, 129;
-  --ion-color-primary-contrast: #ffffff;
-  --ion-color-primary-contrast-rgb: 255, 255, 255;
-  --ion-color-primary-shade: #0ea372;
-  --ion-color-primary-tint: #28c08f;
+  --ion-color-primary: #4edea3;
+  --ion-color-primary-rgb: 78, 222, 163;
+  --ion-color-primary-contrast: #003824; // design token `on-primary`
+  --ion-color-primary-contrast-rgb: 0, 56, 36;
+  --ion-color-primary-shade: #48cc96;
+  --ion-color-primary-tint: #60e1ac;
+
+  // Semantic primary aliases (design tokens).
+  --vultus-primary: #4edea3;
+  --vultus-on-primary: #003824;
+  --vultus-primary-container: #10b981;
+  --vultus-on-primary-container: #00422b;
 
   // ---------------------------------------------------------------------------
-  // Surfaces — navy-slate (dark-first)
+  // Surfaces — deep navy, dark-first, as a TONAL RAMP (not a single "elevated").
+  // Level 0 = surface/background; elevation = a step up the container ramp.
   // ---------------------------------------------------------------------------
-  // Level 0 background #0F172A; Level 1 elevated/cards #1E293B.
-  --ion-background-color: #0f172a;
-  --ion-background-color-rgb: 15, 23, 42;
+  --ion-background-color: #0b1326; // design token `background`
+  --ion-background-color-rgb: 11, 19, 38;
 
-  --vultus-surface: #0f172a; // Level 0 — app background
-  --vultus-surface-elevated: #1e293b; // Level 1 — cards / toolbars / search bar
-  --vultus-surface-overlay: #2d3748; // Level 2 — modals / overlays
-  --vultus-border: #334155; // 1px low-contrast outline on Level 1 surfaces
+  --vultus-surface: #0b1326; // Level 0 — app background (`surface`)
+  --vultus-surface-container-lowest: #060e20;
+  --vultus-surface-container-low: #131b2e; // passive cards (e.g. planned)
+  --vultus-surface-container: #171f33; // Level 1 — standard cards / toolbars
+  --vultus-surface-container-high: #222a3d; // inactive pills, raised chips
+  --vultus-surface-container-highest: #2d3449; // Level 2 — modals / overlays
+  --vultus-surface-bright: #31394d;
 
-  // Text — near-white primary content, mid-slate metadata.
-  --ion-text-color: #f8fafc;
-  --ion-text-color-rgb: 248, 250, 252;
-  --vultus-text-muted: #94a3b8;
+  // Back-compat aliases (kept so existing slices keep compiling) mapped onto the
+  // corrected ramp. Prefer the `--vultus-surface-container*` names in new code.
+  --vultus-surface-elevated: #171f33; // → surface-container (Level 1)
+  --vultus-surface-overlay: #2d3449; // → surface-container-highest (Level 2)
+  --vultus-border: #3c4a42; // → outline-variant
+  --vultus-outline: #86948a;
+  --vultus-outline-variant: #3c4a42;
+
+  // Text — `on-surface` for primary content, `on-surface-variant` for metadata.
+  --ion-text-color: #dae2fd; // design token `on-surface`
+  --ion-text-color-rgb: 218, 226, 253;
+  --vultus-on-surface: #dae2fd;
+  --vultus-on-surface-variant: #bbcabf;
+  --vultus-text-muted: #bbcabf; // back-compat alias → on-surface-variant
 
   // ---------------------------------------------------------------------------
-  // Typography — Inter-first stack (no web-font @import; family stack only)
+  // Typography — Inter-first stack. The web-font itself is loaded via the Google
+  // Fonts link in apps/mobile/src/index.html (a named family alone does NOT load
+  // it). Type scale below mirrors docs/design/vultus-design-system.md.
   // ---------------------------------------------------------------------------
   --vultus-font-family:
     'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
     Arial, sans-serif;
   --ion-font-family: var(--vultus-font-family);
 
+  // Type scale — `<size> / <weight> / <line-height>` per role.
+  --vultus-text-display-lg-size: 32px;
+  --vultus-text-display-lg-weight: 700;
+  --vultus-text-display-lg-line: 40px;
+  --vultus-text-display-lg-spacing: -0.02em;
+  --vultus-text-display-lg-mobile-size: 28px;
+  --vultus-text-display-lg-mobile-line: 36px;
+  --vultus-text-headline-md-size: 24px;
+  --vultus-text-headline-md-weight: 600;
+  --vultus-text-headline-md-line: 32px;
+  --vultus-text-headline-sm-size: 20px;
+  --vultus-text-headline-sm-weight: 600;
+  --vultus-text-headline-sm-line: 28px;
+  --vultus-text-body-lg-size: 16px;
+  --vultus-text-body-lg-weight: 400;
+  --vultus-text-body-lg-line: 24px;
+  --vultus-text-body-md-size: 14px;
+  --vultus-text-body-md-weight: 400;
+  --vultus-text-body-md-line: 20px;
+  --vultus-text-label-md-size: 12px;
+  --vultus-text-label-md-weight: 600;
+  --vultus-text-label-md-line: 16px;
+  --vultus-text-label-md-spacing: 0.05em;
+  --vultus-text-label-sm-size: 11px;
+  --vultus-text-label-sm-weight: 500;
+  --vultus-text-label-sm-line: 16px;
+
   // ---------------------------------------------------------------------------
-  // Spacing — 8px grid
+  // Spacing — 8px grid (4px base). The `--vultus-space-N` scale is kept for
+  // back-compat; the named tokens mirror the design doc's vocabulary.
   // ---------------------------------------------------------------------------
+  --vultus-space-xs: 4px;
+  --vultus-space-sm: 8px;
+  --vultus-space-md: 16px;
+  --vultus-space-lg: 24px;
+  --vultus-space-xl: 32px;
+
   --vultus-space-1: 8px;
   --vultus-space-2: 16px;
   --vultus-space-3: 24px;
@@ -69,17 +130,17 @@
   --vultus-space-6: 48px;
 
   // ---------------------------------------------------------------------------
-  // Radius — 0.5rem default (rounded shape language)
+  // Radius — 0.5rem default (rounded shape language); design `rounded.*`.
   // ---------------------------------------------------------------------------
   --vultus-radius: 0.5rem;
   --vultus-radius-sm: 0.25rem;
   --vultus-radius-md: 0.75rem;
   --vultus-radius-lg: 1rem;
+  --vultus-radius-xl: 1.5rem;
   --vultus-radius-pill: 9999px;
 
   // ---------------------------------------------------------------------------
-  // Semantic watchlist status colors (watchlist `status` field → color)
-  // Consumed by later slices (e.g. the watchlist slice's status badges).
+  // Semantic watchlist status colors (watchlist `status` field → color).
   // ---------------------------------------------------------------------------
   --vultus-status-watching: #3b82f6;
   --vultus-status-completed: #10b981;

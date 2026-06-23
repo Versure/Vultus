@@ -56,6 +56,8 @@ export interface WatchlistItemReadData {
   title: string;
   addedAt: FirestoreTimestampLike;
   status: WatchStatus;
+  posterPath?: string | null;
+  voteAverage?: number | null;
 }
 export interface WatchlistItemWriteData {
   type: TitleType;
@@ -64,6 +66,8 @@ export interface WatchlistItemWriteData {
   title: string;
   addedAt: Date;
   status: WatchStatus;
+  posterPath?: string | null;
+  voteAverage?: number | null;
 }
 
 // --- EpisodeDoc: airDate + nullable watchedAt ---

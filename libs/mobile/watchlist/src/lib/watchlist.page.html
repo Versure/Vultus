@@ -1,9 +1,157 @@
 <ion-header>
   <ion-toolbar>
-    <ion-title>Watchlist</ion-title>
+    <ion-title>
+      <span class="brand-mark">
+        <ion-icon name="film-outline" class="brand-icon"></ion-icon>
+        Vultus
+      </span>
+    </ion-title>
+    <ion-buttons slot="end">
+      <ion-button aria-label="Account">
+        <ion-icon name="person-circle-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
   </ion-toolbar>
 </ion-header>
 
-<ion-content class="ion-padding">
-  <p>Your watchlist will appear here.</p>
+<ion-content>
+  <ion-refresher slot="fixed" (ionRefresh)="onRefresh($event)">
+    <ion-refresher-content></ion-refresher-content>
+  </ion-refresher>
+
+  <!-- Type filter: flex row of auto-sized pills, no container bg -->
+  <div class="type-filter">
+    <button
+      class="filter-pill"
+      [class.active]="selectedType === undefined"
+      (click)="onFilterClick(undefined)"
+    >
+      All
+    </button>
+    <button
+      class="filter-pill"
+      [class.active]="selectedType === 'movie'"
+      (click)="onFilterClick('movie')"
+    >
+      Movies
+    </button>
+    <button
+      class="filter-pill"
+      [class.active]="selectedType === 'tv'"
+      (click)="onFilterClick('tv')"
+    >
+      TV Shows
+    </button>
+  </div>
+
+  @if ((vm$ | async); as vm) { @if (vm.groups === null) {
+  <div class="skeleton-list">
+    @for (s of skeletons; track s) {
+    <div class="watchlist-card skeleton-card">
+      <ion-skeleton-text
+        [animated]="true"
+        class="skeleton-poster"
+      ></ion-skeleton-text>
+      <div class="card-body">
+        <ion-skeleton-text
+          [animated]="true"
+          style="width: 70%"
+        ></ion-skeleton-text>
+        <ion-skeleton-text
+          [animated]="true"
+          style="width: 40%"
+        ></ion-skeleton-text>
+      </div>
+    </div>
+    }
+  </div>
+  } @else { @if (vm.groups.length === 0) {
+  <div class="empty-state">
+    <p class="empty-title">Your watchlist is empty</p>
+    <p class="empty-sub">Search for a title to get started</p>
+  </div>
+  } @else { @for (group of vm.groups; track group.status) {
+  <div class="status-section">
+    <!-- Plain div header: no Ionic ion-item-divider so count never clips -->
+    <div class="section-header" [attr.data-status]="group.status">
+      <span class="section-title">{{ group.label }}</span>
+      <span class="section-count">{{ group.count }} Items</span>
+    </div>
+    @for (item of group.items; track titleId(item)) {
+    <div
+      [class]="'watchlist-card status-' + item.status"
+      role="button"
+      tabindex="0"
+      (click)="navigateToDetail(titleId(item))"
+      (keyup.enter)="navigateToDetail(titleId(item))"
+      (keyup.space)="openStatusSheet(item)"
+      (contextmenu)="openStatusSheet(item); $event.preventDefault()"
+    >
+      <div class="poster">
+        @if (posterUrl(item); as url) {
+        <img [src]="url" [alt]="item.title" />
+        } @else {
+        <div class="poster-fallback"></div>
+        }
+      </div>
+
+      <div class="card-body">
+        <p class="card-title">{{ item.title }}</p>
+        <p class="card-meta">
+          <span class="meta-type"
+            >{{ item.type === 'movie' ? 'Movie' : 'TV Series' }}</span
+          >
+          @if (votePercent(item); as pct) {
+          <span class="meta-sep">&bull;</span>
+          <span class="meta-vote">{{ pct }}%</span>
+          }
+        </p>
+        @if (item.status === 'planned') {
+        <!-- Planned: show availability badge when provider is known (no chip otherwise) -->
+        @if (getProviderName$(item, (region$ | async)) | async; as provider) {
+        <span class="availability-badge">{{ provider }}</span>
+        } } @else { @if (getProviderName$(item, (region$ | async)) | async; as
+        provider) {
+        <span class="provider-badge status-{{ item.status }}"
+          >{{ provider }}</span
+        >
+        }
+        <button
+          type="button"
+          class="status-chip status-{{ item.status }}"
+          (click)="openStatusSheet(item); $event.stopPropagation()"
+        >
+          {{ STATUS_LABELS[item.status] }}
+        </button>
+        }
+      </div>
+
+      <button
+        type="button"
+        class="delete-btn"
+        aria-label="Remove from watchlist"
+        (click)="onDeleteConfirm(item); $event.stopPropagation()"
+      >
+        <ion-icon name="trash-outline"></ion-icon>
+      </button>
+    </div>
+    }
+  </div>
+  } } } }
+
+  <ion-action-sheet
+    [isOpen]="actionSheetOpen"
+    header="Set status"
+    [buttons]="actionSheetButtons"
+    (didDismiss)="actionSheetOpen = false"
+  ></ion-action-sheet>
+
+  <ion-alert
+    cssClass="vultus-alert"
+    [isOpen]="alertOpen"
+    header="Remove title"
+    [message]="alertDeleteItem ? 'Remove ' + alertDeleteItem.title + ' from your watchlist?' : ''"
+    [buttons]="alertButtons"
+    (didDismiss)="alertOpen = false"
+  ></ion-alert>
 </ion-content>

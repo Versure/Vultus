@@ -1,3 +1,396 @@
-// Watchlist tab placeholder — styling arrives with the watchlist slice feature
-// (PLAN §6 item 18). Theme tokens come from @vultus/shared/ui-kit via the
-// app-wide styles.
+// Watchlist tab — Stitch design.md + HTML reference applied.
+// All color literals come from the Stitch palette (watchlist-stitch.html).
+//
+// Key design.md tokens used as literals (diverge from --vultus-* where noted):
+//   surface / background:      #0b1326  (page bg)
+//   surface-container:         #171f33  (card base — watching/completed/dropped)
+//   surface-container-low:     #131b2e  (planned card — lower elevation = passive)
+//   surface-container-high:    #222a3d  (inactive pill bg)
+//   on-surface:                #dae2fd  (primary text)
+//   on-surface-variant:        #bbcabf  (muted text / meta / inactive pill text)
+//   primary:                   #4edea3  (active pill bg, availability badge)
+//   on-primary:                #003824  (text on primary bg)
+//   status-completed:          #10b981  (used for availability badge alt)
+
+// -----------------------------------------------------------------------------
+// Header
+// -----------------------------------------------------------------------------
+ion-header {
+  ion-toolbar {
+    --background: var(--vultus-surface);
+    --border-width: 0 0 1px 0;
+    --border-color: var(--vultus-border);
+    --border-style: solid;
+    --box-shadow: none;
+
+    ion-title {
+      padding-inline: 16px;
+    }
+  }
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #4edea3;
+  font-family: var(--vultus-font-family);
+  font-weight: 700;
+  font-size: 1.125rem;
+}
+
+.brand-icon {
+  font-size: 1.25rem;
+  color: #4edea3;
+  flex-shrink: 0;
+  position: relative;
+  top: -1px;
+}
+
+ion-content {
+  --background: var(--vultus-surface);
+}
+
+// -----------------------------------------------------------------------------
+// Type filter — plain flex row of rounded-full pills.
+// Stitch: active = bg-primary (#4edea3) text-on-primary (#003824);
+//         inactive = bg-surface-container-high (#222a3d) text-on-surface-variant (#bbcabf)
+// px-lg (24px) py-sm (8px) text-label-md (12px/600/0.05em)
+// -----------------------------------------------------------------------------
+.type-filter {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  padding: var(--vultus-space-2) var(--vultus-space-2) var(--vultus-space-1);
+  margin-bottom: var(--vultus-space-1);
+}
+
+.filter-pill {
+  flex: 0 0 auto;
+  padding: 8px 24px;
+  border: none;
+  border-radius: 9999px;
+  background: #222a3d;
+  color: #bbcabf;
+  font-family: var(--vultus-font-family);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+
+  &.active {
+    background: #4edea3;
+    color: #003824;
+  }
+}
+
+.status-section {
+  margin-bottom: var(--vultus-space-3);
+}
+
+// -----------------------------------------------------------------------------
+// Section header — plain div with flex+space-between.
+// Replaces ion-item-divider which clipped the count text.
+// Stitch: title = text-headline-sm (20px/600); count = text-label-md (12px/600)
+//         count color = status color; planned = on-surface-variant.
+// -----------------------------------------------------------------------------
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px var(--vultus-space-2);
+  margin-bottom: 8px;
+}
+
+.section-title {
+  font-family: var(--vultus-font-family);
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #dae2fd;
+}
+
+.section-count {
+  font-family: var(--vultus-font-family);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: #bbcabf;
+  white-space: nowrap;
+}
+
+// Per-status count color
+.section-header[data-status='watching'] .section-count {
+  color: var(--vultus-status-watching);
+}
+.section-header[data-status='completed'] .section-count {
+  color: var(--vultus-status-completed);
+}
+.section-header[data-status='dropped'] .section-count {
+  color: var(--vultus-status-dropped);
+}
+
+// -----------------------------------------------------------------------------
+// Card — no explicit border (contrast via bg delta); backgrounds per Stitch.
+// watching/completed/dropped: surface-container (#171f33)
+// planned: surface-container-low (#131b2e)
+// -----------------------------------------------------------------------------
+.watchlist-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--vultus-space-2);
+  padding: var(--vultus-space-1);
+  margin: 0 var(--vultus-space-2) var(--vultus-space-1);
+  border-radius: var(--vultus-radius-md);
+  background: #171f33;
+  cursor: pointer;
+
+  &.status-planned {
+    background: #131b2e;
+  }
+}
+
+.poster {
+  flex: 0 0 auto;
+  width: 64px;
+  height: 96px;
+  border-radius: var(--vultus-radius);
+  overflow: hidden;
+  background: var(--vultus-surface-overlay);
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .poster-fallback {
+    width: 100%;
+    height: 100%;
+    background: var(--vultus-surface-overlay);
+  }
+}
+
+.card-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+// body-lg: 16px / 400 / 24px — Stitch: text-body-lg text-on-surface
+.card-title {
+  margin: 0;
+  font-family: var(--vultus-font-family);
+  font-weight: 400;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #dae2fd;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// label-sm: 11px / 500 — Stitch: text-label-sm text-on-surface-variant
+.card-meta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--vultus-font-family);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: #bbcabf;
+}
+
+.meta-sep {
+  color: #bbcabf;
+}
+
+.meta-vote {
+  color: #4edea3;
+}
+
+// Availability badge for planned items — Stitch: bg-primary/10 text-primary
+// text-[10px] font-label-md (600 weight), rounded-full
+.availability-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: rgba(78, 222, 163, 0.1);
+  color: #4edea3;
+  font-family: var(--vultus-font-family);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  align-self: flex-start;
+}
+
+// Provider badge (non-planned statuses)
+.provider-badge {
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-family: var(--vultus-font-family);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  --pc: #4edea3;
+  background: color-mix(in srgb, var(--pc) 15%, transparent);
+  color: var(--pc);
+
+  &.status-watching {
+    --pc: var(--vultus-status-watching);
+  }
+  &.status-completed {
+    --pc: var(--vultus-status-completed);
+  }
+  &.status-dropped {
+    --pc: var(--vultus-status-dropped);
+  }
+}
+
+.status-chip {
+  align-self: flex-start;
+  padding: 2px 12px;
+  border: none;
+  border-radius: 9999px;
+  font-family: var(--vultus-font-family);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+}
+.status-chip.status-watching {
+  background: var(--vultus-status-watching);
+}
+.status-chip.status-completed {
+  background: var(--vultus-status-completed);
+}
+.status-chip.status-dropped {
+  background: var(--vultus-status-dropped);
+}
+
+// Delete button — right-aligned flex sibling on the card.
+.delete-btn {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--vultus-radius);
+  background: transparent;
+  color: var(--vultus-status-dropped);
+  font-size: 1.125rem;
+  cursor: pointer;
+  align-self: center;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 60vh;
+  padding: var(--vultus-space-2);
+
+  .empty-title {
+    margin: 0 0 var(--vultus-space-1);
+    font-family: var(--vultus-font-family);
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #dae2fd;
+  }
+
+  .empty-sub {
+    margin: 0;
+    font-family: var(--vultus-font-family);
+    color: #bbcabf;
+  }
+}
+
+.skeleton-list .skeleton-card {
+  align-items: center;
+}
+
+// -----------------------------------------------------------------------------
+// Delete-confirm alert overlay — ion-alert renders in the Ionic overlay DOM
+// (outside this component's shadow), so ::ng-deep is required to reach it via
+// the cssClass="vultus-alert" hook. Design.md Level-2 overlay spec:
+//   bg surface-container-highest (#2d3449), 1rem radius, ambient shadow.
+// -----------------------------------------------------------------------------
+// stylelint-disable selector-pseudo-element-no-unknown
+::ng-deep .vultus-alert {
+  .alert-wrapper {
+    background: #2d3449;
+    border-radius: 1rem;
+    border: 1px solid rgba(60, 74, 66, 0.25);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+  }
+
+  .alert-head {
+    padding: 20px 20px 8px;
+  }
+
+  .alert-title {
+    color: #dae2fd;
+    font-family: 'Inter', sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .alert-message {
+    color: #bbcabf;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    padding: 0 20px 16px;
+  }
+
+  .alert-button-group {
+    padding: 8px 12px 12px;
+    gap: 8px;
+    border-top: 1px solid rgba(60, 74, 66, 0.25);
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+
+  .alert-button {
+    border-radius: 0.5rem;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: 8px 16px;
+    margin: 0;
+  }
+
+  .vultus-alert-cancel {
+    color: #bbcabf;
+    background: transparent;
+  }
+
+  .vultus-alert-remove {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.12);
+  }
+}
+
+.skeleton-poster {
+  width: 64px;
+  height: 96px;
+  border-radius: var(--vultus-radius);
+}

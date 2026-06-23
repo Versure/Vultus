@@ -94,9 +94,62 @@ describe('converters — round-trip identity', () => {
       addedAt: '2026-03-04T05:06:07.000Z',
       status: 'watching',
     };
+    // posterPath/voteAverage are absent on the source item; the write converter
+    // coerces them to null (never undefined), so the round-trip reads them back
+    // as null.
+    expect(
+      dataToWatchlistItem(simulateStored(watchlistItemToData(item)) as never),
+    ).toEqual({ ...item, posterPath: null, voteAverage: null });
+  });
+
+  it('WatchlistItem: posterPath + voteAverage set round-trip', () => {
+    const item: WatchlistItem = {
+      type: 'movie',
+      tmdbId: 603,
+      traktId: 1,
+      title: 'The Matrix',
+      addedAt: '2026-03-04T05:06:07.000Z',
+      status: 'completed',
+      posterPath: '/matrix.jpg',
+      voteAverage: 8.2,
+    };
     expect(
       dataToWatchlistItem(simulateStored(watchlistItemToData(item)) as never),
     ).toEqual(item);
+  });
+
+  it('WatchlistItem: posterPath + voteAverage explicit null round-trip', () => {
+    const item: WatchlistItem = {
+      type: 'tv',
+      tmdbId: 1396,
+      traktId: null,
+      title: 'Breaking Bad',
+      addedAt: '2026-03-04T05:06:07.000Z',
+      status: 'planned',
+      posterPath: null,
+      voteAverage: null,
+    };
+    expect(
+      dataToWatchlistItem(simulateStored(watchlistItemToData(item)) as never),
+    ).toEqual(item);
+  });
+
+  it('WatchlistItem: posterPath/voteAverage absent are written as null (never undefined)', () => {
+    const item: WatchlistItem = {
+      type: 'movie',
+      tmdbId: 27205,
+      traktId: 5,
+      title: 'Inception',
+      addedAt: '2026-03-04T05:06:07.000Z',
+      status: 'watching',
+    };
+    const write = watchlistItemToData(item);
+    expect(write.posterPath).toBeNull();
+    expect(write.voteAverage).toBeNull();
+    // Round-trip reads them back as null.
+    const read = dataToWatchlistItem(simulateStored(write) as never);
+    expect(read.posterPath).toBeNull();
+    expect(read.voteAverage).toBeNull();
   });
 
   it('EpisodeDoc: watchedAt set (watched true)', () => {

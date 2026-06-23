@@ -45,29 +45,52 @@ PushNotifications API from a component); the **native** Capacitor setup
 
 ## Frontend domain guidance
 
-- **Match the design — and actually fetch it.** Pull the relevant Stitch screen
-  with `get_screen` (ID in the spec; use `list_screens`/`get_project` for project
-  `projects/13590348714018893783` to find it). **If `get_screen` errors or seems
-  unreachable, retry it** (transient failures are common) — do **not** silently
-  fall back to "tokens only" and proceed. A `scope:mobile` UI task where you could
-  not see the screen is **blocked**: implement to the spec's stated values, but
-  **report "Stitch screen unverified" prominently** so the orchestrator surfaces it
-  rather than shipping a guess. Always record the screen ID you used.
+- **Match the design — and actually fetch it the right way.** `get_screen` (ID in
+  the spec; use `list_screens`/`get_project` for project
+  `projects/13590348714018893783` to find it) returns **metadata + download URLs,
+  NOT the rendered markup**. The screen object alone is almost un-pinnable — the
+  real values live in the HTML it links to. Recipe:
+  1. `get_screen` → read `htmlCode.downloadUrl` and `screenshot.downloadUrl`.
+  2. **Fetch the raw HTML** at `htmlCode.downloadUrl` with a plain GET
+     (`Invoke-WebRequest -UseBasicParsing` and save to a scratch file, then Read
+     it). **Do NOT use WebFetch** for this — it summarizes the page and strips the
+     `<style>`/Tailwind-config block you need.
+  3. In that HTML, read the **Tailwind config** (`tailwind.config` → `colors`,
+     `fontSize`, `spacing`, `borderRadius`) for exact values, and the **element
+     markup** for structure (which utility classes each part uses).
+  4. Fetch `screenshot.downloadUrl` and eyeball it against your render.
+     **If `get_screen` errors, retry** (transient failures are common). **If you
+     genuinely cannot read the screen HTML, the task is blocked** — implement to the
+     spec's stated values, **report "Stitch screen unverified" prominently** as a
+     `needs-human` item, and do **not** pass it off as done. Always record the screen
+     ID + the download URL you read.
 - **Translate the design to concrete CSS, not vibes.** Before writing SCSS, pin
   the exact values the screen implies: element dimensions (input/control
   **heights**, not just "taller"), spacing/insets, radius, and **every interactive
   state** — default / **focus** / hover / active / disabled, including transitions
   and animations (e.g. "green border on focus, ease-in-out"). A control's focus/
   active styling is part of the design, not an afterthought.
-- **Design tokens (PLAN §2)** are the contract for `shared/ui-kit` theming:
-  dark-first, **Inter**, primary **Emerald `#10B981`**, navy-slate surfaces
-  (`#0F172A`/`#1E293B`), 8px grid, 0.5rem radius. Map the watchlist `status`
-  field to its semantic color: watching `#3B82F6`, completed `#10B981`,
-  dropped `#EF4444`, planned `#94A3B8`. **A token only renders if it's actually
-  wired:** a font named in `--vultus-font-family` is _not loaded_ unless a
-  web-font (`@font-face` / Google Fonts link in `apps/mobile/src/index.html`)
-  provides it — otherwise it silently falls back to system-ui. If the design's
-  font isn't loaded, that's a setup gap to fix (or report), not "good enough".
+- **Design tokens — the in-repo design doc is the contract.** The authoritative
+  token set is `docs/design/vultus-design-system.md` (exported from Stitch), wired
+  into `shared/ui-kit` `theme.scss` as `--vultus-*` / `--ion-*` vars. **Consume
+  those vars; never hand-transcribe a hex** from memory or from prose — stale
+  hand-copied values (e.g. the old "primary `#10B981`, surface `#0F172A`") are the
+  single biggest source of UI-rework loops. The real language is dark-first,
+  **Inter**, primary **Emerald `#4edea3`** (`#10B981` is `primary-container`, not
+  primary), a deep-navy **surface ramp** (`--vultus-surface #0b1326` →
+  `--vultus-surface-container #171f33` → `--vultus-surface-container-highest
+#2d3449`), text `--vultus-on-surface #dae2fd` / `--vultus-on-surface-variant
+#bbcabf`, 8px grid, 0.5rem radius, and a type scale (`--vultus-text-*`:
+  label-sm 11/500 … display-lg 32/700). Map the watchlist `status` field to its
+  semantic var: `--vultus-status-watching #3B82F6`, `-completed #10B981`,
+  `-dropped #EF4444`, `-planned #94A3B8`. If a value you need isn't in `theme.scss`
+  yet, read it from `docs/design/vultus-design-system.md` and **add it to
+  `theme.scss`** (when you own ui-kit) rather than hardcoding a literal in a slice.
+  **A token only renders if it's actually wired:** a font named in
+  `--vultus-font-family` is _not loaded_ unless a web-font (Google Fonts link in
+  `apps/mobile/src/index.html`) provides it — otherwise it silently falls back to
+  system-ui. If the design's font isn't loaded, that's a setup gap to fix (or
+  report), not "good enough".
 - **Ionic component internals — style the part that renders, not the host.**
   Ionic components render inner shadow/scoped elements; theming the host alone
   misses them. Known gotchas:

@@ -1,27 +1,39 @@
 # shared-ui-kit
 
 `@vultus/shared/ui-kit` is Vultus's shared UI foundation. Today it carries the
-**global theming contract** — the "Vultus Design System" Stitch tokens (PLAN §2)
-as SCSS / CSS custom properties. Future **truly-shared Ionic atom components**
-will live here too, but only once the same atom is needed by **3+ slices**
-(CLAUDE.md / PLAN §3 — no premature extraction; duplication inside a slice is
-fine).
+**global theming contract** — the "Vultus Design System" tokens as SCSS / CSS
+custom properties. The **authoritative token values live at
+`docs/design/vultus-design-system.md`** (exported from the Stitch project); this
+lib's `theme.scss` is the runtime wiring of that doc. When the design system
+changes, update the doc and re-map `theme.scss` from it — never edit a hex here
+from memory. Future **truly-shared Ionic atom components** will live here too, but
+only once the same atom is needed by **3+ slices** (CLAUDE.md / PLAN §3 — no
+premature extraction; duplication inside a slice is fine).
 
 ## Public surface
 
 - **`src/lib/theme.scss`** — the design-system token file (the consumable
-  theming surface). Defines, under `:root`, the Stitch tokens as CSS custom
+  theming surface). Defines, under `:root`, the design tokens as CSS custom
   properties and the Ionic theme variables they map onto:
-  - **Primary** Emerald `#10B981` → `--ion-color-primary` (+ `-rgb` / `-shade` /
-    `-tint` / `-contrast`).
-  - **Surfaces** navy-slate → `--ion-background-color` `#0F172A`,
-    `--vultus-surface-elevated` `#1E293B`, plus `--vultus-surface-overlay`,
-    `--vultus-border`, and text tokens (`--ion-text-color`, `--vultus-text-muted`).
+  - **Primary** Emerald `#4edea3` → `--ion-color-primary` / `--vultus-primary`
+    (+ `-rgb` / `-shade` / `-tint` / `-contrast` = `on-primary` `#003824`). Note:
+    `#10B981` is `--vultus-primary-container`, **not** primary.
+  - **Surfaces** deep-navy **tonal ramp** → `--ion-background-color` /
+    `--vultus-surface` `#0b1326`, then `--vultus-surface-container-low` `#131b2e`,
+    `--vultus-surface-container` `#171f33`, `--vultus-surface-container-high`
+    `#222a3d`, `--vultus-surface-container-highest` `#2d3449`. Back-compat aliases
+    `--vultus-surface-elevated` (→ container), `--vultus-surface-overlay` (→
+    highest), `--vultus-border` (→ `outline-variant` `#3c4a42`) are kept.
+  - **Text** → `--ion-text-color` / `--vultus-on-surface` `#dae2fd`,
+    `--vultus-on-surface-variant` / `--vultus-text-muted` `#bbcabf`.
   - **Typography** Inter-first stack → `--vultus-font-family` / `--ion-font-family`
-    (family stack only — no web-font `@import`/CDN).
-  - **Spacing** 8px grid → `--vultus-space-1`…`--vultus-space-6`.
+    (the web-font itself is loaded by the Google Fonts link in
+    `apps/mobile/src/index.html`), plus a type scale `--vultus-text-*`
+    (`label-sm` 11/500 … `display-lg` 32/700) mirroring the design doc.
+  - **Spacing** 8px grid → named `--vultus-space-{xs,sm,md,lg,xl}` and the
+    legacy `--vultus-space-1`…`--vultus-space-6` scale.
   - **Radius** 0.5rem default → `--vultus-radius` (+ `-sm` / `-md` / `-lg` /
-    `-pill`).
+    `-xl` / `-pill`).
   - **Semantic watchlist status colors** → `--vultus-status-watching` `#3B82F6`,
     `--vultus-status-completed` `#10B981`, `--vultus-status-dropped` `#EF4444`,
     `--vultus-status-planned` `#94A3B8` (the watchlist `status` field maps to
