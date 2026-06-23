@@ -69,20 +69,28 @@ Body sections, in this order — keep each tight and concrete:
 5. **Public types / APIs** — new or changed types (prefer `shared/domain`),
    function signatures, HTTP endpoints, callable shapes.
 6. **UI / Stitch screen refs** — for mobile slices only: the relevant Stitch
-   screen and the design-system tokens to match (PLAN §2). **Actually pull the
-   screen** via the Stitch MCP (`list_screens` then `get_screen`) and **reference
-   its ID**; if the MCP errors, **retry** before giving up. If it is genuinely
-   unreachable, do **not** quietly ship a token-only section — record
-   "Stitch screen NOT captured" as a **blocking open item** so the implementer
-   knows the visual contract is unverified. Make the section a **checkable
-   contract, not prose**: pin concrete values the implementer can't misread —
-   element **dimensions** (control/input heights, not "taller"), spacing/insets
-   (which must agree across sibling elements, e.g. list items aligned to the
-   input), radius, and **every interactive state** (default / **focus** / hover /
-   active / disabled, including transitions/animations). Call out token _wiring_
-   that's easy to miss (e.g. the design font must be **loaded** as a web-font, not
-   just named in the family stack). Prefer a per-state acceptance list the
-   feature-reviewer and a human can tick off.
+   screen plus the in-repo design system. **The authoritative tokens live at
+   `docs/design/vultus-design-system.md`** — reference that file, do **not**
+   reprint hex values in the spec (a hand-copied palette is how stale tokens
+   propagate; primary is `#4edea3`, **not** `#10B981`). **Actually pull the
+   screen** and read its real markup: `get_screen` returns only metadata +
+   download URLs, so the spec must point the implementer at the screen's
+   `htmlCode.downloadUrl` (fetched raw, not via WebFetch) for the concrete values,
+   and **reference the screen ID**. If the MCP errors, **retry** before giving up;
+   if genuinely unreachable, record "Stitch screen NOT captured" as a **blocking
+   open item** rather than shipping a prose-only section. Make the section a
+   **checkable contract, not prose**: pin concrete values the implementer can't
+   misread — element **dimensions** (control/input heights, not "taller"),
+   spacing/insets (which must agree across sibling elements, e.g. list items
+   aligned to the input), radius, the **type role** per text element (e.g.
+   "title = body-lg, meta = label-sm" referencing the design doc's scale), and
+   **every interactive state** (default / **focus** / hover / active / disabled,
+   including transitions/animations). Describe **structure from the actual screen**
+   (don't assume an Ionic component maps 1:1 — e.g. the filter is a row of plain
+   pills, not necessarily an `ion-segment`). Call out token _wiring_ that's easy to
+   miss (e.g. the design font must be **loaded** as a web-font, not just named in
+   the family stack). Prefer a per-state acceptance list the feature-reviewer and a
+   human can tick off.
 7. **Implementation task graph** — ordered tasks mapped to slices. Mark each
    task **[sequential]** (shared deps like `shared/domain`,
    `shared/firestore-schema`, new-slice generation, root/config wiring — must

@@ -19,18 +19,31 @@ architecture and decisions; read it before non-trivial work.
 - **Data model:** Firestore, keyed by `userId` from day one; see PLAN §4 for
   collection paths, `title-cache`, and the `previousSnapshot` transition model.
 - **UI design source:** Google Stitch "Vultus Android App Design"
-  (`projects/13590348714018893783`), via the `stitch` MCP. Design tokens:
-  dark-first, Inter, primary Emerald `#10B981`, navy-slate surfaces
-  (`#0F172A`/`#1E293B`), 8px grid. Treat the Stitch design system as the contract
-  for `shared/ui-kit` theming.
+  (`projects/13590348714018893783`), via the `stitch` MCP. The **authoritative
+  token set lives in the repo** at `docs/design/vultus-design-system.md` (exported
+  from Stitch) and is wired into `shared/ui-kit` `theme.scss`. Design language:
+  dark-first, Inter, primary Emerald `#4edea3` (note: `#10B981` is
+  `primary-container`, **not** primary), deep-navy surface ramp (`#0b1326`
+  background → `#171f33` cards → `#2d3449` overlays), `on-surface` text `#dae2fd`,
+  8px grid. **Never hand-transcribe a hex from memory or from prose — cite
+  `docs/design/vultus-design-system.md` (or the fetched Stitch screen) and consume
+  the `--vultus-*` / `--ion-*` vars `theme.scss` exposes.** Treat the Stitch design
+  system as the contract for `shared/ui-kit` theming.
 - **UI fidelity is a contract, not a vibe.** For any mobile UI work the relevant
-  **Stitch screen** (not just the tokens) is the spec: fetch it via the MCP and
-  **retry on failure** — never silently fall back to "tokens only". Pin concrete
-  values and **all interactive states** (focus/active/hover/disabled, animations),
-  and remember a named token only renders if it's wired (e.g. the font must be
-  _loaded_, not just listed in the family stack). A green typecheck/lint/test/build
-  does **not** prove the UI looks right — visually verify it (render/screenshot, or
-  the `--configuration=mock` serve target) or **explicitly flag it unverified for a
+  **Stitch screen** (not just the tokens) is the spec. Fetching it has a specific
+  recipe: `get_screen` returns **metadata + a download URL, not the rendered
+  markup** — take `htmlCode.downloadUrl`, fetch the **raw HTML** (a plain GET /
+  `Invoke-WebRequest`, **not** WebFetch, which summarizes away the CSS), and read
+  the Tailwind config (`colors`/`fontSize`/`spacing`) + element markup for the
+  concrete values; also grab `screenshot.downloadUrl` for a visual compare. **Retry
+  on MCP failure**; if the screen HTML genuinely can't be read, the UI task is
+  **blocked / `needs-human`** — do **not** "fall back to tokens and proceed" (the
+  fallback hides structure the tokens can't express). Pin concrete values and **all
+  interactive states** (focus/active/hover/disabled, animations), and remember a
+  named token only renders if it's wired (e.g. the font must be _loaded_, not just
+  listed in the family stack). A green typecheck/lint/test/build does **not** prove
+  the UI looks right — visually verify it (render/screenshot, or the
+  `--configuration=mock` serve target) or **explicitly flag it unverified for a
   human eyeball**; never report UI fidelity as done off a green build alone.
 
 ## Commands & definition of done (PLAN §5)
