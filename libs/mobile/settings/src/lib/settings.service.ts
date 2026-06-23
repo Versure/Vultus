@@ -6,12 +6,8 @@ import {
   setDoc,
   updateDoc,
 } from '@angular/fire/firestore';
-import {
-  AUTH_UID,
-  REGIONS,
-  type Region,
-  type User,
-} from '@vultus/shared/domain';
+import { AUTH_UID } from '@vultus/shared/domain/tokens';
+import { REGIONS, type Region, type User } from '@vultus/shared/domain';
 import {
   dataToUser,
   userPath,
@@ -82,7 +78,9 @@ export class SettingsService {
     }
 
     this._region.set(user.region);
-    this._notificationsEnabled.set(projectNotifications(user.notificationPrefs));
+    this._notificationsEnabled.set(
+      projectNotifications(user.notificationPrefs),
+    );
     this._loaded.set(true);
   }
 
