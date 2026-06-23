@@ -1,0 +1,10 @@
+# Deployed to the dist root alongside the pruned package.json + lockfile so the
+# Firebase / Cloud Build `pnpm install` knows these dependencies' build scripts
+# are intentionally skipped. This mirrors the repo-root pnpm-workspace.yaml
+# `allowBuilds` entries. Without it, pnpm 11 exits 1 with ERR_PNPM_IGNORED_BUILDS
+# and the functions deploy build fails. Kept in this deploy/ subfolder (not at
+# the functions source root) so pnpm never mistakes it for a nested workspace
+# root during normal repo-root operations; Nx copies it to dist on build.
+allowBuilds:
+  '@firebase/util': false
+  protobufjs: false

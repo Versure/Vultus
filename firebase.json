@@ -1,4 +1,8 @@
 {
+  "functions": {
+    "source": "dist/apps/functions",
+    "runtime": "nodejs22"
+  },
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
