@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideIonicAngular } from '@ionic/angular/standalone';
 import { signal } from '@angular/core';
+import { Router } from '@angular/router';
 import { vi, describe, it, expect } from 'vitest';
 
 // SearchService (a transitive import) pulls in @angular/fire/firestore, which
@@ -54,9 +55,10 @@ describe('SearchPage', () => {
 
   async function setup(serviceOverrides = {}) {
     const svc = makeService(serviceOverrides);
+    const router = { navigate: vi.fn() };
     await TestBed.configureTestingModule({
       imports: [SearchPage],
-      providers: [provideIonicAngular()],
+      providers: [provideIonicAngular(), { provide: Router, useValue: router }],
     })
       // SearchPage declares `providers: [SearchService]` at the component level,
       // which shadows any module-level provider. Override it so the page uses
@@ -68,7 +70,7 @@ describe('SearchPage', () => {
     const fixture = TestBed.createComponent(SearchPage);
     await fixture.whenStable();
     fixture.detectChanges();
-    return { fixture, svc };
+    return { fixture, svc, router };
   }
 
   it('shows prompt state by default', async () => {
@@ -108,6 +110,48 @@ describe('SearchPage', () => {
     const addBtn = el.querySelector<HTMLElement>('.add-btn');
     addBtn?.click();
     expect(svc.add).toHaveBeenCalledWith(mockResult);
+  });
+
+  it('navigates to title-detail when card body tapped', async () => {
+    const { fixture, router } = await setup({
+      viewState: 'results',
+      results: [mockResult],
+    });
+    const el = fixture.nativeElement as HTMLElement;
+    const body = el.querySelector<HTMLElement>('.card-body');
+    body?.click();
+    expect(router.navigate).toHaveBeenCalledWith([
+      'tabs',
+      'title-detail',
+      String(mockResult.tmdbId),
+    ]);
+  });
+
+  it('navigates to title-detail when poster tapped', async () => {
+    const { fixture, router } = await setup({
+      viewState: 'results',
+      results: [mockResult],
+    });
+    const el = fixture.nativeElement as HTMLElement;
+    const poster = el.querySelector<HTMLElement>('.poster-wrap');
+    poster?.click();
+    expect(router.navigate).toHaveBeenCalledWith([
+      'tabs',
+      'title-detail',
+      String(mockResult.tmdbId),
+    ]);
+  });
+
+  it('does not navigate when Add button tapped (inline-add only)', async () => {
+    const { fixture, svc, router } = await setup({
+      viewState: 'results',
+      results: [mockResult],
+    });
+    const el = fixture.nativeElement as HTMLElement;
+    const addBtn = el.querySelector<HTMLElement>('.add-btn');
+    addBtn?.click();
+    expect(svc.add).toHaveBeenCalledWith(mockResult);
+    expect(router.navigate).not.toHaveBeenCalled();
   });
 
   it('does not show Add button for added results', async () => {

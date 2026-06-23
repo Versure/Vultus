@@ -15,6 +15,7 @@ import {
 } from '@angular/fire/firestore';
 import { AUTH_UID } from '@vultus/shared/domain';
 import { TMDB_SEARCH_CONFIG } from '@vultus/mobile/search';
+import { TMDB_DETAIL_CONFIG } from '@vultus/mobile/title-detail';
 import { appRoutes } from './app.routes';
 import { environment } from '../environments/environment';
 import {
@@ -69,5 +70,9 @@ export const appConfig: ApplicationConfig = {
     // TMDB search config (spec 0013) — provided at root from `environment.tmdb`
     // so the search slice can inject it without importing apps/mobile.
     { provide: TMDB_SEARCH_CONFIG, useValue: environment.tmdb },
+    // TMDB detail config (spec 0016) — same `environment.tmdb` value; a separate
+    // token preserves slice isolation (the detail slice never imports the search
+    // slice's token).
+    { provide: TMDB_DETAIL_CONFIG, useValue: environment.tmdb },
   ],
 };
