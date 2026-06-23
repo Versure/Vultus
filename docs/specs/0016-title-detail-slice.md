@@ -252,8 +252,10 @@ Out of scope (each its own later spec):
 ## Data model touchpoints
 
 PLAN §4 paths. **No new field is added to any shared type** (the watchlist
-denormalized fields `posterPath`/`voteAverage` are added by spec 0014 — this spec
-**depends on** them, see Public types). All `title-cache` access is **read-only**.
+denormalized fields `posterPath`/`voteAverage` were added by spec 0014, which is now
+**merged** — they are **already present on main** in `WatchlistItem` and the
+`watchlistItemToData`/`dataToWatchlistItem` converters, and this spec **consumes them
+directly**). All `title-cache` access is **read-only**.
 
 | PLAN §4 path                                 | Access by this slice              | Fields / note                                                                          |
 | -------------------------------------------- | --------------------------------- | -------------------------------------------------------------------------------------- |
@@ -286,12 +288,12 @@ denormalized fields `posterPath`/`voteAverage` are added by spec 0014 — this s
 - **Add write (decision 4).** Build a `WatchlistItem`
   `{ type, tmdbId, traktId: null, title, addedAt: <now ISO>, status: 'planned',
   posterPath, voteAverage }`, pass it through `watchlistItemToData(item)` (the
-  0014-widened converter coerces the two denormalized fields and `addedAt` → Date),
-  and `setDoc` it at `watchlistItemPath(uid, String(tmdbId))`. **Use the shared
-  converter — do not hand-roll the wire mapping.** `posterPath`/`voteAverage` come
-  from the resolved `TitleDetail` (cache or live); when unknown, pass `null` (the
-  fields are optional + nullable per 0014). The doc id is `String(tmdbId)`,
-  matching 0013/0014 (the natural duplicate guard).
+  merged-0014 converter already coerces the two denormalized fields via `?? null` and
+  `addedAt` → Date), and `setDoc` it at `watchlistItemPath(uid, String(tmdbId))`.
+  **Use the shared converter — do not hand-roll the wire mapping.**
+  `posterPath`/`voteAverage` come from the resolved `TitleDetail` (cache or live);
+  when unknown, pass `null` (the fields are optional + nullable, present on main). The
+  doc id is `String(tmdbId)`, matching 0013/0014 (the natural duplicate guard).
 - **Change status / remove (decision 4).** `updateDoc` `{ status }` at
   `watchlistItemPath(uid, String(tmdbId))`; `deleteDoc` at the same path. Mirrors
   0014's `updateStatus` / `removeTitle`.
@@ -542,41 +544,58 @@ blindly build it. Consume the `shared/ui-kit` CSS custom properties / Tailwind
 tokens — **do not hard-code hex**; the hex values below are pinned only so the
 implementer can confirm the token wiring matches the screen.
 
-### Design tokens pinned from the screen (note: the screen uses TWO emeralds)
+### Design tokens — element → role → CSS var (source of truth: `docs/design/vultus-design-system.md`)
 
-| Token                       | Value                       | Use on this page                                                       |
-| --------------------------- | --------------------------- | ---------------------------------------------------------------------- |
-| `primary`                   | `#4edea3` (lighter emerald) | accents, icons, **section headings**, **outlined-button text + border**|
-| `primary-container`         | `#10B981` (PLAN primary)    | **filled-button background** (the Add CTA)                             |
-| `on-primary-container`      | `#00422b`                   | text/icon **on** the filled button + genre chip                       |
-| `background` / `surface`    | `#0b1326`                   | page background                                                        |
-| `surface-container`         | `#171f33`                   | back-button bg (at 40%), low cards                                     |
-| `surface-container-high`    | `#222a3d`                   | raised surfaces                                                        |
-| `surface-container-highest` | `#2d3449`                   | the secondary hero chip (e.g. quality — see recon D)                  |
-| `surface-dark`              | `#1E293B`                   | (PLAN surface-elevated)                                                |
-| `on-surface`                | `#dae2fd`                   | title + primary text                                                   |
-| `on-surface-variant`        | `#bbcabf`                   | synopsis, meta row, provider type labels                              |
-| `outline-variant`           | `#3c4a42`                   | scrolled app-bar bottom border (at 20%), dividers                     |
-| status-watching             | `#3B82F6`                   | tracked status = watching                                             |
-| status-completed            | `#10B981`                   | tracked status = completed                                            |
-| status-dropped              | `#EF4444`                   | tracked status = dropped / remove affordance                          |
-| status-planned              | `#94A3B8`                   | tracked status = planned                                              |
+**`docs/design/vultus-design-system.md` is the authoritative token set; consume the
+wired `--vultus-*` / `--ion-*` CSS custom properties from `shared/ui-kit`
+`theme.scss` — never hardcode a hex.** The mapping below pins each page element to
+its design role and the var that carries it (hex values live only in the design doc
++ theme.scss; do not re-transcribe them here).
 
-- **Typography — Inter, and it MUST be LOADED as a web-font** (Google Fonts
-  `wght@400;500;600;700;800`), not merely named in the family stack; **icons via
-  Material Symbols Outlined** (Ionic's `ionicons` is an acceptable substitute —
-  reconcile the glyph names, but the icon font must actually load). Confirm the
-  `shared/ui-kit` theme (spec 0010) loads Inter; this page must render in Inter,
-  not a system fallback. Type scale (px / line-height / weight):
-  - display-lg-mobile **28/36/700** — the title in the hero
-  - headline-sm **20/28/600** — section headings (rendered in `primary` `#4edea3`)
-  - body-lg **16/24/400** — the synopsis
-  - body-md **14/20/400** — base text + provider name rows
-  - label-md **12/16/600**, `+0.05em`, **uppercase** — chips / meta row
-  - label-sm **11/16/500** — cast role, fine print
-- **Spacing scale (8px grid):** xs `4`, sm `8`, md/gutter `16`, lg `24`, xl `32`;
-  **mobile side margin `16px`**. **Radius:** DEFAULT `0.25rem`, lg `0.5rem`, xl
-  `0.75rem` (`rounded-xl` — buttons + cards), full `9999px` (chips, back button).
+| Page element                                | Design role            | CSS var to consume                                                   |
+| ------------------------------------------- | ---------------------- | -------------------------------------------------------------------- |
+| page background                             | `surface`              | `--vultus-surface` / `--ion-background-color`                        |
+| section headings, accents, icons            | `primary`              | `--ion-color-primary` / `--vultus-primary`                           |
+| outlined status-control text + border       | `primary`              | `--ion-color-primary` / `--vultus-primary`                           |
+| **filled Add CTA background**               | `primary`              | `--ion-color-primary` (see FIX-1 deviation note below)               |
+| **filled Add CTA text/icon**                | `on-primary`           | `--ion-color-primary-contrast`                                       |
+| genre chip text/icon                        | `on-primary-container` | `--vultus-on-primary-container`                                      |
+| title + primary text                        | `on-surface`           | `--vultus-on-surface` / `--ion-text-color`                           |
+| synopsis, meta row, provider-type labels    | `on-surface-variant`   | `--vultus-on-surface-variant`                                        |
+| back-button bg, low cards                   | `surface-container`    | `--vultus-surface-container`                                         |
+| raised chips / surfaces                     | `surface-container-high` | `--vultus-surface-container-high`                                  |
+| secondary hero chip (quality — see recon D) | `surface-container-highest` | `--vultus-surface-container-highest`                            |
+| Level-1 cards / raised surfaces             | tonal ramp             | `--vultus-surface-container` (L1) → `--vultus-surface-container-highest` (overlays) |
+| dividers / scrolled app-bar border          | `outline-variant`      | `--vultus-outline-variant`                                           |
+| tracked status colors                       | semantic status        | `--vultus-status-watching` / `-completed` / `-dropped` / `-planned`  |
+
+> **Deliberate-deviation note (FIX 1):** the fetched Movie-Detail screen rendered the
+> filled CTA with `primary-container` `#10B981`, but the in-repo design-system Button
+> contract (`docs/design/vultus-design-system.md` → Components → Buttons: "Primary:
+> Solid `primary` #4edea3 with `on-primary` #003824") and its theme.scss wiring
+> (`--ion-color-primary: #4edea3`, contrast `#003824`) are higher authority, so the
+> filled CTA uses **`primary` `#4edea3`** (`ion-button color="primary"`), not the
+> screen's `primary-container`. `#10B981` survives on this page **only** as
+> `--vultus-status-completed`.
+
+- **Typography — Inter, and it MUST be LOADED as a web-font** (the weights
+  `apps/mobile/src/index.html` loads, 400–700), not merely named in the family
+  stack; **icons via Material Symbols Outlined** (Ionic's `ionicons` is an acceptable
+  substitute — reconcile the glyph names, but the icon font must actually load).
+  Confirm `shared/ui-kit` `theme.scss` + `index.html` load Inter; this page must
+  render in Inter, not a system fallback. Type roles → vars (px parenthetical sourced
+  from `docs/design/vultus-design-system.md`, not the contract):
+  - display-lg-mobile → `--vultus-text-display-lg-mobile-size`/`-line` (28/36, 700) — the title in the hero
+  - headline-sm → `--vultus-text-headline-sm-size`/`-weight`/`-line` (20/28/600) — section headings (in `primary`)
+  - body-lg → `--vultus-text-body-lg-size`/`-weight`/`-line` (16/24/400) — the synopsis
+  - body-md → `--vultus-text-body-md-size`/`-weight`/`-line` (14/20/400) — base text + provider name rows
+  - label-md → `--vultus-text-label-md-size`/`-weight`/`-line`/`-spacing` (12/16/600, +0.05em), **uppercase** — chips / meta row
+  - label-sm → `--vultus-text-label-sm-size`/`-weight`/`-line` (11/16/500) — cast role, fine print
+- **Spacing scale (8px grid):** `--vultus-space-xs` `4`, `-sm` `8`, `-md`/gutter
+  `16`, `-lg` `24`, `-xl` `32`; **mobile side margin `16px`**. **Radius:**
+  `--vultus-radius-sm` `0.25rem`, `--vultus-radius` `0.5rem`, `--vultus-radius-md`
+  `0.75rem` (`rounded-xl` — buttons + cards), `--vultus-radius-pill` `9999px`
+  (chips, back button).
 
 ### Layout & components (Ionic, top → bottom — each row a checkable acceptance item)
 
@@ -618,11 +637,14 @@ implementer can confirm the token wiring matches the screen.
    deferred to 0017, decision 6) and is **REPLACED by the slice's status control**
    (recon A). Both buttons are **height 56px** (`h-14`), **`rounded-xl`**
    (`0.75rem`):
-   - **Filled button** = bg `primary-container` `#10B981`, text/icon
-     `on-primary-container` `#00422b`, bold, `playlist_add` glyph, **hover →
-     `opacity-90`**, **active → `scale-[0.98]`**. **The only filled CTA on the page.**
-   - **Outlined button** = `border-2 border-primary` `#4edea3`, text `primary`,
-     **hover → `bg primary/10`**, **active → `scale-[0.98]`**.
+   - **Filled button** = `ion-button color="primary"`: bg `--ion-color-primary`
+     (`#4edea3`), text/icon `--ion-color-primary-contrast` (`#003824`), bold,
+     `playlist_add` glyph, **hover → `opacity-90`**, **active → `scale-[0.98]`**.
+     **The only filled CTA on the page** (see the FIX-1 deviation note above — the
+     screen drew `primary-container`, but the design-system Button contract wins).
+   - **Outlined button** = outlined-primary: `border-2` + text on
+     `--ion-color-primary` (`--vultus-primary`), **hover → `bg primary/10`**, **active
+     → `scale-[0.98]`**.
    - **Untracked** (`tracked$ === null`): show **only the filled** "Add to
      Watchlist" button → `add(detail)` (`status: 'planned'`).
    - **Tracked** (`tracked$ !== null`): the **outlined** button becomes the
@@ -631,11 +653,17 @@ implementer can confirm the token wiring matches the screen.
      in slice-local `STATUS_DISPLAY_ORDER` — Watching → Planned → Completed →
      Dropped, mirroring 0014); plus a **Remove** affordance (`IonAlert` confirm →
      `removeTitle`, danger `status-dropped` `#EF4444`).
-4. **Bento content — `glass-panel` cards.** Each card: bg `rgba(30,41,59,0.7)`,
-   `backdrop-filter: blur(12px)`, **1px border `rgba(51,65,85,0.5)`**, **padding
-   24px** (lg), **`rounded-xl`**; **hover lifts `translateY(-2px)`**. Section
-   headings: headline-sm (20/28/600), text `primary` `#4edea3`, with a leading
-   Material/ionicon glyph.
+4. **Bento content — `glass-panel` cards.** Each card: a translucent glass surface
+   (`backdrop-filter: blur(12px)`), **1px border**, **padding 24px** (`--vultus-space-lg`),
+   **`rounded-xl`** (`--vultus-radius-md`); **hover lifts `translateY(-2px)`**.
+   **The glass fill/border are screen-specific glass-effect values NOT in the token
+   set** (the screen used `rgba(30,41,59,0.7)` fill / `rgba(51,65,85,0.5)` border) —
+   **do NOT hardcode raw rgba in the slice.** Derive them from
+   `--vultus-surface-dark` / `--vultus-outline-variant` with an alpha channel, or add
+   a `--vultus-glass-bg` / `--vultus-glass-border` token to `shared/ui-kit` (ui-kit
+   owner) and consume that. **Flag this explicitly in the PR.** Section headings:
+   headline-sm (`--vultus-text-headline-sm-*`), text `--ion-color-primary`, with a
+   leading Material/ionicon glyph.
    - **Synopsis** card — the `overview` paragraph, body-lg (16/24/400),
      `on-surface-variant`. **Always present** (core field).
    - **Cast** card (**conditional — recon C**): a **horizontal snap-scroll** of
@@ -718,12 +746,12 @@ implementer can confirm the token wiring matches the screen.
 
 | Element                       | default                                                              | focus                          | hover                          | active/pressed              | disabled                                  |
 | ----------------------------- | -------------------------------------------------------------------- | ------------------------------ | ------------------------------ | --------------------------- | ----------------------------------------- |
-| **Add to Watchlist** (filled) | bg `primary-container` `#10B981`, text `on-primary-container` `#00422b`, bold, h-14, `rounded-xl`, `playlist_add` | visible focus ring (`--vultus-focus`/2px) | `opacity-90`                   | **`scale-[0.98]`**          | n/a while untracked (becomes status control)|
-| **Status control** (outlined, tracked) | `border-2 border-primary` `#4edea3`, text `primary`, status-colored accent for current status, h-14, `rounded-xl` | visible focus ring             | `bg primary/10`                | **`scale-[0.98]`** → opens `IonActionSheet` | n/a                                        |
-| **Action-sheet status rows**  | one row per status in `STATUS_DISPLAY_ORDER`, status-color accent    | row focus highlight            | row hover highlight            | selection → `updateStatus`  | current status row marked selected         |
-| **Remove** affordance         | danger `status-dropped` `#EF4444` text/icon                          | focus ring                     | brightness shift               | opens `IonAlert` → `removeTitle` | n/a                                        |
-| **Back button**               | 40px circle, bg `surface-container`/40 + `backdrop-blur-md`, `arrow_back` | focus ring                | `bg surface-container` (full)  | **`active:scale-95`** → navigates back | —                                          |
-| **Glass-panel card**          | `rgba(30,41,59,0.7)` + `blur(12px)`, 1px `rgba(51,65,85,0.5)`, p-24, `rounded-xl` | —              | **`translateY(-2px)`** lift    | —                           | —                                          |
+| **Add to Watchlist** (filled) | `ion-button color="primary"`: bg `--ion-color-primary`, text `--ion-color-primary-contrast`, bold, h-14, `rounded-xl`, `playlist_add` | Ionic default `:focus-visible` ring | `opacity-90`                   | **`scale-[0.98]`**          | n/a while untracked (becomes status control)|
+| **Status control** (outlined, tracked) | outlined-primary: `border-2` + text on `--ion-color-primary`, status-colored accent for current status, h-14, `rounded-xl` | Ionic default `:focus-visible` ring | `bg primary/10`                | **`scale-[0.98]`** → opens `IonActionSheet` | n/a                                        |
+| **Action-sheet status rows**  | one row per status in `STATUS_DISPLAY_ORDER`, status-color accent (`--vultus-status-*`) | row focus highlight            | row hover highlight            | selection → `updateStatus`  | current status row marked selected         |
+| **Remove** affordance         | danger `--vultus-status-dropped` text/icon                          | Ionic default `:focus-visible` ring | brightness shift               | opens `IonAlert` → `removeTitle` | n/a                                        |
+| **Back button**               | 40px circle, bg `--vultus-surface-container`/40 + `backdrop-blur-md`, `arrow_back` | Ionic default `:focus-visible` ring | `bg --vultus-surface-container` (full)  | **`active:scale-95`** → navigates back | —                                          |
+| **Glass-panel card**          | glass fill + `blur(12px)`, 1px border (derived from `--vultus-surface-dark`/`--vultus-outline-variant` with alpha, or a `--vultus-glass-*` token — NOT raw rgba), p-24, `rounded-xl` | —              | **`translateY(-2px)`** lift    | —                           | —                                          |
 | **Cast avatar (snap-scroll)** | 96px round, name label-md / role label-sm                            | focus ring on "View All"       | —                              | "View All" → (future)       | — (whole card omitted if no cast — recon C)|
 
 - **Top app-bar scroll behavior:** transparent at top → at `scrollY > 50px`, bg
@@ -733,13 +761,19 @@ implementer can confirm the token wiring matches the screen.
   the loading→loaded swap must **not flash** (gate on first emission); button
   `scale-[0.98]` / `scale-95` press feedback and the card `translateY(-2px)` hover
   lift match the screen unless Ionic defaults override.
-- **Token wiring (easy to miss):** **Inter must be LOADED as a web-font** (Google
-  Fonts `wght@400;500;600;700;800`), not merely named — confirm `shared/ui-kit`
-  loads it and the page renders in Inter, not a system fallback; **icon font must
-  load** too. Note the **two emeralds**: `primary` `#4edea3` (accents/headings/
-  outline) vs `primary-container` `#10B981` (filled-button bg) — wire them to the
-  correct tokens, **do not collapse them**. Use the `--vultus-status-*` tokens for
-  status colors; **do not hard-code hex**.
+- **Token wiring (easy to miss):** `docs/design/vultus-design-system.md` is the
+  authoritative token source — consume the wired `--vultus-*` / `--ion-*` CSS custom
+  properties from `shared/ui-kit` `theme.scss`; **never hardcode a hex.** **Inter
+  must be LOADED as a web-font** (the weights `apps/mobile/src/index.html` loads,
+  400–700), not merely named — confirm `shared/ui-kit` `theme.scss` + `index.html`
+  load it and the page renders in Inter, not a system fallback; **icon font must
+  load** too. On the **two emeralds** (now resolved per FIX 1): the filled CTA + all
+  accents/headings/outline use `--ion-color-primary` (`#4edea3`); `#10B981`
+  (`primary-container`) is **not** used as a fill here — it survives only as
+  `--vultus-status-completed`. Use the `--vultus-status-*` tokens for status colors.
+  For focus, rely on Ionic's default `:focus-visible` focus ring (theme.scss has no
+  `--vultus-focus*` token; ui-kit owns adding a `--vultus-focus-*` token if a custom
+  ring is wanted — not invented inline in this slice).
 
 ## Implementation task graph
 
@@ -823,9 +857,11 @@ relative to each other (they share `src/index.ts` + the page composition), and t
      Expose the change-status trigger as a **public method**
      (e.g. `openStatusSheet()`) bound from the template — **not** an inline
      anonymous handler — so the component test invokes it deterministically.
-     Consume `shared/ui-kit` tokens (no hard-coded hex; note the **two emeralds** —
-     `primary` `#4edea3` accents/headings/outline vs `primary-container` `#10B981`
-     filled CTA). **Re-fetch the Stitch screen `208cb8d7a679490b8d13672c6943d6d3`
+     Consume the `--vultus-*` / `--ion-*` vars from `shared/ui-kit` `theme.scss`
+     (authoritative source: `docs/design/vultus-design-system.md`; no hard-coded hex).
+     The filled Add CTA uses `--ion-color-primary` (`#4edea3`) per the FIX-1 deviation
+     note — `#10B981` (`primary-container`) is **not** a fill here, it survives only as
+     `--vultus-status-completed`. **Re-fetch the Stitch screen `208cb8d7a679490b8d13672c6943d6d3`
      to visually verify** the built page against the pinned UI contract (the screen
      is already captured + reconciled in the UI section — recon A–D apply); the
      filled CTA, the tracked status control (NOT a "Mark as Watched" button), the
@@ -997,8 +1033,8 @@ targets: `mobile-title-detail` and `mobile-search` have `lint`/`test`/`typecheck
       network, no secrets; AngularFire + `fetch` + `AUTH_UID` mocked).
 - [ ] `pnpm nx typecheck mobile-title-detail mobile-search mobile` passes — the new
       client/service/page, the search edit, and the shell's route + token provider
-      compile against the shared types/converters (incl. the **0014-widened
-      `WatchlistItem`** with `posterPath`/`voteAverage` — see Risks).
+      compile against the merged shared types/converters (incl. the **0014-widened
+      `WatchlistItem`** with `posterPath`/`voteAverage`, already on main).
 - [ ] `pnpm nx build mobile` passes (production configuration) — the new slice
       lazy-loads cleanly at `tabs/title-detail/:titleId` and the bundle stays within
       existing budgets.
@@ -1032,8 +1068,10 @@ targets: `mobile-title-detail` and `mobile-search` have `lint`/`test`/`typecheck
       `208cb8d7a679490b8d13672c6943d6d3`, "Movie Detail - Vultus", already captured
       + reconciled in the UI section).** The implementer **re-fetched** the screen
       via the MCP (retried on failure) to **visually verify**, and the PR records the
-      **screen id**. The page honors **recon A–D**: filled Add CTA (`primary-container`
-      `#10B981` / `on-primary-container` `#00422b`) is the only filled button and the
+      **screen id**. The page honors **recon A–D**: filled Add CTA (`ion-button
+      color="primary"` → `--ion-color-primary` `#4edea3` / `--ion-color-primary-contrast`
+      `#003824` per the FIX-1 deviation note — NOT the screen's `primary-container`)
+      is the only filled button and the
       **tracked state shows the status control, NOT a "Mark as Watched" button**;
       provider rows are **text-only** (name + type label, no logo, no `open_in_new`);
       Cast + Director/Budget/Language + runtime/voteAverage/genre are **conditional**
@@ -1045,7 +1083,8 @@ targets: `mobile-title-detail` and `mobile-search` have `lint`/`test`/`typecheck
       empty-providers / null-region) — or, if a human eyeball is still needed, the PR
       **explicitly flags the page "UI unverified — needs human eyeball."** **A green
       build alone does NOT satisfy this item.** Inter is confirmed **loaded**
-      (web-font, `wght@400;500;600;700;800`) and the icon font loaded, not just named.
+      (web-font, the weights `apps/mobile/src/index.html` loads, 400–700) and the
+      icon font loaded, not just named.
 - [ ] PR description records: the **Stitch screen id** used (`208cb8d7…`), the exact
       verification commands, the no-`title-cache`-write / no-episodes /
       writes-only-to-`users/{uid}/watchlist` / uid-via-`AUTH_UID` / no-cross-slice /
@@ -1103,19 +1142,13 @@ targets: `mobile-title-detail` and `mobile-search` have `lint`/`test`/`typecheck
   `tracked$` subscription reflects the add instantly; the metadata/providers may lag
   the cache by up to one sync cycle. Noted so a reviewer does not expect an
   immediate cache write on add (which would violate `firestore.rules`).
-- **Cross-spec dependency on spec 0014's `WatchlistItem` widening.** The add write
-  carries the denormalized **`posterPath` + `voteAverage`** that **spec 0014**
-  (concurrent / merging around the same time) adds to `WatchlistItem` and the
-  `watchlistItemToData` converter (currently they are NOT yet in
-  `libs/shared/firestore-schema/src/lib/converters.ts` on this branch). **The
-  implementer works in a worktree branched after 0014 has landed**; if the widened
-  `WatchlistItem` / converter fields are **absent**, the add payload should either
-  (a) omit the two fields (they are optional + nullable per 0014, so a 6-field write
-  still type-checks and renders with a placeholder until 0014 lands) **or** (b) the
-  implementer **stops and flags** the missing 0014 dependency rather than re-adding
-  the shared fields here (that is 0014's job — adding them here would conflict).
-  **Binding:** do **NOT** modify `shared/domain` / `shared/firestore-schema` in this
-  spec — the widening is 0014's; this spec only **consumes** it.
+- **Consumes spec 0014's `WatchlistItem` widening (0014 is MERGED).** The add write
+  carries the denormalized **`posterPath` + `voteAverage`**. **0014 is merged** — the
+  widened `WatchlistItem` (`posterPath?: string | null`, `voteAverage?: number | null`)
+  and the converters' `?? null` handling (`watchlistItemToData` /
+  `dataToWatchlistItem`) are **on main** and **consumed directly** here. **Binding:**
+  do **NOT** modify `shared/domain` or `shared/firestore-schema` in this spec — only
+  **consume** the merged shared surface.
 - **`AUTH_UID` can be null briefly / cross-boundary DI.** The uid signal is `null`
   before the anon session resolves (spec 0010) and, in the no-emulator dev/test
   context, may never resolve. **Mitigations:** the service guards a null uid on
