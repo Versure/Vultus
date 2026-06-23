@@ -33,8 +33,8 @@ Two tokens must be provided above this slice:
 
 ## TMDB key
 
-- **Local dev:** `environment.ts` carries an **empty placeholder** key. Populate it manually from `.env.local` (gitignored) before running the dev server if you want live TMDB search locally.
-- **Production:** `environment.prod.ts` carries `REPLACE_WITH_REAL_TMDB_API_KEY`. The GitHub Actions workflow substitutes the real key from the `TMDB_API_KEY` secret at build time (CI wiring is a separate follow-up spec).
+- **Local dev:** `environment.ts` carries an empty placeholder by default. To populate it from `.env.local` (gitignored) run `pnpm env:tmdb` from the repo root — see `apps/mobile/README.md` for the full setup steps.
+- **Production:** `environment.prod.ts` carries `REPLACE_WITH_REAL_TMDB_API_KEY`, which the CI workflow substitutes from the `TMDB_API_KEY` GitHub Actions secret before `nx build` runs (see `.github/workflows/ci.yml`).
 
 ## Mock / local dev
 

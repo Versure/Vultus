@@ -353,10 +353,16 @@ A PR is mergeable only when *all* of:
 
 | Secret | Lives in | Used by |
 |---|---|---|
-| TMDB API key | `.env.local`, GitHub secret, Firebase functions config | Functions only |
+| `TMDB_API_KEY` | `.env.local` (local dev via `pnpm env:tmdb`), `TMDB_API_KEY` GitHub Actions secret (CI production build) | Mobile client (injected at build time by CI) |
 | Trakt client ID | `.env.local`, GitHub secret, Firebase functions config | Functions only |
 | FCM service account | Firebase functions config | Functions only |
 | Sync HTTP function shared secret | GitHub secret + Firebase functions config | GitHub Actions cron + Function |
+
+**Required GitHub Actions secrets for production builds:**
+
+| Secret name | Description |
+|---|---|
+| `TMDB_API_KEY` | TMDB Developer API key. The CI workflow injects it into `environment.prod.ts` before `nx build`. Without it the CI build fails fast (explicit check). Get one at themoviedb.org/settings/api. |
 
 `CLAUDE.md` instructs the agent to never read or write `.env.local` and to
 flag any time it would need a secret in a place it shouldn't be.
@@ -446,7 +452,9 @@ These you have to do yourself; Claude Code can't.
       Firestore, Authentication (Anonymous), Cloud Messaging, Cloud
       Functions.
 - [ ] Sign up for TMDB API at themoviedb.org/settings/api → request
-      Developer key. Free, instant.
+      Developer key. Free, instant. Add the key as a GitHub Actions secret
+      named `TMDB_API_KEY` (repo → Settings → Secrets → Actions → New
+      repository secret) so CI can inject it into the production build.
 - [ ] Sign up for Trakt API at trakt.tv/oauth/applications → create
       application, get client ID. Free, instant.
 - [ ] Install Claude Code locally (`npm install -g @anthropic-ai/claude-code`),
