@@ -2,7 +2,7 @@
 number: 0015
 slug: tmdb-ci-key-injection
 title: Wire TMDB API key injection for CI/CD and local dev
-status: draft
+status: done
 slices: []
 scopes: [scope:mobile]
 created: 2026-06-22

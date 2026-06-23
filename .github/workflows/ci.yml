@@ -61,6 +61,26 @@ jobs:
             nx-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
             nx-${{ runner.os }}-
 
+      # Inject TMDB API key into environment.prod.ts before any build step.
+      # The mobile production build (defaultConfiguration=production) uses
+      # environment.prod.ts; without this step the bundle ships the literal
+      # placeholder string and TMDB search silently fails in production.
+      # Fails fast if the secret is not configured so we never ship a broken build.
+      - name: Inject TMDB API key for production build
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+        run: |
+          if [ -z "$TMDB_API_KEY" ]; then
+            echo "::error::TMDB_API_KEY secret is not set. Add it in GitHub → Settings → Secrets → Actions."
+            exit 1
+          fi
+          sed -i "s/REPLACE_WITH_REAL_TMDB_API_KEY/$TMDB_API_KEY/g" \
+            apps/mobile/src/environments/environment.prod.ts
+          if grep -q "REPLACE_WITH_REAL_TMDB_API_KEY" apps/mobile/src/environments/environment.prod.ts; then
+            echo "::error::sed substitution failed — placeholder still present after injection."
+            exit 1
+          fi
+
       - name: Run affected gates (pull_request)
         if: github.event_name == 'pull_request'
         run: pnpm nx affected -t lint test build --base=$NX_BASE --head=$NX_HEAD --configuration=ci
