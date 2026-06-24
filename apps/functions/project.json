@@ -35,6 +35,32 @@
       "configurations": {
         "development": {},
         "production": {
+          "bundle": true,
+          "generatePackageJson": false,
+          "external": [
+            "firebase-admin",
+            "firebase-admin/*",
+            "firebase-functions",
+            "firebase-functions/*"
+          ],
+          "assets": [
+            "apps/functions/src/assets",
+            {
+              "input": "apps/functions",
+              "output": ".",
+              "glob": "package.json"
+            },
+            {
+              "input": "apps/functions/deploy",
+              "output": ".",
+              "glob": "pnpm-workspace.yaml"
+            },
+            {
+              "input": "apps/functions",
+              "output": ".",
+              "glob": ".env.vultus-cab62"
+            }
+          ],
           "esbuildOptions": {
             "sourcemap": false,
             "outExtension": {
@@ -68,6 +94,13 @@
     "prune": {
       "dependsOn": ["prune-lockfile", "copy-workspace-modules"],
       "executor": "nx:noop"
+    },
+    "deploy-preflight": {
+      "dependsOn": ["prune"],
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node tools/scripts/functions-deploy-preflight.mjs"
+      }
     },
     "serve": {
       "continuous": true,

@@ -83,11 +83,11 @@ jobs:
 
       - name: Run affected gates (pull_request)
         if: github.event_name == 'pull_request'
-        run: pnpm nx affected -t lint test build --base=$NX_BASE --head=$NX_HEAD --configuration=ci
+        run: pnpm nx affected -t typecheck lint test build --base=$NX_BASE --head=$NX_HEAD --configuration=ci
 
       - name: Run all gates (push to main baseline)
         if: github.event_name == 'push'
-        run: pnpm nx run-many -t lint test build --all --configuration=ci
+        run: pnpm nx run-many -t typecheck lint test build --all --configuration=ci
 
       # Emulator-backed integration gate (spec 0009). Runs on both pull_request
       # and push so it's a true required gate on PRs to main. Needs NO secrets:
@@ -98,3 +98,13 @@ jobs:
       # exits non-zero if the wrapped command fails, failing this gate.
       - name: Run emulator integration gate
         run: pnpm exec firebase emulators:exec --only firestore --project vultus-cab62 "pnpm nx test-integration functions"
+
+      # Validate the deployable Cloud Functions artifact the way Firebase / Cloud
+      # Build will: the pruned dist bundle installs, the required deps + allowBuilds
+      # config ship, firebase-admin satisfies firebase-functions' peer range, and
+      # main.js loads (gen2 discovery). The lint/test/build gates validate the
+      # monorepo but never this pruned artifact, so every past deploy-blocker
+      # (peer ERESOLVE, missing functions-framework, ERR_PNPM_IGNORED_BUILDS,
+      # broken discovery) was invisible to them. Nx build cache keeps this cheap.
+      - name: Cloud Functions deploy preflight
+        run: pnpm nx run functions:deploy-preflight

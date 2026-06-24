@@ -21,7 +21,10 @@ The barrel (`src/index.ts`) re-exports:
   - `WatchlistItem`, `EpisodeDoc`
   - `NotificationDoc`, `NotificationPayload`
   - `TitleCacheEntry`, `TitleMetadata`, `RegionAvailability`
-- **`./lib/tokens`** — cross-scope dependency-injection tokens.
+- **`./lib/tokens`** — cross-scope dependency-injection tokens. **Not re-exported
+  from the main barrel** — import via the dedicated subpath
+  `@vultus/shared/domain/tokens` (mobile-only; keeps `@angular/core` out of the
+  Cloud Functions build).
 
 `NotificationPayload` carries the data a notification renders from:
 `tmdbId: number` (the TMDB id of the affected title), `titleId`, `title`,

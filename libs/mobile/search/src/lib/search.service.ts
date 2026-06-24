@@ -1,7 +1,8 @@
 import { inject, Injectable, Signal, signal } from '@angular/core';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { of, switchMap } from 'rxjs';
-import { AUTH_UID, WatchlistItem } from '@vultus/shared/domain';
+import { AUTH_UID } from '@vultus/shared/domain/tokens';
+import { WatchlistItem } from '@vultus/shared/domain';
 import {
   watchlistItemPath,
   watchlistItemToData,

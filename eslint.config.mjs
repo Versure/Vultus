@@ -114,6 +114,32 @@ export default tseslint.config(
     ],
   },
 
+  // --- No Angular/Ionic in the Cloud Functions build ----------------------
+  // Sheriff enforces the *import graph* (scope:functions ⇏ scope:mobile) but not
+  // external npm deps. A scope:shared lib may legitimately depend on
+  // @angular/core (e.g. the DI tokens in shared/domain's `./tokens` subpath),
+  // and nothing in Sheriff stops functions code from importing that subpath and
+  // dragging @angular/core into the deployed bundle. This ban catches that leak
+  // at lint, in CI — keep Cloud Functions framework-free (plain values, not
+  // Angular InjectionTokens). See the `functions-deploy-pnpm-recipe` memo.
+  {
+    files: ['apps/functions/**/*.ts', 'libs/functions/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@angular/*', '@ionic/*', '@vultus/shared/domain/tokens'],
+              message:
+                'Cloud Functions must stay framework-free: importing Angular/Ionic (or the Angular-only @vultus/shared/domain/tokens subpath) pulls @angular/core into the deploy bundle. Use plain values, not InjectionTokens.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // --- Prettier: disable all formatting rules (must stay last) ------------
   prettier,
 );

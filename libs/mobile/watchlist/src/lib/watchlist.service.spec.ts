@@ -1,8 +1,8 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Firestore } from '@angular/fire/firestore';
+import { AUTH_UID } from '@vultus/shared/domain/tokens';
 import {
-  AUTH_UID,
   type RegionAvailability,
   type WatchlistItem,
 } from '@vultus/shared/domain';
