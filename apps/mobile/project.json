@@ -57,6 +57,10 @@
             {
               "replace": "apps/mobile/src/environments/environment.ts",
               "with": "apps/mobile/src/environments/environment.mock.ts"
+            },
+            {
+              "replace": "libs/mobile/settings/src/lib/settings.providers.ts",
+              "with": "libs/mobile/settings/src/lib/settings.providers.mock.ts"
             }
           ],
           "optimization": false,
@@ -65,16 +69,6 @@
         }
       },
       "defaultConfiguration": "production"
-    },
-    "dev": {
-      "executor": "nx:run-commands",
-      "options": {
-        "commands": [
-          "npx firebase emulators:start --project vultus-cab62",
-          "pnpm nx serve mobile"
-        ],
-        "parallel": true
-      }
     },
     "serve": {
       "continuous": true,
@@ -88,9 +82,22 @@
         },
         "mock": {
           "buildTarget": "mobile:build:mock"
+        },
+        "emulator": {
+          "buildTarget": "mobile:build:development"
         }
       },
       "defaultConfiguration": "development"
+    },
+    "serve-emulator": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "npx firebase emulators:start --project vultus-cab62",
+          "pnpm nx serve mobile --configuration=emulator"
+        ],
+        "parallel": true
+      }
     },
     "serve-static": {
       "continuous": true,
