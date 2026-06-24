@@ -118,8 +118,9 @@ ion-content {
   color: var(--vultus-on-surface);
 
   &::part(label) {
-    color: var(--vultus-on-surface);
+    font-size: var(--vultus-text-body-lg-size);
     font-weight: 600;
+    color: var(--vultus-on-surface);
   }
 
   // The chosen region value, emphasised in primary like the screen.
