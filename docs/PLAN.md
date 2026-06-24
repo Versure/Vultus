@@ -457,6 +457,19 @@ These you have to do yourself; Claude Code can't.
       repository secret) so CI can inject it into the production build.
 - [ ] Sign up for Trakt API at trakt.tv/oauth/applications → create
       application, get client ID. Free, instant.
+- [ ] Add the deployed `syncTitles` endpoint URL as a GitHub Actions
+      **variable** named `VULTUS_SYNC_URL` (repo → Settings → Secrets and
+      variables → Actions → Variables) so the daily-sync cron knows where to
+      POST. Public value, so a variable, not a secret. (The project runs on
+      Blaze with the function deployed, per project setup.)
+- [ ] Add the sync shared secret as a GitHub Actions **secret** named
+      `SYNC_SHARED_SECRET` (the value sent in the `X-Vultus-Sync-Secret`
+      header by the daily-sync cron) — see PLAN §5's secrets table row
+      "Sync HTTP function shared secret". (Blaze, per project setup.)
+- [ ] Set the **matching** `SYNC_SHARED_SECRET` param on the Cloud Function
+      side (same value as the GitHub secret) so the header comparison passes;
+      rotating one without the other breaks the cron. (Blaze, per project
+      setup.)
 - [ ] Install Claude Code locally (`npm install -g @anthropic-ai/claude-code`),
       authenticate.
 - [ ] Install Node.js LTS, Android Studio (for Capacitor builds), Firebase
