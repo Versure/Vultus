@@ -96,6 +96,24 @@ In scope:
 - **A short `apps/mobile-e2e/README.md`** documenting how to run the suite locally
   (the Java/emulator prereq, the `nx e2e` command, where fixtures live, and the
   emulator-loopback caveat from project memory).
+- **Update the AI agent/skill tooling (`.claude/`)** so future feature specs
+  reliably include e2e coverage where needed. Six files require targeted edits (see
+  task 7 in the task graph for the exact changes per file):
+  - `.claude/agents/spec-author.md` — add an e2e decision rubric (required /
+    fixme-gated / not-required, never silent) to the Test plan section.
+  - `.claude/skills/create-spec/SKILL.md` — add an e2e probe to the interview
+    step so the architect asks about critical flows for mobile UI features.
+  - `.claude/agents/spec-reviewer.md` — add a check that a new UI route/action
+    without e2e coverage must be explicitly justified; silent omission is blocking.
+  - `.claude/agents/qa-runner.md` — tighten the "not bootstrapped" skip: once
+    `apps/mobile-e2e/playwright.config.ts` exists, e2e is bootstrapped for
+    `scope:mobile` work; `test.fixme` flows are pending, not failures.
+  - `.claude/agents/feature-reviewer.md` — add a check for `test.fixme`-gated
+    flows whose blocking dependency this PR delivers; leaving them fixme after
+    the dependency lands is a blocking finding.
+  - `.claude/skills/implement-feature/SKILL.md` — add a step to grep
+    `apps/mobile-e2e/src/` for fixme annotations referencing the spec being
+    implemented, and include un-skipping them as an explicit task.
 
 Out of scope (decision record + PLAN-consistent):
 
@@ -376,8 +394,91 @@ it is a fast guard that needs no emulator; flow 1's `app.boot.spec.ts` is the
 emulator-backed superset. The implementer MAY note the overlap in the PR; do not
 delete the smoke spec, it still runs under the no-backend `webServer` path.)
 
+7. **[sequential] Update AI agent/skill tooling (`.claude/`).**
+   (infrastructure-engineer territory — these are root config files, not Nx
+   projects; no Sheriff boundary applies. Run after task 1 so the e2e harness
+   exists before the tooling refers to it.)
+
+   Apply the following targeted edits. Each change is minimal — add only what is
+   described; do not rewrite surrounding content.
+
+   - **`.claude/agents/spec-author.md` — Test plan section (item 8).**
+     After `e2e (which named flows, if any)`, append the following rubric
+     as a new indented block:
+
+     > **e2e decision rubric** (apply before writing this section):
+     > - **Required** — any `scope:mobile` feature that introduces or substantially
+     >   changes a primary user-facing navigation route or critical action (new page,
+     >   add-to-watchlist, status change, settings persistence). Name each flow
+     >   explicitly; they become DoD gates enforced by `qa-runner` and
+     >   `feature-reviewer`.
+     > - **Fixme-gated** — if a flow depends on a spec not yet merged (e.g. a new
+     >   route that another slice provides), mark it `test.fixme` with a comment
+     >   naming the blocking spec/PLAN item. Include the stub in the task graph so
+     >   the implementer un-skips it when the dependency lands.
+     > - **Not required** — `scope:functions`-only changes, pure refactors with no
+     >   route/action change, infra/CI/config specs. State "No e2e flows required —
+     >   backend/infra change only." explicitly so the omission is intentional.
+     > - **Never omit silently.** Always include this section with one of the three
+     >   outcomes above.
+
+   - **`.claude/skills/create-spec/SKILL.md` — Step 1 (Interview), after the
+     "present options with a recommendation" bullet.**
+     Insert:
+     > - **e2e probe (mobile UI features):** if the feature introduces a new
+     >   page/route or a critical user action (add, remove, status change,
+     >   navigation), ask which flows should be covered by e2e and whether any
+     >   depend on unmerged specs (→ `test.fixme`). Record the approved flows in
+     >   the decision record so `spec-author` names them explicitly in the Test
+     >   plan section.
+
+   - **`.claude/agents/spec-reviewer.md` — Review checklist item 5
+     (Testability), after the existing sentence.**
+     Append:
+     > For a `scope:mobile` spec that adds a new route or critical user action:
+     > the absence of e2e flows must be **explicitly justified** (e.g. "No e2e
+     > flows required — backend-only change"). If it is a new page or primary
+     > action with no e2e coverage and no explanation, that is a **blocking
+     > finding** — the spec-author must either add named flows or document why e2e
+     > is not required. A `test.fixme`-gated flow (blocked on an unmerged spec) is
+     > acceptable, but the blocking dependency must be named.
+
+   - **`.claude/agents/qa-runner.md` — Degradation section, after the first
+     bullet ("If a gate's tooling genuinely isn't bootstrapped yet …").**
+     Insert a new bullet before the "But if the spec explicitly required …" bullet:
+     > - **e2e is bootstrapped once `apps/mobile-e2e/playwright.config.ts`
+     >   exists** — check for that file before deciding to skip. After spec 0019
+     >   merges, e2e is never "not bootstrapped" for `scope:mobile` work; skipping
+     >   it requires an explicit spec justification. `test.fixme`-gated flows are
+     >   expected and do not count as failures — they are scaffolded pending stubs;
+     >   the suite still runs and marks them pending, not failing.
+
+   - **`.claude/agents/feature-reviewer.md` — Review dimension 4 (Tests),
+     after the existing sentences.**
+     Append:
+     > Also check `apps/mobile-e2e/src/` for any `test.fixme`-gated flows that
+     > were blocked on the spec being reviewed. If this PR delivers the dependency
+     > they name (e.g. a new route, a new component selector), those flows must be
+     > **un-skipped** — leaving them as `test.fixme` after the dependency lands is
+     > a **blocking finding**.
+
+   - **`.claude/skills/implement-feature/SKILL.md` — Step 4 (Implement), after
+     the "Lib README currency is part of done" bullet.**
+     Insert:
+     > - **e2e fixme un-skip (mobile UI specs):** before fanning out, grep
+     >   `apps/mobile-e2e/src/` for `test.fixme` annotations that reference this
+     >   spec number or slug. If any exist, include un-skipping them as an explicit
+     >   task in the foundation or the relevant parallel task — the implementer
+     >   removes the `test.fixme` wrapper and verifies the flow passes. The
+     >   `feature-reviewer` enforces this; flag it if you discover it late.
+
+   Files: `.claude/agents/spec-author.md`, `.claude/skills/create-spec/SKILL.md`,
+   `.claude/agents/spec-reviewer.md`, `.claude/agents/qa-runner.md`,
+   `.claude/agents/feature-reviewer.md`, `.claude/skills/implement-feature/SKILL.md`.
+
 Manifests 2–6 are pairwise disjoint (distinct spec files); the shared
-`support/`, fixtures, and config are all written by task 1.
+`support/`, fixtures, and config are all written by task 1. Task 7 touches only
+`.claude/` files, which are disjoint from everything in tasks 2–6.
 
 ## Test plan
 
@@ -470,6 +571,12 @@ Tailored from the PLAN §5 checklist for an e2e-infrastructure spec:
       (flow 8 stubbed), and that **F4–F6 + F8's sync assertion are `test.fixme`
       pending specs 0016 / PLAN §6 items 11–12** (R1/R2) — so a green suite is not
       mistaken for full coverage of those flows.
+- [ ] All 6 AI tooling files updated per task 7 with the exact insertions described
+      (no rewrites of surrounding content). Future `/create-spec` runs probe for e2e
+      flows; future `spec-reviewer` runs flag missing coverage; `qa-runner` treats
+      e2e as bootstrapped once `playwright.config.ts` exists; `feature-reviewer`
+      catches un-skipped `test.fixme` flows; `implement-feature` greps for them
+      before fan-out.
 
 ## Risks
 
