@@ -3,7 +3,7 @@ import { signal } from '@angular/core';
 import { of } from 'rxjs';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SearchService } from './search.service';
-import { AUTH_UID } from '@vultus/shared/domain';
+import { AUTH_UID } from '@vultus/shared/domain/tokens';
 import { TMDB_SEARCH_CONFIG } from './tokens';
 import { Firestore } from '@angular/fire/firestore';
 

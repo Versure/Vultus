@@ -73,6 +73,24 @@ forbidden** — slices communicate only through `scope:shared`. `scope:mobile` a
 (`nx test sheriff-test`) that fails if Sheriff ever stops rejecting an illegal
 cross-scope import. See `docs/PLAN.md` §3 for the full rationale.
 
+## CI / scheduled sync configuration
+
+The `Daily sync` workflow (`.github/workflows/daily-sync.yml`) runs on a daily
+cron (and can be triggered manually) to POST to the deployed `syncTitles`
+endpoint. It requires two pieces of repo config under **Settings → Secrets and
+variables → Actions**:
+
+- A repo Actions **variable** `VULTUS_SYNC_URL` — the public `syncTitles`
+  endpoint URL (a public value, hence a variable, not a secret).
+- A repo Actions **secret** `SYNC_SHARED_SECRET` — the shared secret the
+  workflow sends in the `X-Vultus-Sync-Secret` header. The **same**
+  `SYNC_SHARED_SECRET` value must also be provisioned on the Cloud Function side
+  so the header matches; rotating one without the other breaks the cron.
+
+To dry-run it without waiting for the cron, trigger it manually via
+`workflow_dispatch` (Actions → Daily sync → Run workflow). See `docs/PLAN.md`
+§7 for the full manual-prerequisite checklist.
+
 ## Development workflow
 
 Vultus is built spec-first: a spec file under `docs/specs/NNNN-slug.md`, reviewed

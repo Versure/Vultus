@@ -17,8 +17,8 @@ import {
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
 import { filmOutline, personCircleOutline, trashOutline } from 'ionicons/icons';
+import { AUTH_UID } from '@vultus/shared/domain/tokens';
 import {
-  AUTH_UID,
   type Region,
   type TitleType,
   type WatchStatus,

@@ -2,7 +2,7 @@
 number: 0017
 slug: daily-sync-cron
 title: Add the daily-sync GitHub Actions cron that triggers the syncTitles function
-status: approved
+status: done
 slices: []
 scopes: [scope:functions]
 created: 2026-06-23
