@@ -90,7 +90,10 @@ if (!/^\s*allowBuilds:/m.test(readFileSync(wsPath, 'utf8'))) {
 }
 ok('pnpm-workspace.yaml ships an allowBuilds map');
 
-// 4. Frozen install in dist.
+// 4. Frozen install in dist — proves the pruned lockfile installs and populates
+// node_modules for checks 5–6 (and for Firebase's gen2 local discovery on a real
+// deploy). The shipped pnpm-workspace.yaml carries `packages: ['.']` so this is
+// valid under both the repo's pinned pnpm 9 (CI) and Cloud Build's pnpm 10+.
 try {
   execSync('pnpm install --frozen-lockfile', { cwd: DIST, stdio: 'pipe' });
   ok('pnpm install --frozen-lockfile succeeds');
