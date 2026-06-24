@@ -13,11 +13,12 @@ import {
 import type { Region } from '@vultus/shared/domain';
 import { addIcons } from 'ionicons';
 import { globeOutline, notificationsOutline } from 'ionicons/icons';
+import { SETTINGS_PROVIDERS } from './settings.providers';
 import { SettingsService } from './settings.service';
 
 @Component({
   selector: 'lib-settings',
-  providers: [SettingsService],
+  providers: [...SETTINGS_PROVIDERS],
   imports: [
     IonHeader,
     IonToolbar,
