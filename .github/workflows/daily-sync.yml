@@ -1,0 +1,35 @@
+name: Daily sync
+
+on:
+  schedule:
+    # 0 4 * * * = daily 04:00 UTC. GitHub cron is UTC with NO DST adjustment,
+    # so this lands ~05:00 (winter) / ~06:00 (summer) in NL — chosen so a
+    # NL-overnight provider refresh surfaces notifications in the morning.
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Trigger daily sync
+        timeout-minutes: 5
+        env:
+          SYNC_URL: ${{ vars.VULTUS_SYNC_URL }}
+          SYNC_SECRET: ${{ secrets.SYNC_SHARED_SECRET }}
+        run: |
+          if [ -z "$SYNC_URL" ] || [ -z "$SYNC_SECRET" ]; then
+            echo "::error::VULTUS_SYNC_URL variable and SYNC_SHARED_SECRET secret must be configured."
+            exit 1
+          fi
+          curl --silent --show-error --fail-with-body \
+            --retry 3 --retry-all-errors --retry-delay 5 \
+            --max-time 240 \
+            -X POST "$SYNC_URL" \
+            -H "X-Vultus-Sync-Secret: $SYNC_SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"force": true}'

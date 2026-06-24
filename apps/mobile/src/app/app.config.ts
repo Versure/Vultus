@@ -13,7 +13,7 @@ import {
   getFirestore,
   provideFirestore,
 } from '@angular/fire/firestore';
-import { AUTH_UID } from '@vultus/shared/domain';
+import { AUTH_UID } from '@vultus/shared/domain/tokens';
 import { TMDB_SEARCH_CONFIG } from '@vultus/mobile/search';
 import { TMDB_DETAIL_CONFIG } from '@vultus/mobile/title-detail';
 import { appRoutes } from './app.routes';

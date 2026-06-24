@@ -21,6 +21,7 @@
     "noUnusedLocals": false,
     "paths": {
       "@vultus/shared/domain": ["./libs/shared/domain/src/index.ts"],
+      "@vultus/shared/domain/tokens": ["./libs/shared/domain/src/tokens.ts"],
       "@vultus/shared/firestore-schema": [
         "./libs/shared/firestore-schema/src/index.ts"
       ],

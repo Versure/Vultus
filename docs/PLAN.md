@@ -18,7 +18,7 @@ In scope:
 - Track TV shows; notify the day a new episode is available on a streaming
   platform in your selected region.
 - Track movies; notify the day they become available on a streaming platform.
-- Show *which* platform a title is on (Netflix, Prime, Disney+, etc.) for the
+- Show _which_ platform a title is on (Netflix, Prime, Disney+, etc.) for the
   user's selected region.
 - Track watch progress (mark episodes/movies as watched). Treated as v1.1 —
   built last, after the notification pipeline is working end-to-end.
@@ -38,22 +38,22 @@ day one so multi-user is a UI change later, not a migration.
 
 ## 2. Architecture decisions
 
-| Decision | Choice | Rationale |
-|---|---|---|
-| Frontend | Ionic + Angular (Capacitor) | Stated constraint. Native Android via Capacitor. |
-| Monorepo | Nx workspace | Stated constraint. Shared types between mobile + functions. |
-| Architecture style | Vertical slice (Nx-enforced via Sheriff) | Each feature owns its UI, state, data, and types. |
-| Backend | Firebase (Firestore + Auth + Cloud Functions + FCM) | Single integrated platform; .NET dropped. |
-| Functions runtime | TypeScript | End-to-end TS enables shared types via `libs/shared/domain`. |
-| Database | Firestore | Free tier covers personal use ~1000x over; real-time sync to client. |
-| Auth | Firebase Auth (anonymous in v1, email/password later) | Userid scoping from day one. |
-| Push | FCM directly (Android only) | Free, full control, simplest stack. |
-| Daily sync trigger | GitHub Actions cron → HTTP Cloud Function | Stays on Spark plan, no credit card. |
-| Manual refresh | App calls same HTTP Cloud Function (rate-limited) | Single code path for sync logic. |
-| Region scope | Multi-region from day one | Trivial in data model, painful to add later. |
-| Data sources | TMDB (metadata + watch providers) + Trakt (calendar) | Both free for non-commercial; complementary. |
-| UI design source | Google Stitch — "Vultus Android App Design" | Canonical screens + design system; accessed via Stitch MCP. |
-| Hosting cost | €0/month | Firebase Spark + GitHub Actions free tier + TMDB/Trakt free tier. |
+| Decision           | Choice                                                | Rationale                                                            |
+| ------------------ | ----------------------------------------------------- | -------------------------------------------------------------------- |
+| Frontend           | Ionic + Angular (Capacitor)                           | Stated constraint. Native Android via Capacitor.                     |
+| Monorepo           | Nx workspace                                          | Stated constraint. Shared types between mobile + functions.          |
+| Architecture style | Vertical slice (Nx-enforced via Sheriff)              | Each feature owns its UI, state, data, and types.                    |
+| Backend            | Firebase (Firestore + Auth + Cloud Functions + FCM)   | Single integrated platform; .NET dropped.                            |
+| Functions runtime  | TypeScript                                            | End-to-end TS enables shared types via `libs/shared/domain`.         |
+| Database           | Firestore                                             | Free tier covers personal use ~1000x over; real-time sync to client. |
+| Auth               | Firebase Auth (anonymous in v1, email/password later) | Userid scoping from day one.                                         |
+| Push               | FCM directly (Android only)                           | Free, full control, simplest stack.                                  |
+| Daily sync trigger | GitHub Actions cron → HTTP Cloud Function             | Stays on Spark plan, no credit card.                                 |
+| Manual refresh     | App calls same HTTP Cloud Function (rate-limited)     | Single code path for sync logic.                                     |
+| Region scope       | Multi-region from day one                             | Trivial in data model, painful to add later.                         |
+| Data sources       | TMDB (metadata + watch providers) + Trakt (calendar)  | Both free for non-commercial; complementary.                         |
+| UI design source   | Google Stitch — "Vultus Android App Design"           | Canonical screens + design system; accessed via Stitch MCP.          |
+| Hosting cost       | €0/month                                              | Firebase Spark + GitHub Actions free tier + TMDB/Trakt free tier.    |
 
 ### Why the .NET backend was dropped
 
@@ -77,7 +77,7 @@ NL but has known accuracy gaps for licensed (non-original) content. Trakt's
 calendar gives you upcoming episodes but does not include streaming
 availability per region. Mitigations baked into the design:
 
-- Cache TMDB watch-provider data in Firestore so we can detect *transitions*
+- Cache TMDB watch-provider data in Firestore so we can detect _transitions_
   (yesterday: not on Netflix NL; today: on Netflix NL → notify).
 - Treat the notification as "available now on X" rather than "first episode
   ever" — the transition is what matters.
@@ -172,7 +172,7 @@ Rules:
 ### When to extract to `shared/`
 
 Default answer: **don't**. Duplication is fine inside slices. Only extract
-when the *same* logic appears in **3+ slices** AND has the **same reason to
+when the _same_ logic appears in **3+ slices** AND has the **same reason to
 change**. Two date formatters that both happen to format dates today but
 might diverge tomorrow are not duplication — they're independent.
 
@@ -228,7 +228,7 @@ title-cache/{tmdbId}/availability/{region}
 ```
 
 `title-cache` is shared across users — if you and a future user both track
-*Severance*, we sync it once. This is also what makes the daily sync cheap.
+_Severance_, we sync it once. This is also what makes the daily sync cheap.
 
 ---
 
@@ -326,7 +326,7 @@ overhead — Claude Code can skip straight to the PR.
 
 ### Definition of done
 
-A PR is mergeable only when *all* of:
+A PR is mergeable only when _all_ of:
 
 - [ ] Typecheck passes (`nx affected -t typecheck`).
 - [ ] Lint passes including Sheriff module boundaries.
@@ -341,27 +341,27 @@ A PR is mergeable only when *all* of:
 ### Test layering — the pyramid
 
 - **Unit tests (lots):** All logic. Sync engine, FCM dispatch, Firestore
-  query builders, region resolvers, transition detectors. Jest. Fast.
+  query builders, region resolvers, transition detectors. Vitest + Analog. Fast.
 - **Component tests (some):** Components with non-trivial state, branching,
-  or conditional rendering. Angular Testing Library. Skip pure presentational
-  components.
+  or conditional rendering. Angular Testing Library (on Vitest). Skip pure
+  presentational components.
 - **e2e tests (5–10, named):** Critical user flows only. Playwright against
   Firebase emulators. Claude Code will propose the specific flows in a
   design note for the e2e setup task — you approve them there.
 
 ### Secrets
 
-| Secret | Lives in | Used by |
-|---|---|---|
-| `TMDB_API_KEY` | `.env.local` (local dev via `pnpm env:tmdb`), `TMDB_API_KEY` GitHub Actions secret (CI production build) | Mobile client (injected at build time by CI) |
-| Trakt client ID | `.env.local`, GitHub secret, Firebase functions config | Functions only |
-| FCM service account | Firebase functions config | Functions only |
-| Sync HTTP function shared secret | GitHub secret + Firebase functions config | GitHub Actions cron + Function |
+| Secret                           | Lives in                                                                                                 | Used by                                      |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `TMDB_API_KEY`                   | `.env.local` (local dev via `pnpm env:tmdb`), `TMDB_API_KEY` GitHub Actions secret (CI production build) | Mobile client (injected at build time by CI) |
+| Trakt client ID                  | `.env.local`, GitHub secret, Firebase functions config                                                   | Functions only                               |
+| FCM service account              | Firebase functions config                                                                                | Functions only                               |
+| Sync HTTP function shared secret | GitHub secret + Firebase functions config                                                                | GitHub Actions cron + Function               |
 
 **Required GitHub Actions secrets for production builds:**
 
-| Secret name | Description |
-|---|---|
+| Secret name    | Description                                                                                                                                                                                   |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `TMDB_API_KEY` | TMDB Developer API key. The CI workflow injects it into `environment.prod.ts` before `nx build`. Without it the CI build fails fast (explicit check). Get one at themoviedb.org/settings/api. |
 
 `CLAUDE.md` instructs the agent to never read or write `.env.local` and to
@@ -401,16 +401,16 @@ dependency. Each is sized to ~one Claude Code session.
 10. **Trakt client (in `functions/sync-titles`)** — Auth, `getCalendar`.
     Unit tests with mocked HTTP.
 11. **Sync engine** — Given a list of `tmdbId`s, fetch metadata + providers
-    + episodes, compute transitions vs `previousSnapshot`, write to
-    `title-cache`. Unit tests for transition detection.
+    - episodes, compute transitions vs `previousSnapshot`, write to
+      `title-cache`. Unit tests for transition detection.
 12. **HTTP sync function with shared-secret auth** — Wrap sync engine in
     HTTPS callable, validate secret header, idempotent.
 13. **Daily-sync GitHub Action** — Cron schedule, calls HTTP function with
     secret.
 14. **Notification dispatcher (Firestore trigger)** — On `title-cache/*/
-    availability/*` write, diff against previous snapshot, find users
+availability/*` write, diff against previous snapshot, find users
     tracking that title in matching region, write to `users/*/
-    notifications/*` and send via FCM. Unit tests.
+notifications/*` and send via FCM. Unit tests.
 
 ### Mobile slices
 
@@ -457,11 +457,24 @@ These you have to do yourself; Claude Code can't.
       repository secret) so CI can inject it into the production build.
 - [ ] Sign up for Trakt API at trakt.tv/oauth/applications → create
       application, get client ID. Free, instant.
+- [ ] Add the deployed `syncTitles` endpoint URL as a GitHub Actions
+      **variable** named `VULTUS_SYNC_URL` (repo → Settings → Secrets and
+      variables → Actions → Variables) so the daily-sync cron knows where to
+      POST. Public value, so a variable, not a secret. (The project runs on
+      Blaze with the function deployed, per project setup.)
+- [ ] Add the sync shared secret as a GitHub Actions **secret** named
+      `SYNC_SHARED_SECRET` (the value sent in the `X-Vultus-Sync-Secret`
+      header by the daily-sync cron) — see PLAN §5's secrets table row
+      "Sync HTTP function shared secret". (Blaze, per project setup.)
+- [ ] Set the **matching** `SYNC_SHARED_SECRET` param on the Cloud Function
+      side (same value as the GitHub secret) so the header comparison passes;
+      rotating one without the other breaks the cron. (Blaze, per project
+      setup.)
 - [ ] Install Claude Code locally (`npm install -g @anthropic-ai/claude-code`),
       authenticate.
 - [ ] Install Node.js LTS, Android Studio (for Capacitor builds), Firebase
       CLI (`npm install -g firebase-tools`).
-- [ ] Add a credit card test: confirm you do *not* want to enable Blaze.
+- [ ] Add a credit card test: confirm you do _not_ want to enable Blaze.
       Spark plan + GitHub Actions cron is the chosen path.
 
 ---
@@ -481,15 +494,15 @@ These you have to do yourself; Claude Code can't.
 
 ## 9. Risk register
 
-| Risk | Mitigation |
-|---|---|
-| TMDB watch-provider data is wrong/stale for NL | Watchmode as layered fallback, encapsulated per slice |
-| Free-tier limits hit | All chosen tiers have ~1000x headroom for personal use |
-| FCM token expires/changes | Re-register on every app launch, store array of tokens |
-| Background daily sync fails silently | Cloud Function logs to Firebase Logging; weekly sanity-check issue |
-| Sheriff/Nx version mismatch breaks CI | Pin versions; renovate updates via PR |
-| Agent over-DRYs and breaks slices | Explicit rule in CLAUDE.md; Sheriff catches cross-slice imports |
-| Agent commits secrets | `.env.local` gitignored; CLAUDE.md rule; pre-commit hook with `gitleaks` |
+| Risk                                           | Mitigation                                                               |
+| ---------------------------------------------- | ------------------------------------------------------------------------ |
+| TMDB watch-provider data is wrong/stale for NL | Watchmode as layered fallback, encapsulated per slice                    |
+| Free-tier limits hit                           | All chosen tiers have ~1000x headroom for personal use                   |
+| FCM token expires/changes                      | Re-register on every app launch, store array of tokens                   |
+| Background daily sync fails silently           | Cloud Function logs to Firebase Logging; weekly sanity-check issue       |
+| Sheriff/Nx version mismatch breaks CI          | Pin versions; renovate updates via PR                                    |
+| Agent over-DRYs and breaks slices              | Explicit rule in CLAUDE.md; Sheriff catches cross-slice imports          |
+| Agent commits secrets                          | `.env.local` gitignored; CLAUDE.md rule; pre-commit hook with `gitleaks` |
 
 ---
 

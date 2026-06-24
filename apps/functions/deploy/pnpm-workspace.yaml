@@ -1,0 +1,16 @@
+# Deployed to the dist root alongside the pruned package.json + lockfile so the
+# Firebase / Cloud Build `pnpm install` knows these dependencies' build scripts
+# are intentionally skipped. This mirrors the repo-root pnpm-workspace.yaml
+# `allowBuilds` entries. Without it, pnpm 11 exits 1 with ERR_PNPM_IGNORED_BUILDS
+# and the functions deploy build fails. Kept in this deploy/ subfolder (not at
+# the functions source root) so pnpm never mistakes it for a nested workspace
+# root during normal repo-root operations; Nx copies it to dist on build.
+# `packages: ['.']` makes this a valid single-package workspace for *every* pnpm
+# major: pnpm 9 (the repo/CI pin) rejects a workspace file with no `packages:`,
+# while pnpm 10+ (Cloud Build) needs `allowBuilds` here because it ignores the
+# package.json `pnpm` field. Both keys together satisfy the whole range.
+packages:
+  - '.'
+allowBuilds:
+  '@firebase/util': false
+  protobufjs: false

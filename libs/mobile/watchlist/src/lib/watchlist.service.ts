@@ -8,8 +8,8 @@ import {
   docData,
   updateDoc,
 } from '@angular/fire/firestore';
+import { AUTH_UID } from '@vultus/shared/domain/tokens';
 import {
-  AUTH_UID,
   type Region,
   type RegionAvailability,
   type TitleType,
