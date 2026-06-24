@@ -1,5 +1,7 @@
 import { Component, type OnInit, inject } from '@angular/core';
 import {
+  IonButton,
+  IonButtons,
   IonContent,
   IonHeader,
   IonIcon,
@@ -12,7 +14,12 @@ import {
 } from '@ionic/angular/standalone';
 import type { Region } from '@vultus/shared/domain';
 import { addIcons } from 'ionicons';
-import { globeOutline, notificationsOutline } from 'ionicons/icons';
+import {
+  filmOutline,
+  globeOutline,
+  notificationsOutline,
+  personCircleOutline,
+} from 'ionicons/icons';
 import { SETTINGS_PROVIDERS } from './settings.providers';
 import { SettingsService } from './settings.service';
 
@@ -23,6 +30,8 @@ import { SettingsService } from './settings.service';
     IonHeader,
     IonToolbar,
     IonTitle,
+    IonButtons,
+    IonButton,
     IonContent,
     IonIcon,
     IonSelect,
@@ -37,7 +46,12 @@ export class SettingsPage implements OnInit {
   protected readonly service = inject(SettingsService);
 
   constructor() {
-    addIcons({ globeOutline, notificationsOutline });
+    addIcons({
+      globeOutline,
+      notificationsOutline,
+      filmOutline,
+      personCircleOutline,
+    });
   }
 
   ngOnInit(): void {

@@ -8,15 +8,39 @@
 // control. Page background is `surface`; cards step one level up the ramp to
 // `surface-container`.
 
-// Transparent so the `surface` background shows through the cards (the screen's
-// app bar shares the page background with only a faint bottom hairline).
-.settings-header ion-toolbar {
-  --background: var(--vultus-surface);
-  --border-color: color-mix(
-    in srgb,
-    var(--vultus-outline-variant) 30%,
-    transparent
-  );
+// Shared brand header — film-outline icon + "Vultus" wordmark, matching the
+// watchlist page so the app bar is uniform across pages. The page's own
+// "Settings" heading still renders below the header (see .settings-title).
+ion-header {
+  ion-toolbar {
+    --background: var(--vultus-surface);
+    --border-width: 0 0 1px 0;
+    --border-color: var(--vultus-outline-variant);
+    --border-style: solid;
+    --box-shadow: none;
+
+    ion-title {
+      padding-inline: 16px;
+    }
+  }
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ion-color-primary);
+  font-family: var(--vultus-font-family);
+  font-weight: 700;
+  font-size: 1.125rem;
+}
+
+.brand-icon {
+  font-size: 1.25rem;
+  color: var(--ion-color-primary);
+  flex-shrink: 0;
+  position: relative;
+  top: -1px;
 }
 
 ion-content {
