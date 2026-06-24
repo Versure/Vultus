@@ -1,7 +1,8 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Firestore } from '@angular/fire/firestore';
-import { AUTH_UID, type WatchlistItem } from '@vultus/shared/domain';
+import { AUTH_UID } from '@vultus/shared/domain/tokens';
+import { type WatchlistItem } from '@vultus/shared/domain';
 import {
   availabilityDocPath,
   titleCacheDocPath,

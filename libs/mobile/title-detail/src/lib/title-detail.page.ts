@@ -26,8 +26,8 @@ import {
   trashOutline,
   tvOutline,
 } from 'ionicons/icons';
+import { AUTH_UID } from '@vultus/shared/domain/tokens';
 import {
-  AUTH_UID,
   type Region,
   type WatchStatus,
   type WatchlistItem,

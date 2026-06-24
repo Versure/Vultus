@@ -2,7 +2,7 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute } from '@angular/router';
 import { provideIonicAngular } from '@ionic/angular/standalone';
-import { AUTH_UID } from '@vultus/shared/domain';
+import { AUTH_UID } from '@vultus/shared/domain/tokens';
 import { NEVER, type Observable, concat, of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GroupedProviders, TitleDetail } from './tmdb-detail.client';
