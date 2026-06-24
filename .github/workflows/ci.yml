@@ -83,11 +83,11 @@ jobs:
 
       - name: Run affected gates (pull_request)
         if: github.event_name == 'pull_request'
-        run: pnpm nx affected -t lint test build --base=$NX_BASE --head=$NX_HEAD --configuration=ci
+        run: pnpm nx affected -t typecheck lint test build --base=$NX_BASE --head=$NX_HEAD --configuration=ci
 
       - name: Run all gates (push to main baseline)
         if: github.event_name == 'push'
-        run: pnpm nx run-many -t lint test build --all --configuration=ci
+        run: pnpm nx run-many -t typecheck lint test build --all --configuration=ci
 
       # Emulator-backed integration gate (spec 0009). Runs on both pull_request
       # and push so it's a true required gate on PRs to main. Needs NO secrets:

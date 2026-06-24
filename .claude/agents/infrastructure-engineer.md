@@ -38,8 +38,14 @@ path**, and **your assigned task subset**.
   tags; the lint rule enforcing them; the rules — mobile⇎functions forbidden,
   slices can't import slices, everyone can import `scope:shared`. When asked,
   add a deliberately-failing check to prove the boundary works (PLAN §6 task 2).
-- **CI** (`.github/workflows/ci.yml`): `nx affected -t typecheck|lint|test|
-build|e2e` on every PR; all must pass to merge (PLAN §5).
+- **CI** (`.github/workflows/ci.yml`): `nx affected -t typecheck lint test build`
+  - the emulator integration gate + the `functions:deploy-preflight` gate on every
+    PR; all must pass to merge. **e2e is not a CI gate** (it runs via `qa-runner`
+    locally against the emulators); don't add an `nx ... e2e` step without wiring
+    Playwright + emulators into the workflow first.
+- **Deploy** (`.github/workflows/deploy-functions.yml`): manual `workflow_dispatch`
+  Cloud Functions deploy (preflight → `firebase deploy`); needs the
+  `FIREBASE_SERVICE_ACCOUNT` secret + `TRAKT_CLIENT_ID` variable.
 - **daily-sync** (`.github/workflows/daily-sync.yml`): cron → HTTP Cloud
   Function with the shared secret (keeps the project on the free Spark plan).
 - **Firebase**: `firebase.json`, version-controlled `firestore.rules` (security
