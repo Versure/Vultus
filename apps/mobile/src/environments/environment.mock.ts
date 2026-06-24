@@ -9,7 +9,11 @@
  *   "slow"    → loading state (2 s delay before results appear)
  *   anything else → results state (5 fixture movies/shows)
  *
- * Firebase is unchanged from the dev environment (emulator-first).
+ * Firebase is deliberately NOT emulated (`useEmulators: false`). Slices that
+ * need data (e.g. settings) must be backed by a file-replaced mock provider so
+ * this profile runs without any running emulator. Auth is also skipped — the
+ * anonymous sign-in will fail gracefully (caught in app.config) and slices
+ * whose mock providers do not require a uid will still render correctly.
  */
 
 import type { TmdbSearchConfig } from '@vultus/mobile/search';
@@ -101,7 +105,7 @@ const mockTmdbConfig: TmdbSearchConfig = {
 
 export const environment = {
   production: false,
-  useEmulators: true,
+  useEmulators: false,
   firebase: {
     apiKey: 'demo-vultus-not-a-real-key',
     authDomain: 'demo-vultus.firebaseapp.com',
