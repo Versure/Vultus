@@ -2,7 +2,7 @@
 number: 0020
 slug: capacitor-android-build
 title: Wire the Capacitor Android platform — add android/, app icon + splash, FCM plumbing, and Nx sync/open targets so the app builds and runs as a debug APK on a device
-status: approved
+status: done
 slices: []
 scopes: [scope:mobile]
 created: 2026-06-24
@@ -149,10 +149,9 @@ In scope:
 Out of scope (each its own later spec / explicitly excluded):
 
 - **Notification permission request + token registration** (`PushNotifications.
-  requestPermissions()` / `.register()` / writing `users/{uid}.fcmTokens`) — **spec
+requestPermissions()` / `.register()` / writing `users/{uid}.fcmTokens`) — **spec
   0021 (onboarding)** (decision 5).
-- **Onboarding flow** (first-run region pick + notification permission) — spec
-  0021.
+- **Onboarding flow** (first-run region pick + notification permission) — spec 0021.
 - **Release / signed APK, keystore, Play Store listing, app bundle (.aab)** —
   explicitly out (decision 1).
 - **iOS** (no `ios/` platform; PLAN §1 puts iOS out of v1 scope).
@@ -171,12 +170,12 @@ This spec touches **no slice lib** (`slices: []`) — it is native-platform +
 root/config files. **No `shared/` extraction** is involved (CLAUDE.md 3+-slice
 rule is not engaged — no logic is shared or duplicated).
 
-| Project / area     | Path                                                       | Sheriff tags   | Change                                                                                          |
-| ------------------ | ---------------------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------- |
-| mobile (app)       | `apps/mobile`                                               | `scope:mobile` | new `android/` native project; `project.json` `sync`/`open` targets; `resources/`; README       |
-| Capacitor config   | `capacitor.config.ts` (repo root)                          | none (root)    | add the `SplashScreen` plugin block (background/behaviour)                                       |
-| Root deps          | `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`    | none (root)    | add `@capacitor/push-notifications`, `@capacitor/splash-screen`, `@capacitor/assets` (dev)       |
-| Docs               | `apps/mobile/README.md`, `docs/PLAN.md` §7                 | none (docs)    | native-build recipe + manual-prereq checklist                                                    |
+| Project / area   | Path                                                    | Sheriff tags   | Change                                                                                     |
+| ---------------- | ------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------ |
+| mobile (app)     | `apps/mobile`                                           | `scope:mobile` | new `android/` native project; `project.json` `sync`/`open` targets; `resources/`; README  |
+| Capacitor config | `capacitor.config.ts` (repo root)                       | none (root)    | add the `SplashScreen` plugin block (background/behaviour)                                 |
+| Root deps        | `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml` | none (root)    | add `@capacitor/push-notifications`, `@capacitor/splash-screen`, `@capacitor/assets` (dev) |
+| Docs             | `apps/mobile/README.md`, `docs/PLAN.md` §7              | none (docs)    | native-build recipe + manual-prereq checklist                                              |
 
 - **Sheriff / module boundaries:** Sheriff governs only `scope:`/`slice:` import
   edges **between workspace TypeScript projects**. The `android/` native project,
@@ -196,11 +195,11 @@ rule is not engaged — no logic is shared or duplicated).
 This spec writes **no Firestore document** and changes **no collection, field,
 converter, or security rule**. PLAN §4 paths are untouched:
 
-| PLAN §4 path     | Access by this spec | Note                                                                       |
-| ---------------- | ------------------- | -------------------------------------------------------------------------- |
-| `users/{uid}`    | **none**            | `fcmTokens` is written by spec 0021 (token registration), **not here**     |
-| `users/{uid}/**` | **none**            | not touched                                                                |
-| `title-cache/**` | **none**            | not touched                                                                |
+| PLAN §4 path     | Access by this spec | Note                                                                   |
+| ---------------- | ------------------- | ---------------------------------------------------------------------- |
+| `users/{uid}`    | **none**            | `fcmTokens` is written by spec 0021 (token registration), **not here** |
+| `users/{uid}/**` | **none**            | not touched                                                            |
+| `title-cache/**` | **none**            | not touched                                                            |
 
 - **`google-services.json` is a native Firebase config artifact, NOT Firestore
   data and NOT a secret.** It carries public client identifiers (`project_id`,
@@ -236,7 +235,7 @@ converter, or security rule**. PLAN §4 paths are untouched:
   Target/executor shape is a **recommendation**; what is **binding** is: a
   `mobile:sync` target running `cap sync android`, a `mobile:open` target running
   `cap open android`, both with `mobile:build` as a prerequisite (`dependsOn:
-  ["build"]`), invocable as `pnpm nx run mobile:sync` / `pnpm nx run mobile:open`.
+["build"]`), invocable as `pnpm nx run mobile:sync` / `pnpm nx run mobile:open`.
   (Capacitor reads `webDir: 'dist/apps/mobile/browser'` from the root
   `capacitor.config.ts`, which is exactly what `mobile:build` produces.)
 - **`capacitor.config.ts` gains a `plugins.SplashScreen` block** — concrete values
@@ -298,7 +297,7 @@ hexes — pull the exact values from `docs/design/vultus-design-system.md`):
   - Background: `surface` `#0b1326` (the app is **dark-first** per the design
     system) — wired in two places that must agree: the generated splash drawable
     background **and** the `capacitor.config.ts` `plugins.SplashScreen.
-    backgroundColor` (and `androidSplashResourceName` if customised).
+backgroundColor` (and `androidSplashResourceName` if customised).
   - Centred Vultus mark/wordmark in `primary` Emerald `#4edea3` on the navy, per
     the Stitch splash (exact mark/wordmark + any fade/scale animation taken from
     the captured screen — see the blocking item above).
@@ -339,7 +338,7 @@ Two leaf tasks (the README/PLAN docs, and the icon/splash asset generation) are
 independent of each other once the platform exists, but both write into files the
 sequential chain also touches or depends on, so they are ordered conservatively.
 Because there is only one app project and one native folder, **all file
-manifests overlap on `apps/mobile/**` / `android/**` — so tasks are
+manifests overlap on `apps/mobile/**`/`android/**` — so tasks are
 [sequential]; there is no safe parallel fan-out here.** infrastructure-engineer
 owns the platform/Gradle/deps tasks; frontend-engineer owns the asset/Stitch
 tasks.
@@ -379,7 +378,7 @@ tasks.
      `google-services.json`** — verify and adjust any generated `android/.gitignore`
      so the committed config file is tracked.
    - Run `npx cap sync android` and confirm **all plugins resolve** (`@capacitor/
-     app|haptics|keyboard|status-bar|push-notifications|splash-screen`) with no
+app|haptics|keyboard|status-bar|push-notifications|splash-screen`) with no
      unresolved-plugin error.
    - **Native-toolchain caveat (project memory: loopback/JVM tooling can't run
      under Claude Code tools here).** If `cap add android` / Gradle cannot be
@@ -431,7 +430,7 @@ tasks.
    task 2.** infrastructure-engineer.
    - Add the two targets to `apps/mobile/project.json` (Public types / APIs),
      each `dependsOn: ["build"]`. Verify `pnpm nx run mobile:sync` runs `cap sync
-     android` after a build and `pnpm nx run mobile:open` opens Android Studio.
+android` after a build and `pnpm nx run mobile:open` opens Android Studio.
    - Files: `apps/mobile/project.json`.
 
 6. **[sequential] Documentation: native-build recipe + manual-prereq checklist.
@@ -463,7 +462,7 @@ project or a generated PNG would be theatre). The verification is **build- and
 device-level**, and the existing suites must stay green:
 
 - **Existing unit + component suites stay green.** `pnpm nx run-many -t lint test
-  -p mobile` (and `nx affected -t lint test --base=main`) pass unchanged — no slice
+-p mobile` (and `nx affected -t lint test --base=main`) pass unchanged — no slice
   source changed, so the existing tests neither change nor regress. Adding the
   push-notifications / splash-screen deps must not break the web build's type
   resolution.
@@ -489,64 +488,64 @@ device-level**, and the existing suites must stay green:
 
 ## Definition of done
 
-Tailored from PLAN §5. The automated green gate is **lint + test + the web build
-+ `cap sync`**; the on-device checks are **manual** (native APK build/install is
-out of CI scope — decision-aligned with the out-of-scope list).
+Tailored from PLAN §5. The automated green gate is \*\*lint + test + the web build
 
-- [ ] `pnpm nx run-many -t lint test -p mobile` passes **with Sheriff active**
+- `cap sync`**; the on-device checks are **manual\*\* (native APK build/install is
+  out of CI scope — decision-aligned with the out-of-scope list).
+
+* [ ] `pnpm nx run-many -t lint test -p mobile` passes **with Sheriff active**
       (lint includes Sheriff) — no new boundary edge is introduced (the Capacitor
       plugins are third-party; `android/` is not a TS workspace project); no slice
       source changed, so existing unit/component tests stay green.
-- [ ] `pnpm nx affected -t lint test build --base=main` is green — mirrors CI; the
+* [ ] `pnpm nx affected -t lint test build --base=main` is green — mirrors CI; the
       affected set is `mobile` (root dep + config change). The web build still
       passes within the existing bundle budgets.
-- [ ] `pnpm nx run mobile:build` succeeds and produces `dist/apps/mobile/browser`
+* [ ] `pnpm nx run mobile:build` succeeds and produces `dist/apps/mobile/browser`
       (acceptance criterion 1).
-- [ ] `pnpm nx run mobile:sync` completes with **all Capacitor plugins resolving**
+* [ ] `pnpm nx run mobile:sync` completes with **all Capacitor plugins resolving**
       and no error (acceptance criterion 2) — i.e. `@capacitor/push-notifications`
       and `@capacitor/splash-screen` are installed, in `package.json`, and synced
-      into `android/`. **`cap sync` is a Node-level step (it copies the web bundle
-      + resolves plugin packages; it does NOT invoke Gradle), so it is expected to
+      into `android/`. **`cap sync` is a Node-level step (it copies the web bundle + resolves plugin packages; it does NOT invoke Gradle), so it is expected to
       run in-session as an automated gate.** Only `cap add android` (which runs
       `npx cap add`), the Gradle `assembleDebug`, and the device-install steps may
       fall to `needs-human` if the shell can't run them (see Risks) — `cap sync`
       itself should not.
-- [ ] The **`android/` native project is committed**, `applicationId` is
+* [ ] The **`android/` native project is committed**, `applicationId` is
       `app.vultus.mobile`, app label "Vultus", and **`google-services.json` is
       present and committed** at `apps/mobile/android/app/google-services.json`
       (or the step is flagged `needs-human` with the exact path + package name if
       console access was unavailable).
-- [ ] `mobile:sync` and `mobile:open` Nx targets exist with `dependsOn: ["build"]`
+* [ ] `mobile:sync` and `mobile:open` Nx targets exist with `dependsOn: ["build"]`
       and run `cap sync android` / `cap open android` respectively.
-- [ ] **Icon + splash generated via `@capacitor/assets`** from committed
+* [ ] **Icon + splash generated via `@capacitor/assets`** from committed
       `apps/mobile/resources/{icon,splash}.png`, using the navy `surface` +
       Emerald `primary` tokens from `docs/design/vultus-design-system.md`; the
       `capacitor.config.ts` `SplashScreen.backgroundColor` agrees with the splash
       drawable background. **No hex hand-transcribed** — tokens cited.
-- [ ] **Stitch splash screen ID recorded in the PR** (resolved via `list_screens`/
+* [ ] **Stitch splash screen ID recorded in the PR** (resolved via `list_screens`/
       `get_screen` on `projects/13590348714018893783`), or — if the MCP was
       genuinely unreachable after retries — the splash task flagged blocked /
       `needs-human` (UI / Stitch screen refs), **not** shipped as a guessed splash.
-- [ ] **On-device verification recorded in the PR** (or explicitly flagged
+* [ ] **On-device verification recorded in the PR** (or explicitly flagged
       unverified / `needs-human` if no device available): boots without crash,
       Firebase initialises (no google-services error in logcat), splash matches
       Stitch + dismisses cleanly, launcher icon appears, FCM plugin loads without
       error. (Acceptance criteria 3–7.)
-- [ ] `apps/mobile/README.md` documents the native-build recipe (prereqs +
+* [ ] `apps/mobile/README.md` documents the native-build recipe (prereqs +
       build/sync/open/assemble-debug-APK/install flow); `docs/PLAN.md` §7 lists the
       `google-services.json` manual step. **No leftover Nx scaffold text** in the
       README (CLAUDE.md README rule).
-- [ ] **Guardrail verifications (review-checked):** (a) **no Firestore write / no
-      `users/**` access** — `fcmTokens` registration is deferred to spec 0021;
-      (b) **no permission-prompt / no `PushNotifications.register()` call** added
-      (decision 5); (c) **no signing config / release flavour / keystore / `.aab`**
-      (decision 1); (d) **no `scope:functions`, no other-slice, no
-      `sheriff.config.ts`, no `firestore.rules`, no `ci.yml` change**; (e) **no
-      secret read or written** — `google-services.json` is a **public** client
-      config (committed by design), and the service-account JSON is never touched
-      (per CLAUDE.md the implementer never reads/writes `.env.local` or secrets);
-      (f) no `ios/` platform added.
-- [ ] PR description records: the chosen `@capacitor/push-notifications` /
+* [ ] **Guardrail verifications (review-checked):** (a) **no Firestore write / no
+      `users/**`access** —`fcmTokens`registration is deferred to spec 0021;
+    (b) **no permission-prompt / no`PushNotifications.register()`call** added
+    (decision 5); (c) **no signing config / release flavour / keystore /`.aab`**
+    (decision 1); (d) **no `scope:functions`, no other-slice, no
+    `sheriff.config.ts`, no `firestore.rules`, no `ci.yml`change**; (e) **no
+    secret read or written** —`google-services.json`is a **public** client
+    config (committed by design), and the service-account JSON is never touched
+    (per CLAUDE.md the implementer never reads/writes`.env.local`or secrets);
+    (f) no`ios/` platform added.
+* [ ] PR description records: the chosen `@capacitor/push-notifications` /
       `@capacitor/splash-screen` / `@capacitor/assets` versions + their Capacitor-8
       compatibility check, the resolved **Stitch splash screen ID** (or MCP-
       unreachable + blocked), the `cap sync` plugin-resolution result, the on-device
