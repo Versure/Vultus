@@ -95,6 +95,13 @@
       "dependsOn": ["prune-lockfile", "copy-workspace-modules"],
       "executor": "nx:noop"
     },
+    "deploy-preflight": {
+      "dependsOn": ["prune"],
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node tools/scripts/functions-deploy-preflight.mjs"
+      }
+    },
     "serve": {
       "continuous": true,
       "executor": "@nx/js:node",

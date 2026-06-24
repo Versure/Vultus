@@ -39,12 +39,29 @@ path**, and **your assigned task subset**.
   slices can't import slices, everyone can import `scope:shared`. When asked,
   add a deliberately-failing check to prove the boundary works (PLAN §6 task 2).
 - **CI** (`.github/workflows/ci.yml`): `nx affected -t typecheck|lint|test|
-  build|e2e` on every PR; all must pass to merge (PLAN §5).
+build|e2e` on every PR; all must pass to merge (PLAN §5).
 - **daily-sync** (`.github/workflows/daily-sync.yml`): cron → HTTP Cloud
   Function with the shared secret (keeps the project on the free Spark plan).
 - **Firebase**: `firebase.json`, version-controlled `firestore.rules` (security
   rules keyed by `userId` per §4), `firestore.indexes.json`, emulator wiring for
   local dev and e2e.
+- **Cloud Functions deploy (pnpm + gen2) — known traps.** The deployable artifact
+  is the **pruned** `dist/apps/functions`, installed by Google Cloud Build with
+  **pnpm**, not the monorepo. Four constraints, all gated by
+  `nx run functions:deploy-preflight` (also a CI gate) — run it after any change
+  to functions deps or the build:
+  1. **`firebase-admin` must satisfy `firebase-functions`' peer range** (currently
+     `admin@13`, not 14). Cloud Build's npm enforces peers strictly (ERESOLVE);
+     pnpm's lenient resolver hides it locally.
+  2. **`@google-cloud/functions-framework` must be an explicit dependency** in
+     `apps/functions/package.json` — the pnpm buildpack can't find it transitively.
+  3. **`apps/functions/deploy/pnpm-workspace.yaml` (`allowBuilds`) must ship into
+     dist** (via the production build `assets`). pnpm 11 ignores the package.json
+     `pnpm` field; without the workspace file Cloud Build exits 1 with
+     `ERR_PNPM_IGNORED_BUILDS`.
+  4. **gen2 trigger-type changes are rejected in place** (HTTPS ⇄ background) —
+     `firebase functions:delete <name> --region <r> --force`, then redeploy.
+     Keep the deploy recipe in sync with the `functions-deploy-pnpm-recipe` memo.
 - **Capacitor**: `capacitor.config.ts`, Android icon/splash, FCM push setup,
   local APK build (PLAN §6 task 21).
 - **PR template** under `.github/` when in scope (PLAN §5). Do **not** create
