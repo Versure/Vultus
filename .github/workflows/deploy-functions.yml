@@ -1,0 +1,81 @@
+name: Deploy Functions
+
+# Manual deploy of the Cloud Functions to Firebase (project vultus-cab62).
+# Mirrors the local `/deploy-functions` skill: preflight-validate the pruned
+# artifact, then `firebase deploy --only functions`. Reproducible, runs in a
+# Linux env close to Cloud Build, and removes the manual node_modules-in-dist
+# and TRAKT_CLIENT_ID-prompt friction of a local deploy.
+#
+# PREREQUISITES (provision once in Settings → Secrets and variables → Actions):
+#   - Secret  FIREBASE_SERVICE_ACCOUNT — JSON key for a service account with the
+#     Firebase Admin + Cloud Functions Developer + Service Account User roles on
+#     vultus-cab62. Used for non-interactive deploy auth.
+#   - Variable TRAKT_CLIENT_ID — the (public) Trakt API client id. Written into
+#     apps/functions/.env.vultus-cab62 so the firebase-functions defineString
+#     param resolves without an interactive prompt. (The SYNC_SHARED_SECRET /
+#     TMDB_READ_TOKEN secrets live in Secret Manager and need no wiring here.)
+# workflow_dispatch only — never fires automatically.
+
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: 'Deploy scope (e.g. functions or functions:syncTitles)'
+        required: false
+        default: 'functions'
+
+concurrency:
+  group: deploy-functions
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Write the non-secret TRAKT_CLIENT_ID param into the functions env file so
+      # it ships into dist (build asset) and the defineString resolves without a
+      # prompt. Fails fast if the variable is not configured.
+      - name: Write functions env (TRAKT_CLIENT_ID)
+        env:
+          TRAKT_CLIENT_ID: ${{ vars.TRAKT_CLIENT_ID }}
+        run: |
+          if [ -z "$TRAKT_CLIENT_ID" ]; then
+            echo "::error::TRAKT_CLIENT_ID variable is not set. Add it in Settings → Secrets and variables → Actions → Variables."
+            exit 1
+          fi
+          printf 'TRAKT_CLIENT_ID=%s\n' "$TRAKT_CLIENT_ID" > apps/functions/.env.vultus-cab62
+
+      # Build + prune + validate the deployable artifact (and leave a valid dist
+      # node_modules for gen2 local discovery). Fails the deploy before upload on
+      # any artifact problem.
+      - name: Deploy preflight
+        run: pnpm nx run functions:deploy-preflight
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Deploy to Firebase
+        run: pnpm exec firebase deploy --only ${{ inputs.only }} --project vultus-cab62 --non-interactive
