@@ -59,6 +59,14 @@ architecture and decisions; read it before non-trivial work.
   (for non-trivial UI) + build + e2e (affected critical flows) all green, and the
   changed slice has tests for its logic. Tooling-absent gates degrade gracefully —
   see the skills.
+- **Cloud Functions deploy gate.** CI validates the monorepo but the deployable
+  artifact is the **pruned `dist/apps/functions`**, installed by Cloud Build with
+  pnpm — a different beast. Any change to `apps/functions` deps or build **must**
+  pass `pnpm nx run functions:deploy-preflight` (also a CI gate): it installs the
+  pruned bundle, checks the required deps + `allowBuilds` ship, verifies
+  `firebase-admin` satisfies `firebase-functions`' peer range, and loads `main.js`
+  (gen2 discovery). To actually ship, use `/deploy-functions`. The pnpm/gen2 traps
+  are documented in the `infrastructure-engineer` agent.
 
 ## Conventions
 
