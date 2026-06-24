@@ -1,49 +1,91 @@
+<!--
+  Settings page — visual alignment to the Stitch "Settings - Vultus" screen
+  (projects/13590348714018893783/screens/81945ff3381e453dafcc4e5ce896fcfa).
+
+  The screen groups settings into rounded surface-container cards, each with a
+  left icon tile, a primary title (body-lg) + helper subtitle (body-md), and a
+  trailing control/value. Only the TWO real spec-0011 controls carry behaviour:
+  the Region picker and the global Notifications toggle. The screen's other rows
+  (profile block, "Notification Preferences" nav, Appearance/Dark Mode, About,
+  Sign Out) are decorative/deferred features and are intentionally NOT rendered
+  or wired (spec 0018 decision 4 / Out of scope).
+-->
 <ion-header>
   <ion-toolbar>
-    <ion-title>Settings</ion-title>
+    <ion-title>
+      <span class="brand-mark">
+        <ion-icon name="film-outline" class="brand-icon"></ion-icon>
+        Vultus
+      </span>
+    </ion-title>
+    <ion-buttons slot="end">
+      <ion-button aria-label="Account">
+        <ion-icon name="person-circle-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
   </ion-toolbar>
 </ion-header>
 
 <ion-content>
   @if (service.loaded()) {
-    <ion-list inset="true">
-      <ion-list-header>
-        <ion-label>Region</ion-label>
-      </ion-list-header>
-      <ion-item>
-        <ion-select
-          label="Region"
-          interface="popover"
-          [value]="service.region()"
-          (ionChange)="onRegionChange($event)"
-        >
-          @for (region of service.regions; track region) {
-            <ion-select-option [value]="region">{{ region }}</ion-select-option>
-          }
-        </ion-select>
-      </ion-item>
-      <ion-item lines="none">
-        <ion-note>Content availability is based on this region.</ion-note>
-      </ion-item>
+  <div class="settings-content">
+    <h2 class="settings-title">Settings</h2>
 
-      <ion-list-header>
-        <ion-label>Notifications</ion-label>
-      </ion-list-header>
-      <ion-item>
-        <ion-toggle
-          [checked]="service.notificationsEnabled()"
-          (ionChange)="onNotificationsChange($event)"
-        >
-          <ion-label>Enable notifications</ion-label>
-        </ion-toggle>
-      </ion-item>
-      <ion-item lines="none">
-        <ion-note>Alerts for new episodes and availability changes.</ion-note>
-      </ion-item>
-    </ion-list>
-  } @else {
-    <div class="settings-loading">
-      <ion-spinner></ion-spinner>
+    <div class="settings-cards">
+      <!-- Region row — `ion-select` carries the real behaviour. -->
+      <div class="settings-card">
+        <div class="settings-row">
+          <div class="settings-row__icon" aria-hidden="true">
+            <ion-icon name="globe-outline"></ion-icon>
+          </div>
+          <div class="settings-row__body">
+            <ion-select
+              class="settings-row__select"
+              label="Region"
+              labelPlacement="start"
+              interface="popover"
+              [value]="service.region()"
+              (ionChange)="onRegionChange($event)"
+            >
+              @for (region of service.regions; track region) {
+              <ion-select-option [value]="region"
+                >{{ region }}</ion-select-option
+              >
+              }
+            </ion-select>
+            <p class="settings-row__helper">
+              Content availability is based on this region.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Notifications row — `ion-toggle` carries the real behaviour. -->
+      <div class="settings-card">
+        <div class="settings-row">
+          <div class="settings-row__icon" aria-hidden="true">
+            <ion-icon name="notifications-outline"></ion-icon>
+          </div>
+          <div class="settings-row__body">
+            <ion-toggle
+              class="settings-row__toggle"
+              justify="space-between"
+              [checked]="service.notificationsEnabled()"
+              (ionChange)="onNotificationsChange($event)"
+            >
+              Notifications
+            </ion-toggle>
+            <p class="settings-row__helper">
+              Alerts for new episodes and availability changes.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
+  </div>
+  } @else {
+  <div class="settings-loading">
+    <ion-spinner></ion-spinner>
+  </div>
   }
 </ion-content>

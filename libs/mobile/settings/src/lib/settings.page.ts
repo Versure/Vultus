@@ -1,12 +1,10 @@
 import { Component, type OnInit, inject } from '@angular/core';
 import {
+  IonButton,
+  IonButtons,
   IonContent,
   IonHeader,
-  IonItem,
-  IonLabel,
-  IonList,
-  IonListHeader,
-  IonNote,
+  IonIcon,
   IonSelect,
   IonSelectOption,
   IonSpinner,
@@ -15,21 +13,27 @@ import {
   IonToolbar,
 } from '@ionic/angular/standalone';
 import type { Region } from '@vultus/shared/domain';
+import { addIcons } from 'ionicons';
+import {
+  filmOutline,
+  globeOutline,
+  notificationsOutline,
+  personCircleOutline,
+} from 'ionicons/icons';
+import { SETTINGS_PROVIDERS } from './settings.providers';
 import { SettingsService } from './settings.service';
 
 @Component({
   selector: 'lib-settings',
-  providers: [SettingsService],
+  providers: [...SETTINGS_PROVIDERS],
   imports: [
     IonHeader,
     IonToolbar,
     IonTitle,
+    IonButtons,
+    IonButton,
     IonContent,
-    IonList,
-    IonListHeader,
-    IonItem,
-    IonLabel,
-    IonNote,
+    IonIcon,
     IonSelect,
     IonSelectOption,
     IonToggle,
@@ -40,6 +44,15 @@ import { SettingsService } from './settings.service';
 })
 export class SettingsPage implements OnInit {
   protected readonly service = inject(SettingsService);
+
+  constructor() {
+    addIcons({
+      globeOutline,
+      notificationsOutline,
+      filmOutline,
+      personCircleOutline,
+    });
+  }
 
   ngOnInit(): void {
     void this.service.load();

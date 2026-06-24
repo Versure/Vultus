@@ -1,15 +1,35 @@
+// Shared brand header — film-outline icon + "Vultus" wordmark, matching the
+// watchlist page so the app bar is uniform across pages.
 ion-header {
   ion-toolbar {
     --background: var(--vultus-surface);
-    --border-width: 0;
+    --border-width: 0 0 1px 0;
+    --border-color: var(--vultus-outline-variant);
+    --border-style: solid;
     --box-shadow: none;
 
     ion-title {
-      font-family: var(--vultus-font-family);
-      font-weight: 600;
-      color: var(--ion-text-color);
+      padding-inline: 16px;
     }
   }
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ion-color-primary);
+  font-family: var(--vultus-font-family);
+  font-weight: 700;
+  font-size: 1.125rem;
+}
+
+.brand-icon {
+  font-size: 1.25rem;
+  color: var(--ion-color-primary);
+  flex-shrink: 0;
+  position: relative;
+  top: -1px;
 }
 
 ion-content {
