@@ -470,6 +470,26 @@ These you have to do yourself; Claude Code can't.
       side (same value as the GitHub secret) so the header comparison passes;
       rotating one without the other breaks the cron. (Blaze, per project
       setup.)
+- [ ] Grant **public invokability** to the `synctitles` Cloud Run service
+      (Blaze, per project setup):
+      ```
+      gcloud run services add-iam-policy-binding synctitles \
+        --region=europe-west1 \
+        --member=allUsers \
+        --role=roles/run.invoker \
+        --project=vultus-cab62
+      ```
+      **Why:** gen2 `onRequest` functions are Cloud Run services, **private by
+      default**. `syncTitles` self-authenticates via the `X-Vultus-Sync-Secret`
+      shared secret (spec 0009), so the service must be **publicly invokable**
+      — the shared secret is the security gate, not Cloud Run IAM. Without this
+      binding, the Google Front End blocks every request with an HTML 403 before
+      it ever reaches the function. The service name is the **lowercased**
+      function name `synctitles`. **This is the fix for the 2026-06-24
+      first-run failure** (the daily-sync cron received a Google Front End HTML
+      403 because the service was private). The `deploy-functions.yml` pipeline
+      now verifies invokability after each deploy (smoke gate); it does **not**
+      auto-grant it — this is a one-time manual step, like the secrets above.
 - [ ] Install Claude Code locally (`npm install -g @anthropic-ai/claude-code`),
       authenticate.
 - [ ] Install Node.js LTS, Android Studio (for Capacitor builds), Firebase
