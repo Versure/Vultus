@@ -1,19 +1,30 @@
 /**
  * Mock environment — use with `pnpm nx serve mobile --configuration=mock`.
  *
- * The mock TMDB fetch returns fixture data based on the query, enabling
- * manual testing of all search view-states without a real TMDB API key:
+ * Works WITHOUT the Firebase emulator running:
+ *   - `mockAuthUid` bypasses Firebase Auth: the app skips signInAnonymously and
+ *     uses a fixture uid so write-guards never short-circuit on null uid.
+ *   - `useEmulators: true` points Firestore at localhost:8080. When the emulator
+ *     is NOT running, the SDK enters offline mode: writes buffer in memory and
+ *     `onSnapshot` reflects them immediately (hasPendingWrites: true), giving
+ *     realistic UI feedback without any server. When the emulator IS running,
+ *     writes persist normally.
+ *   - The TMDB fetch is fully mocked (search + detail + providers).
  *
- *   "error"   → error state (network/API error)
+ * Mock TMDB keywords (search):
+ *   "error"   → error state
  *   "empty"   → no-results state
- *   "slow"    → loading state (2 s delay before results appear)
- *   anything else → results state (5 fixture movies/shows)
+ *   "slow"    → loading state (2 s delay)
+ *   anything else → results (5 fixture titles, ids 1–5)
  *
- * Firebase is deliberately NOT emulated (`useEmulators: false`). Slices that
- * need data (e.g. settings) must be backed by a file-replaced mock provider so
- * this profile runs without any running emulator. Auth is also skipped — the
- * anonymous sign-in will fail gracefully (caught in app.config) and slices
- * whose mock providers do not require a uid will still render correctly.
+ * Title detail: navigate to tabs/title-detail/1–5 for fixture data. Any other
+ * id resolves to the not-found state (404 from mock). Providers always return a
+ * US fixture set; region is null in mock (no cached user doc) so providers show
+ * the empty-providers state unless you set a region in the emulator.
+ *
+ * 401 in real (non-mock) dev serve: the TMDB api_key in environment.ts is
+ * intentionally empty — spec 0015 wires it for CI/prod; set it manually in
+ * .env.local for live dev, or use this mock configuration instead.
  */
 
 import type { TmdbSearchConfig } from '@vultus/mobile/search';
@@ -25,6 +36,7 @@ const MOCK_RESULTS = [
     title: 'The Grand Illusion',
     release_date: '1937-06-04',
     poster_path: null,
+    vote_average: 8.1,
   },
   {
     id: 2,
@@ -32,6 +44,7 @@ const MOCK_RESULTS = [
     name: 'Breaking Bad',
     first_air_date: '2008-01-20',
     poster_path: null,
+    vote_average: 9.5,
   },
   {
     id: 3,
@@ -39,6 +52,7 @@ const MOCK_RESULTS = [
     title: 'Inception',
     release_date: '2010-07-16',
     poster_path: null,
+    vote_average: 8.8,
   },
   {
     id: 4,
@@ -46,6 +60,7 @@ const MOCK_RESULTS = [
     name: 'The Wire',
     first_air_date: '2002-06-02',
     poster_path: null,
+    vote_average: 9.3,
   },
   {
     id: 5,
@@ -53,8 +68,19 @@ const MOCK_RESULTS = [
     title: 'Parasite',
     release_date: '2019-05-30',
     poster_path: null,
+    vote_average: 8.5,
   },
 ];
+
+const MOCK_PROVIDERS_RESPONSE = {
+  results: {
+    US: {
+      flatrate: [{ provider_name: 'Netflix' }, { provider_name: 'Disney+' }],
+      rent: [{ provider_name: 'Apple TV' }, { provider_name: 'Amazon Video' }],
+      buy: [{ provider_name: 'Vudu' }],
+    },
+  },
+};
 
 function createMockFetch(): typeof fetch {
   const mockFetch: typeof fetch = (input) => {
@@ -64,11 +90,80 @@ function createMockFetch(): typeof fetch {
         : input instanceof URL
           ? input.href
           : input.url;
+
+    // Watch-providers endpoint — must be checked before movie/tv detail
+    if (url.includes('/watch/providers')) {
+      return Promise.resolve(
+        new Response(JSON.stringify(MOCK_PROVIDERS_RESPONSE), { status: 200 }),
+      );
+    }
+
+    // Movie detail: /movie/{id}[?...]
+    const movieMatch = /\/movie\/(\d+)/.exec(url);
+    if (movieMatch) {
+      const id = Number(movieMatch[1]);
+      const fixture = MOCK_RESULTS.find(
+        (r) => r.id === id && r.media_type === 'movie',
+      );
+      if (!fixture) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ status_message: 'Not Found' }), {
+            status: 404,
+          }),
+        );
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            id,
+            title: fixture.title,
+            release_date: fixture.release_date,
+            overview:
+              'A mock movie overview for manual testing. Navigate to ids 1–5 for the fixture titles.',
+            poster_path: null,
+            vote_average: fixture.vote_average,
+            runtime: 112,
+          }),
+          { status: 200 },
+        ),
+      );
+    }
+
+    // TV detail: /tv/{id}[?...]
+    const tvMatch = /\/tv\/(\d+)/.exec(url);
+    if (tvMatch) {
+      const id = Number(tvMatch[1]);
+      const fixture = MOCK_RESULTS.find(
+        (r) => r.id === id && r.media_type === 'tv',
+      );
+      if (!fixture) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ status_message: 'Not Found' }), {
+            status: 404,
+          }),
+        );
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            id,
+            name: fixture.name,
+            first_air_date: fixture.first_air_date,
+            overview:
+              'A mock TV show overview for manual testing. Navigate to ids 1–5 for the fixture titles.',
+            poster_path: null,
+            vote_average: fixture.vote_average,
+          }),
+          { status: 200 },
+        ),
+      );
+    }
+
+    // Search endpoint: /search/multi?query=...
     const queryMatch = /[?&]query=([^&]*)/.exec(url);
     const query = queryMatch
       ? decodeURIComponent(queryMatch[1]).toLowerCase()
       : '';
-
     const delayMs = query.includes('slow') ? 2000 : 200;
 
     return new Promise((resolve) =>
@@ -105,7 +200,13 @@ const mockTmdbConfig: TmdbSearchConfig = {
 
 export const environment = {
   production: false,
-  useEmulators: false,
+  // Emulators on so Firestore uses localhost:8080 rather than real Firebase.
+  // Without a running emulator the SDK enters offline mode: writes buffer in
+  // memory and onSnapshot reflects them — no emulator required for basic testing.
+  useEmulators: true,
+  // Bypasses Firebase Auth: provides a fixture uid directly so all write-guards
+  // receive a non-null uid and Firestore writes are not short-circuited.
+  mockAuthUid: 'mock-user-123',
   firebase: {
     apiKey: 'demo-vultus-not-a-real-key',
     authDomain: 'demo-vultus.firebaseapp.com',

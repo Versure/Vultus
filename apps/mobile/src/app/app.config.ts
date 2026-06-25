@@ -3,6 +3,7 @@ import {
   inject,
   provideAppInitializer,
   provideBrowserGlobalErrorListeners,
+  signal,
 } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { provideIonicAngular } from '@ionic/angular/standalone';
@@ -66,7 +67,15 @@ export const appConfig: ApplicationConfig = {
     // Expose the shell's uid signal to slices via a scope:shared token, so a
     // slice:* lib can read the current uid WITHOUT importing apps/mobile (which
     // Sheriff forbids). See @vultus/shared/domain AUTH_UID.
-    { provide: AUTH_UID, useFactory: () => inject(ShellAuthService).uid },
+    // In mock mode, environment.mockAuthUid is a fixture uid that bypasses real
+    // Firebase Auth so Firestore writes work without a running auth emulator.
+    {
+      provide: AUTH_UID,
+      useFactory: () =>
+        environment.mockAuthUid
+          ? signal<string | null>(environment.mockAuthUid)
+          : inject(ShellAuthService).uid,
+    },
     // TMDB search config (spec 0013) — provided at root from `environment.tmdb`
     // so the search slice can inject it without importing apps/mobile.
     { provide: TMDB_SEARCH_CONFIG, useValue: environment.tmdb },
