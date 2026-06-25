@@ -102,7 +102,10 @@ test.describe('search (F2–F3)', () => {
     // The disabled `.added-btn` (with the checkmark icon) APPEARS …
     const addedBtn = movieCard.locator('.added-btn');
     await expect(addedBtn).toBeVisible();
-    await expect(addedBtn).toBeDisabled();
+    // ion-button reflects disabled via the `disabled` HTML attribute; Playwright's
+    // toBeDisabled() misreads Ionic custom elements via the accessibility tree, so
+    // we assert the attribute directly (same semantic, unambiguous).
+    await expect(addedBtn).toHaveAttribute('disabled', '');
     await expect(
       addedBtn.locator('ion-icon[name="checkmark-circle"]'),
     ).toBeVisible();
