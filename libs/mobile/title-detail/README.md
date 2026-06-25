@@ -34,7 +34,22 @@ across the barrel.
 
 The page reads its `:titleId`, resolves the uid via `AUTH_UID`, and renders the
 view-states: loading skeleton, loaded (cache or live — identical for the same
-data), not-found, empty-providers, and null-region.
+data), not-found, **error** (recoverable), empty-providers, and null-region. The
+loading / not-found / error states are rendered by the shared `@vultus/shared/ui-kit`
+atoms (`vultus-skeleton-hero`, `vultus-empty-state`, `vultus-error-state`); the
+error state's "Try again" re-resolves the title via a retry trigger (`onRetry()`).
+
+### `DetailViewState` (slice-internal) and error handling
+
+`resolveDetail` discriminates failures instead of swallowing them:
+
+- **`loaded`** — cache hit, or live TMDB fallback succeeded.
+- **`not-found`** — a genuine cache-miss **and** a live TMDB **404** (the title
+  does not exist). Only a 404 lands here.
+- **`error`** — a recoverable transient failure: a **Firestore error on the cache
+  read** (no longer silently treated as a cache miss), or a live TMDB failure that
+  is **not** a 404 (network error, 5xx). Surfaced as the retryable error state.
+- **`loading`** — emitted first while resolving.
 
 ## Data access
 

@@ -75,6 +75,13 @@
   --vultus-on-surface-variant: #bbcabf;
   --vultus-text-muted: #bbcabf; // back-compat alias → on-surface-variant
 
+  // Error — design-doc `error` family (docs/design/vultus-design-system.md).
+  // Used by error-state UI (e.g. shared/ui-kit VultusErrorState icon).
+  --vultus-error: #ffb4ab;
+  --vultus-on-error: #690005;
+  --vultus-error-container: #93000a;
+  --vultus-on-error-container: #ffdad6;
+
   // ---------------------------------------------------------------------------
   // Typography — Inter-first stack. The web-font itself is loaded via the Google
   // Fonts link in apps/mobile/src/index.html (a named family alone does NOT load

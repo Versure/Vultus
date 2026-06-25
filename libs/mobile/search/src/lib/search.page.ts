@@ -9,14 +9,17 @@ import {
   IonIcon,
   IonList,
   IonSearchbar,
-  IonSpinner,
   IonTitle,
   IonToolbar,
 } from '@ionic/angular/standalone';
+import {
+  VultusEmptyState,
+  VultusErrorState,
+  VultusSkeletonCard,
+} from '@vultus/shared/ui-kit';
 import { addIcons } from 'ionicons';
 import {
   add,
-  alertCircleOutline,
   checkmarkCircle,
   filmOutline,
   personCircleOutline,
@@ -37,8 +40,10 @@ import type { SearchResultView } from './search.service';
     IonSearchbar,
     IonList,
     IonBadge,
-    IonSpinner,
     IonIcon,
+    VultusSkeletonCard,
+    VultusEmptyState,
+    VultusErrorState,
   ],
   providers: [SearchService],
   templateUrl: './search.page.html',
@@ -53,7 +58,6 @@ export class SearchPage {
       search,
       checkmarkCircle,
       add,
-      alertCircleOutline,
       filmOutline,
       personCircleOutline,
     });

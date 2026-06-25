@@ -1,14 +1,16 @@
 # shared-ui-kit
 
-`@vultus/shared/ui-kit` is Vultus's shared UI foundation. Today it carries the
-**global theming contract** — the "Vultus Design System" tokens as SCSS / CSS
-custom properties. The **authoritative token values live at
-`docs/design/vultus-design-system.md`** (exported from the Stitch project); this
-lib's `theme.scss` is the runtime wiring of that doc. When the design system
-changes, update the doc and re-map `theme.scss` from it — never edit a hex here
-from memory. Future **truly-shared Ionic atom components** will live here too, but
-only once the same atom is needed by **3+ slices** (CLAUDE.md / PLAN §3 — no
-premature extraction; duplication inside a slice is fine).
+`@vultus/shared/ui-kit` is Vultus's shared UI foundation. It carries two things:
+the **global theming contract** — the "Vultus Design System" tokens as SCSS / CSS
+custom properties — and a small set of **standalone Angular atom components** for
+the empty / loading / error states that all mobile slices share. The
+**authoritative token values live at `docs/design/vultus-design-system.md`**
+(exported from the Stitch project); this lib's `theme.scss` is the runtime wiring
+of that doc. When the design system changes, update the doc and re-map
+`theme.scss` from it — never edit a hex here from memory. Atom components live
+here only once the same atom is needed by **3+ slices** (CLAUDE.md / PLAN §3 — no
+premature extraction; duplication inside a slice is fine); the state atoms below
+qualify (watchlist, search, title-detail).
 
 ## Public surface
 
@@ -26,6 +28,10 @@ premature extraction; duplication inside a slice is fine).
     highest), `--vultus-border` (→ `outline-variant` `#3c4a42`) are kept.
   - **Text** → `--ion-text-color` / `--vultus-on-surface` `#dae2fd`,
     `--vultus-on-surface-variant` / `--vultus-text-muted` `#bbcabf`.
+  - **Error** (design-doc `error` family) → `--vultus-error` `#ffb4ab`,
+    `--vultus-on-error` `#690005`, `--vultus-error-container` `#93000a`,
+    `--vultus-on-error-container` `#ffdad6` (consumed by error-state UI such as
+    `VultusErrorState`).
   - **Typography** Inter-first stack → `--vultus-font-family` / `--ion-font-family`
     (the web-font itself is loaded by the Google Fonts link in
     `apps/mobile/src/index.html`), plus a type scale `--vultus-text-*`
@@ -39,8 +45,32 @@ premature extraction; duplication inside a slice is fine).
     `--vultus-status-planned` `#94A3B8` (the watchlist `status` field maps to
     these; later slices consume them).
 - **`src/index.ts`** — the TS barrel. Exports `SHARED_UI_KIT_THEME_PATH`
-  documenting the SCSS entrypoint and keeping the barrel non-empty/lint-clean.
-  Shared atom components will be added here when the 3+-slice rule is met.
+  (documenting the SCSS entrypoint) plus the four state atom components below:
+  `VultusSkeletonCard`, `VultusSkeletonHero`, `VultusEmptyState`,
+  `VultusErrorState`.
+
+## Components
+
+All four are **standalone**, `OnPush`, prefixed `vultus-`, and style themselves
+purely from the `--vultus-*` theme tokens (no hardcoded colors/radii). Import the
+class from `@vultus/shared/ui-kit` and add it to the host component's `imports`.
+
+- **`VultusSkeletonCard`** — `<vultus-skeleton-card [count]="N" />`. Renders
+  `count` (default `1`) shimmering placeholder rows mimicking a watchlist / search
+  result list item (poster + title + meta + status-badge skeletons). Use while a
+  list is loading.
+- **`VultusSkeletonHero`** — `<vultus-skeleton-hero />`. No inputs. A full-bleed
+  hero placeholder plus title / meta / three overview lines / card block,
+  mimicking the title-detail screen while it loads.
+- **`VultusEmptyState`** — `<vultus-empty-state icon="film-outline" title="…"
+[subtitle]="…" />`. Centered icon + title with optional subtitle (hidden when
+  empty). `icon` and `title` are **required** inputs. The **consumer registers the
+  Ionicon** it passes (call `addIcons({ … })` in the host) — this component does
+  not register icons.
+- **`VultusErrorState`** — `<vultus-error-state [message]="…" (retry)="…" />`.
+  Centered error icon + message (default `'Something went wrong'`) + a "Try again"
+  outline button that emits the `retry` output. **Registers its own icons**
+  (`alertCircleOutline`, `refreshOutline`) — consumers need not.
 
 ## Usage
 
@@ -70,5 +100,6 @@ so no TypeScript cross-scope boundary is crossed.
 
 ## Running unit tests
 
-Run `nx test shared-ui-kit` (Vitest). The lib is theming-only today, so the
-suite passes with no tests (`passWithNoTests`).
+Run `nx test shared-ui-kit` (Vitest + Analog). The state atom components are
+covered by co-located `*.component.spec.ts` files using `@analogjs/testing`'s
+`render` against a zoneless TestBed (`src/test-setup.ts`).

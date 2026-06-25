@@ -7,7 +7,7 @@ import {
 } from '@ionic/angular/standalone';
 import { AUTH_UID } from '@vultus/shared/domain/tokens';
 import { type WatchlistItem } from '@vultus/shared/domain';
-import { NEVER, of } from 'rxjs';
+import { NEVER, of, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SyncStateService } from './watchlist.sync-state.service';
 
@@ -191,6 +191,7 @@ describe('WatchlistPage', () => {
   it('renders empty state when the stream emits []', async () => {
     const service = mockService([]);
     const { el } = await setup(service);
+    expect(el.querySelector('vultus-empty-state')).toBeTruthy();
     expect(el.textContent).toContain('Your watchlist is empty');
     expect(el.textContent).toContain('Search for a title to get started');
     expect(el.querySelector('.watchlist-card')).toBeFalsy();
@@ -201,7 +202,18 @@ describe('WatchlistPage', () => {
     const service = mockService([]);
     service.watchlist$ = vi.fn(() => NEVER);
     const { el } = await setup(service);
-    expect(el.querySelector('ion-skeleton-text')).toBeTruthy();
+    expect(el.querySelector('vultus-skeleton-card')).toBeTruthy();
+    expect(el.textContent).not.toContain('Your watchlist is empty');
+  });
+
+  it('shows error state when the stream errors', async () => {
+    const service = mockService([]);
+    service.watchlist$ = vi.fn(() =>
+      throwError(() => new Error('Firestore error')),
+    );
+    const { el } = await setup(service);
+    expect(el.querySelector('vultus-error-state')).toBeTruthy();
+    expect(el.querySelector('vultus-skeleton-card')).toBeFalsy();
     expect(el.textContent).not.toContain('Your watchlist is empty');
   });
 

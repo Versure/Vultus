@@ -145,7 +145,7 @@ test('watchlist alert remove: card -> empty state (F6 runnable part)', async ({
   await alert.locator('button', { hasText: 'Remove' }).first().click();
 
   // The realtime stream emits an empty list -> the watchlist empty state shows.
-  const emptyState = page.locator('.empty-state');
+  const emptyState = page.locator('vultus-empty-state');
   await expect(emptyState).toBeVisible();
   await expect(emptyState).toContainText('Your watchlist is empty');
 });

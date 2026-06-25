@@ -21,41 +21,25 @@
   @if (vm$ | async; as vm) {
   <!-- LOADING -->
   @if (vm.state.kind === 'loading') {
-  <div class="loading-state" data-test="loading">
-    <ion-skeleton-text
-      [animated]="true"
-      class="skeleton-hero"
-    ></ion-skeleton-text>
-    <div class="loading-body">
-      <ion-skeleton-text
-        [animated]="true"
-        class="skeleton-title"
-      ></ion-skeleton-text>
-      <ion-skeleton-text
-        [animated]="true"
-        class="skeleton-meta"
-      ></ion-skeleton-text>
-      @for (line of skeletonLines; track line) {
-      <ion-skeleton-text
-        [animated]="true"
-        class="skeleton-line"
-      ></ion-skeleton-text>
-      }
-      <ion-skeleton-text
-        [animated]="true"
-        class="skeleton-card"
-      ></ion-skeleton-text>
-    </div>
-  </div>
+  <vultus-skeleton-hero data-test="loading" />
   }
 
   <!-- NOT FOUND -->
   @else if (vm.state.kind === 'not-found') {
-  <div class="not-found-state" data-test="not-found">
-    <ion-icon name="film-outline" class="not-found-icon"></ion-icon>
-    <p class="not-found-title">Title not found</p>
+  <vultus-empty-state
+    data-test="not-found"
+    icon="film-outline"
+    title="Title not found"
+    subtitle="This title no longer exists."
+  />
+  <div style="text-align: center; margin-top: 16px">
     <ion-button fill="clear" routerLink="/tabs/watchlist">Go back</ion-button>
   </div>
+  }
+
+  <!-- ERROR (recoverable — network / Firestore failure) -->
+  @else if (vm.state.kind === 'error') {
+  <vultus-error-state data-test="error" (retry)="onRetry()" />
   }
 
   <!-- LOADED -->

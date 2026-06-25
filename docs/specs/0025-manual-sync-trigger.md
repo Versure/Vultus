@@ -633,7 +633,7 @@ Tailored from the PLAN §5 / CLAUDE.md checklist to the four projects touched.
 - [ ] `pnpm nx test functions` passes — the `triggerSync` handler unit tests
       (fake engine + fake `db`; no-auth → `unauthenticated`, deduped per-user
       gather, `{ syncedAt }`, **no `users/**`/`system/sync`write**, partial-error
-    resolves) green; the existing`syncTitles` tests still pass.
+  resolves) green; the existing`syncTitles` tests still pass.
 - [ ] `pnpm nx test mobile-watchlist` passes — `SyncStateService` cooldown unit
       tests + the `WatchlistPage` button-state component tests green (mocked
       `TRIGGER_SYNC`/`ToastController`/`localStorage`; no network/emulator).
@@ -659,9 +659,9 @@ Tailored from the PLAN §5 / CLAUDE.md checklist to the four projects touched.
       params declared by name, read via `.value()` at runtime, never `.env.local`,
       never logged; (b) `triggerSync` writes **only** `title-cache` (via the engine
       port) — **no `users/**`write, no`system/sync`write**; (c) the mobile slice
-    reaches the callable **only** via the`TRIGGER_SYNC`token (no
-   `@angular/fire/functions`/ no`apps/mobile`import) and reaches the uid only
-    via`AUTH_UID`; (d) **no cross-slice / cross-scope import** anywhere.
+  reaches the callable **only** via the`TRIGGER_SYNC`token (no
+ `@angular/fire/functions`/ no`apps/mobile`import) and reaches the uid only
+  via`AUTH_UID`; (d) **no cross-slice / cross-scope import** anywhere.
 - [ ] **`sheriff.config.ts`, `firestore.rules`, `firestore.indexes.json` are NOT
       modified** (existing tags + rules already cover this — verified, recorded in
       the PR). `firebase.json` **is** modified (the Functions emulator entry).

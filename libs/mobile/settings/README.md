@@ -33,8 +33,20 @@ The page exposes:
   toggles are a later spec.
 
 Writes happen on user interaction (no Save button). The form is render-gated on
-`load()` (an `ion-spinner` shows until the doc resolves). `fcmTokens` is never
-written beyond the `[]` default (FCM registration is PLAN §6 item 21).
+`load()`:
+
+- **Loading** (default): a form-shaped skeleton (two stacked
+  `ion-skeleton-text` placeholder cards) shows until the doc resolves.
+- **Loaded** (`loaded()` true): the Region / Notifications cards render.
+- **Error** (`loadFailed()` true): if `load()` throws (e.g. Firestore offline)
+  the page renders `VultusErrorState` (from `@vultus/shared/ui-kit`) with a
+  retry button wired to `SettingsService.retryLoad()`. `loadFailed` is checked
+  **before** `loaded`, so a failure never leaves the skeleton hanging.
+
+`SettingsService` exposes `loaded`, `loadFailed` (readonly signals) and
+`retryLoad()` (resets `loadFailed` and re-runs `load()`) for this gate.
+`fcmTokens` is never written beyond the `[]` default (FCM registration is
+PLAN §6 item 21).
 
 The current uid is obtained via the `scope:shared` `AUTH_UID` injection token
 (provided at the app root by the shell), so this slice never imports
