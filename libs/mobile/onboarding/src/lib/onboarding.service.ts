@@ -50,33 +50,38 @@ export class OnboardingService {
    */
   async complete(region: Region): Promise<void> {
     const uid = this.uid();
-    if (uid === null) {
-      // No session yet — do not touch Firestore or set the flag on a null path.
-      return;
+
+    if (uid !== null) {
+      // Best-effort Firestore write + push registration — neither must block the
+      // completion flag below. A failure here (network down, rules, token not yet
+      // propagated) is recoverable: the user doc can be written on next launch.
+      try {
+        const ref = doc(this.firestore, userPath(uid));
+        await setDoc(
+          ref,
+          userToData({
+            region,
+            notificationPrefs: {
+              episodeAired: true,
+              movieAvailable: true,
+              cameToPlatform: true,
+            },
+            fcmTokens: [],
+          }),
+          { merge: true },
+        );
+
+        if (Capacitor.isNativePlatform()) {
+          await this.registerForPush(uid);
+        }
+      } catch {
+        // Swallow: Firestore/push errors must never block onboarding completion.
+      }
     }
 
-    const ref = doc(this.firestore, userPath(uid));
-
-    // Merge so an existing doc's fcmTokens (and any other fields) survive.
-    await setDoc(
-      ref,
-      userToData({
-        region,
-        notificationPrefs: {
-          episodeAired: true,
-          movieAvailable: true,
-          cameToPlatform: true,
-        },
-        fcmTokens: [],
-      }),
-      { merge: true },
-    );
-
-    if (Capacitor.isNativePlatform()) {
-      await this.registerForPush(uid);
-    }
-
-    // Always last, regardless of push success/failure.
+    // Always set last — regardless of uid availability, Firestore outcome, or
+    // push outcome. This ensures the user is never permanently stuck on the
+    // onboarding screen due to a transient auth or network failure.
     await Preferences.set({ key: ONBOARDING_DONE_KEY, value: 'true' });
   }
 

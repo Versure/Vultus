@@ -62,7 +62,9 @@ captures/
 .cxx/
 
 # Google Services (e.g. APIs or Firebase)
-# google-services.json
+# Untracked + gitignored going forward (spec 0026). Provisioned per-machine from
+# the Firebase console and in CI from the base64 GOOGLE_SERVICES_JSON secret.
+google-services.json
 
 # Freeline
 freeline.py

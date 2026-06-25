@@ -30,7 +30,7 @@
           "fileReplacements": [
             {
               "replace": "apps/mobile/src/environments/environment.ts",
-              "with": "apps/mobile/src/environments/environment.prod.ts"
+              "with": "apps/mobile/src/environments/environment.generated.ts"
             }
           ],
           "budgets": [
@@ -127,6 +127,25 @@
           "pnpm nx run mobile:sync",
           "pnpm nx run mobile:open"
         ]
+      }
+    },
+    "inject-env": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node tools/scripts/inject-mobile-env.mjs"
+      }
+    },
+    "android-debug": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "node tools/scripts/inject-mobile-env.mjs",
+          "node tools/scripts/inject-mobile-env.mjs --check-native",
+          "pnpm nx run mobile:build",
+          "npx cap sync android",
+          "node tools/scripts/gradlew.mjs assembleDebug"
+        ],
+        "parallel": false
       }
     },
     "sync": {
