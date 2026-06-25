@@ -96,7 +96,7 @@ import {
   clearAll, // () => Promise<void>
   routeTmdb, // (page, fixtureName?='tmdb-search-multi.json') => Promise<unknown>
   // plus low-level: clearFirestore, clearAuth, writeDocument, encodeFields, firestoreHost, authHost, PROJECT_ID
-} from '../support';
+} from './support';
 ```
 
 (`src/support.ts` is a plain re-export **file**, not a barrel `index.ts` — under
