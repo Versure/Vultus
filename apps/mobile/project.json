@@ -143,7 +143,7 @@
           "node tools/scripts/inject-mobile-env.mjs --check-native",
           "pnpm nx run mobile:build",
           "npx cap sync android",
-          "cd android && ./gradlew assembleDebug"
+          "node tools/scripts/gradlew.mjs assembleDebug"
         ],
         "parallel": false
       }
