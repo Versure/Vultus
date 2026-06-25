@@ -108,6 +108,16 @@
         "spa": true
       }
     },
+    "android": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "pnpm nx run mobile:build",
+          "pnpm nx run mobile:sync",
+          "pnpm nx run mobile:open"
+        ]
+      }
+    },
     "sync": {
       "executor": "nx:run-commands",
       "options": {
