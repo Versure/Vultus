@@ -12,6 +12,7 @@ import {
   IonHeader,
   IonIcon,
   IonSkeletonText,
+  IonTitle,
   IonToolbar,
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
@@ -21,6 +22,7 @@ import {
   documentTextOutline,
   filmOutline,
   peopleOutline,
+  personCircleOutline,
   star,
   timeOutline,
   trashOutline,
@@ -70,6 +72,7 @@ const EMPTY_PROVIDERS: GroupedProviders = { flatrate: [], rent: [], buy: [] };
     IonBackButton,
     IonContent,
     IonButton,
+    IonTitle,
     IonIcon,
     IonSkeletonText,
     IonActionSheet,
@@ -169,6 +172,7 @@ export class TitleDetailPage {
       timeOutline,
       documentTextOutline,
       peopleOutline,
+      personCircleOutline,
       addCircleOutline,
       trashOutline,
     });
