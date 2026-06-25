@@ -190,7 +190,7 @@ describe('OnboardingService', () => {
     });
   });
 
-  it('null-uid guard: no Firestore access', async () => {
+  it('null-uid: skips Firestore but still sets completion flag', async () => {
     const service = createService(null);
 
     await service.complete('DE');
@@ -198,7 +198,23 @@ describe('OnboardingService', () => {
     expect(setDocMock).not.toHaveBeenCalled();
     expect(updateDocMock).not.toHaveBeenCalled();
     expect(getDocMock).not.toHaveBeenCalled();
-    expect(preferencesSetMock).not.toHaveBeenCalled();
+    // Even without a uid the user must be able to proceed — the flag is always set.
+    expect(preferencesSetMock).toHaveBeenCalledWith({
+      key: ONBOARDING_DONE_KEY,
+      value: 'true',
+    });
+  });
+
+  it('Firestore write error never blocks completion', async () => {
+    setDocMock.mockRejectedValue(new Error('firestore unavailable'));
+    const service = createService(UID);
+
+    await expect(service.complete('NL')).resolves.toBeUndefined();
+
+    expect(preferencesSetMock).toHaveBeenCalledWith({
+      key: ONBOARDING_DONE_KEY,
+      value: 'true',
+    });
   });
 
   it('every write targets users/{uid}', async () => {
