@@ -5,13 +5,38 @@
 // ui-kit theme.scss for this slice.
 
 // -----------------------------------------------------------------------------
-// Header — transparent pushed sub-page bar with only the back button.
+// Header — matches the standard app bar used on search / watchlist / settings.
 // -----------------------------------------------------------------------------
-.detail-header ion-toolbar {
-  --background: transparent;
-  --border-width: 0;
-  --box-shadow: none;
-  --color: var(--vultus-on-surface);
+ion-header {
+  ion-toolbar {
+    --background: var(--vultus-surface);
+    --border-width: 0 0 1px 0;
+    --border-color: var(--vultus-outline-variant);
+    --border-style: solid;
+    --box-shadow: none;
+
+    ion-title {
+      padding-inline: 16px;
+    }
+  }
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ion-color-primary);
+  font-family: var(--vultus-font-family);
+  font-weight: 700;
+  font-size: 1.125rem;
+}
+
+.brand-icon {
+  font-size: 1.25rem;
+  color: var(--ion-color-primary);
+  flex-shrink: 0;
+  position: relative;
+  top: -1px;
 }
 
 ion-content {
