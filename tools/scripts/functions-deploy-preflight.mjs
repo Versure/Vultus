@@ -14,20 +14,25 @@
  *
  * Checks (each fails fast with an actionable message):
  *   1. Artifact present — package.json, pnpm-lock.yaml, main.js.
- *   2. Required runtime deps declared — @google-cloud/functions-framework (the
+ *   2. Param env file (.env.vultus-cab62) present in dist — staged here from
+ *      apps/functions/ (the Nx build's dotfile asset glob silently skips it,
+ *      fast-glob ignores dotfiles), so firebase deploy resolves the non-secret
+ *      TRAKT_CLIENT_ID defineString param non-interactively. A missing *source*
+ *      warns (artifact-only runs are valid); a missing *dist* file fails fast.
+ *   3. Required runtime deps declared — @google-cloud/functions-framework (the
  *      pnpm buildpack needs it explicitly), firebase-admin, firebase-functions.
- *   3. pnpm-workspace.yaml ships an allowBuilds map — without it Cloud Build's
+ *   4. pnpm-workspace.yaml ships an allowBuilds map — without it Cloud Build's
  *      pnpm exits 1 with ERR_PNPM_IGNORED_BUILDS. (Static check, so it holds
  *      regardless of the local pnpm major.)
- *   4. `pnpm install --frozen-lockfile` succeeds in dist — the pruned lockfile
+ *   5. `pnpm install --frozen-lockfile` succeeds in dist — the pruned lockfile
  *      is installable.
- *   5. firebase-admin satisfies firebase-functions' peer range — reproduces the
+ *   6. firebase-admin satisfies firebase-functions' peer range — reproduces the
  *      npm ERESOLVE that Cloud Build hits but pnpm's lenient resolver hides.
- *   6. main.js loads — `require(main.js)`, exactly what the gen2 manifest
+ *   7. main.js loads — `require(main.js)`, exactly what the gen2 manifest
  *      discovery does, catching module-resolution failures.
  */
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { copyFileSync, existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 
@@ -60,7 +65,49 @@ for (const f of ['package.json', 'pnpm-lock.yaml', 'main.js']) {
 }
 ok('artifact present (package.json, pnpm-lock.yaml, main.js)');
 
-// 2. Required runtime deps declared.
+// Stage the TRAKT_CLIENT_ID param file into dist. The Nx production build lists
+// it as a dotfile asset glob, but fast-glob skips dotfiles by default, so the
+// build silently never copies it — staging here (on both CI and local deploy
+// paths) is the durable fix. A missing *source* is only a warning: preflight may
+// legitimately validate the artifact bundle with no intent to deploy. The dist
+// presence check below is the hard gate.
+const ENV_FILE = '.env.vultus-cab62';
+const SRC = resolve(process.cwd(), 'apps/functions', ENV_FILE);
+const dest = join(DIST, ENV_FILE);
+if (existsSync(SRC)) {
+  copyFileSync(SRC, dest);
+  ok('staged .env.vultus-cab62 into dist (TRAKT_CLIENT_ID param file)');
+} else {
+  console.warn(
+    `  ! ${SRC} not found — skipping stage. It carries the non-secret TRAKT_CLIENT_ID param; ` +
+      'in CI it is produced by the `Write functions env (TRAKT_CLIENT_ID)` step from ' +
+      'vars.TRAKT_CLIENT_ID, and locally it is the gitignored project env file. ' +
+      'A real `firebase deploy` will fail without it.',
+  );
+}
+
+// 2. Param env file present in dist (the loud guard). firebase deploy reads
+// TRAKT_CLIENT_ID (a non-secret defineString param) from this dotenv file in the
+// functions source dir, which firebase.json points at dist/apps/functions. The
+// Nx production build's dotfile asset glob does NOT copy it (fast-glob skips
+// dotfiles), so it is staged above / produced by the CI write-step. If it is
+// absent now, the non-interactive deploy aborts with "no value for ...
+// TRAKT_CLIENT_ID" — fail here instead, loudly.
+if (!existsSync(dest)) {
+  fail(
+    `${dest} is missing. firebase deploy reads TRAKT_CLIENT_ID (a non-secret defineString param) ` +
+      'from this file in the functions source dir (dist/apps/functions per firebase.json). ' +
+      "The Nx production build's dotfile asset glob does NOT copy it (fast-glob skips dotfiles); " +
+      'it is staged from apps/functions/.env.vultus-cab62 by this preflight, normally produced ' +
+      'by the CI `Write functions env (TRAKT_CLIENT_ID)` step (from vars.TRAKT_CLIENT_ID) / ' +
+      'locally the gitignored file. Without it the non-interactive deploy aborts.',
+  );
+}
+ok(
+  '.env.vultus-cab62 present in dist (TRAKT_CLIENT_ID resolves non-interactively)',
+);
+
+// 3. Required runtime deps declared.
 const pkg = JSON.parse(readFileSync(join(DIST, 'package.json'), 'utf8'));
 const deps = pkg.dependencies ?? {};
 for (const d of REQUIRED_DEPS) {
@@ -75,7 +122,7 @@ for (const d of REQUIRED_DEPS) {
 }
 ok(`required runtime dependencies declared (${REQUIRED_DEPS.join(', ')})`);
 
-// 3. pnpm-workspace.yaml ships an allowBuilds map.
+// 4. pnpm-workspace.yaml ships an allowBuilds map.
 const wsPath = join(DIST, 'pnpm-workspace.yaml');
 if (!existsSync(wsPath)) {
   fail(
@@ -90,8 +137,8 @@ if (!/^\s*allowBuilds:/m.test(readFileSync(wsPath, 'utf8'))) {
 }
 ok('pnpm-workspace.yaml ships an allowBuilds map');
 
-// 4. Frozen install in dist — proves the pruned lockfile installs and populates
-// node_modules for checks 5–6 (and for Firebase's gen2 local discovery on a real
+// 5. Frozen install in dist — proves the pruned lockfile installs and populates
+// node_modules for checks 6–7 (and for Firebase's gen2 local discovery on a real
 // deploy). The shipped pnpm-workspace.yaml carries `packages: ['.']` so this is
 // valid under both the repo's pinned pnpm 9 (CI) and Cloud Build's pnpm 10+.
 try {
@@ -103,7 +150,7 @@ try {
   fail(`pnpm install --frozen-lockfile failed in dist:\n${out}`);
 }
 
-// 5. firebase-admin satisfies firebase-functions' peer range.
+// 6. firebase-admin satisfies firebase-functions' peer range.
 const distRequire = createRequire(join(DIST, 'noop.js'));
 const rootRequire = createRequire(join(process.cwd(), 'noop.js'));
 // Read package.json directly through the top-level node_modules symlinks —
@@ -153,7 +200,7 @@ try {
   );
 }
 
-// 6. main.js loads (the gen2 discovery step) — require, exactly as firebase-tools does.
+// 7. main.js loads (the gen2 discovery step) — require, exactly as firebase-tools does.
 try {
   distRequire(join(DIST, 'main.js'));
   ok('main.js loads (gen2 discovery)');

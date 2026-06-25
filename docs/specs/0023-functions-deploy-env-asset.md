@@ -2,7 +2,7 @@
 number: 0023
 slug: functions-deploy-env-asset
 title: Fix the CI Functions deploy — stage the .env.vultus-cab62 param file into dist in preflight and guard it loudly
-status: approved
+status: done
 slices: []
 scopes: [scope:functions]
 created: 2026-06-25
@@ -142,8 +142,8 @@ deployed `syncTitles` HTTP contract are **fixed input**, unchanged. The only
   `dist/apps/functions/.env.vultus-cab62` **exists** (the param file Firebase reads
   to resolve `TRAKT_CLIENT_ID` non-interactively). The script gains one numbered
   check and a staging step; its CLI surface (`node
-  tools/scripts/functions-deploy-preflight.mjs`, invoked via `nx run
-  functions:deploy-preflight`) and exit semantics (0 = all pass, 1 = first fail)
+tools/scripts/functions-deploy-preflight.mjs`, invoked via `nx run
+functions:deploy-preflight`) and exit semantics (0 = all pass, 1 = first fail)
   are unchanged.
 - The env filename is `.env.<projectId>` with `projectId = vultus-cab62` (the
   single deploy target, per `setGlobalOptions` / `firebase.json`). The script may
@@ -179,7 +179,7 @@ the staged file is guaranteed present for everything downstream:
   (`SRC = resolve(process.cwd(), 'apps/functions/.env.vultus-cab62')`,
   `dest = join(DIST, '.env.vultus-cab62')`). If `existsSync(SRC)`, `copyFileSync`
   it to `dest` (import `copyFileSync` from `node:fs`) and `ok('staged
-  .env.vultus-cab62 into dist (TRAKT_CLIENT_ID param file)')`. If the **source
+.env.vultus-cab62 into dist (TRAKT_CLIENT_ID param file)')`. If the **source
   does not exist**, emit a **warning, not a fail** — print a clear advisory (e.g.
   `console.warn`) that `apps/functions/.env.vultus-cab62` was not found at the
   source, that it normally carries the non-secret `TRAKT_CLIENT_ID` param and is
@@ -187,7 +187,7 @@ the staged file is guaranteed present for everything downstream:
   `vars.TRAKT_CLIENT_ID` (and, locally, is the gitignored project env file), and
   that a real deploy will fail without it. **Rationale (pin in the spec/PR):**
   preflight can legitimately be run purely to validate the artifact bundle without
-  intending to deploy, so a missing *source* is a warning; the **dist presence**
+  intending to deploy, so a missing _source_ is a warning; the **dist presence**
   check below is the hard gate.
 - **New numbered check (the loud guard) — "param env file present in dist".**
   After the stage step, `if (!existsSync(dest)) fail(...)`. The message must
@@ -198,7 +198,7 @@ the staged file is guaranteed present for everything downstream:
   copy it** (fast-glob skips dotfiles), and that it is normally produced by the CI
   `Write functions env (TRAKT_CLIENT_ID)` step (from `vars.TRAKT_CLIENT_ID`) /
   locally the gitignored file. On success: `ok('.env.vultus-cab62 present in dist
-  (TRAKT_CLIENT_ID resolves non-interactively)')`.
+(TRAKT_CLIENT_ID resolves non-interactively)')`.
 - **Renumber** the trailing comment headers if the implementer numbers the new
   check inline (the existing checks are 1–6; the staging/guard slots logically as
   "1b"/"2" or a renumber to 7 checks — pick whichever keeps the file's numbered
@@ -253,7 +253,7 @@ Nx `project.json` asset edit — there is **no slice/component/e2e** surface.
   guard logic. The preflight is currently a top-level ESM script (side-effecting,
   not exported functions), so to make it testable **refactor the stage/guard into
   a small pure-ish exported helper** (e.g. `export function stageEnvFile(distDir,
-  srcEnvPath)` returning `{ staged: boolean }` and a guard that throws/returns when
+srcEnvPath)` returning `{ staged: boolean }` and a guard that throws/returns when
   the dist file is absent) that the top-level script calls, then unit-test:
   (a) source present → file copied into the dist dir and reported staged;
   (b) source absent → no throw, warning path (no copy);
@@ -266,8 +266,7 @@ Nx `project.json` asset edit — there is **no slice/component/e2e** surface.
   **Caution:** the current script is **side-effecting at import** — it runs all
   checks and may `process.exit(1)` on load — so any extracted `stageEnvFile`-style
   helper must be importable **without triggering the top-level preflight run** (e.g.
-  guard the script body behind an `if (import.meta.url === \`file://${process.argv[1]}\`)`
-  main check, or split the helper into a sibling `.mjs` module). Otherwise a Vitest
+  guard the script body behind an `if (import.meta.url === \`file://${process.argv[1]}\`)`main check, or split the helper into a sibling`.mjs` module). Otherwise a Vitest
   import executes the whole preflight against the real cwd. (As hedged below, the
   integration gate remains the primary verification.)
 - **Integration verification (the concrete green gate — agent CAN run in-session):**
@@ -276,7 +275,7 @@ Nx `project.json` asset edit — there is **no slice/component/e2e** surface.
      (PowerShell: `Set-Content` / a here-string — the value is a non-secret
      placeholder, safe to write).
   2. Remove `dist/apps/functions` (e.g. `Remove-Item -Recurse -Force
-     dist/apps/functions` if present) to force a fresh build, mirroring CI.
+dist/apps/functions` if present) to force a fresh build, mirroring CI.
   3. Run `pnpm nx run functions:deploy-preflight` (it builds + prunes first).
   4. Assert it **passes** and that `dist/apps/functions/.env.vultus-cab62`
      **exists** afterward (the staged file).
@@ -322,7 +321,7 @@ Tailored from the PLAN §5 checklist. The `functions` project **is** affected
       PR notes this is intentional placement.
 - [ ] Integration gate green: from a **cleaned** `dist`, with a dummy
       `apps/functions/.env.vultus-cab62` present, `pnpm nx run
-      functions:deploy-preflight` **passes** and `dist/apps/functions/.env.vultus-cab62`
+    functions:deploy-preflight` **passes** and `dist/apps/functions/.env.vultus-cab62`
       **exists** afterward.
 - [ ] Unit test (if added per the recommendation) green; if the testable-refactor
       was deliberately skipped, the PR records why and relies on the integration
@@ -351,7 +350,7 @@ Tailored from the PLAN §5 checklist. The `functions` project **is** affected
 - **Missing-source = warning, not fail (Decision 2 nuance).** Running preflight to
   validate only the artifact bundle (no intent to deploy, no source env file)
   remains valid and warns rather than fails; the **dist-presence** check is the
-  hard gate. If a future caller expects preflight to *guarantee* a deployable env
+  hard gate. If a future caller expects preflight to _guarantee_ a deployable env
   on a machine that never wrote the source file, that expectation is wrong by
   design — the warning explains how the file is produced.
 - **Testability refactor is minor scope creep.** Exporting a small helper to unit
