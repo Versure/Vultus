@@ -131,10 +131,12 @@ the user re-onboards — desired behaviour.
     - **Settings tab behaviour** — unchanged; region/notification edits post-onboard
       continue to go through the settings slice (spec 0011). This spec does **not**
       touch `libs/mobile/settings`.
-    - **Emulator-backed e2e** — descoped (PLAN §6 item 20 pattern, consistent with
-      0010/0011/0019). This PR's gate is **unit + component + build**; no `ci.yml` /
-      `playwright.config.ts` change. (A `mock`-profile manual smoke is encouraged, not
-      a gate — see Test plan.)
+    - **Emulator-backed e2e for the navigation/region flows IS in scope** (three flows —
+      F-onboard-1/2/3 — in a new `apps/mobile-e2e/src/onboarding.spec.ts`; see Test plan).
+      Only the **native FCM path** (the push-permission dialog + the token write) is
+      **device-only** — it has no browser runtime and is never exercised in e2e. (A
+      `mock`-profile manual smoke is also encouraged for visual verification — see Test
+      plan.)
     - **iOS** (no `ios/` platform — PLAN §1) and **multi-device token rotation /
       token-removal-on-sign-out** (only the additive `arrayUnion` write here).
     - **A skippable / "remind me later" onboarding, analytics, or A/B variants.**
@@ -524,17 +526,43 @@ infrastructure-engineer owns the dependency add + `cap sync`.
      final verify after 3–4, but its file write conflicts with nothing and may be done
      concurrently.
 
-6. **[sequential] Tests. Depends on tasks 3–5.** frontend-engineer / qa-runner.
+6. **[sequential] Unit + component tests. Depends on tasks 3–5.** frontend-engineer /
+   qa-runner.
    - Service unit tests, guard unit tests, page component test (Test plan).
    - Files: `libs/mobile/onboarding/src/lib/onboarding.service.spec.ts`,
      `libs/mobile/onboarding/src/lib/onboarding.guard.spec.ts`,
      `libs/mobile/onboarding/src/lib/onboarding.page.spec.ts`.
 
-(All slice work is under `libs/mobile/onboarding/**`; the only file outside it is
-`apps/mobile/src/app/app.routes.ts` (task 5) and the root dep files (task 1). No
-`sheriff.config.ts`, `firestore.rules`, `firestore.indexes.json`, `libs/mobile/settings`,
-or `scope:functions` file is touched. The single parallel manifest
-(`app.routes.ts`) is disjoint from every other task's files.)
+7. **[parallel] e2e spec + spec-0019 backward-compat fix. Depends on tasks 3–5 (the
+   guard + `/onboarding` route must be wired so the flows can run).**
+   frontend-engineer / qa-runner.
+   - Author `apps/mobile-e2e/src/onboarding.spec.ts` with the three flows
+     **F-onboard-1 / F-onboard-2 / F-onboard-3** (Test plan): first-launch redirect to
+     `/onboarding`, pick "DE" → complete → `/tabs/watchlist` + emulator `users/{uid}`
+     with `region: 'DE'` + `CapacitorStorage.onboarding_done = 'true'`, and flag-pre-set
+     → straight to `/tabs/watchlist`. `onboarding.spec.ts` leaves the flag unset (or
+     clears it) for the first-launch flows. Native FCM (dialog + token write) is **not**
+     exercised (device-only).
+   - **Backward-compat fix:** update the existing spec-0019 e2e files that boot and
+     expect `/tabs/watchlist` so they pre-set `localStorage.setItem(
+     'CapacitorStorage.onboarding_done', 'true')` in their `beforeEach` (or set it by
+     default in `global-setup.ts` / a shared support helper) — at minimum
+     `apps/mobile-e2e/src/app.boot.spec.ts`, plus any other spec-0019 file that boots
+     without pre-setting the flag. This keeps the spec-0019 suite green now that boot
+     redirects to `/onboarding` until the flag is set.
+   - **File manifest: `apps/mobile-e2e/src/**`** — concretely
+     `apps/mobile-e2e/src/onboarding.spec.ts` (new) plus the spec-0019 files needing the
+     fix (at least `apps/mobile-e2e/src/app.boot.spec.ts`, and `global-setup.ts` /
+     support helper if the default-baseline approach is used). **Disjoint** from task 6
+     (`libs/mobile/onboarding/**/*.spec.ts`) and tasks 2–5 — `apps/mobile-e2e/src/` only,
+     **no `libs/mobile/onboarding/` files** — so it runs **parallel** to task 6.
+
+(All slice work is under `libs/mobile/onboarding/**`; the files outside it are
+`apps/mobile/src/app/app.routes.ts` (task 5), the root dep files (task 1), and the
+`apps/mobile-e2e/src/**` e2e files (task 7). No `sheriff.config.ts`, `firestore.rules`,
+`firestore.indexes.json`, `libs/mobile/settings`, or `scope:functions` file is touched.
+The two parallel manifests — `app.routes.ts` (task 5) and `apps/mobile-e2e/src/**`
+(task 7) — are disjoint from each other and from the slice-internal tasks.)
 
 ## Test plan
 
@@ -589,18 +617,50 @@ mirroring the spec-0011 page test; `OnboardingService` mocked, `Router` mocked):
   resolve, navigates to `/tabs/watchlist`; the button is disabled while in flight
   (no double-fire).
 
-**e2e:** **descoped to PLAN §6 item 20** (decision 10). No new Playwright spec; no
-change to `apps/mobile-e2e`, `playwright.config.ts`, or `ci.yml`. A `mock`-profile
-manual smoke (serve `--configuration=mock`, confirm the page renders and "Get
-started" routes to the tabs) is encouraged for visual verification but is **not** a
-gate. The full native first-launch flow (real permission dialog + token write +
+**e2e — `apps/mobile-e2e/src/onboarding.spec.ts`** (Playwright, emulator-backed,
+new file). `@capacitor/preferences` falls back to `localStorage` on web, so Playwright
+can read/write the completion flag via `page.evaluate`. The key Capacitor uses is
+prefixed: **`CapacitorStorage.onboarding_done`**. That makes the navigation/region
+flows testable in browser mode without native plugins. Three flows:
+
+- **F-onboard-1** (`empty` fixture, **no** localStorage flag set): Boot → URL is
+  `/onboarding`; the welcome header, the region `ion-select`, and the "Get started"
+  `ion-button` render. Asserts the onboarding guard is active (no flag → redirect).
+- **F-onboard-2** (`empty` fixture, **no** localStorage flag): Pick region **"DE"** in
+  the `ion-select`, tap "Get started" → URL becomes `/tabs/watchlist`; `users/{uid}`
+  exists in the Firestore emulator with `region: 'DE'`; `localStorage` has
+  `CapacitorStorage.onboarding_done = 'true'`. (The FCM permission dialog + token write
+  are **device-only** — **not** asserted here.)
+- **F-onboard-3** (`empty` or `seeded` fixture, `CapacitorStorage.onboarding_done =
+  'true'` pre-set in `beforeEach` via
+  `page.evaluate(() => localStorage.setItem('CapacitorStorage.onboarding_done', 'true'))`):
+  Boot → URL is `/tabs/watchlist` directly; **no** redirect to `/onboarding`.
+
+`onboarding.spec.ts` explicitly **does NOT** set the flag (or clears it) before
+F-onboard-1 / F-onboard-2 so it exercises the first-launch path. **Native FCM parts
+(the permission dialog and the token write) remain device-only** — they are never
+exercised in e2e (browser mode has no native runtime); the e2e flows assert only the
+navigation + region-write + completion-flag behaviour.
+
+**Backward-compat note (BLOCKING for green CI):** once the onboarding guard lands, **all
+existing spec-0019 e2e tests** (which currently assume boot → `/tabs/watchlist`) will
+break, because boot now redirects to `/onboarding` until the flag is set. The
+implementer **must** pre-set `localStorage.setItem('CapacitorStorage.onboarding_done',
+'true')` in those tests' `beforeEach` setup — or, preferably, set it as the default
+baseline for all non-onboarding specs in `global-setup.ts` / a shared support helper —
+so the spec-0019 suite stays green. The new `onboarding.spec.ts` is the **only** spec
+that leaves the flag unset (or clears it), to test the first-launch path.
+
+A `mock`-profile manual smoke (serve `--configuration=mock`, confirm the page renders
+and "Get started" routes to the tabs) is also encouraged for visual verification. The
+full native first-launch flow (real permission dialog + token write +
 `Preferences`-gated reboot) is device-only and human-verified.
 
 ## Definition of done
 
-Tailored from PLAN §5. Green gate is **lint/Sheriff + unit + component + build**
-(what `ci.yml` runs); emulator-backed e2e + the native permission/token path are
-out of CI scope (decision 10).
+Tailored from PLAN §5. Green gate is **lint/Sheriff + unit + component + build + e2e**
+(what `ci.yml` runs) — the navigation/region e2e flows are now in scope (decision 10).
+Only the **native permission/token path** is out of CI scope (device-only).
 
 - [ ] `pnpm nx run-many -t lint test -p mobile-onboarding mobile` passes **with
       Sheriff active** (lint includes Sheriff): the onboarding slice imports
@@ -623,6 +683,17 @@ out of CI scope (decision 10).
 - [ ] **Component test** asserts the page renders the region select + notifications
       control + "Get started", and that "Get started" calls `complete` once and routes
       to `/tabs/watchlist` (PLAN §5: component tests for non-trivial UI).
+- [ ] **e2e:** `apps/mobile-e2e/src/onboarding.spec.ts` exists with the three flows
+      **F-onboard-1 / F-onboard-2 / F-onboard-3**. **F-onboard-1** (first-launch boot →
+      `/onboarding` with header + region select + "Get started") and **F-onboard-3**
+      (flag pre-set → straight to `/tabs/watchlist`, no redirect) are **green**;
+      **F-onboard-2** passes (pick "DE" → complete → `/tabs/watchlist`, emulator
+      `users/{uid}` created with `region: 'DE'`, `CapacitorStorage.onboarding_done =
+      'true'`). All **pre-existing spec-0019 e2e flows (F1–F8 across `app.boot.spec.ts`,
+      `search.spec.ts`, `settings.spec.ts`, `watchlist-refresh.spec.ts`)** remain green
+      after the backward-compat fix (the flag pre-set in `beforeEach` / `global-setup`).
+      The **FCM flows (permission dialog + token write) are explicitly device-only — NOT
+      a CI gate**.
 - [ ] `@capacitor/preferences` is added to the root `package.json` at a pinned,
       Capacitor-8-compatible version; `pnpm-lock.yaml` updated; `cap sync android`
       resolves all plugins with no error (the new plugin's native module is present).
@@ -649,7 +720,10 @@ out of CI scope (decision 10).
       its Capacitor-8 compatibility check + the `cap sync` plugin-resolution result, the
       `fcmTokens` `FcmToken[]`-vs-`string[]` resolution (Risks), the writes-only-to-
       `users/{uid}` / no-cross-slice / no-`scope:functions` / push-never-blocks boundary
-      confirmations, and that **emulator-backed e2e is descoped to PLAN §6 item 20**.
+      confirmations, the **e2e result** (F-onboard-1/2/3 green + the spec-0019 suite still
+      green after the `CapacitorStorage.onboarding_done` backward-compat fix), and that
+      **the native FCM path (permission dialog + token write) is device-only, not a CI
+      gate**.
 
 ## Risks
 
