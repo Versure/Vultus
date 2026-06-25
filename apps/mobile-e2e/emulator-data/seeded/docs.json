@@ -1,0 +1,30 @@
+{
+  "description": "Seeded fixture (spec 0019 flows F4-F8): the users/{uid} profile doc (region NL) plus ONE TV watchlist entry (Breaking Bad, tmdbId 2, status planned). {uid} is substituted at seed time with the resolved anon uid (R3). addedAt uses the __timestamp marker so the encoder writes a Firestore timestampValue.",
+  "docs": [
+    {
+      "path": "users/{uid}",
+      "data": {
+        "region": "NL",
+        "notificationPrefs": {
+          "episodeAired": true,
+          "movieAvailable": true,
+          "cameToPlatform": true
+        },
+        "fcmTokens": []
+      }
+    },
+    {
+      "path": "users/{uid}/watchlist/2",
+      "data": {
+        "type": "tv",
+        "tmdbId": 2,
+        "traktId": null,
+        "title": "Breaking Bad",
+        "addedAt": { "__timestamp": "2026-06-24T10:00:00.000Z" },
+        "status": "planned",
+        "posterPath": "/breaking-bad-poster.jpg",
+        "voteAverage": 8.9
+      }
+    }
+  ]
+}

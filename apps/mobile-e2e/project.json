@@ -7,6 +7,20 @@
   "implicitDependencies": ["mobile"],
   "// targets": "to see all targets run: nx show project mobile-e2e --web",
   "targets": {
+    "e2e": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/mobile-e2e",
+        "command": "playwright test"
+      }
+    },
+    "e2e-local": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "pnpm exec firebase emulators:exec --only firestore,auth --project vultus-cab62 \"pnpm nx e2e mobile-e2e\""
+      }
+    },
     "open": {
       "continuous": true,
       "executor": "nx:run-commands",

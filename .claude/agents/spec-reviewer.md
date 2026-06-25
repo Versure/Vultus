@@ -38,6 +38,13 @@ Evaluate the spec against each of these and record concrete findings:
    Are signatures coherent?
 5. **Testability** — does the test plan follow the pyramid (PLAN §5)? Is the
    logic actually unit-testable as specified? Are e2e flows named and minimal?
+   For a `scope:mobile` spec that adds a new route or critical user action:
+   the absence of e2e flows must be **explicitly justified** (e.g. "No e2e
+   flows required — backend-only change"). If it is a new page or primary
+   action with no e2e coverage and no explanation, that is a **blocking
+   finding** — the spec-author must either add named flows or document why e2e
+   is not required. A `test.fixme`-gated flow (blocked on an unmerged spec) is
+   acceptable, but the blocking dependency must be named.
 6. **UI fidelity (mobile slices)** — does the spec reference an **actual Stitch
    screen ID** (not "MCP unreachable, tokens only")? Is the UI section a
    **checkable contract** — concrete control **dimensions**, insets that agree
