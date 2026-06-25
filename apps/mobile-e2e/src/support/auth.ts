@@ -25,37 +25,45 @@ const AUTH_STORE = 'firebaseLocalStorage';
 /**
  * Wait for the app's anonymous sign-in to settle and return the resolved uid.
  *
- * Uses `page.waitForFunction` to poll the Firebase Auth IndexedDB persistence
- * (browser-side) until a uid is present — the SDK writes it once
- * `signInAnonymously` resolves against the emulator. `waitForFunction` keeps
- * re-running the predicate while it returns a falsy value (no record yet) and
- * resolves once it returns the uid string. This is the Playwright-blessed poll
- * (no `waitForTimeout`): there is no DOM element to await on, since the uid is
- * never surfaced to the DOM. Throws if no uid appears within `timeoutMs` (a real
- * failure: emulator unreachable or the app never signed in — surfacing it beats
- * seeding under a wrong/empty uid).
+ * Two-step implementation to avoid a JSHandle serialization race:
+ *
+ *  1. `waitForFunction` polls until a uid IS present (returns boolean — polling
+ *     only, no value retrieval). Using a plain boolean avoids the window where
+ *     `handle.jsonValue()` can return null after `waitForFunction` resolves with
+ *     a truthy string value (observed in Playwright timing races).
+ *
+ *  2. `page.evaluate` reads the uid atomically once the wait has settled. A
+ *     direct evaluate call is serialized in a single browser tick and cannot race
+ *     against the `waitForFunction` → `jsonValue()` gap.
+ *
+ * Throws if no uid appears within `timeoutMs` (a real failure: emulator
+ * unreachable or the app never signed in — surfacing it beats seeding under a
+ * wrong/empty uid).
  */
 export async function resolveAnonUid(
   page: Page,
   timeoutMs = 15000,
 ): Promise<string> {
-  const uid = await page
+  const idbArgs = { dbName: AUTH_DB, storeName: AUTH_STORE };
+
+  // Step 1 — poll until an auth record with a uid appears; return boolean only.
+  await page
     .waitForFunction(
       ({ dbName, storeName }) =>
-        new Promise<string | null>((resolve) => {
+        new Promise<boolean>((resolve) => {
           let openReq: IDBOpenDBRequest;
           try {
             openReq = indexedDB.open(dbName);
           } catch {
-            resolve(null);
+            resolve(false);
             return;
           }
-          openReq.onerror = () => resolve(null);
+          openReq.onerror = () => resolve(false);
           openReq.onsuccess = () => {
             const db = openReq.result;
             if (!db.objectStoreNames.contains(storeName)) {
               db.close();
-              resolve(null);
+              resolve(false);
               return;
             }
             let getAllReq: IDBRequest;
@@ -66,12 +74,12 @@ export async function resolveAnonUid(
                 .getAll();
             } catch {
               db.close();
-              resolve(null);
+              resolve(false);
               return;
             }
             getAllReq.onerror = () => {
               db.close();
-              resolve(null);
+              resolve(false);
             };
             getAllReq.onsuccess = () => {
               const records = (getAllReq.result ?? []) as {
@@ -79,28 +87,89 @@ export async function resolveAnonUid(
                 value?: { uid?: string };
               }[];
               db.close();
-              const authRecord = records.find(
+              const found = records.some(
                 (r) =>
                   typeof r?.fbase_key === 'string' &&
                   r.fbase_key.startsWith('firebase:authUser:') &&
-                  typeof r?.value?.uid === 'string',
+                  typeof r?.value?.uid === 'string' &&
+                  r.value.uid.length > 0,
               );
-              resolve(authRecord?.value?.uid ?? null);
+              resolve(found);
             };
           };
         }),
-      { dbName: AUTH_DB, storeName: AUTH_STORE },
+      idbArgs,
       { timeout: timeoutMs, polling: 250 },
     )
-    .then((handle) => handle.jsonValue())
     .catch(() => {
       throw new Error(
-        'resolveAnonUid: no anonymous uid found in Firebase Auth IndexedDB within ' +
+        'resolveAnonUid: no anonymous auth record in Firebase Auth IndexedDB within ' +
           `${timeoutMs}ms. Are the Auth (9099) / Firestore (8080) emulators running ` +
           'on the default ports (Emulator-port invariant)?',
       );
     });
+
+  // Step 2 — read the uid via a fresh page.evaluate (avoids the JSHandle
+  // serialization window between waitForFunction resolving and jsonValue() being
+  // called — the evaluate runs atomically in a single browser tick).
+  const uid = await page.evaluate(
+    ({ dbName, storeName }) =>
+      new Promise<string | null>((resolve) => {
+        let openReq: IDBOpenDBRequest;
+        try {
+          openReq = indexedDB.open(dbName);
+        } catch {
+          resolve(null);
+          return;
+        }
+        openReq.onerror = () => resolve(null);
+        openReq.onsuccess = () => {
+          const db = openReq.result;
+          if (!db.objectStoreNames.contains(storeName)) {
+            db.close();
+            resolve(null);
+            return;
+          }
+          let getAllReq: IDBRequest;
+          try {
+            getAllReq = db
+              .transaction(storeName, 'readonly')
+              .objectStore(storeName)
+              .getAll();
+          } catch {
+            db.close();
+            resolve(null);
+            return;
+          }
+          getAllReq.onerror = () => {
+            db.close();
+            resolve(null);
+          };
+          getAllReq.onsuccess = () => {
+            const records = (getAllReq.result ?? []) as {
+              fbase_key?: string;
+              value?: { uid?: string };
+            }[];
+            db.close();
+            const authRecord = records.find(
+              (r) =>
+                typeof r?.fbase_key === 'string' &&
+                r.fbase_key.startsWith('firebase:authUser:') &&
+                typeof r?.value?.uid === 'string' &&
+                r.value.uid.length > 0,
+            );
+            resolve(authRecord?.value?.uid ?? null);
+          };
+        };
+      }),
+    idbArgs,
+  );
+
   if (!uid)
-    throw new Error('resolveAnonUid: waitForFunction resolved with falsy uid');
+    throw new Error(
+      'resolveAnonUid: uid absent immediately after wait settled — auth record ' +
+        'cleared between waitForFunction and evaluate. Verify the Auth emulator ' +
+        '(9099) is still running and not clearing accounts mid-test.',
+    );
   return uid;
 }

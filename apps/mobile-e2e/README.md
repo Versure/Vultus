@@ -18,20 +18,27 @@ Prerequisites:
 - **Java** (the Firestore/Auth emulators are Java processes).
 - **Firebase CLI** (`pnpm exec firebase`), already a dev dependency.
 
-Run the suite (this wraps the run in the emulators automatically via the same
-command CI uses):
+### Recommended: `e2e-local` Nx target (Nx Console friendly)
+
+The `e2e-local` target starts the emulators, runs the suite, and stops them —
+identical to the CI gate, no manual emulator management:
 
 ```sh
-pnpm exec firebase emulators:exec --only firestore,auth --project vultus-cab62 "pnpm nx e2e mobile-e2e"
+pnpm nx e2e-local mobile-e2e
 ```
 
-Or, if you already have the emulators running on the default ports, just:
+This is the target to use in Nx Console. It runs
+`firebase emulators:exec --only firestore,auth` around the suite automatically.
+
+### Manual (if emulators are already running)
+
+If the emulators are already running on the default ports:
 
 ```sh
 pnpm nx e2e mobile-e2e
 ```
 
-Interactive (Playwright UI):
+Interactive (Playwright UI — requires emulators already running):
 
 ```sh
 pnpm nx open mobile-e2e
