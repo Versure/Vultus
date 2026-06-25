@@ -2,7 +2,7 @@
 number: 0027
 slug: serve-emulator-build-dep
 title: Make mobile:serve-emulator build functions before starting the emulator
-status: approved
+status: done
 slices: []
 scopes: [scope:mobile]
 created: 2026-06-25
