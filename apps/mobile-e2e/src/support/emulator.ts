@@ -73,7 +73,14 @@ export async function writeDocument(
   const url = `${firestoreDocumentsBase()}/${path}`;
   const res = await fetch(url, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    // 'Bearer owner' is the Firestore emulator's admin bypass token — identical to
+    // the mechanism used by @firebase/rules-unit-testing. The emulator grants admin
+    // access and skips security rules when this token is present, allowing seed
+    // writes to owner-locked collections (users/{uid}/watchlist) without a real JWT.
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer owner',
+    },
     body: JSON.stringify({ fields }),
   });
   if (!res.ok) {
