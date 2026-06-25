@@ -42,10 +42,20 @@ Imported from `@vultus/functions/sync-titles`:
   logic** (transition detection + the snapshot roll stay in the engine). Pass it
   the `Firestore` instance from `firebase-admin/firestore`; it is the only place
   `firebase-admin` enters the slice.
+- `gatherUserWatchlistTitles(db: Firestore, uid: string): Promise<GatheredUserTitle[]>`
+  — the **per-user** watchlist gather for the manual `triggerSync` callable (spec
+  0025). Reads ONLY the calling user's `users/{uid}/watchlist` collection (a single
+  `.get()` via the `@vultus/shared/firestore-schema` `watchlistPath(uid)` builder —
+  no `where`/`orderBy`, so no composite index), projects each doc to its two raw
+  primitive fields `{ tmdbId, type }` (no converter — avoids the `addedAt`
+  Timestamp), and dedupes by `tmdbId`. Distinct from the cron's global
+  `collectionGroup('watchlist')` scan in `apps/functions`. The `triggerSync`
+  callable (`apps/functions/src/main.ts`) **consumes** this to gather the caller's
+  own titles before running one force-fresh engine pass.
 - Types: `TmdbClientConfig`, `TmdbClient`, `RegionProviders`, `TraktClientConfig`,
   `TraktClient`, `TraktCalendarEntry`, `SyncEngine`, `SyncEngineConfig`,
   `SyncTitleInput`, `TitleCacheStore`, `SyncResult`, `ProviderTransition`,
-  `SyncOutcome`.
+  `SyncOutcome`, `GatheredUserTitle`.
 - Errors: `TmdbError`, `TraktError` (kept distinct — each carries `status` +
   `endpoint`, neither embeds its credential).
 
@@ -186,8 +196,14 @@ const results = await engine.sync([
 - `store/` — the Admin-SDK persistence adapter (`firestore-title-cache-store.ts`)
   implementing the engine's `TitleCacheStore` port against `firebase-admin`
   Firestore via the spec-0005 `@vultus/shared/firestore-schema` path builders +
-  converters, plus its spec. **This is the only file in the slice that imports
-  `firebase-admin`**; it adds no business logic.
+  converters, plus its spec. The only file in the slice that does `title-cache`
+  reads/writes via `firebase-admin`; it adds no business logic.
+- `gather/` — the per-user watchlist gather (`user-gather.ts`,
+  `gatherUserWatchlistTitles`) for the manual `triggerSync` callable (spec 0025),
+  plus its spec. Reads one user's `users/{uid}/watchlist` via the
+  `@vultus/shared/firestore-schema` `watchlistPath(uid)` builder, projecting raw
+  `{ tmdbId, type }` and deduping by `tmdbId`. Takes a `firebase-admin` `Firestore`
+  but only as a typed parameter (no SDK init/import beyond the `Firestore` type).
 
 Only the symbols re-exported from `src/index.ts` are public; DTOs, mappers, and
 the http transport are slice-internal.

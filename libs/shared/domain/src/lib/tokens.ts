@@ -17,3 +17,14 @@ import { InjectionToken, type Signal } from '@angular/core';
  * (`slice:settings` → `scope:mobile`).
  */
 export const AUTH_UID = new InjectionToken<Signal<string | null>>('AUTH_UID');
+
+/**
+ * A thunk that triggers a manual sync of the current user's watchlist via the
+ * `triggerSync` callable and resolves with the server's syncedAt ISO string.
+ * Provided by the shell (`apps/mobile`) so slices can trigger a sync WITHOUT
+ * importing `@angular/fire/functions` or `apps/mobile` directly — mirroring the
+ * AUTH_UID pattern (spec 0025).
+ */
+export const TRIGGER_SYNC = new InjectionToken<
+  () => Promise<{ syncedAt: string }>
+>('TRIGGER_SYNC');
