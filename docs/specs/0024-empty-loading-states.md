@@ -1,5 +1,5 @@
 ---
-number: 0023
+number: 0024
 slug: empty-loading-states
 title: Align empty, loading, and error states across all mobile slices to the Stitch design
 status: approved
