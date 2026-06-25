@@ -95,6 +95,13 @@
     },
     "serve-emulator": {
       "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "target": "build",
+          "projects": ["functions"],
+          "configuration": "development"
+        }
+      ],
       "options": {
         "commands": [
           "npx firebase emulators:start --project vultus-cab62",
