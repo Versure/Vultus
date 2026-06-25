@@ -12,12 +12,20 @@ import {
   IonRefresher,
   IonRefresherContent,
   IonSkeletonText,
+  IonSpinner,
   IonTitle,
   IonToolbar,
+  ToastController,
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
-import { filmOutline, personCircleOutline, trashOutline } from 'ionicons/icons';
+import {
+  filmOutline,
+  personCircleOutline,
+  refreshOutline,
+  trashOutline,
+} from 'ionicons/icons';
 import { AUTH_UID } from '@vultus/shared/domain/tokens';
+import { SyncStateService } from './watchlist.sync-state.service';
 import {
   type Region,
   type TitleType,
@@ -55,6 +63,7 @@ const TMDB_POSTER_BASE = 'https://image.tmdb.org/t/p/w185';
     IonRefresher,
     IonRefresherContent,
     IonSkeletonText,
+    IonSpinner,
     IonAlert,
     IonActionSheet,
   ],
@@ -64,6 +73,10 @@ const TMDB_POSTER_BASE = 'https://image.tmdb.org/t/p/w185';
 export class WatchlistPage {
   private readonly watchlistService = inject(WatchlistService);
   private readonly router = inject(Router);
+  private readonly toastCtrl = inject(ToastController);
+
+  /** Client-side cooldown state for the toolbar refresh button (spec 0025). */
+  readonly syncState = inject(SyncStateService);
 
   /** Exposed for template bindings (status chip label). */
   readonly STATUS_LABELS = STATUS_LABELS;
@@ -124,7 +137,38 @@ export class WatchlistPage {
   ];
 
   constructor() {
-    addIcons({ filmOutline, personCircleOutline, trashOutline });
+    addIcons({
+      filmOutline,
+      personCircleOutline,
+      refreshOutline,
+      trashOutline,
+    });
+  }
+
+  /**
+   * Toolbar refresh button: triggers a manual sync and surfaces the outcome as a
+   * toast. The `SyncStateService` owns the guard/cooldown; this method only maps
+   * resolve/reject to the success/error toast.
+   */
+  async onSync(): Promise<void> {
+    try {
+      await this.syncState.triggerSync();
+      const toast = await this.toastCtrl.create({
+        message: 'Watchlist synced',
+        duration: 2000,
+        position: 'bottom',
+        color: 'success',
+      });
+      await toast.present();
+    } catch {
+      const toast = await this.toastCtrl.create({
+        message: 'Sync failed — try again later',
+        duration: 3000,
+        position: 'bottom',
+        color: 'danger',
+      });
+      await toast.present();
+    }
   }
 
   /** Action-sheet buttons generated from the display order + a Cancel row. */

@@ -7,6 +7,24 @@
       </span>
     </ion-title>
     <ion-buttons slot="end">
+      <ion-button
+        fill="clear"
+        [disabled]="!syncState.canSync() || syncState.syncing()"
+        [attr.aria-label]="
+          syncState.syncing()
+            ? 'Syncing…'
+            : !syncState.canSync()
+              ? 'Synced just now'
+              : 'Refresh watchlist'
+        "
+        (click)="onSync()"
+      >
+        @if (syncState.syncing()) {
+        <ion-spinner name="crescent" slot="icon-only"></ion-spinner>
+        } @else {
+        <ion-icon name="refresh-outline" slot="icon-only"></ion-icon>
+        }
+      </ion-button>
       <ion-button aria-label="Account">
         <ion-icon name="person-circle-outline" slot="icon-only"></ion-icon>
       </ion-button>

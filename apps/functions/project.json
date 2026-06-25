@@ -54,11 +54,6 @@
               "input": "apps/functions/deploy",
               "output": ".",
               "glob": "pnpm-workspace.yaml"
-            },
-            {
-              "input": "apps/functions",
-              "output": ".",
-              "glob": ".env.vultus-cab62"
             }
           ],
           "esbuildOptions": {
