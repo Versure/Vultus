@@ -61,6 +61,10 @@
             {
               "replace": "libs/mobile/settings/src/lib/settings.providers.ts",
               "with": "libs/mobile/settings/src/lib/settings.providers.mock.ts"
+            },
+            {
+              "replace": "libs/mobile/onboarding/src/lib/onboarding.providers.ts",
+              "with": "libs/mobile/onboarding/src/lib/onboarding.providers.mock.ts"
             }
           ],
           "optimization": false,

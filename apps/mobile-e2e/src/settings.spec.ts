@@ -84,7 +84,12 @@ async function pickRegion(page: Page, region: string): Promise<void> {
   await expect(page.locator('ion-popover')).toHaveCount(0);
 }
 
-test.beforeEach(async () => {
+test.beforeEach(async ({ page }) => {
+  // Pre-set the onboarding completion flag so the guard (spec 0022) passes
+  // through to the tabs shell instead of redirecting to /onboarding.
+  await page.addInitScript(() => {
+    localStorage.setItem('CapacitorStorage.onboarding_done', 'true');
+  });
   // Deterministic reset: clear Auth + Firestore before each test (spec 0019).
   await clearAll();
 });
