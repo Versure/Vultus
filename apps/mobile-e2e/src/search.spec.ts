@@ -49,9 +49,9 @@ test.describe('search (F2–F3)', () => {
     await expect(page).toHaveURL(/\/tabs\/search$/);
 
     // Prompt/empty state shows before any query is typed.
-    await expect(page.locator('.empty-state .empty-text')).toHaveText(
-      'Search for movies and TV shows',
-    );
+    await expect(
+      page.locator('vultus-empty-state .vultus-empty-state__title'),
+    ).toHaveText('Search for movies and TV shows');
 
     // Type a query into the searchbar's inner native input. The component reads
     // `(ionInput)` -> service debounces (~400ms) -> results render.
