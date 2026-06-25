@@ -27,7 +27,13 @@ scoped to the change over running the whole repo.
 4. **Component tests** — included in the test target for affected UI slices.
 5. **Build** — `nx affected -t build --base=<base>`
 6. **e2e** — `nx affected -t e2e --base=<base>`, which runs Playwright against
-   the Firebase emulators (`firebase emulators:start` / `firebase emulators:exec`).
+   the Firebase emulators. **Emulator loopback constraint (R4):** the Firebase
+   emulators (Java NIO processes) cannot be started from within this Claude Code
+   tool session (loopback blocked — project memory). Use `nx e2e-local mobile-e2e`
+   instead of `nx e2e mobile-e2e` when attempting a local run to auto-start/stop
+   emulators. If the loopback constraint is in effect, mark e2e as
+   `UNRUNNABLE IN SESSION (R4)` — do NOT mark it `SKIPPED`; CI (`firebase
+emulators:exec` gate) is the authoritative validator. Report the CI URL.
 7. **Smoke / boots** — when feasible, launch the app via `nx serve` (background),
    confirm it starts without console errors, then stop it.
 8. **Visual fidelity (UI slices)** — typecheck/lint/test/build **cannot** confirm
@@ -46,6 +52,12 @@ scoped to the change over running the whole repo.
 
 - If a gate's **tooling genuinely isn't bootstrapped yet** (no Nx target,
   workspace not created), record it `SKIPPED (not bootstrapped)` and continue.
+- **e2e is bootstrapped once `apps/mobile-e2e/playwright.config.ts`
+  exists** — check for that file before deciding to skip. After spec 0019
+  merges, e2e is never "not bootstrapped" for `scope:mobile` work; skipping
+  it requires an explicit spec justification. `test.fixme`-gated flows are
+  expected and do not count as failures — they are scaffolded pending stubs;
+  the suite still runs and marks them pending, not failing.
 - But if the **spec explicitly required** a gate (e.g. it named e2e flows or a
   component test) and that gate didn't run, that is an **unmet DoD gate** —
   report it as `FAIL (DoD gate unmet)`, not a quiet skip. Do not let a feature

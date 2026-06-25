@@ -1,0 +1,17 @@
+{
+  "description": "Empty fixture (spec 0019 flows F1-F3): the users/{uid} profile doc, region NL, default notification prefs, NO watchlist entries. {uid} is substituted at seed time with the resolved anon uid (R3).",
+  "docs": [
+    {
+      "path": "users/{uid}",
+      "data": {
+        "region": "NL",
+        "notificationPrefs": {
+          "episodeAired": true,
+          "movieAvailable": true,
+          "cameToPlatform": true
+        },
+        "fcmTokens": []
+      }
+    }
+  ]
+}
