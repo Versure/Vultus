@@ -68,6 +68,22 @@ path**, and **your assigned task subset**.
   4. **gen2 trigger-type changes are rejected in place** (HTTPS ⇄ background) —
      `firebase functions:delete <name> --region <r> --force`, then redeploy.
      Keep the deploy recipe in sync with the `functions-deploy-pnpm-recipe` memo.
+  5. **gen2 `onRequest` functions are Cloud Run services, private by default.**
+     A gen2 `onRequest` function that self-authenticates at the application layer
+     (e.g. `syncTitles` via the `X-Vultus-Sync-Secret` shared secret) **must**
+     have an `allUsers` → `roles/run.invoker` IAM binding to be publicly
+     invokable — the shared secret is the security gate, not Cloud Run IAM. The
+     deploy service account may lack `run.services.setIamPolicy` (or an org
+     domain-restricted-sharing policy may block `allUsers`), so the binding can
+     **silently not apply** after `firebase deploy`. **Symptom:** a
+     **Google-Front-End HTML 403** (`"Your client does not have permission"` /
+     `<title>403 Forbidden</title>`) — the request never reaches the function,
+     which would always return a **JSON** error body. **Fix:** the documented
+     one-time manual `gcloud run services add-iam-policy-binding` grant (PLAN §7).
+     **Guard:** the `deploy-functions.yml` post-deploy smoke gate detects this
+     and fails the deploy with an actionable `::error::` pointing to the exact
+     grant command. (See the `functions-deploy-pnpm-recipe` memo for the full
+     deploy recipe; spec 0021 for the failure history.)
 - **Capacitor**: `capacitor.config.ts`, Android icon/splash, FCM push setup,
   local APK build (PLAN §6 task 21).
 - **PR template** under `.github/` when in scope (PLAN §5). Do **not** create

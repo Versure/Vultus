@@ -26,10 +26,49 @@ jobs:
             echo "::error::VULTUS_SYNC_URL variable and SYNC_SHARED_SECRET secret must be configured."
             exit 1
           fi
-          curl --silent --show-error --fail-with-body \
+          body_file="$(mktemp)"
+          # Capture status + body separately so we can diagnose a 403 precisely.
+          # --retry-all-errors retries transient/5xx; we still inspect the final
+          # body. The secret is passed only via the header from $SYNC_SECRET and
+          # is never echoed.
+          # NOTE: --fail/--fail-with-body are intentionally absent. Without --fail,
+          # curl exits 0 on a completed HTTP error response (4xx/5xx), so
+          # --retry-all-errors only retries genuine transient/connection-level
+          # failures — not a completed 5xx. The case block below fails the job on
+          # any non-2xx. Do NOT re-add --fail; it would break the GFE-vs-function
+          # 403 branching that this step exists for.
+          status="$(curl --silent --show-error \
             --retry 3 --retry-all-errors --retry-delay 5 \
             --max-time 240 \
+            -o "$body_file" -w '%{http_code}' \
             -X POST "$SYNC_URL" \
             -H "X-Vultus-Sync-Secret: $SYNC_SECRET" \
             -H "Content-Type: application/json" \
-            -d '{"force": true}'
+            -d '{"force": true}')"
+          echo "Daily sync HTTP status: $status"
+          # Print the response body for observability (SyncRunResponse counts on
+          # 200; a JSON {"error":...} on a function-level failure). The function
+          # never echoes secrets, and we never print the request header.
+          cat "$body_file"
+          echo
+          case "$status" in
+            2??)
+              exit 0
+              ;;
+            403)
+              if grep -qiE 'Your client does not have permission|<title>403 Forbidden' "$body_file"; then
+                echo "::error::Google Front End 403 — the syncTitles Cloud Run service is PRIVATE; the request never reached the function. Grant public invokability: gcloud run services add-iam-policy-binding synctitles --region=europe-west1 --member=allUsers --role=roles/run.invoker --project=vultus-cab62 (see docs/PLAN.md §7)."
+              else
+                echo "::error::Function returned 403 (forbidden) — the shared secret was reached but did NOT match. Verify SYNC_SHARED_SECRET matches the function-side param."
+              fi
+              exit 1
+              ;;
+            401)
+              echo "::error::Function returned 401 (unauthenticated) — the X-Vultus-Sync-Secret header was missing or empty as seen by the function."
+              exit 1
+              ;;
+            *)
+              echo "::error::Daily sync failed with HTTP $status. See the response body above."
+              exit 1
+              ;;
+          esac

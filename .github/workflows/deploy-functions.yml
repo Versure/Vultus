@@ -79,3 +79,41 @@ jobs:
 
       - name: Deploy to Firebase
         run: pnpm exec firebase deploy --only ${{ inputs.only }} --project vultus-cab62 --non-interactive
+
+      # After deploy, confirm the syncTitles Cloud Run service is publicly
+      # invokable. gen2 onRequest functions are Cloud Run services, PRIVATE by
+      # default; this function self-authenticates via the shared secret, so it
+      # MUST allow unauthenticated invocations (allUsers → roles/run.invoker).
+      # If the service is private, the Google Front End returns an HTML 403 and
+      # the request never reaches the function — the cron would then fail daily.
+      # This sends NO secret (it must not trigger a real sync); a reachable
+      # function answers any unauthenticated POST with a JSON error body, which
+      # proves invokability regardless of the auth outcome.
+      # Placement: post-deploy because the check needs the deployed URL, which
+      # only exists after deploy. functions:deploy-preflight runs pre-deploy and
+      # validates the artifact only — folding this check into preflight is wrong.
+      - name: Verify syncTitles is publicly invokable
+        timeout-minutes: 2
+        env:
+          SYNC_URL: ${{ vars.VULTUS_SYNC_URL }}
+        run: |
+          if [ -z "$SYNC_URL" ]; then
+            echo "::warning::VULTUS_SYNC_URL is not set; skipping the public-invokability smoke check. Set the repo Actions variable to enable it."
+            exit 0
+          fi
+          # Unauthenticated POST (NO secret header). Capture body + status code
+          # separately; do NOT use --fail so we always inspect the body.
+          body_file="$(mktemp)"
+          status="$(curl --silent --show-error \
+            --retry 2 --retry-delay 5 \
+            --max-time 60 \
+            -o "$body_file" -w '%{http_code}' \
+            -X POST "$SYNC_URL" \
+            -H 'Content-Type: application/json' \
+            -d '{}')"
+          echo "Smoke check HTTP status: $status"
+          if [ "$status" = "403" ] && grep -qiE 'Your client does not have permission|<title>403 Forbidden' "$body_file"; then
+            echo "::error::syncTitles returned a Google Front End 403 — the Cloud Run service is PRIVATE (request never reached the function). Grant public invokability once: gcloud run services add-iam-policy-binding synctitles --region=europe-west1 --member=allUsers --role=roles/run.invoker --project=vultus-cab62  (see docs/PLAN.md §7)."
+            exit 1
+          fi
+          echo "syncTitles is publicly invokable (function reached; got a function-level response)."

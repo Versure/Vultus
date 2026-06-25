@@ -2,7 +2,7 @@
 number: 0021
 slug: daily-sync-public-invoker
 title: Fix the failing daily-sync cron — make syncTitles publicly invokable and add deploy + runtime regression checks
-status: approved
+status: done
 slices: []
 scopes: [scope:functions]
 created: 2026-06-24
