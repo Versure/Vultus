@@ -1,5 +1,6 @@
 import type { Auth } from '@angular/fire/auth';
 import type { Firestore } from '@angular/fire/firestore';
+import type { Functions } from '@angular/fire/functions';
 
 /** The subset of `environment` this helper inspects to decide on emulators. */
 export interface EmulatorEnv {
@@ -23,12 +24,20 @@ export type ConnectFirestoreFn = (
   host: string,
   port: number,
 ) => void;
+export type ConnectFunctionsFn = (
+  fns: Functions,
+  host: string,
+  port: number,
+) => void;
 
 /** Auth emulator endpoint (firebase.json: Auth on 9099). */
 export const AUTH_EMULATOR_URL = 'http://localhost:9099';
 /** Firestore emulator endpoint (firebase.json: Firestore on 8080). */
 export const FIRESTORE_EMULATOR_HOST = 'localhost';
 export const FIRESTORE_EMULATOR_PORT = 8080;
+/** Functions emulator endpoint (firebase.json: Functions on 5001). */
+export const FUNCTIONS_EMULATOR_HOST = 'localhost';
+export const FUNCTIONS_EMULATOR_PORT = 5001;
 
 /** Whether emulators should be wired (dev only): `!production && useEmulators`. */
 function emulatorsEnabled(env: EmulatorEnv): boolean {
@@ -68,4 +77,21 @@ export function connectFirestoreEmulatorIfEnabled(
     return;
   }
   connectFirestore(firestore, FIRESTORE_EMULATOR_HOST, FIRESTORE_EMULATOR_PORT);
+}
+
+/**
+ * Connect AngularFire `Functions` to the local emulator, but ONLY in dev
+ * (`!production && useEmulators`); otherwise a no-op. Lives in the
+ * `provideFunctions` factory, next to the instance it gates — mirroring
+ * `connectFirestoreEmulatorIfEnabled` (spec 0025 Test plan).
+ */
+export function connectFunctionsEmulatorIfEnabled(
+  env: EmulatorEnv,
+  fns: Functions,
+  connectFunctions: ConnectFunctionsFn,
+): void {
+  if (!emulatorsEnabled(env)) {
+    return;
+  }
+  connectFunctions(fns, FUNCTIONS_EMULATOR_HOST, FUNCTIONS_EMULATOR_PORT);
 }

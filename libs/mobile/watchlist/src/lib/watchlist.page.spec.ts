@@ -1,11 +1,15 @@
-import { signal } from '@angular/core';
+import { signal, type WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
-import { provideIonicAngular } from '@ionic/angular/standalone';
+import {
+  ToastController,
+  provideIonicAngular,
+} from '@ionic/angular/standalone';
 import { AUTH_UID } from '@vultus/shared/domain/tokens';
 import { type WatchlistItem } from '@vultus/shared/domain';
 import { NEVER, of, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { SyncStateService } from './watchlist.sync-state.service';
 
 // Mock the data-access service module so the page test never pulls in the real
 // `@angular/fire/firestore` import chain (rxfire ships ESM-in-CJS and breaks the
@@ -80,7 +84,32 @@ function mockService(items: WatchlistItem[]): MockService {
   };
 }
 
-async function setup(service: MockService, uid: string | null = 'uid-123') {
+interface MockSyncState {
+  canSync: WritableSignal<boolean>;
+  syncing: WritableSignal<boolean>;
+  triggerSync: ReturnType<typeof vi.fn>;
+}
+
+function mockSyncState(over: Partial<MockSyncState> = {}): MockSyncState {
+  return {
+    canSync: over.canSync ?? signal(true),
+    syncing: over.syncing ?? signal(false),
+    triggerSync: over.triggerSync ?? vi.fn(() => Promise.resolve(undefined)),
+  };
+}
+
+function mockToastCtrl() {
+  const present = vi.fn(() => Promise.resolve(undefined));
+  const create = vi.fn(() => Promise.resolve({ present }));
+  return { create, present };
+}
+
+async function setup(
+  service: MockService,
+  uid: string | null = 'uid-123',
+  syncState: MockSyncState = mockSyncState(),
+  toast = mockToastCtrl(),
+) {
   await TestBed.configureTestingModule({
     imports: [WatchlistPage],
     providers: [
@@ -88,6 +117,8 @@ async function setup(service: MockService, uid: string | null = 'uid-123') {
       { provide: WatchlistService, useValue: service },
       { provide: AUTH_UID, useValue: signal<string | null>(uid) },
       { provide: Router, useValue: { navigate: vi.fn() } },
+      { provide: SyncStateService, useValue: syncState },
+      { provide: ToastController, useValue: toast },
     ],
   }).compileComponents();
 
@@ -96,7 +127,29 @@ async function setup(service: MockService, uid: string | null = 'uid-123') {
   await fixture.whenStable();
   fixture.detectChanges();
   const el = fixture.nativeElement as HTMLElement;
-  return { fixture, el };
+  return { fixture, el, syncState, toast };
+}
+
+/** The refresh button is the first ion-button in the toolbar's slot="end". */
+function refreshButton(el: HTMLElement): HTMLElement {
+  const btn = el.querySelector<HTMLElement>(
+    'ion-buttons[slot="end"] ion-button',
+  );
+  if (!btn) {
+    throw new Error('refresh button not found');
+  }
+  return btn;
+}
+
+/**
+ * IonButton's `disabled` is a property bound via Angular, not an attribute that
+ * reflects to the host in jsdom — read the property (falling back to the attr).
+ */
+function isDisabled(btn: HTMLElement): boolean {
+  return (
+    (btn as { disabled?: boolean }).disabled === true ||
+    btn.hasAttribute('disabled')
+  );
 }
 
 describe('WatchlistPage', () => {
@@ -211,5 +264,96 @@ describe('WatchlistPage', () => {
     expect(headers[1]).toContain('Planned');
     expect(headers[2]).toContain('Completed');
     expect(headers[0]).toContain('1 Items');
+  });
+
+  describe('toolbar refresh button (spec 0025)', () => {
+    it('idle: renders in slot="end", enabled, aria-label="Refresh watchlist"', async () => {
+      const service = mockService([]);
+      const { el } = await setup(service);
+      const btn = refreshButton(el);
+
+      expect(btn.getAttribute('aria-label')).toBe('Refresh watchlist');
+      expect(isDisabled(btn)).toBe(false);
+      // Idle shows the refresh icon, not the spinner.
+      expect(
+        btn.querySelector('ion-icon[name="refresh-outline"]'),
+      ).toBeTruthy();
+      expect(btn.querySelector('ion-spinner')).toBeFalsy();
+    });
+
+    it('click calls syncState.triggerSync; while syncing the button shows the spinner and is disabled', async () => {
+      const service = mockService([]);
+      const syncState = mockSyncState();
+      const { fixture, el } = await setup(service, 'uid-123', syncState);
+
+      await fixture.componentInstance.onSync();
+      expect(syncState.triggerSync).toHaveBeenCalledTimes(1);
+
+      // Simulate the in-flight state the service would set.
+      syncState.syncing.set(true);
+      fixture.detectChanges();
+
+      const btn = refreshButton(el);
+      expect(isDisabled(btn)).toBe(true);
+      expect(btn.getAttribute('aria-label')).toBe('Syncing…');
+      expect(btn.querySelector('ion-spinner[name="crescent"]')).toBeTruthy();
+      expect(btn.querySelector('ion-icon[name="refresh-outline"]')).toBeFalsy();
+    });
+
+    it('success presents the "Watchlist synced" toast', async () => {
+      const service = mockService([]);
+      const syncState = mockSyncState({
+        triggerSync: vi.fn(() => Promise.resolve(undefined)),
+      });
+      const toast = mockToastCtrl();
+      const { fixture } = await setup(service, 'uid-123', syncState, toast);
+
+      await fixture.componentInstance.onSync();
+
+      expect(toast.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'Watchlist synced',
+          color: 'success',
+          duration: 2000,
+          position: 'bottom',
+        }),
+      );
+      expect(toast.present).toHaveBeenCalled();
+    });
+
+    it('failure presents the error toast (color: danger)', async () => {
+      const service = mockService([]);
+      const syncState = mockSyncState({
+        triggerSync: vi.fn(() => Promise.reject(new Error('boom'))),
+      });
+      const toast = mockToastCtrl();
+      const { fixture } = await setup(service, 'uid-123', syncState, toast);
+
+      await fixture.componentInstance.onSync();
+
+      expect(toast.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'Sync failed — try again later',
+          color: 'danger',
+          duration: 3000,
+          position: 'bottom',
+        }),
+      );
+      expect(toast.present).toHaveBeenCalled();
+    });
+
+    it('cooldown (canSync false): button disabled with aria-label="Synced just now"', async () => {
+      const service = mockService([]);
+      const syncState = mockSyncState({ canSync: signal(false) });
+      const { el } = await setup(service, 'uid-123', syncState);
+      const btn = refreshButton(el);
+
+      expect(isDisabled(btn)).toBe(true);
+      expect(btn.getAttribute('aria-label')).toBe('Synced just now');
+      // Cooldown still shows the refresh icon (at Ionic's disabled opacity).
+      expect(
+        btn.querySelector('ion-icon[name="refresh-outline"]'),
+      ).toBeTruthy();
+    });
   });
 });

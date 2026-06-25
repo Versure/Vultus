@@ -3,7 +3,9 @@
 The **Watchlist** tab slice — a `scope:mobile` vertical slice owning the
 watchlist tab's UI, state, data, and slice-local types (spec 0014, PLAN §6
 item 18). It renders the user's watchlist as a realtime, status-grouped list of
-poster cards with a type filter, per-item status changes, and removal.
+poster cards with a type filter, per-item status changes, and removal. A
+**toolbar refresh button** (spec 0025) triggers a manual, client-side
+rate-limited sync of the user's tracked titles.
 
 ## Public surface (barrel `@vultus/mobile/watchlist`)
 
@@ -49,6 +51,19 @@ The slice-local grouping/filtering helpers (`groupByStatus`, `filterByType`,
 `watchlist.service.ts` and are **not** exported from the barrel — they are
 slice-internal.
 
+`SyncStateService` (`providedIn: 'root'`, slice-internal — **not** barrel-
+exported) owns the **manual-sync cooldown** behind the toolbar refresh button
+(spec 0025). It reads/writes the `localStorage` key **`vultus_last_sync_at`**
+(ISO string), exposes a `canSync` signal (false while inside the 5-minute /
+`300_000` ms cooldown, auto re-enabled by a timer at the exact expiry) and a
+`syncing` signal, and a `triggerSync()` method that guards both signals, calls
+the injected **`TRIGGER_SYNC`** thunk, records a fresh timestamp + restarts the
+cooldown on success, and re-throws (without advancing the timestamp) on failure
+so the page can show an error toast. `localStorage` access is guarded — if it is
+unavailable or throws, the service degrades to "always allowed". `WatchlistPage`
+maps the resolve/reject to a "Watchlist synced" / "Sync failed — try again
+later" `ToastController` toast.
+
 ## Data access
 
 - **Reads:** `users/{uid}/watchlist` (realtime list), `users/{uid}` (region),
@@ -81,6 +96,11 @@ Lazy-loaded by the `apps/mobile` tabs shell as the default landing tab:
 - **Key constraint:** the current user's uid is obtained **only** via the
   `scope:shared` `AUTH_UID` injection token (provided by the shell), never by
   importing `ShellAuthService` from `apps/mobile`.
+- **Manual sync constraint (spec 0025):** the toolbar refresh button reaches the
+  `triggerSync` callable **only** via the `scope:shared` `TRIGGER_SYNC` injection
+  token (provided by the shell). The slice has **no** `@angular/fire/functions`
+  import, **no** `@vultus/functions/*` import, and **no** `apps/mobile` import —
+  mirroring the `AUTH_UID` pattern.
 
 ## Running unit tests
 

@@ -35,3 +35,9 @@ export type {
 // against firebase-admin Firestore (spec 0009). This is the only SDK-bound
 // export; the engine itself stays Firebase-free.
 export { createFirestoreTitleCacheStore } from './lib/store/firestore-title-cache-store';
+
+// Per-user watchlist gather for the manual `triggerSync` callable (spec 0025):
+// reads ONE user's `users/{uid}/watchlist` and projects to distinct
+// `{ tmdbId, type }`. Consumed by `apps/functions` `triggerSync`.
+export { gatherUserWatchlistTitles } from './lib/gather/user-gather';
+export type { GatheredUserTitle } from './lib/gather/user-gather';
