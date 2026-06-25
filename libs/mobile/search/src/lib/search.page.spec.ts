@@ -76,6 +76,8 @@ describe('SearchPage', () => {
   it('shows prompt state by default', async () => {
     const { fixture } = await setup({ viewState: 'prompt' });
     const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('vultus-empty-state')).toBeTruthy();
+    // title text is still in the DOM
     expect(el.textContent).toContain('Search for movies and TV shows');
   });
 
@@ -164,18 +166,30 @@ describe('SearchPage', () => {
     expect(el.querySelector('.added-btn')).toBeTruthy();
   });
 
-  it('shows no-results state with query', async () => {
+  it('shows no-results state with query via vultus-empty-state', async () => {
     const { fixture } = await setup({
       viewState: 'no-results',
       lastQuery: 'xyzzy',
     });
     const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('vultus-empty-state')).toBeTruthy();
     expect(el.textContent).toContain("No results for 'xyzzy'");
   });
 
-  it('shows loading spinner', async () => {
+  it('shows skeleton cards while loading', async () => {
     const { fixture } = await setup({ viewState: 'loading' });
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector('ion-spinner')).toBeTruthy();
+    expect(el.querySelector('vultus-skeleton-card')).toBeTruthy();
+    expect(el.querySelector('ion-spinner')).toBeFalsy();
+  });
+
+  it('shows error state and calls retrySearch on retry', async () => {
+    const { fixture, svc } = await setup({ viewState: 'error' });
+    const el = fixture.nativeElement as HTMLElement;
+    const errorEl = el.querySelector('vultus-error-state');
+    expect(errorEl).toBeTruthy();
+    // Simulate retry emit — dispatch the 'retry' custom event
+    errorEl?.dispatchEvent(new CustomEvent('retry'));
+    expect(svc.retrySearch).toHaveBeenCalledTimes(1);
   });
 });

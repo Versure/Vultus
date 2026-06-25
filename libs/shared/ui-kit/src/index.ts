@@ -8,11 +8,16 @@
 //
 //   @import '@vultus/shared/ui-kit/src/lib/theme.scss';
 //
-// Shared Ionic atom components will be added to this barrel ONLY when the same
-// atom is needed by 3+ slices (CLAUDE.md / PLAN §3 — no premature extraction).
-// Until then this constant documents the SCSS theming entrypoint and keeps the
-// barrel non-empty and lint-clean.
+// This constant documents the SCSS theming entrypoint and keeps the SCSS
+// surface discoverable from TS.
 //
 // SHERIFF: scope:shared — importable by anyone.
 export const SHARED_UI_KIT_THEME_PATH =
   '@vultus/shared/ui-kit/src/lib/theme.scss';
+
+// Shared empty / loading / error state atoms (used by 3+ mobile slices —
+// watchlist, search, title-detail). See each component's doc comment + README.
+export { VultusSkeletonCard } from './lib/skeleton-card/vultus-skeleton-card.component';
+export { VultusSkeletonHero } from './lib/skeleton-hero/vultus-skeleton-hero.component';
+export { VultusEmptyState } from './lib/empty-state/vultus-empty-state.component';
+export { VultusErrorState } from './lib/error-state/vultus-error-state.component';

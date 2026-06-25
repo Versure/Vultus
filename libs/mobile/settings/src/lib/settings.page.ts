@@ -7,12 +7,13 @@ import {
   IonIcon,
   IonSelect,
   IonSelectOption,
-  IonSpinner,
+  IonSkeletonText,
   IonTitle,
   IonToggle,
   IonToolbar,
 } from '@ionic/angular/standalone';
 import type { Region } from '@vultus/shared/domain';
+import { VultusErrorState } from '@vultus/shared/ui-kit';
 import { addIcons } from 'ionicons';
 import {
   filmOutline,
@@ -37,7 +38,8 @@ import { SettingsService } from './settings.service';
     IonSelect,
     IonSelectOption,
     IonToggle,
-    IonSpinner,
+    IonSkeletonText,
+    VultusErrorState,
   ],
   templateUrl: './settings.page.html',
   styleUrl: './settings.page.scss',
@@ -56,6 +58,10 @@ export class SettingsPage implements OnInit {
 
   ngOnInit(): void {
     void this.service.load();
+  }
+
+  protected retry(): void {
+    this.service.retryLoad();
   }
 
   protected onRegionChange(event: CustomEvent): void {

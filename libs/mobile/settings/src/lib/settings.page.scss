@@ -188,10 +188,30 @@ ion-content {
   color: var(--vultus-on-surface-variant);
 }
 
-// Loading render-gate — centred spinner on the page background, matching the
-// screen's surface while the user doc resolves.
+// Loading / error render-gate — centred on the page background, matching the
+// screen's surface while the user doc resolves (skeleton) or after it fails
+// (error state).
 .settings-loading {
   display: flex;
   justify-content: center;
   padding-top: var(--vultus-space-xl); // 32px on the 8px grid
+}
+
+// Form-shaped skeleton: two stacked placeholder cards approximating the Region
+// and Notifications cards, on the same centred column as the loaded content.
+.settings-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vultus-space-md);
+  padding: var(--vultus-space-md);
+  max-width: 42rem;
+  margin-inline: auto;
+  width: 100%;
+}
+
+.settings-skeleton__card {
+  display: block;
+  height: 96px;
+  border-radius: var(--vultus-radius-md);
+  background: var(--vultus-surface-container);
 }

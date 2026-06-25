@@ -105,6 +105,26 @@ export default tseslint.config(
     },
   },
 
+  // --- Angular TS best practices — shared/ui-kit (prefix `vultus`) ----------
+  // shared/ui-kit now ships standalone Angular components (state atoms); their
+  // selectors use the `vultus-` prefix per CLAUDE.md. Mirrors the mobile-lib
+  // block above so lint-staged pre-commit gate recognises them.
+  {
+    files: ['libs/shared/ui-kit/**/*.ts'],
+    extends: [...angular.configs.tsRecommended],
+    processor: angular.processInlineTemplates,
+    rules: {
+      '@angular-eslint/directive-selector': [
+        'error',
+        { type: 'attribute', prefix: 'vultus', style: 'camelCase' },
+      ],
+      '@angular-eslint/component-selector': [
+        'error',
+        { type: 'element', prefix: 'vultus', style: 'kebab-case' },
+      ],
+    },
+  },
+
   // --- Angular template best practices + a11y — mobile app + slice libs ---
   {
     files: ['apps/mobile/**/*.html', 'libs/mobile/**/*.html'],

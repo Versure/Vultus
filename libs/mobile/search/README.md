@@ -8,7 +8,7 @@ The **Search** tab slice of the Vultus mobile app. It provides live, debounced T
 - Displays result cards: poster thumbnail, title, release/first-air year, and a Movie/TV Show badge.
 - Inline **Add** button writes a `planned` watchlist entry at `users/{uid}/watchlist/{titleId}` via `@vultus/shared/firestore-schema` converters.
 - Reads the user's existing watchlist live and marks already-added results as settled/non-actionable (cannot double-add).
-- Five view-states: `prompt` (empty query), `loading`, `results`, `no-results`, `error`.
+- Five view-states: `prompt` (empty query), `loading`, `results`, `no-results`, `error`. The non-`results` states render via the shared `@vultus/shared/ui-kit` state atoms — `<vultus-skeleton-card>` (loading; replaces the old `ion-spinner`), `<vultus-empty-state>` (prompt + no-results), and `<vultus-error-state>` (error, with built-in retry). The page registers `filmOutline` / `search` (consumed by `vultus-empty-state`); `vultus-error-state` registers its own icons.
 - Handles null `AUTH_UID` gracefully: search works without uid; `add()` is a no-op when uid is null.
 
 ## Public surface

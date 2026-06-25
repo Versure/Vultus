@@ -35,6 +35,7 @@ import { type Observable, catchError, from, map, of, startWith } from 'rxjs';
 import {
   type GroupedProviders,
   type TitleDetail,
+  TmdbDetailError,
   createTmdbDetailClient,
 } from './tmdb-detail.client';
 import { TMDB_DETAIL_CONFIG } from './tokens';
@@ -63,7 +64,8 @@ export const STATUS_LABELS: Record<WatchStatus, string> = {
 export type DetailViewState =
   | { kind: 'loading' }
   | { kind: 'loaded'; source: 'cache' | 'live'; detail: TitleDetail }
-  | { kind: 'not-found' }; // both cache miss AND live TMDB 404/error
+  | { kind: 'not-found' } // genuine cache-miss AND live TMDB 404
+  | { kind: 'error' }; // network/Firestore fetch failure (≠ 404), recoverable
 
 /** Empty grouped-providers value (no availability / null region). */
 const EMPTY_PROVIDERS: GroupedProviders = { flatrate: [], rent: [], buy: [] };
@@ -102,6 +104,7 @@ export class TitleDetailService {
   }
 
   private async resolveDetail(tmdbId: number): Promise<DetailViewState> {
+    // Cache path — if Firestore fails, surface the error (don't swallow it).
     try {
       const cacheRef = doc(this.firestore, titleCacheDocPath(tmdbId));
       const snap = await getDoc(cacheRef);
@@ -124,14 +127,21 @@ export class TitleDetailService {
         return { kind: 'loaded', source: 'cache', detail };
       }
     } catch {
-      // Firestore unavailable (offline / emulator not running) — treat as cache miss.
+      // Firestore error on the cache read → surface as a recoverable error,
+      // NOT a silent cache miss (the title may well exist; we just couldn't read).
+      return { kind: 'error' };
     }
-    // Cache miss — live, display-only fallback. A 404/throw → not-found.
+    // Cache miss → live, display-only fallback. Discriminate a genuine 404
+    // (title doesn't exist → not-found) from a transient failure (network /
+    // 5xx → error, recoverable via retry).
     try {
       const detail = await this.client.getDetail(tmdbId);
       return { kind: 'loaded', source: 'live', detail };
-    } catch {
-      return { kind: 'not-found' };
+    } catch (err) {
+      if (err instanceof TmdbDetailError && err.status === 404) {
+        return { kind: 'not-found' };
+      }
+      return { kind: 'error' };
     }
   }
 

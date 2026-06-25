@@ -11,8 +11,8 @@ poster cards with a type filter, per-item status changes, and removal.
   `lib-watchlist`) rendering the Watchlist tab: type segment (All / Movies / TV
   Shows), status-grouped sections (Watching → Planned → Completed → Dropped),
   poster cards with type/vote/provider badges, a long-press/secondary status
-  action sheet, a delete-confirm alert, pull-to-refresh, loading skeletons, and
-  an empty state.
+  action sheet, a delete-confirm alert, pull-to-refresh, and shared
+  loading / empty / error states (see below).
 - **`WatchlistService`** — `providedIn: 'root'` data-access service:
   - `watchlist$(uid, type?)` — realtime `users/{uid}/watchlist`, mapped to
     domain `WatchlistItem`s, optionally filtered by `TitleType`. Null uid →
@@ -25,6 +25,24 @@ poster cards with a type filter, per-item status changes, and removal.
   - `availability$(tmdbId, region)` — provider availability from
     `title-cache/{tmdbId}/availability/{region}` for the provider badge. Null
     region / missing doc → `null`.
+
+## Loading / empty / error states
+
+The page's `vm$` is a single stream of
+`{ groups: StatusGroup[] | null; error: boolean }` that drives all four list
+states, rendered with the shared atoms from **`@vultus/shared/ui-kit`** (spec
+0024):
+
+- **error** (`error: true`) → `<vultus-error-state>` with a retry button wired to
+  `onRetry()` (re-pushes the current type filter to re-subscribe the stream). A
+  thrown Firestore error is caught in the `vm$` pipe via `catchError` and mapped
+  to `{ groups: null, error: true }` — it never propagates and tears down the
+  stream. The error branch is checked **first**, because on error `groups` is also
+  `null`.
+- **loading** (`groups === null`, no error) → `<vultus-skeleton-card [count]="5">`.
+- **empty** (`groups.length === 0`) → `<vultus-empty-state>` (`film-outline` icon,
+  registered in this page via `addIcons`).
+- **populated** → the status-grouped sections.
 
 The slice-local grouping/filtering helpers (`groupByStatus`, `filterByType`,
 `STATUS_DISPLAY_ORDER`, `STATUS_LABELS`, `StatusGroup`) live in

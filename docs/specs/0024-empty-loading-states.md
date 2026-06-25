@@ -2,7 +2,7 @@
 number: 0024
 slug: empty-loading-states
 title: Align empty, loading, and error states across all mobile slices to the Stitch design
-status: approved
+status: done
 slices: [slice:watchlist, slice:search, slice:title-detail, slice:settings]
 scopes: [scope:mobile, scope:shared]
 created: 2026-06-25
@@ -25,7 +25,7 @@ settings). The result is inconsistent and, in places, incomplete:
   network blip looks like a deleted title), and there is **no error/retry**.
   Worse, the **cache path** (`getDoc` in `title-detail.service.ts` lines
   126–128) has its own `try/catch` that **swallows Firestore errors silently** —
-  so a Firestore-down condition never reaches *any* error branch at all (it
+  so a Firestore-down condition never reaches _any_ error branch at all (it
   falls through to the live path or to `not-found`). Both the live-path errors
   **and** the cache/Firestore `getDoc` errors must be surfaced.
 - **Settings** shows a bare `ion-spinner` until `load()` resolves and has **no
@@ -91,13 +91,13 @@ Out of scope (explicitly):
 
 ## 3. Affected slices & Sheriff tags
 
-| Lib / app | Sheriff tags | Change |
-| --- | --- | --- |
-| `libs/shared/ui-kit/src` | `scope:shared` | Add 4 standalone components + barrel exports; README update. First TS components in this lib (previously theme-only). |
-| `libs/mobile/watchlist/src` | `scope:mobile`, `slice:watchlist` | Consume the 3 atoms; add error VM branch. |
-| `libs/mobile/search/src` | `scope:mobile`, `slice:search` | Consume `VultusSkeletonCard`, `VultusEmptyState`, `VultusErrorState`. |
-| `libs/mobile/title-detail/src` | `scope:mobile`, `slice:title-detail` | Consume `VultusSkeletonHero`, `VultusEmptyState`, `VultusErrorState`; add `error` to `DetailViewState`. |
-| `libs/mobile/settings/src` | `scope:mobile`, `slice:settings` | Consume `VultusErrorState`; add inline form skeleton + error flag. |
+| Lib / app                      | Sheriff tags                         | Change                                                                                                                |
+| ------------------------------ | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `libs/shared/ui-kit/src`       | `scope:shared`                       | Add 4 standalone components + barrel exports; README update. First TS components in this lib (previously theme-only). |
+| `libs/mobile/watchlist/src`    | `scope:mobile`, `slice:watchlist`    | Consume the 3 atoms; add error VM branch.                                                                             |
+| `libs/mobile/search/src`       | `scope:mobile`, `slice:search`       | Consume `VultusSkeletonCard`, `VultusEmptyState`, `VultusErrorState`.                                                 |
+| `libs/mobile/title-detail/src` | `scope:mobile`, `slice:title-detail` | Consume `VultusSkeletonHero`, `VultusEmptyState`, `VultusErrorState`; add `error` to `DetailViewState`.               |
+| `libs/mobile/settings/src`     | `scope:mobile`, `slice:settings`     | Consume `VultusErrorState`; add inline form skeleton + error flag.                                                    |
 
 **No cross-slice imports.** Each slice imports only from
 `@vultus/shared/ui-kit` (`scope:shared` — importable by anyone, PLAN §3 rule 4)
@@ -181,8 +181,8 @@ Slice-internal type change (not a public API — internal to title-detail):
 export type DetailViewState =
   | { kind: 'loading' }
   | { kind: 'loaded'; source: 'cache' | 'live'; detail: TitleDetail }
-  | { kind: 'not-found' }     // genuine cache-miss AND live TMDB 404
-  | { kind: 'error' };        // NEW: network/Firestore fetch failure (≠ 404)
+  | { kind: 'not-found' } // genuine cache-miss AND live TMDB 404
+  | { kind: 'error' }; // NEW: network/Firestore fetch failure (≠ 404)
 ```
 
 `resolveDetail()` must distinguish a real **404 / not-found** (→ `not-found`)
@@ -217,7 +217,7 @@ body, and a `retryLoad()` that resets it and re-runs `load()`.
 
 > **Stitch capture status (spec-author, 2026-06-25).** The state branches this
 > spec governs — skeleton, empty, and error — are **not depicted as standalone
-> screens** in the Stitch project: the Stitch screens render *loaded* content.
+> screens** in the Stitch project: the Stitch screens render _loaded_ content.
 > The known relevant screen IDs (from prior specs / in-repo refs) are:
 > **Watchlist** — not captured in any prior spec (ID unknown);
 > **Search** — not captured in any prior spec (ID unknown);
@@ -225,18 +225,19 @@ body, and a `retryLoad()` that resets it and re-runs `load()`.
 > (pinned in spec 0016);
 > **Settings - Vultus** — `projects/13590348714018893783/screens/81945ff3381e453dafcc4e5ce896fcfa`
 > (referenced in `settings.page.html`).
-> The **visual contract for the *skeletons*** is *shape-match the slice's real
-> content* (read from the live markup below), so the skeleton dimensions are
+> The **visual contract for the _skeletons_** is _shape-match the slice's real
+> content_ (read from the live markup below), so the skeleton dimensions are
 > pinned to the existing loaded-content cards, not to a separate Stitch screen.
 > The implementer **must still `get_screen`** the Watchlist, Search, Movie
 > Detail (id above), and Settings (id above) screens (the Stitch MCP **is**
 > reachable from the orchestrator — **retry on a sub-agent "unreachable"**, do
 > not skip), fetch each `htmlCode.downloadUrl` **raw** (plain GET, not WebFetch)
-> + `screenshot.downloadUrl`, and **visually verify** the skeleton silhouette
-> matches the real card/hero/row and that empty/error states sit on the correct
-> surface ramp. **Record the four screen IDs used in the PR.** This is a *verify*
-> step (the spec's pinned values are the contract); it is **not blocking** for
-> these state branches because the screens don't depict them.
+>
+> - `screenshot.downloadUrl`, and **visually verify** the skeleton silhouette
+>   matches the real card/hero/row and that empty/error states sit on the correct
+>   surface ramp. **Record the four screen IDs used in the PR.** This is a _verify_
+>   step (the spec's pinned values are the contract); it is **not blocking** for
+>   these state branches because the screens don't depict them.
 
 All tokens below are CSS custom properties exposed by
 `libs/shared/ui-kit/src/lib/theme.scss` (the `--vultus-*` / `--ion-*` vars). **Do
@@ -322,14 +323,14 @@ Same centred layout as the empty state, plus a retry button.
   `refresh-outline` icon (`slot="start"`), `(click)` → `retry.emit()`. Concrete
   states (per-state acceptance contract — feature-reviewer/human tick these):
 
-  | State | Appearance |
-  | --- | --- |
-  | **default** | `fill="outline"`, border + text `--vultus-primary` (`#4edea3`), transparent fill, `--vultus-radius` corners, height **40px**, `label-md` (12/600) text. |
-  | **focus** | Visible focus ring (Ionic default focus highlight on `--vultus-primary`); ring must be visible against `--vultus-surface`. |
-  | **hover** | Subtle primary-tinted overlay (Ionic outline hover, ~8% primary) — pointer environments only. |
-  | **active / pressed** | Primary-tinted overlay (~12% primary), no physical "lift" (flat aesthetic per design system). |
-  | **disabled** | Not used in this spec — the button is always enabled (retry is always a valid action). Do not render a disabled state. |
-  | **transition** | Ionic's default button state transition (≈150ms ease) for hover/active overlays; the shimmer-to-content swap is the skeleton's `[animated]` shimmer, not a custom fade. |
+  | State                | Appearance                                                                                                                                                              |
+  | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | **default**          | `fill="outline"`, border + text `--vultus-primary` (`#4edea3`), transparent fill, `--vultus-radius` corners, height **40px**, `label-md` (12/600) text.                 |
+  | **focus**            | Visible focus ring (Ionic default focus highlight on `--vultus-primary`); ring must be visible against `--vultus-surface`.                                              |
+  | **hover**            | Subtle primary-tinted overlay (Ionic outline hover, ~8% primary) — pointer environments only.                                                                           |
+  | **active / pressed** | Primary-tinted overlay (~12% primary), no physical "lift" (flat aesthetic per design system).                                                                           |
+  | **disabled**         | Not used in this spec — the button is always enabled (retry is always a valid action). Do not render a disabled state.                                                  |
+  | **transition**       | Ionic's default button state transition (≈150ms ease) for hover/active overlays; the shimmer-to-content swap is the skeleton's `[animated]` shimmer, not a custom fade. |
 
   All colors via CSS vars (`--ion-color-primary` is already mapped to
   `--vultus-primary` in `theme.scss`); set `color="primary"` rather than
@@ -377,7 +378,7 @@ folder manifest `libs/shared/ui-kit/src/**`.)
 - Replace the inline `skeleton-list` block with `<vultus-skeleton-card [count]="5">`.
 - Replace the `.empty-state` block with
   `<vultus-empty-state icon="film-outline" title="Your watchlist is empty"
-  subtitle="Search for a title to get started">`.
+subtitle="Search for a title to get started">`.
 - Add an **error VM branch**: extend `vm$` to the exact shape
   `{ groups: StatusGroup[] | null; error: boolean }` so a stream error maps to an
   error state (`catchError` on the `watchlist$` pipe emits
@@ -422,7 +423,7 @@ Files (writes):
 
 - Replace the inline loading skeleton block with `<vultus-skeleton-hero>`.
 - Re-render the `not-found` state via `<vultus-empty-state icon="film-outline"
-  title="Title not found" subtitle="...">` (keep the "Go back" link, or move it
+title="Title not found" subtitle="...">` (keep the "Go back" link, or move it
   into the page beneath the atom).
 - Add the `error` kind to `DetailViewState` and branch `resolveDetail()` so a
   thrown network/Firestore error → `error` (not `not-found`); render
@@ -546,9 +547,9 @@ empty/error states sit on the correct surface ramp with primary-emerald retry.
 ## 10. Risks
 
 - **Stitch screens don't depict these states.** Skeleton/empty/error are not
-  standalone Stitch screens, so the contract for skeletons is *shape-match the
-  real content* (pinned above from the live markup), and empty/error use the
-  design-system tokens. If the pulled Watchlist/Search screens *do* show an
+  standalone Stitch screens, so the contract for skeletons is _shape-match the
+  real content_ (pinned above from the live markup), and empty/error use the
+  design-system tokens. If the pulled Watchlist/Search screens _do_ show an
   empty/error treatment that differs from the pinned values, the implementer
   reconciles toward the screen and notes the deviation in the PR. **Watchlist and
   Search screen IDs were never captured in prior specs** — the implementer must
@@ -571,7 +572,7 @@ empty/error states sit on the correct surface ramp with primary-emerald retry.
   is defensible — flagged so it's a conscious call, not an accidental
   over-extraction.
 - **Settings skeleton is slice-local, not a shared atom.** The form-shaped
-  skeleton is intentionally *not* `VultusSkeletonCard` (a form ≠ a list); it
+  skeleton is intentionally _not_ `VultusSkeletonCard` (a form ≠ a list); it
   duplicates a little skeleton markup in the settings slice. That is acceptable
   per the no-premature-DRY rule (one consumer, different shape).
 - **No data-source caveats** (TMDB/Trakt accuracy) apply — this spec touches no
