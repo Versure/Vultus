@@ -1,0 +1,59 @@
+<!--
+  Onboarding page (spec 0022).
+
+  There is NO Stitch screen for onboarding in projects/13590348714018893783
+  (the project has Settings, Movie Detail, Splash, Search, Watchlist, and a
+  Media Tracker screen only). This layout is therefore built to the spec's
+  concrete UI contract — full-screen, header-less, dark surface — and MUST be
+  visually verified by a human (see the slice README / handoff notes). All
+  colours/typography/spacing/radius come from shared/ui-kit theme vars.
+-->
+<ion-content>
+  <div class="onboarding-container">
+    <!-- Header section -->
+    <div class="onboarding-header">
+      <h1 class="onboarding-title">Welcome to Vultus</h1>
+      <p class="onboarding-subtitle">Your high-fidelity media tracker</p>
+    </div>
+
+    <!-- Region picker -->
+    <div class="onboarding-card">
+      <ion-select
+        class="onboarding-select"
+        label="Region"
+        labelPlacement="start"
+        interface="popover"
+        [value]="selectedRegion()"
+        [disabled]="loading()"
+        (ionChange)="onRegionChange($event)"
+      >
+        @for (region of service.regions; track region) {
+        <ion-select-option [value]="region">{{ region }}</ion-select-option>
+        }
+      </ion-select>
+      <p class="onboarding-helper">
+        Content availability is based on this region.
+      </p>
+    </div>
+
+    <!-- Notifications explanation -->
+    <div class="onboarding-card">
+      <p class="onboarding-notifications-text">
+        Vultus will ask for notification permission to alert you when new
+        episodes air or titles become available in your region.
+      </p>
+    </div>
+
+    <!-- Get started button -->
+    <ion-button
+      class="onboarding-cta"
+      expand="block"
+      [disabled]="loading()"
+      (click)="onGetStarted()"
+    >
+      @if (loading()) {
+      <ion-spinner slot="start"></ion-spinner>
+      } Get started
+    </ion-button>
+  </div>
+</ion-content>

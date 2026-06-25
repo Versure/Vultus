@@ -17,7 +17,12 @@ import { clearAll, resolveAnonUid, seedFor } from './support';
  * uid AFTER boot (R3 — `seedFor`, not `resetAndSeed`, so the running session is
  * preserved); Ionic transitions / network are awaited rather than slept on.
  */
-test.beforeEach(async () => {
+test.beforeEach(async ({ page }) => {
+  // Pre-set the onboarding completion flag so the guard passes through to tabs.
+  // Without this, the guard (spec 0022) redirects first-launch boots to /onboarding.
+  await page.addInitScript(() => {
+    localStorage.setItem('CapacitorStorage.onboarding_done', 'true');
+  });
   // Clean emulator state before the app boots and creates its anon session.
   await clearAll();
 });

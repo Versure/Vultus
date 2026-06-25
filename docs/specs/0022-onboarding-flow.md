@@ -2,7 +2,7 @@
 number: 0022
 slug: onboarding-flow
 title: Add the first-launch onboarding flow — region pick + push-permission grant + FCM token registration before the tabs shell
-status: approved
+status: done
 slices: [slice:onboarding]
 scopes: [scope:mobile, scope:shared]
 created: 2026-06-25
@@ -31,8 +31,8 @@ page; the page collects the streaming **region**, explains and requests **push
 notification permission**, and on "Get started":
 
 - writes/creates `users/{uid}` with the chosen region + default `notificationPrefs`
-  + empty `fcmTokens` (so onboarding — not the lazy settings read — is the normal
-  creator of the user doc);
+  - empty `fcmTokens` (so onboarding — not the lazy settings read — is the normal
+    creator of the user doc);
 - if push permission is granted, registers for FCM and writes the received token
   into `users/{uid}.fcmTokens` (the **first** real token write in the app);
 - records completion in Capacitor `Preferences` (`onboarding_done = 'true'`) and
@@ -69,29 +69,28 @@ the user re-onboards — desired behaviour.
 
 4. **Region selection reuses the shared `REGIONS` / `Region`** from
    `@vultus/shared/domain` (already the ten regions `NL, DE, GB, US, FR, BE, ES, IT,
-   CA, AU` — widened by spec 0011; **no domain change needed here**). Default `NL`,
+CA, AU` — widened by spec 0011; **no domain change needed here**). Default `NL`,
    changeable in the picker. On "Get started" the slice **creates/writes**
    `users/{uid}` with the chosen region + default `notificationPrefs: { episodeAired:
-   true, movieAvailable: true, cameToPlatform: true }` + `fcmTokens: []` via the
+true, movieAvailable: true, cameToPlatform: true }` + `fcmTokens: []` via the
    shared `@vultus/shared/firestore-schema` converters. This makes **onboarding** the
-   normal creator of the user doc. The settings slice's eager read-or-create (spec
-   0011) still works correctly if the user somehow reaches settings without
+   normal creator of the user doc. The settings slice's eager read-or-create (spec 0011) still works correctly if the user somehow reaches settings without
    onboarding, but on the normal path the doc already exists.
 
 5. **FCM token registration — full: request permission + write token.** On
    "Get started", after the user-doc write:
    a. Call `PushNotifications.requestPermissions()` (`@capacitor/push-notifications`).
    b. If `receive === 'granted'`: call `PushNotifications.register()`, listen for the
-      `'registration'` event, and write the received token into `users/{uid}.fcmTokens`
-      (see Data model — the field is `FcmToken[]`, **not** `string[]`; see Risks for
-      the resolution and how `arrayUnion` is applied).
+   `'registration'` event, and write the received token into `users/{uid}.fcmTokens`
+   (see Data model — the field is `FcmToken[]`, **not** `string[]`; see Risks for
+   the resolution and how `arrayUnion` is applied).
    c. If `receive === 'denied'`, or on **any** push-notifications error, **proceed
-      silently** — never block onboarding completion. The user can grant later via
-      device settings; `fcmTokens` stays `[]`.
+   silently** — never block onboarding completion. The user can grant later via
+   device settings; `fcmTokens` stays `[]`.
    d. `PushNotifications` is a native Capacitor plugin, **unavailable in browser/dev**.
-      The service **must guard on `Capacitor.isNativePlatform()`** and skip the entire
-      push flow gracefully in-browser (web build, `mock` serve, e2e smoke) — the
-      region write + completion flag must still run.
+   The service **must guard on `Capacitor.isNativePlatform()`** and skip the entire
+   push flow gracefully in-browser (web build, `mock` serve, e2e smoke) — the
+   region write + completion flag must still run.
 
 6. **Onboarding-done state via Capacitor `Preferences`** (`@capacitor/preferences`).
    After all of the above, write `{ key: 'onboarding_done', value: 'true' }`. The
@@ -119,7 +118,7 @@ the user re-onboards — desired behaviour.
    navigates to `/tabs/watchlist`.
 
 9. **No domain type change.** `User` (with `notificationPrefs` + `fcmTokens:
-   FcmToken[]`), `Region`/`REGIONS`, and the `AUTH_UID` token all already exist in
+FcmToken[]`), `Region`/`REGIONS`, and the `AUTH_UID` token all already exist in
    `@vultus/shared/domain`; the converters/paths exist in
    `@vultus/shared/firestore-schema`. **Reuse them — add no shared type.** (The only
    `scope:shared`-tagged touch is the new `slice:onboarding` lib itself; the
@@ -160,7 +159,7 @@ In scope:
 - **`onboardingGuard`** — a `CanActivateFn` reading the `Preferences` flag, returning
   `true` or a redirect `UrlTree` to `/onboarding`. Barrel-exported.
 - **Shell route wiring** in `apps/mobile/src/app/app.routes.ts`: `canActivate:
-  [onboardingGuard]` on `tabs`; a new lazy `/onboarding` route.
+[onboardingGuard]` on `tabs`; a new lazy `/onboarding` route.
 - **Add `@capacitor/preferences`** (and confirm `@capacitor/push-notifications`,
   already present from spec 0020) to the **root `package.json`** at a Capacitor-8
   compatible pinned version; lockfile + (if needed) `pnpm-workspace.yaml` allowBuilds
@@ -181,14 +180,14 @@ Data model).
 
 ## Affected slices & Sheriff tags
 
-| Project / area     | Path                                                    | Sheriff tags                       | Change                                                                                  |
-| ------------------ | ------------------------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------- |
-| mobile-onboarding  | `libs/mobile/onboarding`                                | `scope:mobile`, `slice:onboarding` | **new lib** — `OnboardingPage`, `OnboardingService`, `onboardingGuard`, barrel, README  |
-| mobile (app/shell) | `apps/mobile/src/app/app.routes.ts`                     | `scope:mobile`                     | add `onboardingGuard` to `tabs`; add lazy `/onboarding` route                           |
+| Project / area     | Path                                                    | Sheriff tags                       | Change                                                                                   |
+| ------------------ | ------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------- |
+| mobile-onboarding  | `libs/mobile/onboarding`                                | `scope:mobile`, `slice:onboarding` | **new lib** — `OnboardingPage`, `OnboardingService`, `onboardingGuard`, barrel, README   |
+| mobile (app/shell) | `apps/mobile/src/app/app.routes.ts`                     | `scope:mobile`                     | add `onboardingGuard` to `tabs`; add lazy `/onboarding` route                            |
 | Root deps          | `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml` | none (root)                        | add `@capacitor/preferences` (pinned, Capacitor-8); allowBuilds only if genuinely needed |
 
 - **Tagging is by PATH GLOB in `sheriff.config.ts`** (`'libs/mobile/<slice>/src':
-  ['scope:mobile', 'slice:<slice>']`). A new `libs/mobile/onboarding/src`
+['scope:mobile', 'slice:<slice>']`). A new `libs/mobile/onboarding/src`
   **inherits `['scope:mobile', 'slice:onboarding']` automatically** the moment the
   lib is generated — **this spec does NOT edit `sheriff.config.ts`.** (`slice:onboarding`
   is not yet in the comment vocabulary in `sheriff.config.ts`; updating that
@@ -196,7 +195,7 @@ Data model).
   enforces.)
 - **Import boundaries (verified against the merged `sheriff.config.ts` rules):**
   - `libs/mobile/onboarding` (`slice:onboarding`) may import `['scope:shared',
-    sameTag]` only. It imports `@vultus/shared/domain` (`Region`/`REGIONS`/`User`/
+sameTag]` only. It imports `@vultus/shared/domain` (`Region`/`REGIONS`/`User`/
     `FcmToken`), `@vultus/shared/domain/tokens` (`AUTH_UID`), and
     `@vultus/shared/firestore-schema` (`userPath`, `userToData`/`dataToUser`) — **all
     `scope:shared`, allowed (rule 4).** It imports **no other slice**.
@@ -231,30 +230,30 @@ and converter-backed** (`@vultus/shared/domain` `User`/`FcmToken`/`NotificationP
 `@vultus/shared/firestore-schema` `userPath` / `userToData` / `dataToUser`) — this
 spec **reuses** it; it does not redefine it.
 
-| PLAN §4 path     | Access by this slice          | Fields                                                                                                                  |
-| ---------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `users/{uid}`    | **create / set**, **update**  | `region: Region`; `notificationPrefs: { episodeAired, movieAvailable, cameToPlatform }` (all `true`); `fcmTokens` (`[]` on create, then `arrayUnion` of one `FcmToken` on grant) |
-| `users/{uid}/**` | **none**                      | watchlist / episodes / notifications subcollections untouched                                                          |
-| `title-cache/**` | **none**                      | not touched                                                                                                            |
+| PLAN §4 path     | Access by this slice         | Fields                                                                                                                                                                           |
+| ---------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `users/{uid}`    | **create / set**, **update** | `region: Region`; `notificationPrefs: { episodeAired, movieAvailable, cameToPlatform }` (all `true`); `fcmTokens` (`[]` on create, then `arrayUnion` of one `FcmToken` on grant) |
+| `users/{uid}/**` | **none**                     | watchlist / episodes / notifications subcollections untouched                                                                                                                    |
+| `title-cache/**` | **none**                     | not touched                                                                                                                                                                      |
 
 - **User-doc create (decision 4):** on `complete(region)`, write `users/{uid}` via
   `setDoc(doc(firestore, userPath(uid)), userToData({ region, notificationPrefs: {
-  episodeAired: true, movieAvailable: true, cameToPlatform: true }, fcmTokens: [] }))`.
+episodeAired: true, movieAvailable: true, cameToPlatform: true }, fcmTokens: [] }))`.
   Use `setDoc` (idempotent create-or-overwrite of these onboarding-owned defaults) —
   acceptable because onboarding runs once and is the doc's normal creator; if the doc
   somehow already exists (e.g. settings opened first), the region the user just chose
   in onboarding is authoritative for this write. (Implementer may instead `setDoc(...,
-  { merge: true })` if preserving an existing non-default `notificationPrefs`/`fcmTokens`
+{ merge: true })` if preserving an existing non-default `notificationPrefs`/`fcmTokens`
   is preferred — **binding constraint:** after `complete`, the doc exists with the
   chosen `region` and a valid `notificationPrefs`; do not clobber a previously
   registered `fcmTokens` array if one exists.)
 - **FCM token write (decision 5b):** on the `'registration'` event, write **one
   `FcmToken`** into `fcmTokens`. Because `fcmTokens` is `FcmToken[]` (objects, **not**
   `string[]` — see Risks), the additive write is `updateDoc(ref, { fcmTokens:
-  arrayUnion(fcmTokenWire) })`. Build it in two steps:
+arrayUnion(fcmTokenWire) })`. Build it in two steps:
   1. Construct a **domain `FcmToken`** (`@vultus/shared/domain`): `{ token:
-     <event.registration.value>, deviceId: <stable device id>, createdAt: new
-     Date().toISOString() }` — `createdAt` is an **ISO 8601 string** at the domain layer.
+<event.registration.value>, deviceId: <stable device id>, createdAt: new
+Date().toISOString() }` — `createdAt` is an **ISO 8601 string** at the domain layer.
   2. Map it to the **wire shape** `FcmTokenWriteData` (`@vultus/shared/firestore-schema`):
      `{ token, deviceId, createdAt: new Date(iso) }` — `createdAt` becomes a JS `Date`
      here (so Firestore stores a Timestamp). Pass this wire-shaped element to
@@ -264,6 +263,7 @@ spec **reuses** it; it does not redefine it.
   installed — see Risks); a documented constant or a generated-and-persisted id is
   acceptable for v1 single-device. The token write **must not** run on web (guarded by
   `isNativePlatform()`).
+
 - **Use the shared converters / paths:** `userPath(uid)` for the path,
   `userToData(user)` for the create payload. For the single-element `arrayUnion` there
   is **no public single-element FCM converter** — `fcmTokenToData` is **private and not
@@ -296,6 +296,7 @@ spec **reuses** it; it does not redefine it.
     `mock` providers swap (`onboarding.providers.mock.ts`) follows spec 0018's
     structural-mirror pattern. Document whatever is exported in the README.
   - **Recommended (not binding) shapes:**
+
     ```ts
     // onboardingGuard — CanActivateFn
     export const onboardingGuard: CanActivateFn = async () => {
@@ -317,6 +318,7 @@ spec **reuses** it; it does not redefine it.
       complete(region: Region): Promise<void>;
     }
     ```
+
     What is **binding**: `onboardingGuard` gates `tabs` on the `'onboarding_done'`
     Preferences flag (redirect to `/onboarding` when unset); `complete(region)`
     creates `users/{uid}` with the decision-4 defaults via the shared converter,
@@ -324,6 +326,7 @@ spec **reuses** it; it does not redefine it.
     via `arrayUnion`, swallows any push failure (never blocking completion), and sets
     `onboarding_done = 'true'` last; the slice never writes outside `users/{uid}`,
     never touches another slice, never imports `apps/mobile`.
+
 - **`apps/mobile/src/app/app.routes.ts`** — the only shell API change:
   ```ts
   import { onboardingGuard } from '@vultus/mobile/onboarding';
@@ -336,7 +339,7 @@ spec **reuses** it; it does not redefine it.
   },
   ```
   Route shape is the **binding** contract; the existing `{ path: '', redirectTo:
-  'tabs/watchlist' }` stays — first launch hits `tabs`, the guard redirects to
+'tabs/watchlist' }` stays — first launch hits `tabs`, the guard redirects to
   `/onboarding`, the page navigates back to `/tabs/watchlist` on completion.
 
 ## UI / Stitch screen refs
@@ -358,7 +361,7 @@ to match is the **onboarding / welcome / get-started** screen of Stitch project
 > 1. `list_screens` on `projects/13590348714018893783` and find the **onboarding /
 >    welcome / get-started** screen (the first-run gate, not a content tab). **Retry on
 >    MCP failure.** (Note: the merged Settings page cites screen
->    `81945ff3381e453dafcc4e5ce896fcfa` — the onboarding screen is a *different* one;
+>    `81945ff3381e453dafcc4e5ce896fcfa` — the onboarding screen is a _different_ one;
 >    do not reuse the Settings screen.)
 > 2. `get_screen` on it for `htmlCode.downloadUrl` + `screenshot.downloadUrl`. **Fetch
 >    the raw HTML via a plain GET / `Invoke-WebRequest` (NOT WebFetch — it summarises
@@ -443,7 +446,7 @@ infrastructure-engineer owns the dependency add + `cap sync`.
      already present from spec 0020) is still installed. Update `pnpm-lock.yaml`.
    - **Fresh-worktree install guards (project memory):** ensure `pnpm install`
      completes — `pnpm-workspace.yaml` should already carry `re2: false` and `sharp:
-     true`; if `@capacitor/preferences` introduces a newly-blocked native postinstall,
+true`; if `@capacitor/preferences` introduces a newly-blocked native postinstall,
      add it to the allowBuilds list and record it. Likewise, if the pinned version is
      newer than the cooldown window defined in `pnpm-workspace.yaml`
      (`minimumReleaseAgeExclude`), add `@capacitor/preferences` to that list — analogous
@@ -459,7 +462,7 @@ infrastructure-engineer owns the dependency add + `cap sync`.
    frontend-engineer.
    - Use the Nx Angular library generator to create `libs/mobile/onboarding`
      (matching the spec-0010 slice-lib conventions: `sourceRoot
-     libs/mobile/onboarding/src`, `prefix lib`, `projectType library`, `tags: []` in
+libs/mobile/onboarding/src`, `prefix lib`, `projectType library`, `tags: []` in
      `project.json` — Sheriff tags come from the path glob, NOT `project.json`). It
      inherits `['scope:mobile', 'slice:onboarding']` automatically.
    - Create the barrel `src/index.ts` (exports filled in by tasks 3–4) and a real
@@ -476,11 +479,11 @@ infrastructure-engineer owns the dependency add + `cap sync`.
      `isNativePlatform()`-guarded push flow (`requestPermissions` → on `granted`,
      `register` + `'registration'` listener → `arrayUnion` `FcmToken` write; swallow
      denied/errors — decision 5), then `Preferences.set({ key: 'onboarding_done',
-     value: 'true' })`. Expose `regions = REGIONS`. **Null-uid guard** before any
+value: 'true' })`. Expose `regions = REGIONS`. **Null-uid guard** before any
      Firestore call (the `AUTH_UID` signal can be null before the anon session
      resolves — see Risks).
    - `onboarding.guard.ts`: the `CanActivateFn` reading `Preferences.get({ key:
-     'onboarding_done' })`; return `true` or `Router.createUrlTree(['/onboarding'])`.
+'onboarding_done' })`; return `true` or `Router.createUrlTree(['/onboarding'])`.
      Export an `ONBOARDING_DONE_KEY` constant shared by the service + guard (same lib,
      no boundary issue).
    - `onboarding.providers.mock.ts`: a structural mock of `OnboardingService` (spec
@@ -513,7 +516,7 @@ infrastructure-engineer owns the dependency add + `cap sync`.
 
 5. **[parallel] Shell route wiring. Depends on task 2 (the barrel must exist with
    `onboardingGuard` + `OnboardingPage` exported — i.e. needs tasks 3–4's exports at
-   build time, but the *edit* itself touches only `app.routes.ts` and can be authored
+   build time, but the _edit_ itself touches only `app.routes.ts` and can be authored
    concurrently once the barrel symbols are agreed).** frontend-engineer.
    - In `apps/mobile/src/app/app.routes.ts`: add `canActivate: [onboardingGuard]` to
      the `tabs` route and the new lazy `/onboarding` route (Public types / APIs). Keep
@@ -521,7 +524,7 @@ infrastructure-engineer owns the dependency add + `cap sync`.
    - **File manifest: `apps/mobile/src/app/app.routes.ts`** (this one file only).
      Disjoint from all of tasks 2–4 (`libs/mobile/onboarding/**`) and task 6
      (`*.spec.ts`), so it is the single safe parallel fan-out. **Ordering caveat for
-     the orchestrator:** the route file *imports* the barrel symbols, so a green
+     the orchestrator:** the route file _imports_ the barrel symbols, so a green
      typecheck/build requires tasks 3–4 to have produced those exports — run this task's
      final verify after 3–4, but its file write conflicts with nothing and may be done
      concurrently.
@@ -545,17 +548,17 @@ infrastructure-engineer owns the dependency add + `cap sync`.
      exercised (device-only).
    - **Backward-compat fix:** update the existing spec-0019 e2e files that boot and
      expect `/tabs/watchlist` so they pre-set `localStorage.setItem(
-     'CapacitorStorage.onboarding_done', 'true')` in their `beforeEach` (or set it by
+'CapacitorStorage.onboarding_done', 'true')` in their `beforeEach` (or set it by
      default in `global-setup.ts` / a shared support helper) — at minimum
      `apps/mobile-e2e/src/app.boot.spec.ts`, plus any other spec-0019 file that boots
      without pre-setting the flag. This keeps the spec-0019 suite green now that boot
      redirects to `/onboarding` until the flag is set.
    - **File manifest: `apps/mobile-e2e/src/**`** — concretely
-     `apps/mobile-e2e/src/onboarding.spec.ts` (new) plus the spec-0019 files needing the
-     fix (at least `apps/mobile-e2e/src/app.boot.spec.ts`, and `global-setup.ts` /
-     support helper if the default-baseline approach is used). **Disjoint** from task 6
-     (`libs/mobile/onboarding/**/*.spec.ts`) and tasks 2–5 — `apps/mobile-e2e/src/` only,
-     **no `libs/mobile/onboarding/` files** — so it runs **parallel** to task 6.
+`apps/mobile-e2e/src/onboarding.spec.ts`(new) plus the spec-0019 files needing the
+fix (at least`apps/mobile-e2e/src/app.boot.spec.ts`, and `global-setup.ts` /
+support helper if the default-baseline approach is used). **Disjoint** from task 6
+(`libs/mobile/onboarding/**/\*.spec.ts`) and tasks 2–5 — `apps/mobile-e2e/src/` only,
+     **no `libs/mobile/onboarding/` files** — so it runs **parallel\*\* to task 6.
 
 (All slice work is under `libs/mobile/onboarding/**`; the files outside it are
 `apps/mobile/src/app/app.routes.ts` (task 5), the root dep files (task 1), and the
@@ -582,7 +585,7 @@ mocked `AUTH_UID` signal, mocked `@capacitor/push-notifications` / `@capacitor/p
 - **Web (non-native) skips the push flow but still completes:** with
   `isNativePlatform() === false`, `requestPermissions`/`register` are **not** called,
   no `fcmTokens` update fires, yet the user-doc write and the `Preferences.set({ key:
-  'onboarding_done', value: 'true' })` both run.
+'onboarding_done', value: 'true' })` both run.
 - **Native + granted writes a token:** `isNativePlatform() === true` and
   `requestPermissions` resolves `{ receive: 'granted' }` → `register()` is called, and
   on a simulated `'registration'` event the service issues an `arrayUnion` update to
@@ -632,7 +635,7 @@ flows testable in browser mode without native plugins. Three flows:
   `CapacitorStorage.onboarding_done = 'true'`. (The FCM permission dialog + token write
   are **device-only** — **not** asserted here.)
 - **F-onboard-3** (`empty` or `seeded` fixture, `CapacitorStorage.onboarding_done =
-  'true'` pre-set in `beforeEach` via
+'true'` pre-set in `beforeEach` via
   `page.evaluate(() => localStorage.setItem('CapacitorStorage.onboarding_done', 'true'))`):
   Boot → URL is `/tabs/watchlist` directly; **no** redirect to `/onboarding`.
 
@@ -667,8 +670,7 @@ Only the **native permission/token path** is out of CI scope (device-only).
       `@vultus/shared/domain`, `@vultus/shared/domain/tokens`,
       `@vultus/shared/firestore-schema`, AngularFire + `@capacitor/*` (third-party) —
       **no other-slice import, no `apps/mobile` deep import, no `scope:functions`
-      import**; the shell route edit is `scope:mobile → scope:mobile` (allowed). Service
-      + guard unit tests and the page component test are green (no emulator, no network,
+      import**; the shell route edit is `scope:mobile → scope:mobile` (allowed). Service + guard unit tests and the page component test are green (no emulator, no network,
       no native runtime, no secrets — Firebase + Capacitor plugins mocked).
 - [ ] `pnpm nx typecheck mobile-onboarding mobile` passes — the page, service, guard,
       and the shell route's barrel import all compile (`AUTH_UID`, the shared
@@ -689,7 +691,7 @@ Only the **native permission/token path** is out of CI scope (device-only).
       (flag pre-set → straight to `/tabs/watchlist`, no redirect) are **green**;
       **F-onboard-2** passes (pick "DE" → complete → `/tabs/watchlist`, emulator
       `users/{uid}` created with `region: 'DE'`, `CapacitorStorage.onboarding_done =
-      'true'`). All **pre-existing spec-0019 e2e flows (F1–F8 across `app.boot.spec.ts`,
+  'true'`). All **pre-existing spec-0019 e2e flows (F1–F8 across `app.boot.spec.ts`,
       `search.spec.ts`, `settings.spec.ts`, `watchlist-refresh.spec.ts`)** remain green
       after the backward-compat fix (the flag pre-set in `beforeEach` / `global-setup`).
       The **FCM flows (permission dialog + token write) are explicitly device-only — NOT
@@ -731,18 +733,18 @@ Only the **native permission/token path** is out of CI scope (device-only).
   The decision record describes writing "the received token to `users/{uid}.fcmTokens`
   via `arrayUnion`" and calls the field `string[]`. The **merged** domain
   (`@vultus/shared/domain` `User.fcmTokens: FcmToken[]`, with `FcmToken = { token,
-  deviceId, createdAt: string }` — ISO 8601) and its (private) converter persist an
+deviceId, createdAt: string }` — ISO 8601) and its (private) converter persist an
   **array of objects** with `createdAt` mapped to a `Date` on the wire
   (`FcmTokenWriteData.createdAt: Date`). **Resolution (binding):** build a domain
   `FcmToken` first (`{ token: <event.registration.value>, deviceId, createdAt: new
-  Date().toISOString() }` — ISO **string**), then map it inline to the exported wire
+Date().toISOString() }` — ISO **string**), then map it inline to the exported wire
   type `FcmTokenWriteData` (`{ token, deviceId, createdAt: new Date(iso) }` — `Date`)
   and pass that to `arrayUnion` — NOT a bare string. The private `fcmTokenToData` is
   **not exported**, so do the inline single-element map; this spec adds no public
   single-element FCM converter (decision 9). Writing a bare string would corrupt the
   array shape and break the read converter. If the implementer believes a `string[]`
   field is wanted instead, that is a **data-model change** (new spec + converter rewrite
-  + migration), not a silent divergence.
+  - migration), not a silent divergence.
 
 - **`@capacitor/preferences` is NOT bundled in `@capacitor/core` and is NOT installed
   (corrected in-spec — decision 6).** Verified against `package.json`: only

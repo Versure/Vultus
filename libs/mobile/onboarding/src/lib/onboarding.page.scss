@@ -1,0 +1,120 @@
+// Onboarding page (spec 0022).
+//
+// NO Stitch screen exists for onboarding — this is built to the spec's UI
+// contract and is flagged for human visual verification. All colours,
+// typography, spacing and radius come from the shared/ui-kit theme vars
+// (--vultus-* / --ion-*); NO hard-coded hex here. Page background is `surface`;
+// cards step one level up the ramp to `surface-container`.
+
+ion-content {
+  --background: var(--vultus-surface);
+}
+
+// Full-height column: header pinned to the top, the CTA pushed to the bottom by
+// the margin-top:auto on the button (the cards sit just under the header).
+.onboarding-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  box-sizing: border-box;
+  padding: var(--vultus-space-lg) var(--vultus-space-md);
+  max-width: 42rem;
+  margin-inline: auto;
+}
+
+// Welcome header — display-lg (mobile size) title + body-lg subtitle.
+.onboarding-header {
+  margin-bottom: var(--vultus-space-xl);
+}
+
+.onboarding-title {
+  margin: 0 0 var(--vultus-space-sm);
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-display-lg-mobile-size);
+  font-weight: var(--vultus-text-display-lg-weight);
+  line-height: var(--vultus-text-display-lg-mobile-line);
+  letter-spacing: var(--vultus-text-display-lg-spacing);
+  color: var(--vultus-on-surface);
+}
+
+.onboarding-subtitle {
+  margin: 0;
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-body-lg-size);
+  font-weight: var(--vultus-text-body-lg-weight);
+  line-height: var(--vultus-text-body-lg-line);
+  color: var(--vultus-on-surface-variant);
+}
+
+// Cards — surface-container fill, 0.75rem (`md`) radius, 1px outline-variant
+// hairline at low alpha, 16px internal padding, 16px apart.
+.onboarding-card {
+  background: var(--vultus-surface-container);
+  border: 1px solid
+    color-mix(in srgb, var(--vultus-outline-variant) 20%, transparent);
+  border-radius: var(--vultus-radius-md);
+  padding: var(--vultus-space-md);
+
+  & + .onboarding-card {
+    margin-top: var(--vultus-space-md);
+  }
+}
+
+// Region select — label (body-lg/600) leading, chosen value in primary trailing.
+.onboarding-select {
+  --padding-start: 0;
+  --padding-end: 0;
+  --padding-top: 0;
+  --padding-bottom: 0;
+  width: 100%;
+  font-size: var(--vultus-text-body-lg-size);
+  font-weight: 600;
+  line-height: var(--vultus-text-body-lg-line);
+  color: var(--vultus-on-surface);
+
+  &::part(label) {
+    font-size: var(--vultus-text-body-lg-size);
+    font-weight: 600;
+    color: var(--vultus-on-surface);
+  }
+
+  &::part(text) {
+    color: var(--ion-color-primary);
+    font-weight: 700;
+  }
+
+  &::part(icon) {
+    color: var(--vultus-on-surface-variant);
+    opacity: 1;
+  }
+}
+
+// Helper text under the region picker — body-md in on-surface-variant.
+.onboarding-helper {
+  margin: var(--vultus-space-sm) 0 0;
+  font-size: var(--vultus-text-body-md-size);
+  font-weight: var(--vultus-text-body-md-weight);
+  line-height: var(--vultus-text-body-md-line);
+  color: var(--vultus-on-surface-variant);
+}
+
+// Push-permission explainer — body-md in on-surface-variant.
+.onboarding-notifications-text {
+  margin: 0;
+  font-size: var(--vultus-text-body-md-size);
+  font-weight: var(--vultus-text-body-md-weight);
+  line-height: var(--vultus-text-body-md-line);
+  color: var(--vultus-on-surface-variant);
+}
+
+// Primary CTA — pinned to the bottom of the column. Uses the Ionic primary
+// button styling (emerald, on-primary label) from the theme. 24px above it.
+.onboarding-cta {
+  margin-top: auto;
+  padding-top: var(--vultus-space-lg);
+  --border-radius: var(--vultus-radius-md);
+
+  ion-spinner {
+    margin-inline-end: var(--vultus-space-sm);
+  }
+}
