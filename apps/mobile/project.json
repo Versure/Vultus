@@ -107,6 +107,30 @@
         "staticFilePath": "dist/apps/mobile/browser",
         "spa": true
       }
+    },
+    "android": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "pnpm nx run mobile:build",
+          "pnpm nx run mobile:sync",
+          "pnpm nx run mobile:open"
+        ]
+      }
+    },
+    "sync": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npx cap sync android"
+      },
+      "dependsOn": ["build"]
+    },
+    "open": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npx cap open android"
+      },
+      "dependsOn": ["build"]
     }
   }
 }
