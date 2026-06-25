@@ -2,7 +2,7 @@
 number: 0016
 slug: title-detail-slice
 title: Build the title-detail slice — per-title detail page with metadata, regional providers, and watchlist actions
-status: approved
+status: done
 slices: [slice:title-detail]
 scopes: [scope:mobile]
 created: 2026-06-22
@@ -130,7 +130,7 @@ live.
 
 8. **No new e2e in this spec.** e2e + emulator wiring is PLAN §6 item 20. The
    green gate here is **unit + component + build** (what `ci.yml` runs: `lint test
-   build`). All Firebase and all TMDB HTTP access in tests is **mocked** — no live
+build`). All Firebase and all TMDB HTTP access in tests is **mocked** — no live
    Firebase, no emulator (project memory: the emulator cannot run under Claude Code
    tools here), no real TMDB network, no secrets. (Consistent with specs
    0010/0011/0013/0014.)
@@ -196,11 +196,11 @@ Out of scope (each its own later spec):
 
 ## Affected slices & Sheriff tags
 
-| Project             | Path                       | Sheriff tags                         | Change                                                                                       |
-| ------------------- | -------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------- |
-| mobile-title-detail | `libs/mobile/title-detail` | `scope:mobile`, `slice:title-detail` | **NEW** lib: `TitleDetailPage` + `TitleDetailService` + `TmdbDetailClient` + config token; README; tests |
+| Project             | Path                       | Sheriff tags                         | Change                                                                                                              |
+| ------------------- | -------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| mobile-title-detail | `libs/mobile/title-detail` | `scope:mobile`, `slice:title-detail` | **NEW** lib: `TitleDetailPage` + `TitleDetailService` + `TmdbDetailClient` + config token; README; tests            |
 | mobile-search       | `libs/mobile/search`       | `scope:mobile`, `slice:search`       | **minimal** edit: tap a result **card** → navigate to `tabs/title-detail/:titleId` (Add control behavior preserved) |
-| mobile (app)        | `apps/mobile`              | `scope:mobile`                       | register the lazy `tabs/title-detail/:titleId` route; provide `TMDB_DETAIL_CONFIG` at root from `environment.tmdb` |
+| mobile (app)        | `apps/mobile`              | `scope:mobile`                       | register the lazy `tabs/title-detail/:titleId` route; provide `TMDB_DETAIL_CONFIG` at root from `environment.tmdb`  |
 
 - **Tagging is by PATH GLOB in `sheriff.config.ts`** (spec 0010): the existing
   config declares `'libs/mobile/<slice>': ['scope:mobile', 'slice:<slice>']`, so a
@@ -212,8 +212,8 @@ Out of scope (each its own later spec):
   exists** (e.g. the vocabulary list omits it), and record "no `sheriff.config.ts`
   change needed" in the PR if the verification passes. Generated `project.json`
   keeps `tags: []` (correct — tagging is by glob). **Per project memory, the glob
-  targets `libs/**/src` (the barrel module), not the lib root — confirm the new
-  lib's `src` is matched so runtime barrel imports resolve.**
+  targets `libs/**/src`(the barrel module), not the lib root — confirm the new
+lib's`src` is matched so runtime barrel imports resolve.\*\*
 - **Import boundaries (verified against the spec-0010 Sheriff rules 1–4):**
   - `libs/mobile/title-detail` (`slice:title-detail`) is governed by
     `'slice:*': ['scope:shared', sameTag]` — it may import **only** `scope:shared`
@@ -257,14 +257,14 @@ denormalized fields `posterPath`/`voteAverage` were added by spec 0014, which is
 `watchlistItemToData`/`dataToWatchlistItem` converters, and this spec **consumes them
 directly**). All `title-cache` access is **read-only**.
 
-| PLAN §4 path                                 | Access by this slice              | Fields / note                                                                          |
-| -------------------------------------------- | --------------------------------- | -------------------------------------------------------------------------------------- |
-| `title-cache/{tmdbId}` (doc)                 | **read** (cache-first metadata)   | `type`, `metadata` (`title`, `overview`, `posterPath`, `releaseDate`), `traktId`       |
-| `title-cache/{tmdbId}/availability/{region}` | **read** (cache-first providers)  | `providers: WatchProvider[]` — grouped by `type` for the providers section             |
-| `users/{uid}` (doc)                          | **read**                          | `region: Region` (settings slice owns the write — spec 0011)                           |
-| `users/{uid}/watchlist/{titleId}`            | **read (realtime)**, **create**, **update(status)**, **delete** | tracked state subscription; add (`status:'planned'`); change status; remove           |
-| `users/{uid}/watchlist/{titleId}/episodes/**`| **none**                          | **OUT OF SCOPE** (decision 6) — not read, not written                                  |
-| `title-cache/**` (write)                     | **none**                          | functions-only (`write: if false`) — the live TMDB fallback is display-only            |
+| PLAN §4 path                                  | Access by this slice                                            | Fields / note                                                                    |
+| --------------------------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `title-cache/{tmdbId}` (doc)                  | **read** (cache-first metadata)                                 | `type`, `metadata` (`title`, `overview`, `posterPath`, `releaseDate`), `traktId` |
+| `title-cache/{tmdbId}/availability/{region}`  | **read** (cache-first providers)                                | `providers: WatchProvider[]` — grouped by `type` for the providers section       |
+| `users/{uid}` (doc)                           | **read**                                                        | `region: Region` (settings slice owns the write — spec 0011)                     |
+| `users/{uid}/watchlist/{titleId}`             | **read (realtime)**, **create**, **update(status)**, **delete** | tracked state subscription; add (`status:'planned'`); change status; remove      |
+| `users/{uid}/watchlist/{titleId}/episodes/**` | **none**                                                        | **OUT OF SCOPE** (decision 6) — not read, not written                            |
+| `title-cache/**` (write)                      | **none**                                                        | functions-only (`write: if false`) — the live TMDB fallback is display-only      |
 
 - **Cache-first read (decision 2).** Read `title-cache/{tmdbId}` via
   `titleCacheDocPath(tmdbId)` + `dataToTitleCache`. If the doc **exists**, render
@@ -281,13 +281,13 @@ directly**). All `title-cache` access is **read-only**.
   produces. **It never writes `title-cache`** — the fetched data is held in the
   service's signal for the page render only.
 - **Region resolution (decision 2).** Read `users/{uid}.region` via `userPath(uid)`
-  + `dataToUser`. A **null/unset** region (user doc absent, or read before
-  settings has been visited) → the providers section is **omitted** and replaced
-  by a "Set your region in Settings to see availability" prompt; the rest of the
-  page still renders.
+  - `dataToUser`. A **null/unset** region (user doc absent, or read before
+    settings has been visited) → the providers section is **omitted** and replaced
+    by a "Set your region in Settings to see availability" prompt; the rest of the
+    page still renders.
 - **Add write (decision 4).** Build a `WatchlistItem`
   `{ type, tmdbId, traktId: null, title, addedAt: <now ISO>, status: 'planned',
-  posterPath, voteAverage }`, pass it through `watchlistItemToData(item)` (the
+posterPath, voteAverage }`, pass it through `watchlistItemToData(item)` (the
   merged-0014 converter already coerces the two denormalized fields via `?? null` and
   `addedAt` → Date), and `setDoc` it at `watchlistItemPath(uid, String(tmdbId))`.
   **Use the shared converter — do not hand-roll the wire mapping.**
@@ -446,21 +446,25 @@ export type DetailViewState =
 
 Method/signal names are a **recommendation**; what is **binding**: cache-first
 resolution via `titleCacheDocPath` + `dataToTitleCache` (then `availabilityDocPath`
-+ `dataToAvailability` for providers), **live TMDB fallback on cache miss** via the
-slice-local client (decision 2), region read from `users/{uid}` via `userPath` +
-`dataToUser`, **realtime** tracked-state subscription on
-`watchlistItemPath(uid, String(tmdbId))` via `dataToWatchlistItem`, the add write
-via `watchlistItemToData` + `setDoc` (decision 4, with denormalized
-`posterPath`/`voteAverage`), `updateStatus`/`removeTitle` targeting the same path;
-a **null-uid guard** before any uid-keyed Firestore call (emit `null` / no-op,
-never throw on an undefined path); **never write `title-cache`**; **never read or
-write the `episodes` subcollection** (decision 6).
+
+- `dataToAvailability` for providers), **live TMDB fallback on cache miss** via the
+  slice-local client (decision 2), region read from `users/{uid}` via `userPath` +
+  `dataToUser`, **realtime** tracked-state subscription on
+  `watchlistItemPath(uid, String(tmdbId))` via `dataToWatchlistItem`, the add write
+  via `watchlistItemToData` + `setDoc` (decision 4, with denormalized
+  `posterPath`/`voteAverage`), `updateStatus`/`removeTitle` targeting the same path;
+  a **null-uid guard** before any uid-keyed Firestore call (emit `null` / no-op,
+  never throw on an undefined path); **never write `title-cache`**; **never read or
+  write the `episodes` subcollection** (decision 6).
 
 ### Status display order (binding — mirror 0014)
 
 ```ts
 const STATUS_DISPLAY_ORDER: WatchStatus[] = [
-  'watching', 'planned', 'completed', 'dropped',
+  'watching',
+  'planned',
+  'completed',
+  'dropped',
 ];
 ```
 
@@ -550,24 +554,25 @@ implementer can confirm the token wiring matches the screen.
 wired `--vultus-*` / `--ion-*` CSS custom properties from `shared/ui-kit`
 `theme.scss` — never hardcode a hex.** The mapping below pins each page element to
 its design role and the var that carries it (hex values live only in the design doc
-+ theme.scss; do not re-transcribe them here).
 
-| Page element                                | Design role            | CSS var to consume                                                   |
-| ------------------------------------------- | ---------------------- | -------------------------------------------------------------------- |
-| page background                             | `surface`              | `--vultus-surface` / `--ion-background-color`                        |
-| section headings, accents, icons            | `primary`              | `--ion-color-primary` / `--vultus-primary`                           |
-| outlined status-control text + border       | `primary`              | `--ion-color-primary` / `--vultus-primary`                           |
-| **filled Add CTA background**               | `primary`              | `--ion-color-primary` (see FIX-1 deviation note below)               |
-| **filled Add CTA text/icon**                | `on-primary`           | `--ion-color-primary-contrast`                                       |
-| genre chip text/icon                        | `on-primary-container` | `--vultus-on-primary-container`                                      |
-| title + primary text                        | `on-surface`           | `--vultus-on-surface` / `--ion-text-color`                           |
-| synopsis, meta row, provider-type labels    | `on-surface-variant`   | `--vultus-on-surface-variant`                                        |
-| back-button bg, low cards                   | `surface-container`    | `--vultus-surface-container`                                         |
-| raised chips / surfaces                     | `surface-container-high` | `--vultus-surface-container-high`                                  |
-| secondary hero chip (quality — see recon D) | `surface-container-highest` | `--vultus-surface-container-highest`                            |
-| Level-1 cards / raised surfaces             | tonal ramp             | `--vultus-surface-container` (L1) → `--vultus-surface-container-highest` (overlays) |
-| dividers / scrolled app-bar border          | `outline-variant`      | `--vultus-outline-variant`                                           |
-| tracked status colors                       | semantic status        | `--vultus-status-watching` / `-completed` / `-dropped` / `-planned`  |
+- theme.scss; do not re-transcribe them here).
+
+| Page element                                | Design role                 | CSS var to consume                                                                  |
+| ------------------------------------------- | --------------------------- | ----------------------------------------------------------------------------------- |
+| page background                             | `surface`                   | `--vultus-surface` / `--ion-background-color`                                       |
+| section headings, accents, icons            | `primary`                   | `--ion-color-primary` / `--vultus-primary`                                          |
+| outlined status-control text + border       | `primary`                   | `--ion-color-primary` / `--vultus-primary`                                          |
+| **filled Add CTA background**               | `primary`                   | `--ion-color-primary` (see FIX-1 deviation note below)                              |
+| **filled Add CTA text/icon**                | `on-primary`                | `--ion-color-primary-contrast`                                                      |
+| genre chip text/icon                        | `on-primary-container`      | `--vultus-on-primary-container`                                                     |
+| title + primary text                        | `on-surface`                | `--vultus-on-surface` / `--ion-text-color`                                          |
+| synopsis, meta row, provider-type labels    | `on-surface-variant`        | `--vultus-on-surface-variant`                                                       |
+| back-button bg, low cards                   | `surface-container`         | `--vultus-surface-container`                                                        |
+| raised chips / surfaces                     | `surface-container-high`    | `--vultus-surface-container-high`                                                   |
+| secondary hero chip (quality — see recon D) | `surface-container-highest` | `--vultus-surface-container-highest`                                                |
+| Level-1 cards / raised surfaces             | tonal ramp                  | `--vultus-surface-container` (L1) → `--vultus-surface-container-highest` (overlays) |
+| dividers / scrolled app-bar border          | `outline-variant`           | `--vultus-outline-variant`                                                          |
+| tracked status colors                       | semantic status             | `--vultus-status-watching` / `-completed` / `-dropped` / `-planned`                 |
 
 > **Deliberate-deviation note (FIX 1):** the fetched Movie-Detail screen rendered the
 > filled CTA with `primary-container` `#10B981`, but the in-repo design-system Button
@@ -709,14 +714,14 @@ its design role and the var that carries it (hex values live only in the design 
   `provider.type`; **no logo image, no `open_in_new`/deep-link** (no logo/URL field
   on `WatchProvider`). Grouped by type; includes the **empty-providers** state.
   **Deliberate data-driven simplification.**
-- **C. Cast + extended Metadata (Director/Budget/Language) + runtime + voteAverage
-  + genre are CONDITIONAL.** Render each **only when the field is present** in the
-  resolved data; **omit the whole panel/row/item when absent** (no placeholders).
-  **Verified:** the stored `TitleMetadata` is only
-  `{ title, overview, posterPath, releaseDate }`, so the **cached path omits**
-  cast/director/budget/language/runtime/genre/voteAverage; the **live-TMDB path
-  MAY** surface them. **Widening the stored shape is OUT OF SCOPE** (sync-engine
-  concern). Synopsis + title + year are the always-present core.
+- \*\*C. Cast + extended Metadata (Director/Budget/Language) + runtime + voteAverage
+  - genre are CONDITIONAL.** Render each **only when the field is present** in the
+    resolved data; **omit the whole panel/row/item when absent** (no placeholders).
+    **Verified:** the stored `TitleMetadata` is only
+    `{ title, overview, posterPath, releaseDate }`, so the **cached path omits**
+    cast/director/budget/language/runtime/genre/voteAverage; the **live-TMDB path
+    MAY** surface them. **Widening the stored shape is OUT OF SCOPE\*\* (sync-engine
+    concern). Synopsis + title + year are the always-present core.
 - **D. Hero "quality" chip (mock "4K Ultra HD") has no backing field → DROP or make
   conditional.** The **genre chip** renders the **first genre if present, else
   omit**.
@@ -744,15 +749,15 @@ its design role and the var that carries it (hex values live only in the design 
 
 ### Interactive-state contract (per element — verify each against the fetched screen; tick off in review)
 
-| Element                       | default                                                              | focus                          | hover                          | active/pressed              | disabled                                  |
-| ----------------------------- | -------------------------------------------------------------------- | ------------------------------ | ------------------------------ | --------------------------- | ----------------------------------------- |
-| **Add to Watchlist** (filled) | `ion-button color="primary"`: bg `--ion-color-primary`, text `--ion-color-primary-contrast`, bold, h-14, `rounded-xl`, `playlist_add` | Ionic default `:focus-visible` ring | `opacity-90`                   | **`scale-[0.98]`**          | n/a while untracked (becomes status control)|
-| **Status control** (outlined, tracked) | outlined-primary: `border-2` + text on `--ion-color-primary`, status-colored accent for current status, h-14, `rounded-xl` | Ionic default `:focus-visible` ring | `bg primary/10`                | **`scale-[0.98]`** → opens `IonActionSheet` | n/a                                        |
-| **Action-sheet status rows**  | one row per status in `STATUS_DISPLAY_ORDER`, status-color accent (`--vultus-status-*`) | row focus highlight            | row hover highlight            | selection → `updateStatus`  | current status row marked selected         |
-| **Remove** affordance         | danger `--vultus-status-dropped` text/icon                          | Ionic default `:focus-visible` ring | brightness shift               | opens `IonAlert` → `removeTitle` | n/a                                        |
-| **Back button**               | 40px circle, bg `--vultus-surface-container`/40 + `backdrop-blur-md`, `arrow_back` | Ionic default `:focus-visible` ring | `bg --vultus-surface-container` (full)  | **`active:scale-95`** → navigates back | —                                          |
-| **Glass-panel card**          | glass fill + `blur(12px)`, 1px border (derived from `--vultus-surface-dark`/`--vultus-outline-variant` with alpha, or a `--vultus-glass-*` token — NOT raw rgba), p-24, `rounded-xl` | —              | **`translateY(-2px)`** lift    | —                           | —                                          |
-| **Cast avatar (snap-scroll)** | 96px round, name label-md / role label-sm                            | focus ring on "View All"       | —                              | "View All" → (future)       | — (whole card omitted if no cast — recon C)|
+| Element                                | default                                                                                                                                                                              | focus                               | hover                                  | active/pressed                              | disabled                                     |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- | -------------------------------------- | ------------------------------------------- | -------------------------------------------- |
+| **Add to Watchlist** (filled)          | `ion-button color="primary"`: bg `--ion-color-primary`, text `--ion-color-primary-contrast`, bold, h-14, `rounded-xl`, `playlist_add`                                                | Ionic default `:focus-visible` ring | `opacity-90`                           | **`scale-[0.98]`**                          | n/a while untracked (becomes status control) |
+| **Status control** (outlined, tracked) | outlined-primary: `border-2` + text on `--ion-color-primary`, status-colored accent for current status, h-14, `rounded-xl`                                                           | Ionic default `:focus-visible` ring | `bg primary/10`                        | **`scale-[0.98]`** → opens `IonActionSheet` | n/a                                          |
+| **Action-sheet status rows**           | one row per status in `STATUS_DISPLAY_ORDER`, status-color accent (`--vultus-status-*`)                                                                                              | row focus highlight                 | row hover highlight                    | selection → `updateStatus`                  | current status row marked selected           |
+| **Remove** affordance                  | danger `--vultus-status-dropped` text/icon                                                                                                                                           | Ionic default `:focus-visible` ring | brightness shift                       | opens `IonAlert` → `removeTitle`            | n/a                                          |
+| **Back button**                        | 40px circle, bg `--vultus-surface-container`/40 + `backdrop-blur-md`, `arrow_back`                                                                                                   | Ionic default `:focus-visible` ring | `bg --vultus-surface-container` (full) | **`active:scale-95`** → navigates back      | —                                            |
+| **Glass-panel card**                   | glass fill + `blur(12px)`, 1px border (derived from `--vultus-surface-dark`/`--vultus-outline-variant` with alpha, or a `--vultus-glass-*` token — NOT raw rgba), p-24, `rounded-xl` | —                                   | **`translateY(-2px)`** lift            | —                                           | —                                            |
+| **Cast avatar (snap-scroll)**          | 96px round, name label-md / role label-sm                                                                                                                                            | focus ring on "View All"            | —                                      | "View All" → (future)                       | — (whole card omitted if no cast — recon C)  |
 
 - **Top app-bar scroll behavior:** transparent at top → at `scrollY > 50px`, bg
   `surface`/80% + `backdrop-blur-xl` + `outline-variant`/20% bottom border (or the
@@ -850,23 +855,23 @@ relative to each other (they share `src/index.ts` + the page composition), and t
    - The page (UI section): back button, hero/poster/title/year/type badge,
      overview, providers-by-type text chips, the watchlist action area
      (untracked → Add; tracked → status indicator + change-status `IonActionSheet`
-     + remove `IonAlert`), and all view-states (loading skeleton / loaded
-     cache==live / not-found / empty-providers / null-region). Wire to
-     `TitleDetailService`; read `:titleId` from the route
-     (`ActivatedRoute`/`input`), parse to a number, resolve uid via `AUTH_UID`.
-     Expose the change-status trigger as a **public method**
-     (e.g. `openStatusSheet()`) bound from the template — **not** an inline
-     anonymous handler — so the component test invokes it deterministically.
-     Consume the `--vultus-*` / `--ion-*` vars from `shared/ui-kit` `theme.scss`
-     (authoritative source: `docs/design/vultus-design-system.md`; no hard-coded hex).
-     The filled Add CTA uses `--ion-color-primary` (`#4edea3`) per the FIX-1 deviation
-     note — `#10B981` (`primary-container`) is **not** a fill here, it survives only as
-     `--vultus-status-completed`. **Re-fetch the Stitch screen `208cb8d7a679490b8d13672c6943d6d3`
-     to visually verify** the built page against the pinned UI contract (the screen
-     is already captured + reconciled in the UI section — recon A–D apply); the
-     filled CTA, the tracked status control (NOT a "Mark as Watched" button), the
-     text-only provider rows, and the conditional Cast/Metadata panels must match
-     the encoded contract.
+     - remove `IonAlert`), and all view-states (loading skeleton / loaded
+       cache==live / not-found / empty-providers / null-region). Wire to
+       `TitleDetailService`; read `:titleId` from the route
+       (`ActivatedRoute`/`input`), parse to a number, resolve uid via `AUTH_UID`.
+       Expose the change-status trigger as a **public method**
+       (e.g. `openStatusSheet()`) bound from the template — **not** an inline
+       anonymous handler — so the component test invokes it deterministically.
+       Consume the `--vultus-*` / `--ion-*` vars from `shared/ui-kit` `theme.scss`
+       (authoritative source: `docs/design/vultus-design-system.md`; no hard-coded hex).
+       The filled Add CTA uses `--ion-color-primary` (`#4edea3`) per the FIX-1 deviation
+       note — `#10B981` (`primary-container`) is **not** a fill here, it survives only as
+       `--vultus-status-completed`. **Re-fetch the Stitch screen `208cb8d7a679490b8d13672c6943d6d3`
+       to visually verify** the built page against the pinned UI contract (the screen
+       is already captured + reconciled in the UI section — recon A–D apply); the
+       filled CTA, the tracked status control (NOT a "Mark as Watched" button), the
+       text-only provider rows, and the conditional Cast/Metadata panels must match
+       the encoded contract.
    - Rewrite the generated `README.md` to the real public surface: what the lib is
      (the pushed per-title detail page), barrel exports (`TitleDetailPage`,
      `TMDB_DETAIL_CONFIG`, `TmdbDetailConfig`), a usage note (lazy-routed at
@@ -968,7 +973,7 @@ mocked AngularFire `Firestore` + mocked `AUTH_UID` signal):**
 - **add() write shape (decision 4):** `add(detail)` writes to
   `watchlistItemPath(uid, String(detail.tmdbId))` a payload equal to
   `watchlistItemToData({ type, tmdbId, traktId:null, title, addedAt, status:'planned',
-  posterPath, voteAverage })` — assert `status==='planned'`, `traktId===null`, id =
+posterPath, voteAverage })` — assert `status==='planned'`, `traktId===null`, id =
   stringified tmdbId, and the **denormalized `posterPath`/`voteAverage`** are carried
   from `detail`.
 - **updateStatus / removeTitle:** `updateStatus(tmdbId, status)` updates `{ status }`
@@ -1065,11 +1070,10 @@ targets: `mobile-title-detail` and `mobile-search` have `lint`/`test`/`typecheck
       consistency); (g) **no secret read/written** — the slice reuses the shell's
       `environment.tmdb` via `TMDB_DETAIL_CONFIG`, never touches `.env.local`.
 - [ ] **UI fidelity — the page matches the pinned Stitch contract (screen
-      `208cb8d7a679490b8d13672c6943d6d3`, "Movie Detail - Vultus", already captured
-      + reconciled in the UI section).** The implementer **re-fetched** the screen
+      `208cb8d7a679490b8d13672c6943d6d3`, "Movie Detail - Vultus", already captured + reconciled in the UI section).** The implementer **re-fetched** the screen
       via the MCP (retried on failure) to **visually verify**, and the PR records the
       **screen id**. The page honors **recon A–D**: filled Add CTA (`ion-button
-      color="primary"` → `--ion-color-primary` `#4edea3` / `--ion-color-primary-contrast`
+  color="primary"` → `--ion-color-primary` `#4edea3` / `--ion-color-primary-contrast`
       `#003824` per the FIX-1 deviation note — NOT the screen's `primary-container`)
       is the only filled button and the
       **tracked state shows the status control, NOT a "Mark as Watched" button**;
@@ -1182,7 +1186,7 @@ targets: `mobile-title-detail` and `mobile-search` have `lint`/`test`/`typecheck
   (recon A), providers are **text-only** with no logo/URL field (recon B), and
   **cast/director/budget/language/runtime/voteAverage/genre are not persisted** in
   `title-cache` (verified `TitleMetadata = { title, overview, posterPath,
-  releaseDate }`) so they render **only on the live-TMDB path and only when present**
+releaseDate }`) so they render **only on the live-TMDB path and only when present**
   (recon C). **Mitigation:** the implementer must build the **reconciled** contract,
   not the raw mock — omit absent panels/rows rather than show placeholders, and must
   **NOT widen `shared/domain`/`shared/firestore-schema`** to persist the extra fields
