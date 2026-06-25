@@ -102,25 +102,29 @@ export class TitleDetailService {
   }
 
   private async resolveDetail(tmdbId: number): Promise<DetailViewState> {
-    const cacheRef = doc(this.firestore, titleCacheDocPath(tmdbId));
-    const snap = await getDoc(cacheRef);
-    if (snap.exists()) {
-      const entry = dataToTitleCache(snap.data() as TitleCacheReadData);
-      const meta = entry.metadata;
-      const detail: TitleDetail = {
-        tmdbId,
-        type: entry.type,
-        title: meta.title,
-        year: parseYear(meta.releaseDate),
-        overview: meta.overview,
-        posterUrl: meta.posterPath
-          ? this.config.imageBaseUrl + meta.posterPath
-          : null,
-        posterPath: meta.posterPath,
-        // Not carried on the cached metadata (recon C) — null/omitted.
-        voteAverage: null,
-      };
-      return { kind: 'loaded', source: 'cache', detail };
+    try {
+      const cacheRef = doc(this.firestore, titleCacheDocPath(tmdbId));
+      const snap = await getDoc(cacheRef);
+      if (snap.exists()) {
+        const entry = dataToTitleCache(snap.data() as TitleCacheReadData);
+        const meta = entry.metadata;
+        const detail: TitleDetail = {
+          tmdbId,
+          type: entry.type,
+          title: meta.title,
+          year: parseYear(meta.releaseDate),
+          overview: meta.overview,
+          posterUrl: meta.posterPath
+            ? this.config.imageBaseUrl + meta.posterPath
+            : null,
+          posterPath: meta.posterPath,
+          // Not carried on the cached metadata (recon C) — null/omitted.
+          voteAverage: null,
+        };
+        return { kind: 'loaded', source: 'cache', detail };
+      }
+    } catch {
+      // Firestore unavailable (offline / emulator not running) — treat as cache miss.
     }
     // Cache miss — live, display-only fallback. A 404/throw → not-found.
     try {

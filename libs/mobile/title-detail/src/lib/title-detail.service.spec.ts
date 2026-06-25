@@ -202,6 +202,23 @@ describe('TitleDetailService', () => {
     expect(state.kind).toBe('not-found');
   });
 
+  it('Firestore offline (getDoc throws unavailable) → falls through to live fallback, stream completes without error', async () => {
+    getDocMock.mockRejectedValue(
+      Object.assign(new Error('Could not reach Cloud Firestore backend'), {
+        code: 'unavailable',
+      }),
+    );
+    getDetailMock.mockResolvedValue(liveDetail({ type: 'movie' }));
+    const service = createService(UID);
+    const state = await lastState(service, 27205);
+    expect(state.kind).toBe('loaded');
+    if (state.kind === 'loaded') {
+      expect(state.source).toBe('live');
+      expect(state.detail.title).toBe('Inception');
+    }
+    expect(getDetailMock).toHaveBeenCalledTimes(1);
+  });
+
   it('region$ emits the user region, and null when the doc is absent', async () => {
     docDataMock.mockReturnValue(
       of({ region: 'NL', notificationPrefs: {}, fcmTokens: [] }),
