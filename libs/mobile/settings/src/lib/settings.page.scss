@@ -1,10 +1,197 @@
-// Theming (PLAN §2 tokens) comes from the shared/ui-kit Ionic theme seeded in
-// spec 0010 (dark-first, Inter, Emerald --ion-color-primary, navy-slate
-// surfaces, 8px grid, 0.5rem radius). This file only handles slice-local
-// layout the theme does not cover.
+// Settings page — visual alignment to the Stitch "Settings - Vultus" screen
+// (projects/13590348714018893783/screens/81945ff3381e453dafcc4e5ce896fcfa).
+//
+// All colours/typography/spacing/radius come from the shared/ui-kit theme vars
+// (--vultus-* / --ion-*) seeded by spec 0010 — NO hard-coded hex here. The
+// screen draws each setting as a rounded surface-container card with a left
+// icon tile, a body-lg title, a body-md helper subtitle, and a trailing
+// control. Page background is `surface`; cards step one level up the ramp to
+// `surface-container`.
 
+// Shared brand header — film-outline icon + "Vultus" wordmark, matching the
+// watchlist page so the app bar is uniform across pages. The page's own
+// "Settings" heading still renders below the header (see .settings-title).
+ion-header {
+  ion-toolbar {
+    --background: var(--vultus-surface);
+    --border-width: 0 0 1px 0;
+    --border-color: var(--vultus-outline-variant);
+    --border-style: solid;
+    --box-shadow: none;
+
+    ion-title {
+      padding-inline: 16px;
+    }
+  }
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ion-color-primary);
+  font-family: var(--vultus-font-family);
+  font-weight: 700;
+  font-size: 1.125rem;
+}
+
+.brand-icon {
+  font-size: 1.25rem;
+  color: var(--ion-color-primary);
+  flex-shrink: 0;
+  position: relative;
+  top: -1px;
+}
+
+ion-content {
+  --background: var(--vultus-surface);
+}
+
+.settings-content {
+  // 16px (`margin-mobile`) side margins; matches the screen's content inset.
+  padding: var(--vultus-space-md);
+  max-width: 42rem; // screen's `max-w-2xl` centred column
+  margin-inline: auto;
+}
+
+// Page heading — `headline-sm` (20/600), 24px (`lg`) below it.
+.settings-title {
+  margin: 0 0 var(--vultus-space-lg);
+  font-size: var(--vultus-text-headline-sm-size);
+  font-weight: var(--vultus-text-headline-sm-weight);
+  line-height: var(--vultus-text-headline-sm-line);
+  color: var(--vultus-on-surface);
+}
+
+// Stack of cards, 8px (`sm`) apart per the screen's `space-y-sm`.
+.settings-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vultus-space-sm);
+}
+
+// One settings card — `surface-container` fill, 0.75rem (`md`) radius, a 1px
+// `outline-variant` hairline at low alpha, 16px internal padding.
+.settings-card {
+  background: var(--vultus-surface-container);
+  border: 1px solid
+    color-mix(in srgb, var(--vultus-outline-variant) 20%, transparent);
+  border-radius: var(--vultus-radius-md);
+  padding: var(--vultus-space-md);
+  // Subtle primary-tinted overlay on press per the design-system "Interactions"
+  // note (5% emerald), no physical lift. Transition matches the screen's
+  // `transition-colors`.
+  transition: background-color 150ms ease-in-out;
+
+  &:active {
+    background: color-mix(
+      in srgb,
+      var(--ion-color-primary) 5%,
+      var(--vultus-surface-container)
+    );
+  }
+}
+
+// Row layout: icon tile + body column, 16px gap (`md`).
+.settings-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--vultus-space-md);
+}
+
+// 40x40 rounded icon tile (`surface-variant/50` on the screen → one ramp step
+// up at 50% alpha), primary-coloured glyph, 0.5rem radius.
+.settings-row__icon {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--vultus-radius);
+  background: color-mix(
+    in srgb,
+    var(--vultus-surface-container-highest) 50%,
+    transparent
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  ion-icon {
+    font-size: 22px;
+    color: var(--ion-color-primary);
+  }
+}
+
+// Title + control + helper share one column so the title, the control, and the
+// helper text all align to the same left edge as their sibling rows.
+.settings-row__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+// Region select — title is the `label` (body-lg/600), the selected value sits
+// to the trailing edge in `primary` per the screen ("Netherlands" in emerald).
+.settings-row__select {
+  --padding-start: 0;
+  --padding-end: 0;
+  --padding-top: 0;
+  --padding-bottom: 0;
+  width: 100%;
+  font-size: var(--vultus-text-body-lg-size);
+  font-weight: 600;
+  line-height: var(--vultus-text-body-lg-line);
+  color: var(--vultus-on-surface);
+
+  &::part(label) {
+    font-size: var(--vultus-text-body-lg-size);
+    font-weight: 600;
+    color: var(--vultus-on-surface);
+  }
+
+  // The chosen region value, emphasised in primary like the screen.
+  &::part(text) {
+    color: var(--ion-color-primary);
+    font-weight: 700;
+  }
+
+  &::part(icon) {
+    color: var(--vultus-on-surface-variant);
+    opacity: 1;
+  }
+}
+
+// Notifications toggle — title (body-lg/600) on the leading edge, the switch on
+// the trailing edge (justify="space-between"). The checked track uses the Ionic
+// primary (`--ion-color-primary` = emerald) per the token contract; the off
+// track steps up the surface ramp like the screen's neutral track.
+.settings-row__toggle {
+  width: 100%;
+  font-size: var(--vultus-text-body-lg-size);
+  font-weight: 600;
+  line-height: var(--vultus-text-body-lg-line);
+  --track-background: var(--vultus-surface-container-highest);
+  --track-background-checked: var(--ion-color-primary);
+  --handle-background: var(--vultus-on-surface);
+  --handle-background-checked: var(--vultus-on-primary);
+
+  &::part(label) {
+    color: var(--vultus-on-surface);
+  }
+}
+
+// Helper/description text — `body-md` (14/400) in `on-surface-variant`, 8px
+// (`sm`) below the control, aligned to the control's left edge.
+.settings-row__helper {
+  margin: var(--vultus-space-sm) 0 0;
+  font-size: var(--vultus-text-body-md-size);
+  font-weight: var(--vultus-text-body-md-weight);
+  line-height: var(--vultus-text-body-md-line);
+  color: var(--vultus-on-surface-variant);
+}
+
+// Loading render-gate — centred spinner on the page background, matching the
+// screen's surface while the user doc resolves.
 .settings-loading {
   display: flex;
   justify-content: center;
-  padding-top: 32px; // 4 * 8px grid
+  padding-top: var(--vultus-space-xl); // 32px on the 8px grid
 }

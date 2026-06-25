@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import {
   IonBadge,
   IonButton,
+  IonButtons,
   IonContent,
   IonHeader,
   IonIcon,
@@ -18,6 +19,7 @@ import {
   alertCircleOutline,
   checkmarkCircle,
   filmOutline,
+  personCircleOutline,
   search,
 } from 'ionicons/icons';
 import { SearchService } from './search.service';
@@ -29,11 +31,12 @@ import type { SearchResultView } from './search.service';
     IonHeader,
     IonToolbar,
     IonTitle,
+    IonButtons,
+    IonButton,
     IonContent,
     IonSearchbar,
     IonList,
     IonBadge,
-    IonButton,
     IonSpinner,
     IonIcon,
   ],
@@ -46,7 +49,14 @@ export class SearchPage {
   private readonly router = inject(Router);
 
   constructor() {
-    addIcons({ search, checkmarkCircle, add, alertCircleOutline, filmOutline });
+    addIcons({
+      search,
+      checkmarkCircle,
+      add,
+      alertCircleOutline,
+      filmOutline,
+      personCircleOutline,
+    });
   }
 
   onSearch(event: CustomEvent<{ value?: string | null }>): void {
