@@ -15,6 +15,7 @@
 export const environment = {
   production: true,
   useEmulators: false,
+  mockAuthUid: null as string | null,
   firebase: {
     apiKey: 'REPLACE_WITH_REAL_WEB_API_KEY',
     authDomain: 'REPLACE_WITH_REAL_AUTH_DOMAIN',

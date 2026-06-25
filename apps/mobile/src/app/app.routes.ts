@@ -25,6 +25,14 @@ export const appRoutes: Route[] = [
         loadComponent: () =>
           import('@vultus/mobile/settings').then((m) => m.SettingsPage),
       },
+      {
+        // Pushed (not a tab) per-title detail page (spec 0016). Reached from the
+        // watchlist (0014) and search (0013) via ['tabs','title-detail', titleId];
+        // nested under `tabs` so the tab bar stays visible.
+        path: 'title-detail/:titleId',
+        loadComponent: () =>
+          import('@vultus/mobile/title-detail').then((m) => m.TitleDetailPage),
+      },
       { path: '', redirectTo: 'watchlist', pathMatch: 'full' },
     ],
   },

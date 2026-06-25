@@ -1,0 +1,208 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="tabs/watchlist"></ion-back-button>
+    </ion-buttons>
+    <ion-title>
+      <span class="brand-mark">
+        <ion-icon name="film-outline" class="brand-icon"></ion-icon>
+        Vultus
+      </span>
+    </ion-title>
+    <ion-buttons slot="end">
+      <ion-button aria-label="Account">
+        <ion-icon name="person-circle-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  @if (vm$ | async; as vm) {
+  <!-- LOADING -->
+  @if (vm.state.kind === 'loading') {
+  <div class="loading-state" data-test="loading">
+    <ion-skeleton-text
+      [animated]="true"
+      class="skeleton-hero"
+    ></ion-skeleton-text>
+    <div class="loading-body">
+      <ion-skeleton-text
+        [animated]="true"
+        class="skeleton-title"
+      ></ion-skeleton-text>
+      <ion-skeleton-text
+        [animated]="true"
+        class="skeleton-meta"
+      ></ion-skeleton-text>
+      @for (line of skeletonLines; track line) {
+      <ion-skeleton-text
+        [animated]="true"
+        class="skeleton-line"
+      ></ion-skeleton-text>
+      }
+      <ion-skeleton-text
+        [animated]="true"
+        class="skeleton-card"
+      ></ion-skeleton-text>
+    </div>
+  </div>
+  }
+
+  <!-- NOT FOUND -->
+  @else if (vm.state.kind === 'not-found') {
+  <div class="not-found-state" data-test="not-found">
+    <ion-icon name="film-outline" class="not-found-icon"></ion-icon>
+    <p class="not-found-title">Title not found</p>
+    <ion-button fill="clear" routerLink="/tabs/watchlist">Go back</ion-button>
+  </div>
+  }
+
+  <!-- LOADED -->
+  @else if (vm.state.kind === 'loaded') { @let detail = vm.state.detail;
+
+  <!-- Hero -->
+  <section class="hero" data-test="hero">
+    @if (detail.posterUrl) {
+    <img class="hero-image" [src]="detail.posterUrl" [alt]="detail.title" />
+    } @else {
+    <div class="hero-placeholder" data-test="poster-placeholder">
+      <ion-icon name="film-outline"></ion-icon>
+    </div>
+    }
+    <div class="hero-gradient"></div>
+    <div class="hero-title-block">
+      <div class="hero-chips">
+        <span class="type-badge">{{ typeBadge(detail.type) }}</span>
+      </div>
+      <h1 class="hero-title">{{ detail.title }}</h1>
+      <div class="hero-meta">
+        @if (detail.voteAverage !== null) {
+        <span class="meta-item">
+          <ion-icon name="star" class="meta-icon meta-star"></ion-icon>
+          <span class="meta-vote"
+            >{{ detail.voteAverage | number: '1.1-1' }}</span
+          >
+        </span>
+        } @if (detail.year !== null) {
+        <span class="meta-item">
+          <ion-icon name="calendar-outline" class="meta-icon"></ion-icon>
+          <span>{{ detail.year }}</span>
+        </span>
+        }
+      </div>
+    </div>
+  </section>
+
+  <div class="content-canvas">
+    <!-- Action area -->
+    <div class="action-area" data-test="action-area">
+      @if (vm.tracked === null) {
+      <ion-button
+        expand="block"
+        color="primary"
+        class="add-cta"
+        data-test="add-btn"
+        (click)="addToWatchlist(detail)"
+      >
+        <ion-icon name="add-circle-outline" slot="start"></ion-icon>
+        Add to Watchlist
+      </ion-button>
+      } @else {
+      <button
+        type="button"
+        class="status-control"
+        data-test="status-control"
+        [style.--status-color]="statusColorVar(vm.tracked.status)"
+        (click)="openStatusSheet()"
+      >
+        <span class="status-dot"></span>
+        <span class="status-label">{{ STATUS_LABELS[vm.tracked.status] }}</span>
+      </button>
+      <button
+        type="button"
+        class="remove-control"
+        data-test="remove-btn"
+        (click)="openRemoveAlert()"
+      >
+        <ion-icon name="trash-outline"></ion-icon>
+        Remove
+      </button>
+      }
+    </div>
+
+    <!-- Synopsis (always present) -->
+    <div class="glass-panel" data-test="synopsis">
+      <h2 class="card-heading">
+        <ion-icon name="document-text-outline"></ion-icon>
+        Synopsis
+      </h2>
+      <p class="synopsis-text">{{ detail.overview }}</p>
+    </div>
+
+    <!-- Where to Watch -->
+    <div class="glass-panel" data-test="providers">
+      <h2 class="card-heading">
+        <ion-icon name="tv-outline"></ion-icon>
+        Where to Watch
+      </h2>
+
+      @if (vm.region === null) {
+      <p class="muted-line" data-test="null-region">
+        Set your region in Settings to see availability
+      </p>
+      } @else if (!hasProviders(vm.providers)) {
+      <p class="muted-line" data-test="empty-providers">
+        Not available to stream in your region
+      </p>
+      } @else { @if (vm.providers.flatrate.length > 0) {
+      <div class="provider-group" data-test="group-flatrate">
+        <h3 class="group-label">Streaming</h3>
+        @for (p of vm.providers.flatrate; track p.providerId) {
+        <div class="provider-row">
+          <span class="provider-name">{{ p.name }}</span>
+          <span class="provider-type">{{ providerTypeLabel(p.type) }}</span>
+        </div>
+        }
+      </div>
+      } @if (vm.providers.rent.length > 0) {
+      <div class="provider-group" data-test="group-rent">
+        <h3 class="group-label">Rent</h3>
+        @for (p of vm.providers.rent; track p.providerId) {
+        <div class="provider-row">
+          <span class="provider-name">{{ p.name }}</span>
+          <span class="provider-type">{{ providerTypeLabel(p.type) }}</span>
+        </div>
+        }
+      </div>
+      } @if (vm.providers.buy.length > 0) {
+      <div class="provider-group" data-test="group-buy">
+        <h3 class="group-label">Buy</h3>
+        @for (p of vm.providers.buy; track p.providerId) {
+        <div class="provider-row">
+          <span class="provider-name">{{ p.name }}</span>
+          <span class="provider-type">{{ providerTypeLabel(p.type) }}</span>
+        </div>
+        }
+      </div>
+      } }
+    </div>
+  </div>
+  } }
+
+  <ion-action-sheet
+    [isOpen]="actionSheetOpen"
+    header="Change status"
+    [buttons]="actionSheetButtons"
+    (didDismiss)="actionSheetOpen = false"
+  ></ion-action-sheet>
+
+  <ion-alert
+    [isOpen]="alertOpen"
+    header="Remove from watchlist?"
+    message="This removes the title from your watchlist."
+    cssClass="vultus-alert"
+    [buttons]="alertButtons"
+    (didDismiss)="alertOpen = false"
+  ></ion-alert>
+</ion-content>

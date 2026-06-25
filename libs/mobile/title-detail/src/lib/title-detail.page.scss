@@ -1,0 +1,447 @@
+// Title-detail page — Stitch "Movie Detail - Vultus" (screen
+// 208cb8d7a679490b8d13672c6943d6d3), reconciled per spec 0016 recon A–D.
+// All colors consume the wired --vultus-* / --ion-* tokens (theme.scss); no
+// hand-transcribed hex. Glass cards use the --vultus-glass-* tokens added to
+// ui-kit theme.scss for this slice.
+
+// -----------------------------------------------------------------------------
+// Header — matches the standard app bar used on search / watchlist / settings.
+// -----------------------------------------------------------------------------
+ion-header {
+  ion-toolbar {
+    --background: var(--vultus-surface);
+    --border-width: 0 0 1px 0;
+    --border-color: var(--vultus-outline-variant);
+    --border-style: solid;
+    --box-shadow: none;
+
+    ion-title {
+      padding-inline: 16px;
+    }
+  }
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ion-color-primary);
+  font-family: var(--vultus-font-family);
+  font-weight: 700;
+  font-size: 1.125rem;
+}
+
+.brand-icon {
+  font-size: 1.25rem;
+  color: var(--ion-color-primary);
+  flex-shrink: 0;
+  position: relative;
+  top: -1px;
+}
+
+ion-content {
+  --background: var(--vultus-surface);
+}
+
+// -----------------------------------------------------------------------------
+// Hero / backdrop — 530px tall, bottom-up gradient, floating title block.
+// -----------------------------------------------------------------------------
+.hero {
+  position: relative;
+  width: 100%;
+  height: 530px;
+}
+
+.hero-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.hero-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--vultus-surface-container);
+
+  ion-icon {
+    font-size: 96px;
+    color: var(--vultus-on-surface-variant);
+  }
+}
+
+.hero-gradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    var(--vultus-surface) 0%,
+    color-mix(in srgb, var(--vultus-surface) 80%, transparent) 40%,
+    transparent 100%
+  );
+}
+
+.hero-title-block {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  padding: 0 var(--vultus-space-md) var(--vultus-space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--vultus-space-md);
+}
+
+.hero-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--vultus-space-sm);
+}
+
+.type-badge {
+  padding: 2px 8px;
+  border-radius: var(--vultus-radius-sm);
+  background: var(--vultus-primary-container);
+  color: var(--vultus-on-primary-container);
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-label-md-size);
+  font-weight: var(--vultus-text-label-md-weight);
+  line-height: var(--vultus-text-label-md-line);
+  letter-spacing: var(--vultus-text-label-md-spacing);
+  text-transform: uppercase;
+}
+
+.hero-title {
+  margin: 0;
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-display-lg-mobile-size);
+  font-weight: var(--vultus-text-display-lg-weight);
+  line-height: var(--vultus-text-display-lg-mobile-line);
+  letter-spacing: var(--vultus-text-display-lg-spacing);
+  color: var(--vultus-on-surface);
+}
+
+.hero-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--vultus-space-lg);
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-label-md-size);
+  font-weight: var(--vultus-text-label-md-weight);
+  line-height: var(--vultus-text-label-md-line);
+  letter-spacing: var(--vultus-text-label-md-spacing);
+  color: var(--vultus-on-surface-variant);
+}
+
+.meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--vultus-space-xs);
+}
+
+.meta-icon {
+  font-size: 18px;
+}
+
+.meta-star {
+  color: var(--vultus-primary);
+}
+
+.meta-vote {
+  color: var(--vultus-on-surface);
+  font-weight: 700;
+}
+
+// -----------------------------------------------------------------------------
+// Content canvas — overlaps the hero, vertical stack of action area + cards.
+// -----------------------------------------------------------------------------
+.content-canvas {
+  position: relative;
+  z-index: 10;
+  margin-top: calc(-1 * var(--vultus-space-md));
+  padding: 0 var(--vultus-space-md) var(--vultus-space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--vultus-space-lg);
+}
+
+// -----------------------------------------------------------------------------
+// Action area — untracked: filled Add CTA (the ONLY filled button, FIX-1);
+// tracked: outlined status control + remove affordance.
+// -----------------------------------------------------------------------------
+.action-area {
+  display: flex;
+  flex-direction: row;
+  gap: var(--vultus-space-md);
+}
+
+.add-cta {
+  flex: 1;
+  height: 56px;
+  --border-radius: var(--vultus-radius-md);
+  font-weight: 700;
+  --color: var(--ion-color-primary-contrast);
+}
+
+.status-control {
+  flex: 1;
+  height: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--vultus-space-sm);
+  border: 2px solid var(--ion-color-primary);
+  border-radius: var(--vultus-radius-md);
+  background: transparent;
+  color: var(--ion-color-primary);
+  font-family: var(--vultus-font-family);
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    transform 80ms ease;
+
+  &:hover {
+    background: color-mix(in srgb, var(--ion-color-primary) 10%, transparent);
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+
+  .status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: var(--vultus-radius-pill);
+    background: var(--status-color, var(--ion-color-primary));
+  }
+}
+
+.remove-control {
+  height: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--vultus-space-xs);
+  padding: 0 var(--vultus-space-md);
+  border: none;
+  border-radius: var(--vultus-radius-md);
+  background: transparent;
+  color: var(--vultus-status-dropped);
+  font-family: var(--vultus-font-family);
+  font-weight: 600;
+  cursor: pointer;
+
+  &:active {
+    transform: scale(0.98);
+  }
+
+  ion-icon {
+    font-size: 20px;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Glass-panel cards — frosted surface (--vultus-glass-*), 1px border, p-24,
+// rounded-xl, hover lift. Heading in primary with a leading icon.
+// -----------------------------------------------------------------------------
+.glass-panel {
+  padding: var(--vultus-space-lg);
+  border-radius: var(--vultus-radius-md);
+  background: var(--vultus-glass-bg);
+  border: 1px solid var(--vultus-glass-border);
+  backdrop-filter: blur(12px);
+  transition: transform 200ms ease-out;
+
+  &:hover {
+    transform: translateY(-2px);
+  }
+}
+
+.card-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--vultus-space-sm);
+  margin: 0 0 var(--vultus-space-md);
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-headline-sm-size);
+  font-weight: var(--vultus-text-headline-sm-weight);
+  line-height: var(--vultus-text-headline-sm-line);
+  color: var(--ion-color-primary);
+
+  ion-icon {
+    font-size: 20px;
+  }
+}
+
+.synopsis-text {
+  margin: 0;
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-body-lg-size);
+  font-weight: var(--vultus-text-body-lg-weight);
+  line-height: var(--vultus-text-body-lg-line);
+  color: var(--vultus-on-surface-variant);
+}
+
+.muted-line {
+  margin: 0;
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-body-md-size);
+  line-height: var(--vultus-text-body-md-line);
+  color: var(--vultus-on-surface-variant);
+}
+
+// -----------------------------------------------------------------------------
+// Provider rows — TEXT ONLY (recon B): name + a derived type label, no logo,
+// no deep-link icon. Grouped by Streaming / Rent / Buy.
+// -----------------------------------------------------------------------------
+.provider-group {
+  & + & {
+    margin-top: var(--vultus-space-md);
+  }
+}
+
+.group-label {
+  margin: 0 0 var(--vultus-space-sm);
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-label-md-size);
+  font-weight: var(--vultus-text-label-md-weight);
+  line-height: var(--vultus-text-label-md-line);
+  letter-spacing: var(--vultus-text-label-md-spacing);
+  text-transform: uppercase;
+  color: var(--vultus-on-surface-variant);
+}
+
+.provider-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--vultus-space-sm) var(--vultus-space-md);
+  border-radius: var(--vultus-radius);
+  background: var(--vultus-surface-container);
+
+  & + & {
+    margin-top: var(--vultus-space-sm);
+  }
+}
+
+.provider-name {
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-body-md-size);
+  font-weight: 700;
+  color: var(--vultus-on-surface);
+}
+
+.provider-type {
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-label-sm-size);
+  font-weight: var(--vultus-text-label-sm-weight);
+  line-height: var(--vultus-text-label-sm-line);
+  color: var(--vultus-on-surface-variant);
+}
+
+// -----------------------------------------------------------------------------
+// Loading skeleton — hero + title + meta + synopsis lines + a card block.
+// -----------------------------------------------------------------------------
+.loading-state {
+  display: flex;
+  flex-direction: column;
+}
+
+.skeleton-hero {
+  width: 100%;
+  height: 530px;
+  margin: 0;
+}
+
+.loading-body {
+  padding: var(--vultus-space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--vultus-space-sm);
+}
+
+.skeleton-title {
+  width: 70%;
+  height: 32px;
+  border-radius: var(--vultus-radius-sm);
+}
+
+.skeleton-meta {
+  width: 50%;
+  height: 16px;
+  border-radius: var(--vultus-radius-sm);
+}
+
+.skeleton-line {
+  width: 100%;
+  height: 14px;
+  border-radius: var(--vultus-radius-sm);
+}
+
+.skeleton-card {
+  width: 100%;
+  height: 120px;
+  margin-top: var(--vultus-space-md);
+  border-radius: var(--vultus-radius-md);
+}
+
+// -----------------------------------------------------------------------------
+// Not-found state — centred muted icon + copy + back affordance.
+// -----------------------------------------------------------------------------
+.not-found-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 70vh;
+  padding: var(--vultus-space-md);
+  gap: var(--vultus-space-sm);
+}
+
+.not-found-icon {
+  font-size: 64px;
+  color: var(--vultus-on-surface-variant);
+}
+
+.not-found-title {
+  margin: 0;
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-headline-sm-size);
+  font-weight: var(--vultus-text-headline-sm-weight);
+  color: var(--vultus-on-surface);
+}
+
+// -----------------------------------------------------------------------------
+// Remove-confirm alert overlay (Ionic overlay DOM — ::ng-deep via cssClass).
+// -----------------------------------------------------------------------------
+// stylelint-disable selector-pseudo-element-no-unknown
+::ng-deep .vultus-alert {
+  .alert-wrapper {
+    background: var(--vultus-surface-container-highest);
+    border-radius: var(--vultus-radius-lg);
+    border: 1px solid var(--vultus-glass-border);
+  }
+
+  .alert-title {
+    color: var(--vultus-on-surface);
+    font-family: var(--vultus-font-family);
+    font-weight: 600;
+  }
+
+  .alert-message {
+    color: var(--vultus-on-surface-variant);
+    font-family: var(--vultus-font-family);
+  }
+
+  .vultus-alert-cancel {
+    color: var(--vultus-on-surface-variant);
+  }
+
+  .vultus-alert-remove {
+    color: var(--vultus-status-dropped);
+  }
+}

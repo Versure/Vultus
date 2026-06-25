@@ -140,6 +140,25 @@
   --vultus-radius-pill: 9999px;
 
   // ---------------------------------------------------------------------------
+  // Glass-panel surface (frosted card on top of the hero / content canvas).
+  // Derived from the surface ramp with an alpha channel rather than a raw rgba:
+  // the fill steps off `--vultus-surface-dark` (#1e293b, the design's glass base)
+  // and the hairline border off `--vultus-outline` so consuming slices need no
+  // hand-transcribed rgba. Used by the title-detail slice's `.glass-panel` cards.
+  // ---------------------------------------------------------------------------
+  --vultus-surface-dark: #1e293b;
+  --vultus-glass-bg: color-mix(
+    in srgb,
+    var(--vultus-surface-dark) 70%,
+    transparent
+  );
+  --vultus-glass-border: color-mix(
+    in srgb,
+    var(--vultus-outline) 50%,
+    transparent
+  );
+
+  // ---------------------------------------------------------------------------
   // Semantic watchlist status colors (watchlist `status` field → color).
   // ---------------------------------------------------------------------------
   --vultus-status-watching: #3b82f6;

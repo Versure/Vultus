@@ -1,4 +1,5 @@
 import { Component, inject } from '@angular/core';
+import { Router } from '@angular/router';
 import {
   IonBadge,
   IonButton,
@@ -45,6 +46,7 @@ import type { SearchResultView } from './search.service';
 })
 export class SearchPage {
   readonly service = inject(SearchService);
+  private readonly router = inject(Router);
 
   constructor() {
     addIcons({
@@ -64,6 +66,10 @@ export class SearchPage {
   onAdd(result: SearchResultView, event: Event): void {
     event.stopPropagation();
     void this.service.add(result);
+  }
+
+  openDetail(result: SearchResultView): void {
+    void this.router.navigate(['tabs', 'title-detail', String(result.tmdbId)]);
   }
 
   retry(): void {

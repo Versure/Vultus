@@ -13,6 +13,9 @@
 export const environment = {
   production: false,
   useEmulators: true,
+  // null in dev/prod — overridden to a fixture uid in environment.mock.ts so
+  // the mock serve works without a running auth emulator.
+  mockAuthUid: null as string | null,
   firebase: {
     apiKey: 'demo-vultus-not-a-real-key',
     authDomain: 'demo-vultus.firebaseapp.com',
