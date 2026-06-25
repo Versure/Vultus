@@ -2,7 +2,7 @@
 number: 0022
 slug: onboarding-flow
 title: Add the first-launch onboarding flow — region pick + push-permission grant + FCM token registration before the tabs shell
-status: implementing
+status: done
 slices: [slice:onboarding]
 scopes: [scope:mobile, scope:shared]
 created: 2026-06-25
@@ -691,7 +691,7 @@ Only the **native permission/token path** is out of CI scope (device-only).
       (flag pre-set → straight to `/tabs/watchlist`, no redirect) are **green**;
       **F-onboard-2** passes (pick "DE" → complete → `/tabs/watchlist`, emulator
       `users/{uid}` created with `region: 'DE'`, `CapacitorStorage.onboarding_done =
-    'true'`). All **pre-existing spec-0019 e2e flows (F1–F8 across `app.boot.spec.ts`,
+  'true'`). All **pre-existing spec-0019 e2e flows (F1–F8 across `app.boot.spec.ts`,
       `search.spec.ts`, `settings.spec.ts`, `watchlist-refresh.spec.ts`)** remain green
       after the backward-compat fix (the flag pre-set in `beforeEach` / `global-setup`).
       The **FCM flows (permission dialog + token write) are explicitly device-only — NOT
