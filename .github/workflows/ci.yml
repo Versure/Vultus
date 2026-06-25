@@ -99,6 +99,36 @@ jobs:
       - name: Run emulator integration gate
         run: pnpm exec firebase emulators:exec --only firestore --project vultus-cab62 "pnpm nx test-integration functions"
 
+      # e2e gate (spec 0019). Playwright drives the web-served app against the
+      # Auth + Firestore emulators. NO secret: every TMDB call is intercepted with
+      # committed fixtures (page.route), and the emulators need no credentials.
+      # The Functions emulator is NOT started — flow 8's sync is stubbed at the
+      # network layer (R2). Java is already set up above for the integration gate.
+      #
+      # `emulators:exec` boots ONLY firestore,auth on the default ports 8080/9099
+      # (the browser app hardcodes those — Emulator-port invariant) and exports
+      # FIRESTORE_EMULATOR_HOST / FIREBASE_AUTH_EMULATOR_HOST for the Node-side
+      # globalSetup/support, then tears them down on exit. Plain `nx ... -t e2e`
+      # (NOT --configuration=ci, which the e2e target does not define).
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: Install Playwright chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run e2e gate (pull_request)
+        if: github.event_name == 'pull_request'
+        run: pnpm exec firebase emulators:exec --only firestore,auth --project vultus-cab62 "pnpm nx affected -t e2e --base=$NX_BASE --head=$NX_HEAD"
+
+      - name: Run e2e gate (push to main baseline)
+        if: github.event_name == 'push'
+        run: pnpm exec firebase emulators:exec --only firestore,auth --project vultus-cab62 "pnpm nx run-many -t e2e --all"
+
       # Validate the deployable Cloud Functions artifact the way Firebase / Cloud
       # Build will: the pruned dist bundle installs, the required deps + allowBuilds
       # config ship, firebase-admin satisfies firebase-functions' peer range, and
