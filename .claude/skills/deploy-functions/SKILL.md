@@ -72,6 +72,14 @@ bundle.
 
 - Confirm each function's operation succeeded (`Successful update/create
 operation`) and surface the printed function URL(s).
+- **Confirm `syncTitles` is publicly invokable.** The `deploy-functions.yml`
+  pipeline runs a post-deploy smoke check automatically (unauthenticated POST;
+  no secret sent). If it reports a Google Front End 403, the Cloud Run service
+  is still private — apply the one-time `allUsers` → `roles/run.invoker` grant
+  documented in PLAN §7. For a local deploy (this skill, not the workflow),
+  verify manually: `curl -s -o /dev/null -w '%{http_code}' -X POST <URL>` should
+  return `401` (function reached, no secret) not a Google HTML 403. See the
+  `infrastructure-engineer` deploy notes (trap 5) for the full failure mode.
 - If Cloud Build fails, fetch the linked build log, map the error to the
   preflight checks / the `infrastructure-engineer` deploy notes, fix, and re-run
   from step 1.
