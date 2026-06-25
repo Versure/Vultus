@@ -104,6 +104,24 @@ Body sections, in this order — keep each tight and concrete:
 8. **Test plan** — concrete tests per the PLAN §5 pyramid: unit (what logic),
    component (which components with non-trivial state), e2e (which named flows,
    if any).
+
+   > **e2e decision rubric** (apply before writing this section):
+   >
+   > - **Required** — any `scope:mobile` feature that introduces or substantially
+   >   changes a primary user-facing navigation route or critical action (new page,
+   >   add-to-watchlist, status change, settings persistence). Name each flow
+   >   explicitly; they become DoD gates enforced by `qa-runner` and
+   >   `feature-reviewer`.
+   > - **Fixme-gated** — if a flow depends on a spec not yet merged (e.g. a new
+   >   route that another slice provides), mark it `test.fixme` with a comment
+   >   naming the blocking spec/PLAN item. Include the stub in the task graph so
+   >   the implementer un-skips it when the dependency lands.
+   > - **Not required** — `scope:functions`-only changes, pure refactors with no
+   >   route/action change, infra/CI/config specs. State "No e2e flows required —
+   >   backend/infra change only." explicitly so the omission is intentional.
+   > - **Never omit silently.** Always include this section with one of the three
+   >   outcomes above.
+
 9. **Definition of done** — copy the PLAN §5 checklist, tailored to this feature.
 10. **Risks** — known unknowns, data-source caveats (TMDB/Trakt accuracy),
     PLAN conflicts.

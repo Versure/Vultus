@@ -36,6 +36,11 @@ uncommitted work).
    anything missing or out-of-scope creep.
 4. **Tests** — does the changed logic have unit tests? Non-trivial UI a
    component test? Are the spec's named e2e flows present? Flag untested logic.
+   Also check `apps/mobile-e2e/src/` for any `test.fixme`-gated flows that
+   were blocked on the spec being reviewed. If this PR delivers the dependency
+   they name (e.g. a new route, a new component selector), those flows must be
+   **un-skipped** — leaving them as `test.fixme` after the dependency lands is
+   a **blocking finding**.
 5. **Secrets/safety** — any committed secret, `.env` read, or hardcoded key.
 6. **Lib README currency** (CLAUDE.md DoD) — if the diff creates a lib or changes
    a lib's public API/behavior/boundaries, its `README.md` must be updated to
