@@ -2,7 +2,7 @@
 number: 0026
 slug: debug-android-prod-parity
 title: Inject real config/secrets at build time so a debug-signed Android APK has full production parity, keeping committed files key-free
-status: implementing
+status: done
 slices: []
 scopes: [scope:mobile]
 created: 2026-06-25
@@ -492,7 +492,7 @@ is edited), so its `nx affected` targets apply.
 - [ ] **`android/app/google-services.json` untracked** — `git rm --cached` run, the
       file added to `.gitignore` (`android/.gitignore` line un-commented), the
       working-copy file **preserved on disk** (not deleted), and `git ls-files
-    android/app/google-services.json` returns **nothing**.
+  android/app/google-services.json` returns **nothing**.
 - [ ] **History scrub + key rotation explicitly NOT done** (decision 5) — the public
       Android `api_key` in past history is left as-is; this is documented as
       intentional (no `filter-repo`/BFG, no rotation), avoiding disruption to open
