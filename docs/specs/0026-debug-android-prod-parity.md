@@ -2,7 +2,7 @@
 number: 0026
 slug: debug-android-prod-parity
 title: Inject real config/secrets at build time so a debug-signed Android APK has full production parity, keeping committed files key-free
-status: approved
+status: implementing
 slices: []
 scopes: [scope:mobile]
 created: 2026-06-25
@@ -124,7 +124,7 @@ In scope:
 - **Inject the TMDB key + Firebase web config** into that generated file from the
   local source (gitignored) and from CI secrets/variables.
 - **`google-services.json` untracking + provisioning:** `git rm --cached
-  android/app/google-services.json`, add it to `.gitignore`, keep the local
+android/app/google-services.json`, add it to `.gitignore`, keep the local
   working-copy file per-machine, and in CI decode it from a base64 secret to
   `android/app/google-services.json` before the Gradle / `cap sync` build;
   **verify/keep** the existing Gradle `com.google.gms.google-services` plugin wiring;
@@ -148,7 +148,7 @@ Out of scope (each stated explicitly):
   `api_key` already in committed history is **left as-is** — no `filter-repo`/BFG
   rewrite, no key rotation. "Key-free" is **going-forward in the working tree**.
 - **The onboarding / FCM token feature itself** — that is spec **0022**; this spec
-  only makes the on-device push path *reachable* by re-sourcing
+  only makes the on-device push path _reachable_ by re-sourcing
   `android/app/google-services.json` + native Firebase config.
 - **Any new app feature, slice, page, component, or UI** — search / watchlist /
   title-detail / onboarding screens already exist; this spec only makes them reach
@@ -256,8 +256,8 @@ The only new "interfaces" are **build-time contracts**:
      (`apiKey`/`authDomain`/`storageBucket`/`messagingSenderId`/`appId`/TMDB
      `apiKey` are all non-empty), and
    - `android/app/google-services.json` **exists** at native-build time.
-   Any violation **fails the build with an actionable message** (which key is
-   missing, where to set it locally vs. CI).
+     Any violation **fails the build with an actionable message** (which key is
+     missing, where to set it locally vs. CI).
 
 4. **Injection script CLI** (new `tools/scripts/*.mjs`): a node ESM script,
    invokable via an Nx target, that (a) reads the value source (local env file or
@@ -355,7 +355,7 @@ Files: `android/app/google-services.json` (`git rm --cached`),
 - **Reconcile the silent-degrade vs. the loud guard.** The existing Gradle conditional
   **silently degrades** (logs "Push Notifications won't work" and skips the plugin)
   when the file is absent — this conflicts with our fail-loud requirement. **Chosen
-  approach:** *keep* the Gradle conditional apply as-is (it is the upstream
+  approach:** _keep_ the Gradle conditional apply as-is (it is the upstream
   Capacitor-generated default; making it unconditional would only swap a soft skip for
   an opaque Gradle error and fight every `cap sync` regeneration), and add a
   **separate pre-build preflight guard** in the Nx debug-APK flow (Task 4) that
@@ -440,9 +440,9 @@ tooling, so there is **no slice / component surface**.
     actionable "set it locally or in GitHub" message;
   - **(d)** the `google-services.json` presence guard **fails** when the file is
     absent (use a temp dir as the fake `android/app`).
-  Use `node:os` `tmpdir` + `node:fs`. **Keep it small**; if exporting the helper
-  meaningfully distorts the script, fall back to the build gate below and **record
-  why in the PR** (same hedge as 0023).
+    Use `node:os` `tmpdir` + `node:fs`. **Keep it small**; if exporting the helper
+    meaningfully distorts the script, fall back to the build gate below and **record
+    why in the PR** (same hedge as 0023).
 - **Build gate (CI-runnable, the concrete green gate):**
   1. with the injection sourcing values (CI secrets, or local file), run the
      production build (`pnpm nx run mobile:build`);
@@ -453,7 +453,7 @@ tooling, so there is **no slice / component surface**.
   4. `actionlint` green on the changed `ci.yml` (and any new workflow).
 - **e2e: NO new automated e2e flows.** Search / add-to-watchlist are **already
   covered** by the spec-0019 Playwright suite (run against the Auth + Firestore
-  emulators with committed TMDB fixtures); this spec changes only *config injection*,
+  emulators with committed TMDB fixtures); this spec changes only _config injection_,
   not those routes/actions, so it adds **no new flow and un-skips nothing**. **Device
   push cannot run in CI** (needs a real Android device + real creds + merged 0022).
   Stated explicitly so the reviewer does not flag a missing e2e — per the
@@ -492,7 +492,7 @@ is edited), so its `nx affected` targets apply.
 - [ ] **`android/app/google-services.json` untracked** — `git rm --cached` run, the
       file added to `.gitignore` (`android/.gitignore` line un-commented), the
       working-copy file **preserved on disk** (not deleted), and `git ls-files
-      android/app/google-services.json` returns **nothing**.
+    android/app/google-services.json` returns **nothing**.
 - [ ] **History scrub + key rotation explicitly NOT done** (decision 5) — the public
       Android `api_key` in past history is left as-is; this is documented as
       intentional (no `filter-repo`/BFG, no rotation), avoiding disruption to open
@@ -529,8 +529,7 @@ is edited), so its `nx affected` targets apply.
       `mobile`; `actionlint` on the changed workflow(s); the build guard asserts no
       placeholder/empty value in `dist/apps/mobile`; unit test green (or its skip
       recorded per the pragmatic-pyramid hedge).
-- [ ] **No new automated e2e flow** — explicitly recorded (config/native change; search
-      + add already covered by 0019; device push is human-only).
+- [ ] **No new automated e2e flow** — explicitly recorded (config/native change; search + add already covered by 0019; device push is human-only).
 
 ## Risks
 

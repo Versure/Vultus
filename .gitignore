@@ -20,6 +20,10 @@ node_modules
 apps/functions/.env.vultus-*
 *.serviceaccount.json
 
+# Build-time generated mobile env (spec 0026) — real config/secrets injected at
+# build time from .env.local (local) or CI secrets; never committed.
+apps/mobile/src/environments/environment.generated.ts
+
 # IDEs and editors
 /.idea
 .project

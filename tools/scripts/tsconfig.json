@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowJs": true,
+    "checkJs": false,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "types": ["vitest/globals", "node"]
+  },
+  "include": ["**/*.mjs", "**/*.ts", "**/*.mts"]
+}
