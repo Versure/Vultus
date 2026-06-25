@@ -1,0 +1,9 @@
+{
+  "name": "mobile-onboarding",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/mobile/onboarding/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": [],
+  "targets": {}
+}

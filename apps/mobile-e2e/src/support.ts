@@ -25,6 +25,7 @@ export {
   clearFirestore,
   clearAuth,
   writeDocument,
+  readDocument,
 } from './support/emulator';
 export {
   encodeFields,

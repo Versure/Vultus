@@ -1,13 +1,22 @@
 import { Route } from '@angular/router';
+import { onboardingGuard } from '@vultus/mobile/onboarding';
 
 /**
- * App routes (spec 0010): the tabs shell is the root; Watchlist is the default
- * landing tab. Each child route lazy-loads its slice's page through the slice
- * barrel (`@vultus/mobile/<slice>`).
+ * App routes (spec 0010 + 0022): the tabs shell is the root; Watchlist is the
+ * default landing tab. Each child route lazy-loads its slice's page through the
+ * slice barrel (`@vultus/mobile/<slice>`). The `onboardingGuard` on `tabs`
+ * redirects first-launch users to `/onboarding` until the Preferences flag is
+ * set (spec 0022).
  */
 export const appRoutes: Route[] = [
   {
+    path: 'onboarding',
+    loadComponent: () =>
+      import('@vultus/mobile/onboarding').then((m) => m.OnboardingPage),
+  },
+  {
     path: 'tabs',
+    canActivate: [onboardingGuard],
     loadComponent: () => import('./tabs/tabs.page').then((m) => m.TabsPage),
     children: [
       {

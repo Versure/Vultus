@@ -27,7 +27,12 @@ const MOVIE_TITLE = 'The Matrix';
 const TV_TITLE = 'Breaking Bad';
 
 test.describe('search (F2–F3)', () => {
-  test.beforeEach(async () => {
+  test.beforeEach(async ({ page }) => {
+    // Pre-set the onboarding completion flag so the guard (spec 0022) passes
+    // through to the tabs shell instead of redirecting to /onboarding.
+    await page.addInitScript(() => {
+      localStorage.setItem('CapacitorStorage.onboarding_done', 'true');
+    });
     // Clean slate between tests: clear the Auth + Firestore emulators.
     await clearAll();
   });

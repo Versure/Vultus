@@ -58,6 +58,32 @@ export async function clearAuth(): Promise<void> {
 }
 
 /**
+ * Read a single document from Firestore via the emulator REST `documents` API.
+ *
+ * Returns the raw Firestore REST response `fields` map (Firestore typed-value
+ * objects), or `null` if the document doesn't exist (404). Use `encodeFields` /
+ * `encodeValue` from `encode.ts` for writes; for reads, pick the scalar values
+ * from the typed-value wrappers directly, e.g.
+ * `fields.region.stringValue as string`.
+ */
+export async function readDocument(
+  path: string,
+): Promise<Record<string, unknown> | null> {
+  const url = `${firestoreDocumentsBase()}/${path}`;
+  const res = await fetch(url, {
+    headers: { Authorization: 'Bearer owner' },
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    throw new Error(
+      `Firestore read failed for ${path}: ${res.status} ${await res.text()}`,
+    );
+  }
+  const body = (await res.json()) as { fields?: Record<string, unknown> };
+  return body.fields ?? null;
+}
+
+/**
  * Write a single document to Firestore via the emulator REST `documents` API.
  *
  * `path` is the document path RELATIVE to the documents root, e.g.

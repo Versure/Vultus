@@ -1,5 +1,13 @@
 import { test, expect } from '@playwright/test';
 
+// Pre-set the onboarding completion flag so the guard (spec 0022) passes
+// through to the tabs shell instead of redirecting to /onboarding.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('CapacitorStorage.onboarding_done', 'true');
+  });
+});
+
 /**
  * No-emulator smoke test (spec 0010, decision 5).
  *

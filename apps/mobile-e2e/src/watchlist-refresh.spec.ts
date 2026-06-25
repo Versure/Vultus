@@ -43,7 +43,12 @@ const SEEDED_TITLE = 'Breaking Bad';
  */
 const SYNC_ENDPOINT_GLOB = '**/*syncWatchlist*';
 
-test.beforeEach(async () => {
+test.beforeEach(async ({ page }) => {
+  // Pre-set the onboarding completion flag so the guard (spec 0022) passes
+  // through to the tabs shell instead of redirecting to /onboarding.
+  await page.addInitScript(() => {
+    localStorage.setItem('CapacitorStorage.onboarding_done', 'true');
+  });
   // Clean slate between tests (clear Auth + Firestore via emulator REST).
   await clearAll();
 });
