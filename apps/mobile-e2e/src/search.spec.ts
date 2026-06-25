@@ -49,8 +49,10 @@ test.describe('search (F2–F3)', () => {
     await expect(page).toHaveURL(/\/tabs\/search$/);
 
     // Prompt/empty state shows before any query is typed.
+    // Scoped to lib-search to avoid matching the watchlist tab's empty state
+    // (Ionic keeps inactive tabs in the DOM).
     await expect(
-      page.locator('vultus-empty-state .vultus-empty-state__title'),
+      page.locator('lib-search vultus-empty-state .vultus-empty-state__title'),
     ).toHaveText('Search for movies and TV shows');
 
     // Type a query into the searchbar's inner native input. The component reads
