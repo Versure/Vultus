@@ -24,34 +24,28 @@
 
   <!-- Prompt state -->
   @if (service.viewState() === 'prompt') {
-  <div class="empty-state">
-    <ion-icon name="film-outline" class="empty-icon"></ion-icon>
-    <p class="empty-text">Search for movies and TV shows</p>
-  </div>
+  <vultus-empty-state
+    icon="film-outline"
+    title="Search for movies and TV shows"
+  />
   }
 
   <!-- Loading state -->
   @if (service.viewState() === 'loading') {
-  <div class="empty-state">
-    <ion-spinner></ion-spinner>
-  </div>
+  <vultus-skeleton-card [count]="6" />
   }
 
   <!-- No results state -->
   @if (service.viewState() === 'no-results') {
-  <div class="empty-state">
-    <ion-icon name="search" class="empty-icon"></ion-icon>
-    <p class="empty-text">No results for '{{ service.lastQuery() }}'</p>
-  </div>
+  <vultus-empty-state
+    icon="search"
+    title="No results for '{{ service.lastQuery() }}'"
+  />
   }
 
   <!-- Error state -->
   @if (service.viewState() === 'error') {
-  <div class="empty-state">
-    <ion-icon name="alert-circle-outline" class="empty-icon"></ion-icon>
-    <p class="empty-text">Something went wrong</p>
-    <ion-button fill="outline" (click)="retry()">Try again</ion-button>
-  </div>
+  <vultus-error-state (retry)="retry()" />
   }
 
   <!-- Results -->

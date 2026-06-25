@@ -27,7 +27,11 @@
 </ion-header>
 
 <ion-content>
-  @if (service.loaded()) {
+  @if (service.loadFailed()) {
+  <div class="settings-loading">
+    <vultus-error-state (retry)="retry()" />
+  </div>
+  } @else if (service.loaded()) {
   <div class="settings-content">
     <h2 class="settings-title">Settings</h2>
 
@@ -85,7 +89,16 @@
   </div>
   } @else {
   <div class="settings-loading">
-    <ion-spinner></ion-spinner>
+    <div class="settings-skeleton">
+      <ion-skeleton-text
+        [animated]="true"
+        class="settings-skeleton__card"
+      ></ion-skeleton-text>
+      <ion-skeleton-text
+        [animated]="true"
+        class="settings-skeleton__card"
+      ></ion-skeleton-text>
+    </div>
   </div>
   }
 </ion-content>

@@ -321,7 +321,7 @@ Tailored from the PLAN §5 checklist. The `functions` project **is** affected
       PR notes this is intentional placement.
 - [ ] Integration gate green: from a **cleaned** `dist`, with a dummy
       `apps/functions/.env.vultus-cab62` present, `pnpm nx run
-    functions:deploy-preflight` **passes** and `dist/apps/functions/.env.vultus-cab62`
+  functions:deploy-preflight` **passes** and `dist/apps/functions/.env.vultus-cab62`
       **exists** afterward.
 - [ ] Unit test (if added per the recommendation) green; if the testable-refactor
       was deliberately skipped, the PR records why and relies on the integration

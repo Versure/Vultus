@@ -81,27 +81,6 @@ ion-content {
   }
 }
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 60vh;
-  gap: var(--vultus-space-1);
-}
-
-.empty-icon {
-  font-size: 3rem;
-  color: var(--vultus-text-muted);
-}
-
-.empty-text {
-  color: var(--vultus-text-muted);
-  font-family: var(--vultus-font-family);
-  font-size: 0.875rem;
-  text-align: center;
-}
-
 .results-list {
   background: transparent;
   // Horizontal inset (16px) matches the visible search input edge: the input

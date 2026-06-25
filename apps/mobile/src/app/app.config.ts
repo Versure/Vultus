@@ -14,7 +14,14 @@ import {
   getFirestore,
   provideFirestore,
 } from '@angular/fire/firestore';
-import { AUTH_UID } from '@vultus/shared/domain/tokens';
+import {
+  Functions,
+  connectFunctionsEmulator,
+  getFunctions,
+  httpsCallable,
+  provideFunctions,
+} from '@angular/fire/functions';
+import { AUTH_UID, TRIGGER_SYNC } from '@vultus/shared/domain/tokens';
 import { TMDB_SEARCH_CONFIG } from '@vultus/mobile/search';
 import { TMDB_DETAIL_CONFIG } from '@vultus/mobile/title-detail';
 import { appRoutes } from './app.routes';
@@ -22,6 +29,7 @@ import { environment } from '../environments/environment';
 import {
   connectAuthEmulatorIfEnabled,
   connectFirestoreEmulatorIfEnabled,
+  connectFunctionsEmulatorIfEnabled,
 } from './firebase/emulators';
 import { ShellAuthService } from './auth/auth.service';
 
@@ -51,6 +59,17 @@ export const appConfig: ApplicationConfig = {
       );
       return firestore;
     }),
+    // Wire AngularFire Functions with the europe-west1 region to match
+    // setGlobalOptions in apps/functions main.ts (region mismatch 404s silently).
+    provideFunctions(() => {
+      const fns = getFunctions(undefined, 'europe-west1');
+      connectFunctionsEmulatorIfEnabled(
+        environment,
+        fns,
+        connectFunctionsEmulator,
+      );
+      return fns;
+    }),
     // Gate render on the resolved anonymous session (decision 3). CRITICAL:
     // degrade gracefully — under the no-emulator dev server (e2e smoke) there
     // is no Auth backend, so signInAnonymously rejects. Swallow the failure so
@@ -75,6 +94,20 @@ export const appConfig: ApplicationConfig = {
         environment.mockAuthUid
           ? signal<string | null>(environment.mockAuthUid)
           : inject(ShellAuthService).uid,
+    },
+    // Provide the triggerSync thunk as a scope:shared token so the watchlist
+    // slice can call it without importing @angular/fire/functions or apps/mobile
+    // (mirrors the AUTH_UID pattern — spec 0025).
+    {
+      provide: TRIGGER_SYNC,
+      useFactory: () => {
+        const fns = inject(Functions);
+        const callable = httpsCallable<unknown, { syncedAt: string }>(
+          fns,
+          'triggerSync',
+        );
+        return () => callable().then((r) => r.data);
+      },
     },
     // TMDB search config (spec 0013) — provided at root from `environment.tmdb`
     // so the search slice can inject it without importing apps/mobile.

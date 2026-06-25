@@ -41,6 +41,7 @@ export class SettingsService {
   private readonly _region = signal<Region | null>(null);
   private readonly _notificationsEnabled = signal<boolean>(true);
   private readonly _loaded = signal<boolean>(false);
+  private readonly _loadFailed = signal<boolean>(false);
 
   /** Current persisted region; null until the user doc resolves. */
   readonly region = this._region.asReadonly();
@@ -48,6 +49,12 @@ export class SettingsService {
   readonly notificationsEnabled = this._notificationsEnabled.asReadonly();
   /** True once `load()` has resolved (render-gate for the page). */
   readonly loaded = this._loaded.asReadonly();
+  /**
+   * True when the last `load()` attempt threw (e.g. Firestore offline). The
+   * page renders an error state with a retry instead of hanging on the
+   * skeleton; checked BEFORE `loaded` in the template.
+   */
+  readonly loadFailed = this._loadFailed.asReadonly();
 
   /** Reads `users/{uid}`; creates it with defaults if absent. */
   async load(): Promise<void> {
@@ -58,30 +65,45 @@ export class SettingsService {
       return;
     }
 
-    const ref = doc(this.firestore, userPath(uid));
-    const snap = await getDoc(ref);
+    // Clear any prior failure so a re-attempt starts from the skeleton state.
+    this._loadFailed.set(false);
 
-    let user: User;
-    if (snap.exists()) {
-      user = dataToUser(snap.data() as UserReadData);
-    } else {
-      user = {
-        region: 'NL',
-        notificationPrefs: {
-          episodeAired: true,
-          movieAvailable: true,
-          cameToPlatform: true,
-        },
-        fcmTokens: [],
-      };
-      await setDoc(ref, userToData(user));
+    try {
+      const ref = doc(this.firestore, userPath(uid));
+      const snap = await getDoc(ref);
+
+      let user: User;
+      if (snap.exists()) {
+        user = dataToUser(snap.data() as UserReadData);
+      } else {
+        user = {
+          region: 'NL',
+          notificationPrefs: {
+            episodeAired: true,
+            movieAvailable: true,
+            cameToPlatform: true,
+          },
+          fcmTokens: [],
+        };
+        await setDoc(ref, userToData(user));
+      }
+
+      this._region.set(user.region);
+      this._notificationsEnabled.set(
+        projectNotifications(user.notificationPrefs),
+      );
+      this._loaded.set(true);
+    } catch {
+      // Surface the failure as an error state. `_loaded` stays false; the
+      // template checks `loadFailed` first, so the skeleton never hangs.
+      this._loadFailed.set(true);
     }
+  }
 
-    this._region.set(user.region);
-    this._notificationsEnabled.set(
-      projectNotifications(user.notificationPrefs),
-    );
-    this._loaded.set(true);
+  /** Re-attempts `load()` after a failure (clears the error flag first). */
+  retryLoad(): void {
+    this._loadFailed.set(false);
+    void this.load();
   }
 
   /** Persists the region only; leaves all other fields untouched. */

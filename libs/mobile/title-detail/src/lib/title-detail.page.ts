@@ -11,7 +11,6 @@ import {
   IonContent,
   IonHeader,
   IonIcon,
-  IonSkeletonText,
   IonTitle,
   IonToolbar,
 } from '@ionic/angular/standalone';
@@ -35,6 +34,7 @@ import {
   type WatchlistItem,
 } from '@vultus/shared/domain';
 import {
+  BehaviorSubject,
   type Observable,
   combineLatest,
   map,
@@ -43,6 +43,11 @@ import {
   startWith,
   switchMap,
 } from 'rxjs';
+import {
+  VultusEmptyState,
+  VultusErrorState,
+  VultusSkeletonHero,
+} from '@vultus/shared/ui-kit';
 import { type GroupedProviders, type TitleDetail } from './tmdb-detail.client';
 import {
   STATUS_DISPLAY_ORDER,
@@ -74,9 +79,11 @@ const EMPTY_PROVIDERS: GroupedProviders = { flatrate: [], rent: [], buy: [] };
     IonButton,
     IonTitle,
     IonIcon,
-    IonSkeletonText,
     IonActionSheet,
     IonAlert,
+    VultusSkeletonHero,
+    VultusEmptyState,
+    VultusErrorState,
   ],
   templateUrl: './title-detail.page.html',
   styleUrl: './title-detail.page.scss',
@@ -91,7 +98,6 @@ export class TitleDetailPage {
   /** Exposed for template bindings. */
   readonly STATUS_LABELS = STATUS_LABELS;
   readonly statusOrder = STATUS_DISPLAY_ORDER;
-  readonly skeletonLines = [0, 1, 2];
 
   /** The numeric tmdb id parsed from the `:titleId` route param. */
   readonly tmdbId = Number(this.route.snapshot.paramMap.get('titleId'));
@@ -127,9 +133,18 @@ export class TitleDetailPage {
     ];
   }
 
-  private readonly detail$: Observable<DetailViewState> = this.service
-    .detail$(this.tmdbId)
-    .pipe(shareReplay({ bufferSize: 1, refCount: true }));
+  /**
+   * Retry trigger for the recoverable `error` state. Each `next()` re-runs the
+   * service's `detail$(tmdbId)` (which re-emits `loading` then the fresh result)
+   * through `switchMap`, so tapping "Try again" re-resolves the title.
+   */
+  private readonly retryTrigger$ = new BehaviorSubject<void>(undefined);
+
+  private readonly detail$: Observable<DetailViewState> =
+    this.retryTrigger$.pipe(
+      switchMap(() => this.service.detail$(this.tmdbId)),
+      shareReplay({ bufferSize: 1, refCount: true }),
+    );
 
   private readonly region$ = this.service
     .region$()
@@ -176,6 +191,11 @@ export class TitleDetailPage {
       addCircleOutline,
       trashOutline,
     });
+  }
+
+  /** Re-resolves the title after a recoverable error (bound to error-state retry). */
+  onRetry(): void {
+    this.retryTrigger$.next();
   }
 
   /** Opens the status-change action sheet (public — bound + tested). */

@@ -11,13 +11,20 @@ import {
   IonIcon,
   IonRefresher,
   IonRefresherContent,
-  IonSkeletonText,
+  IonSpinner,
   IonTitle,
   IonToolbar,
+  ToastController,
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
-import { filmOutline, personCircleOutline, trashOutline } from 'ionicons/icons';
+import {
+  filmOutline,
+  personCircleOutline,
+  refreshOutline,
+  trashOutline,
+} from 'ionicons/icons';
 import { AUTH_UID } from '@vultus/shared/domain/tokens';
+import { SyncStateService } from './watchlist.sync-state.service';
 import {
   type Region,
   type TitleType,
@@ -25,9 +32,16 @@ import {
   type WatchlistItem,
 } from '@vultus/shared/domain';
 import {
+  VultusEmptyState,
+  VultusErrorState,
+  VultusSkeletonCard,
+} from '@vultus/shared/ui-kit';
+import {
   BehaviorSubject,
   type Observable,
+  catchError,
   map,
+  of,
   startWith,
   switchMap,
 } from 'rxjs';
@@ -54,9 +68,12 @@ const TMDB_POSTER_BASE = 'https://image.tmdb.org/t/p/w185';
     IonIcon,
     IonRefresher,
     IonRefresherContent,
-    IonSkeletonText,
+    IonSpinner,
     IonAlert,
     IonActionSheet,
+    VultusSkeletonCard,
+    VultusEmptyState,
+    VultusErrorState,
   ],
   templateUrl: './watchlist.page.html',
   styleUrl: './watchlist.page.scss',
@@ -64,6 +81,10 @@ const TMDB_POSTER_BASE = 'https://image.tmdb.org/t/p/w185';
 export class WatchlistPage {
   private readonly watchlistService = inject(WatchlistService);
   private readonly router = inject(Router);
+  private readonly toastCtrl = inject(ToastController);
+
+  /** Client-side cooldown state for the toolbar refresh button (spec 0025). */
+  readonly syncState = inject(SyncStateService);
 
   /** Exposed for template bindings (status chip label). */
   readonly STATUS_LABELS = STATUS_LABELS;
@@ -74,9 +95,6 @@ export class WatchlistPage {
   /** Selected type filter — undefined = All, 'movie' = Movies, 'tv' = TV. */
   selectedType: TitleType | undefined = undefined;
 
-  /** Skeleton placeholder rows while loading. */
-  readonly skeletons = [0, 1, 2, 3, 4];
-
   // Drives re-subscription when the type filter changes.
   private readonly typeFilter$ = new BehaviorSubject<TitleType | undefined>(
     undefined,
@@ -85,18 +103,21 @@ export class WatchlistPage {
   /**
    * View model for the list. `groups` is null until the first emission of the
    * realtime stream → the template renders skeletons; once it emits (even `[]`)
-   * the empty state / grouped sections take over. Modelled as a stream (not a
+   * the empty state / grouped sections take over. A stream error maps to
+   * `{ groups: null, error: true }` (caught here, not propagated) so the
+   * template renders the error state with a retry. Modelled as a stream (not a
    * mutated `loading` flag) so nothing changes component state during change
    * detection.
    */
-  readonly vm$: Observable<{ groups: StatusGroup[] | null }> =
+  readonly vm$: Observable<{ groups: StatusGroup[] | null; error: boolean }> =
     this.typeFilter$.pipe(
       switchMap((type) =>
-        this.watchlistService
-          .watchlist$(this.uid(), type)
-          .pipe(map((items) => ({ groups: groupByStatus(items) }))),
+        this.watchlistService.watchlist$(this.uid(), type).pipe(
+          map((items) => ({ groups: groupByStatus(items), error: false })),
+          catchError(() => of({ groups: null, error: true })),
+        ),
       ),
-      startWith({ groups: null }),
+      startWith({ groups: null, error: false }),
     );
 
   /** The user's region (for provider-badge availability lookups). */
@@ -124,7 +145,38 @@ export class WatchlistPage {
   ];
 
   constructor() {
-    addIcons({ filmOutline, personCircleOutline, trashOutline });
+    addIcons({
+      filmOutline,
+      personCircleOutline,
+      refreshOutline,
+      trashOutline,
+    });
+  }
+
+  /**
+   * Toolbar refresh button: triggers a manual sync and surfaces the outcome as a
+   * toast. The `SyncStateService` owns the guard/cooldown; this method only maps
+   * resolve/reject to the success/error toast.
+   */
+  async onSync(): Promise<void> {
+    try {
+      await this.syncState.triggerSync();
+      const toast = await this.toastCtrl.create({
+        message: 'Watchlist synced',
+        duration: 2000,
+        position: 'bottom',
+        color: 'success',
+      });
+      await toast.present();
+    } catch {
+      const toast = await this.toastCtrl.create({
+        message: 'Sync failed — try again later',
+        duration: 3000,
+        position: 'bottom',
+        color: 'danger',
+      });
+      await toast.present();
+    }
   }
 
   /** Action-sheet buttons generated from the display order + a Cancel row. */
@@ -162,6 +214,11 @@ export class WatchlistPage {
   onRefresh(event: CustomEvent): void {
     this.typeFilter$.next(this.selectedType);
     (event.detail as { complete: () => void }).complete();
+  }
+
+  /** Error-state retry: re-subscribe the realtime stream for the current filter. */
+  onRetry(): void {
+    this.typeFilter$.next(this.selectedType);
   }
 
   /** Opens the delete-confirm alert for an item. */

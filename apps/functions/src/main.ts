@@ -14,7 +14,7 @@
  * network, or secrets.
  */
 import { logger, setGlobalOptions } from 'firebase-functions';
-import { onRequest } from 'firebase-functions/https';
+import { onRequest, onCall, HttpsError } from 'firebase-functions/https';
 import { defineSecret, defineString } from 'firebase-functions/params';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -24,6 +24,7 @@ import {
   createTmdbClient,
   createTraktClient,
   createFirestoreTitleCacheStore,
+  gatherUserWatchlistTitles,
 } from '@vultus/functions/sync-titles';
 import type {
   SyncEngine,
@@ -252,6 +253,65 @@ export const syncTitles = onRequest(
     );
 
     res.status(output.status).json(output.body);
+  },
+);
+
+/** The response the manual `triggerSync` callable resolves with (spec 0025). */
+export interface TriggerSyncResponse {
+  /** ISO 8601 timestamp of when the manual sync pass completed. */
+  syncedAt: string;
+}
+
+/** Dependencies injected into `runTriggerSync`, so tests drive it with fakes. */
+export interface RunTriggerSyncDeps {
+  db: Firestore;
+  /** Builds the credentialed engine for the gathered store. Injected so the
+   *  handler test can supply a fake engine without the real clients. */
+  createEngine: (db: Firestore) => SyncEngine;
+}
+
+/**
+ * Core manual-sync flow, SDK-agnostic via injected deps. Validates the caller's
+ * identity (`uid` must be present), gathers ONLY that user's watchlist titles
+ * (deduped to `{ tmdbId, type }`), runs ONE force-fresh engine pass (no staleness
+ * filter — manual = always refresh), and resolves `{ syncedAt }`. Best-effort:
+ * per-title engine errors do NOT fail the callable (spec 0008 isolation). Writes
+ * ONLY `title-cache/**` via the engine port — no `users/**`, no `system/sync`.
+ */
+export async function runTriggerSync(
+  deps: RunTriggerSyncDeps,
+  uid: string | undefined,
+): Promise<TriggerSyncResponse> {
+  if (!uid) {
+    throw new HttpsError('unauthenticated', 'Sign-in required');
+  }
+  const rawTitles = await gatherUserWatchlistTitles(deps.db, uid);
+  const inputs: SyncTitleInput[] = rawTitles.map((t) => ({
+    tmdbId: t.tmdbId,
+    type: t.type,
+  }));
+  const engine = deps.createEngine(deps.db);
+  await engine.sync(inputs);
+  return { syncedAt: new Date().toISOString() };
+}
+
+/**
+ * The deployable manual-sync callable (spec 0025). Verified Firebase Auth context
+ * is supplied by the callable framework; we only assert an identity is present
+ * (`request.auth.uid`, never a client-supplied payload). Binds `TMDB_READ_TOKEN`
+ * so the runtime injects it; reuses the SAME engine wiring as `syncTitles`.
+ */
+export const triggerSync = onCall<unknown, Promise<TriggerSyncResponse>>(
+  { secrets: [TMDB_READ_TOKEN] },
+  (request) => {
+    const db = ensureAdmin();
+    const createEngine = (firestore: Firestore): SyncEngine =>
+      createSyncEngine({
+        tmdb: createTmdbClient({ readAccessToken: TMDB_READ_TOKEN.value() }),
+        trakt: createTraktClient({ clientId: TRAKT_CLIENT_ID.value() }),
+        store: createFirestoreTitleCacheStore(firestore),
+      });
+    return runTriggerSync({ db, createEngine }, request.auth?.uid);
   },
 );
 

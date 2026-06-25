@@ -12,7 +12,7 @@ import {
 import type { FirestoreTimestampLike } from '@vultus/shared/firestore-schema';
 import { type Observable, of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { TitleDetail } from './tmdb-detail.client';
+import { TmdbDetailError, type TitleDetail } from './tmdb-detail.client';
 import {
   type DetailViewState,
   TitleDetailService,
@@ -45,8 +45,19 @@ vi.mock('@angular/fire/firestore', () => ({
 // --- Slice-local TMDB client mock ---
 const getDetailMock = vi.fn<() => Promise<TitleDetail>>();
 const getProvidersMock = vi.fn();
+// Mirror the real TmdbDetailError shape (carries an HTTP `status`) so the
+// service's 404-vs-transient discrimination can be exercised. Defined inline in
+// the (hoisted) factory to avoid any temporal-dead-zone on the class reference.
 vi.mock('./tmdb-detail.client', () => ({
-  TmdbDetailError: class extends Error {},
+  TmdbDetailError: class TmdbDetailError extends Error {
+    constructor(
+      message: string,
+      readonly status: number,
+    ) {
+      super(message);
+      this.name = 'TmdbDetailError';
+    }
+  },
   createTmdbDetailClient: () => ({
     getDetail: getDetailMock,
     getProviders: getProvidersMock,
@@ -194,15 +205,31 @@ describe('TitleDetailService', () => {
     }
   });
 
-  it('cache miss + live throws → not-found', async () => {
+  it('cache miss + live TMDB 404 → not-found (genuine missing title)', async () => {
     getDocMock.mockResolvedValue(snap(undefined));
-    getDetailMock.mockRejectedValue(new Error('404'));
+    getDetailMock.mockRejectedValue(new TmdbDetailError('not found', 404));
     const service = createService(UID);
     const state = await lastState(service, 999);
     expect(state.kind).toBe('not-found');
   });
 
-  it('Firestore offline (getDoc throws unavailable) → falls through to live fallback, stream completes without error', async () => {
+  it('cache miss + live TMDB non-404 error (5xx) → error, NOT not-found', async () => {
+    getDocMock.mockResolvedValue(snap(undefined));
+    getDetailMock.mockRejectedValue(new TmdbDetailError('server error', 503));
+    const service = createService(UID);
+    const state = await lastState(service, 27205);
+    expect(state.kind).toBe('error');
+  });
+
+  it('cache miss + live throws a plain network error → error (recoverable), NOT not-found', async () => {
+    getDocMock.mockResolvedValue(snap(undefined));
+    getDetailMock.mockRejectedValue(new Error('network down'));
+    const service = createService(UID);
+    const state = await lastState(service, 27205);
+    expect(state.kind).toBe('error');
+  });
+
+  it('Firestore getDoc error (offline / unavailable) → error, NOT a silent cache-miss to the live path', async () => {
     getDocMock.mockRejectedValue(
       Object.assign(new Error('Could not reach Cloud Firestore backend'), {
         code: 'unavailable',
@@ -211,12 +238,9 @@ describe('TitleDetailService', () => {
     getDetailMock.mockResolvedValue(liveDetail({ type: 'movie' }));
     const service = createService(UID);
     const state = await lastState(service, 27205);
-    expect(state.kind).toBe('loaded');
-    if (state.kind === 'loaded') {
-      expect(state.source).toBe('live');
-      expect(state.detail.title).toBe('Inception');
-    }
-    expect(getDetailMock).toHaveBeenCalledTimes(1);
+    expect(state.kind).toBe('error');
+    // The cache read failed → surfaced as error; the live path is NOT attempted.
+    expect(getDetailMock).not.toHaveBeenCalled();
   });
 
   it('region$ emits the user region, and null when the doc is absent', async () => {

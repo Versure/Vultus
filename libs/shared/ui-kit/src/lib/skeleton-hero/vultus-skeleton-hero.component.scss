@@ -1,0 +1,54 @@
+:host {
+  display: block;
+}
+
+.vultus-skeleton-hero__hero {
+  display: block;
+  width: 100%;
+  height: 320px;
+  border-radius: 0;
+  margin: 0;
+}
+
+.vultus-skeleton-hero__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 16px;
+  margin-top: 16px;
+}
+
+.vultus-skeleton-hero__title {
+  height: 28px;
+  width: 60%;
+  border-radius: var(--vultus-radius-sm);
+  margin: 0;
+}
+
+.vultus-skeleton-hero__meta {
+  height: 14px;
+  width: 40%;
+  border-radius: var(--vultus-radius-sm);
+  margin: 0;
+}
+
+.vultus-skeleton-hero__line {
+  height: 14px;
+  border-radius: var(--vultus-radius-sm);
+  margin: 0;
+}
+
+.vultus-skeleton-hero__line--full {
+  width: 100%;
+}
+
+.vultus-skeleton-hero__line--short {
+  width: 80%;
+}
+
+.vultus-skeleton-hero__card {
+  height: 96px;
+  width: 100%;
+  border-radius: var(--vultus-radius-md);
+  margin: 8px 0 0;
+}

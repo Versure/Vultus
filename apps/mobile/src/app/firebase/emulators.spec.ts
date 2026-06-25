@@ -1,17 +1,23 @@
 import { vi } from 'vitest';
 import type { Auth } from '@angular/fire/auth';
 import type { Firestore } from '@angular/fire/firestore';
+import type { Functions } from '@angular/fire/functions';
 import {
   AUTH_EMULATOR_URL,
   FIRESTORE_EMULATOR_HOST,
   FIRESTORE_EMULATOR_PORT,
+  FUNCTIONS_EMULATOR_HOST,
+  FUNCTIONS_EMULATOR_PORT,
   connectAuthEmulatorIfEnabled,
   connectFirestoreEmulatorIfEnabled,
+  connectFunctionsEmulatorIfEnabled,
+  type ConnectFunctionsFn,
   type EmulatorEnv,
 } from './emulators';
 
 const auth = {} as Auth;
 const firestore = {} as Firestore;
+const fns = {} as Functions;
 
 const DEV: EmulatorEnv = { production: false, useEmulators: true };
 const DEV_NO_EMU: EmulatorEnv = { production: false, useEmulators: false };
@@ -72,5 +78,35 @@ describe('connectFirestoreEmulatorIfEnabled', () => {
     connectFirestoreEmulatorIfEnabled(PROD, firestore, connectFirestore);
 
     expect(connectFirestore).not.toHaveBeenCalled();
+  });
+});
+
+describe('connectFunctionsEmulatorIfEnabled', () => {
+  it('connects the Functions emulator when dev + useEmulators', () => {
+    const connectFunctions: ConnectFunctionsFn = vi.fn();
+
+    connectFunctionsEmulatorIfEnabled(DEV, fns, connectFunctions);
+
+    expect(connectFunctions).toHaveBeenCalledWith(
+      fns,
+      FUNCTIONS_EMULATOR_HOST,
+      FUNCTIONS_EMULATOR_PORT,
+    );
+  });
+
+  it('does not connect when useEmulators is false', () => {
+    const connectFunctions: ConnectFunctionsFn = vi.fn();
+
+    connectFunctionsEmulatorIfEnabled(DEV_NO_EMU, fns, connectFunctions);
+
+    expect(connectFunctions).not.toHaveBeenCalled();
+  });
+
+  it('does not connect in production', () => {
+    const connectFunctions: ConnectFunctionsFn = vi.fn();
+
+    connectFunctionsEmulatorIfEnabled(PROD, fns, connectFunctions);
+
+    expect(connectFunctions).not.toHaveBeenCalled();
   });
 });

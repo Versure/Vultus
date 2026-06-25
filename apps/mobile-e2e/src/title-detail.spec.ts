@@ -66,7 +66,12 @@ async function bootAndSeed(
   return uid;
 }
 
-test.beforeEach(async () => {
+test.beforeEach(async ({ page }) => {
+  // Pre-set the onboarding completion flag so the guard (spec 0022) passes
+  // through to the tabs shell instead of redirecting to /onboarding.
+  await page.addInitScript(() => {
+    localStorage.setItem('CapacitorStorage.onboarding_done', 'true');
+  });
   // Clean emulator state before the app boots and creates its anon session.
   await clearAll();
 });
@@ -140,7 +145,7 @@ test('watchlist alert remove: card -> empty state (F6 runnable part)', async ({
   await alert.locator('button', { hasText: 'Remove' }).first().click();
 
   // The realtime stream emits an empty list -> the watchlist empty state shows.
-  const emptyState = page.locator('.empty-state');
+  const emptyState = page.locator('vultus-empty-state');
   await expect(emptyState).toBeVisible();
   await expect(emptyState).toContainText('Your watchlist is empty');
 });

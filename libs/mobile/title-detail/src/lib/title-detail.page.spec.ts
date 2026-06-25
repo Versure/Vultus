@@ -99,10 +99,13 @@ describe('TitleDetailPage', () => {
     expect(fixture.componentInstance.tmdbId).toBe(27205);
   });
 
-  it('shows the loading skeleton before the first emission (no not-found copy)', async () => {
+  it('shows the loading skeleton hero before the first emission (no not-found copy)', async () => {
     const { fixture } = await setup({ detail: 'loading' });
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('[data-test="loading"]')).toBeTruthy();
+    // The shared <vultus-skeleton-hero> atom renders the loading placeholder
+    // (and still mounts ion-skeleton-text internally).
+    expect(el.querySelector('vultus-skeleton-hero')).toBeTruthy();
     expect(el.querySelector('ion-skeleton-text')).toBeTruthy();
     expect(el.textContent).not.toContain('Title not found');
   });
@@ -156,12 +159,33 @@ describe('TitleDetailPage', () => {
     );
   });
 
-  it('shows the not-found state and no action area', async () => {
+  it('shows the not-found empty-state and no action area', async () => {
     const { fixture } = await setup({ detail: { kind: 'not-found' } });
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector('[data-test="not-found"]')).toBeTruthy();
+    const empty = el.querySelector('[data-test="not-found"]');
+    expect(empty).toBeTruthy();
+    expect(empty?.tagName.toLowerCase()).toBe('vultus-empty-state');
     expect(el.textContent).toContain('Title not found');
     expect(el.querySelector('[data-test="action-area"]')).toBeFalsy();
+  });
+
+  it('shows the error-state on the recoverable error kind, and onRetry re-subscribes detail$', async () => {
+    const { fixture, svc } = await setup({ detail: { kind: 'error' } });
+    const el = fixture.nativeElement as HTMLElement;
+    const errorEl = el.querySelector('[data-test="error"]');
+    expect(errorEl).toBeTruthy();
+    expect(errorEl?.tagName.toLowerCase()).toBe('vultus-error-state');
+    expect(el.querySelector('[data-test="action-area"]')).toBeFalsy();
+
+    // detail$ subscribed once for the initial render.
+    const callsBefore = svc.detail$.mock.calls.length;
+    expect(callsBefore).toBeGreaterThanOrEqual(1);
+
+    // Tapping "Try again" re-runs detail$(tmdbId) via the retry trigger.
+    fixture.componentInstance.onRetry();
+    fixture.detectChanges();
+    expect(svc.detail$.mock.calls.length).toBeGreaterThan(callsBefore);
+    expect(svc.detail$).toHaveBeenLastCalledWith(27205);
   });
 
   it('renders provider groups as text chips, omitting empty groups', async () => {

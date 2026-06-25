@@ -13,9 +13,11 @@ interface MockSettingsService {
   region: WritableSignal<Region | null>;
   notificationsEnabled: WritableSignal<boolean>;
   loaded: WritableSignal<boolean>;
+  loadFailed: WritableSignal<boolean>;
   load: ReturnType<typeof vi.fn>;
   setRegion: ReturnType<typeof vi.fn>;
   setNotificationsEnabled: ReturnType<typeof vi.fn>;
+  retryLoad: ReturnType<typeof vi.fn>;
 }
 
 vi.mock('./settings.service', () => ({
@@ -27,20 +29,21 @@ vi.mock('./settings.service', () => ({
 import { SettingsPage } from './settings.page';
 import { SettingsService } from './settings.service';
 
-function mockService(loaded: boolean): MockSettingsService {
+function mockService(loaded: boolean, loadFailed = false): MockSettingsService {
   return {
     regions: REGIONS,
     region: signal<Region | null>('NL'),
     notificationsEnabled: signal<boolean>(true),
     loaded: signal<boolean>(loaded),
+    loadFailed: signal<boolean>(loadFailed),
     load: vi.fn().mockResolvedValue(undefined),
     setRegion: vi.fn().mockResolvedValue(undefined),
     setNotificationsEnabled: vi.fn().mockResolvedValue(undefined),
+    retryLoad: vi.fn(),
   };
 }
 
-async function setup(loaded: boolean) {
-  const service = mockService(loaded);
+async function setupWithService(service: MockSettingsService) {
   await TestBed.configureTestingModule({
     imports: [SettingsPage],
     providers: [
@@ -60,6 +63,10 @@ async function setup(loaded: boolean) {
   return { fixture, service, el };
 }
 
+async function setup(loaded: boolean, loadFailed = false) {
+  return setupWithService(mockService(loaded, loadFailed));
+}
+
 describe('SettingsPage', () => {
   beforeEach(() => {
     TestBed.resetTestingModule();
@@ -74,7 +81,8 @@ describe('SettingsPage', () => {
     const { el } = await setup(true);
     expect(el.querySelector('ion-select')).toBeTruthy();
     expect(el.querySelector('ion-toggle')).toBeTruthy();
-    expect(el.querySelector('ion-spinner')).toBeFalsy();
+    expect(el.querySelector('ion-skeleton-text')).toBeFalsy();
+    expect(el.querySelector('vultus-error-state')).toBeFalsy();
   });
 
   it('lists the ten regions as select options', async () => {
@@ -104,10 +112,26 @@ describe('SettingsPage', () => {
     expect(service.setNotificationsEnabled).toHaveBeenCalledWith(false);
   });
 
-  it('render-gates: shows a spinner (no form) before load resolves', async () => {
+  it('render-gates: shows a skeleton (no form) before load resolves', async () => {
     const { el } = await setup(false);
-    expect(el.querySelector('ion-spinner')).toBeTruthy();
+    expect(el.querySelector('ion-skeleton-text')).toBeTruthy();
     expect(el.querySelector('ion-select')).toBeFalsy();
     expect(el.querySelector('ion-toggle')).toBeFalsy();
+    expect(el.querySelector('vultus-error-state')).toBeFalsy();
+  });
+
+  it('shows error state (no skeleton, no form) when loadFailed is true', async () => {
+    const { el } = await setup(false, true);
+    expect(el.querySelector('vultus-error-state')).toBeTruthy();
+    expect(el.querySelector('ion-skeleton-text')).toBeFalsy();
+    expect(el.querySelector('ion-select')).toBeFalsy();
+  });
+
+  it('calls retryLoad() when the error state emits retry', async () => {
+    const { el, service } = await setup(false, true);
+    const errorEl = el.querySelector('vultus-error-state');
+    expect(errorEl).toBeTruthy();
+    errorEl?.dispatchEvent(new CustomEvent('retry'));
+    expect(service.retryLoad).toHaveBeenCalledTimes(1);
   });
 });

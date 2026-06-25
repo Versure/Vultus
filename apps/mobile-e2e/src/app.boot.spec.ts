@@ -17,7 +17,12 @@ import { clearAll, resolveAnonUid, seedFor } from './support';
  * uid AFTER boot (R3 — `seedFor`, not `resetAndSeed`, so the running session is
  * preserved); Ionic transitions / network are awaited rather than slept on.
  */
-test.beforeEach(async () => {
+test.beforeEach(async ({ page }) => {
+  // Pre-set the onboarding completion flag so the guard passes through to tabs.
+  // Without this, the guard (spec 0022) redirects first-launch boots to /onboarding.
+  await page.addInitScript(() => {
+    localStorage.setItem('CapacitorStorage.onboarding_done', 'true');
+  });
   // Clean emulator state before the app boots and creates its anon session.
   await clearAll();
 });
@@ -47,8 +52,8 @@ test('boots into anon auth and shows the empty watchlist', async ({ page }) => {
   await expect(page.locator('ion-tab-button[tab="settings"]')).toBeVisible();
 
   // 4. The empty state shows once loading completes and there are zero groups
-  //    (watchlist.page.html: `.empty-state` with `.empty-title` / `.empty-sub`).
-  const emptyState = page.locator('.empty-state');
+  //    (watchlist.page.html: <vultus-empty-state> shared atom).
+  const emptyState = page.locator('vultus-empty-state');
   await expect(emptyState).toBeVisible();
   await expect(emptyState).toContainText('Your watchlist is empty');
   await expect(emptyState).toContainText('Search for a title to get started');

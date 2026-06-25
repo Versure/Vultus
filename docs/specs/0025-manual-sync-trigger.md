@@ -2,7 +2,7 @@
 number: 0025
 slug: manual-sync-trigger
 title: Add a manual "refresh now" sync trigger to the watchlist toolbar via a triggerSync callable
-status: approved
+status: done
 slices: [slice:watchlist, slice:sync-titles]
 scopes: [scope:mobile, scope:functions]
 created: 2026-06-25
@@ -111,11 +111,11 @@ Out of scope (explicitly):
 
 ## Affected slices & Sheriff tags
 
-| Project               | Path                         | Sheriff tags                           | Change                                                                            |
-| --------------------- | ---------------------------- | -------------------------------------- | --------------------------------------------------------------------------------- |
-| functions-sync-titles | `libs/functions/sync-titles` | `scope:functions`, `slice:sync-titles` | **add** the per-user gather helper (pure) + its unit test; barrel may stay as-is  |
-| functions (app)       | `apps/functions`             | `scope:functions`                      | **add** the `triggerSync` callable export (alongside the untouched `syncTitles`)  |
-| mobile-watchlist      | `libs/mobile/watchlist`      | `scope:mobile`, `slice:watchlist`      | **add** `SyncStateService` + the toolbar refresh button/state on `WatchlistPage`  |
+| Project               | Path                         | Sheriff tags                           | Change                                                                             |
+| --------------------- | ---------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------- |
+| functions-sync-titles | `libs/functions/sync-titles` | `scope:functions`, `slice:sync-titles` | **add** the per-user gather helper (pure) + its unit test; barrel may stay as-is   |
+| functions (app)       | `apps/functions`             | `scope:functions`                      | **add** the `triggerSync` callable export (alongside the untouched `syncTitles`)   |
+| mobile-watchlist      | `libs/mobile/watchlist`      | `scope:mobile`, `slice:watchlist`      | **add** `SyncStateService` + the toolbar refresh button/state on `WatchlistPage`   |
 | mobile (shell)        | `apps/mobile`                | `scope:mobile`                         | **add** `provideFunctions` + the callable token provider + Functions emulator glue |
 
 - **Tags are by path glob in `sheriff.config.ts` — this spec does NOT edit
@@ -216,7 +216,7 @@ Behaviour:
   see below), dedupe to distinct `{ tmdbId, type }`.
 - **Run:** build the engine exactly as `syncTitles` does
   (`createSyncEngine({ tmdb: createTmdbClient(...), trakt: createTraktClient(...),
-  store: createFirestoreTitleCacheStore(db) })`) and `await engine.sync(inputs)`.
+store: createFirestoreTitleCacheStore(db) })`) and `await engine.sync(inputs)`.
   **No staleness filter** (manual = always refresh the user's titles).
 - **Return:** `{ syncedAt: new Date().toISOString() }`. The engine's per-title
   errors are isolated (spec 0008) and do **not** fail the callable — a manual
@@ -277,9 +277,9 @@ import { InjectionToken } from '@angular/core';
  *  the `triggerSync` callable and resolves with the server's syncedAt ISO
  *  string. Provided by the shell (apps/mobile) so slices can trigger a sync
  *  WITHOUT importing @angular/fire/functions or apps/mobile. */
-export const TRIGGER_SYNC = new InjectionToken<() => Promise<{ syncedAt: string }>>(
-  'TRIGGER_SYNC',
-);
+export const TRIGGER_SYNC = new InjectionToken<
+  () => Promise<{ syncedAt: string }>
+>('TRIGGER_SYNC');
 ```
 
 - **Binding:** the watchlist slice injects `TRIGGER_SYNC` and calls it; it does
@@ -296,8 +296,8 @@ export const TRIGGER_SYNC = new InjectionToken<() => Promise<{ syncedAt: string 
 `app.config.ts` does **not** currently `provideFunctions` (verified). Add:
 
 - `provideFunctions(() => { const fns = getFunctions(undefined, 'europe-west1');
-  connectFunctionsEmulatorIfEnabled(environment, fns, connectFunctionsEmulator);
-  return fns; })` — note the **region must be `europe-west1`** to match the
+connectFunctionsEmulatorIfEnabled(environment, fns, connectFunctionsEmulator);
+return fns; })` — note the **region must be `europe-west1`** to match the
   deployed callable's region (`setGlobalOptions` in `main.ts`). A region mismatch
   silently 404s the callable.
 - A `connectFunctionsEmulatorIfEnabled(env, fns, connectFn)` helper added to
@@ -306,8 +306,8 @@ export const TRIGGER_SYNC = new InjectionToken<() => Promise<{ syncedAt: string 
   connector injected for testability). Functions emulator host/port: **`localhost`
   : `5001`** (the firebase.json default for the Functions emulator).
 - A `{ provide: TRIGGER_SYNC, useFactory: () => { const fns = inject(Functions);
-  const callable = httpsCallable<unknown, { syncedAt: string }>(fns, 'triggerSync');
-  return () => callable().then((r) => r.data); } }` provider (factory injects the
+const callable = httpsCallable<unknown, { syncedAt: string }>(fns, 'triggerSync');
+return () => callable().then((r) => r.data); } }` provider (factory injects the
   AngularFire `Functions` and returns the thunk the token describes).
 - A **Functions emulator entry in `firebase.json`** (`"functions": { "port": 5001 }`
   under `emulators`) so the e2e/dev path can reach the callable. (firebase.json
@@ -378,7 +378,7 @@ specifies a value it wins, but these are the floor the implementer must hit):
     plain state change.
 - **Toasts (Ionic `ToastController`):**
   - **success:** message **"Watchlist synced"**, `duration: 2000`, `position:
-    'bottom'`. Color/`cssClass` should read from the theme's success/`primary`
+'bottom'`. Color/`cssClass` should read from the theme's success/`primary`
     token (consume the `--vultus-*`/`--ion-color-success` var — do not hardcode).
   - **error:** message **"Sync failed — try again later"**, `duration: 3000`,
     `position: 'bottom'`, `color: 'danger'` (the `--ion-color-danger` / `error`
@@ -456,8 +456,8 @@ the parallel batch since its files are disjoint from the mobile slice's.
    - Add handler unit tests (`main.spec.ts` additions or a sibling spec): assert
      no-auth → `unauthenticated`; a valid `request.auth.uid` → engine called with
      the deduped per-user titles and the response is `{ syncedAt }`; **no
-     `users/**` write and no `system/sync` write** (boundary); a partial engine
-     error still resolves. Fake engine + fake/mocked `db`; no network, no
+     `users/**`write and no`system/sync`write** (boundary); a partial engine
+error still resolves. Fake engine + fake/mocked`db`; no network, no
      emulator, no secrets.
    - Update `libs/functions/sync-titles/README.md`: add `gatherUserWatchlistTitles`
      to the public surface and note the `triggerSync` callable consumes it.
@@ -542,8 +542,8 @@ for the happy-path manual-sync flow.
   called.
 - Valid `request.auth.uid` → engine called with the deduped per-user titles;
   resolves `{ syncedAt: <ISO string> }`.
-- **Boundary:** across all paths the fake `db` records **no `users/**` write and
-  no `system/sync` write** — only `title-cache/**` (via the store). This is the
+- **Boundary:** across all paths the fake `db` records **no `users/**`write and
+no`system/sync`write** — only`title-cache/\*\*` (via the store). This is the
   load-bearing boundary test.
 - A partial engine error (one title `outcome: 'error'`) still **resolves**
   `{ syncedAt }` (manual refresh is best-effort, per 0008 isolation).
@@ -571,7 +571,7 @@ for the happy-path manual-sync flow.
 `SyncStateService`/`TRIGGER_SYNC`/`ToastController`):**
 
 - Idle: the refresh button renders in `slot="end"`, enabled, `aria-label="Refresh
-  watchlist"`.
+watchlist"`.
 - Click → calls the service's `triggerSync()`; while `syncing()` the button shows
   the spinner and is `disabled`.
 - Success → the success toast ("Watchlist synced") is presented.
@@ -632,8 +632,8 @@ Tailored from the PLAN §5 / CLAUDE.md checklist to the four projects touched.
       (mocked Admin SDK) green; the existing 0006/0007/0008/0009 tests still pass.
 - [ ] `pnpm nx test functions` passes — the `triggerSync` handler unit tests
       (fake engine + fake `db`; no-auth → `unauthenticated`, deduped per-user
-      gather, `{ syncedAt }`, **no `users/**`/`system/sync` write**, partial-error
-      resolves) green; the existing `syncTitles` tests still pass.
+      gather, `{ syncedAt }`, **no `users/**`/`system/sync`write**, partial-error
+  resolves) green; the existing`syncTitles` tests still pass.
 - [ ] `pnpm nx test mobile-watchlist` passes — `SyncStateService` cooldown unit
       tests + the `WatchlistPage` button-state component tests green (mocked
       `TRIGGER_SYNC`/`ToastController`/`localStorage`; no network/emulator).
@@ -658,10 +658,10 @@ Tailored from the PLAN §5 / CLAUDE.md checklist to the four projects touched.
 - [ ] **Boundary verifications (review-checked):** (a) **no secret read/written** —
       params declared by name, read via `.value()` at runtime, never `.env.local`,
       never logged; (b) `triggerSync` writes **only** `title-cache` (via the engine
-      port) — **no `users/**` write, no `system/sync` write**; (c) the mobile slice
-      reaches the callable **only** via the `TRIGGER_SYNC` token (no
-      `@angular/fire/functions` / no `apps/mobile` import) and reaches the uid only
-      via `AUTH_UID`; (d) **no cross-slice / cross-scope import** anywhere.
+      port) — **no `users/**`write, no`system/sync`write**; (c) the mobile slice
+  reaches the callable **only** via the`TRIGGER_SYNC`token (no
+ `@angular/fire/functions`/ no`apps/mobile`import) and reaches the uid only
+  via`AUTH_UID`; (d) **no cross-slice / cross-scope import** anywhere.
 - [ ] **`sheriff.config.ts`, `firestore.rules`, `firestore.indexes.json` are NOT
       modified** (existing tags + rules already cover this — verified, recorded in
       the PR). `firebase.json` **is** modified (the Functions emulator entry).
@@ -693,7 +693,7 @@ Tailored from the PLAN §5 / CLAUDE.md checklist to the four projects touched.
   server-side per-user `lastManualSyncAt` would be the upgrade — out of scope.
 - **Callable region must match the deployment.** `httpsCallable` resolves the
   function by name in a region; the shell **must** call `getFunctions(app,
-  'europe-west1')` to match `setGlobalOptions({ region: 'europe-west1' })` in
+'europe-west1')` to match `setGlobalOptions({ region: 'europe-west1' })` in
   `main.ts`. A region mismatch silently 404s the callable (no boundary/auth
   error). Pinned in Public types / APIs + the shell task; verify in the PR.
 - **The cron's `syncTitles` must not regress.** The biggest risk is "helpfully"

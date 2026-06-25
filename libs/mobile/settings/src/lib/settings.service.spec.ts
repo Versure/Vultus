@@ -115,6 +115,45 @@ describe('SettingsService', () => {
     expect(service.notificationsEnabled()).toBe(false);
   });
 
+  it('load failure: getDoc throws → loadFailed true, loaded stays false', async () => {
+    getDocMock.mockRejectedValue(new Error('offline'));
+    const service = createService(UID);
+
+    await service.load();
+
+    expect(service.loadFailed()).toBe(true);
+    expect(service.loaded()).toBe(false);
+  });
+
+  it('retryLoad clears loadFailed and re-attempts load (then succeeds)', async () => {
+    // First attempt fails, second attempt resolves the doc.
+    getDocMock.mockRejectedValueOnce(new Error('offline'));
+    getDocMock.mockResolvedValueOnce(
+      existingDoc({
+        region: 'DE',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+        },
+      }),
+    );
+    const service = createService(UID);
+
+    await service.load();
+    expect(service.loadFailed()).toBe(true);
+
+    service.retryLoad();
+    // retryLoad fires load() without awaiting; let the microtasks drain.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(getDocMock).toHaveBeenCalledTimes(2);
+    expect(service.loadFailed()).toBe(false);
+    expect(service.loaded()).toBe(true);
+    expect(service.region()).toBe('DE');
+  });
+
   it('setRegion updates only region and the signal', async () => {
     const service = createService(UID);
 

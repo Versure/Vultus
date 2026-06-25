@@ -25,6 +25,11 @@ The barrel (`src/index.ts`) re-exports:
   from the main barrel** — import via the dedicated subpath
   `@vultus/shared/domain/tokens` (mobile-only; keeps `@angular/core` out of the
   Cloud Functions build).
+  - `AUTH_UID` — `Signal<string | null>` provided by the shell; slices inject
+    this instead of importing `apps/mobile`.
+  - `TRIGGER_SYNC` — `() => Promise<{ syncedAt: string }>` thunk provided by the
+    shell; slices call this to trigger a manual sync via `triggerSync` callable
+    without importing `@angular/fire/functions` or `apps/mobile` (spec 0025).
 
 `NotificationPayload` carries the data a notification renders from:
 `tmdbId: number` (the TMDB id of the affected title), `titleId`, `title`,
