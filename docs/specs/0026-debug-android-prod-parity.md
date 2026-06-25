@@ -60,7 +60,10 @@ This spec is **pure infrastructure / native-build / config**. It changes **no
 slice, no library public API, no Sheriff config, and no Firestore data model**.
 It depends on onboarding spec **0022** (FCM token registration via
 `@capacitor/push-notifications`, writing `users/{uid}.fcmTokens`) for the **push
-parity** leg only — device push verification is gated on 0022 being merged.
+parity** leg only. **0022 is now merged to `main`** (the `libs/mobile/onboarding`
+slice ships the native registration path), so this dependency is **satisfied** —
+the push leg is unblocked; device push verification remains a human/post-merge
+on-device check.
 
 ### Decisions (already made — do not re-open)
 
@@ -69,7 +72,8 @@ parity** leg only — device push verification is gated on 0022 being merged.
    live in. Debug data mixing into prod Firestore is **accepted** (personal
    single-user tracker). **No separate dev Firebase project.**
 2. **Full push parity is in scope**, with a **hard dependency on spec 0022** (the
-   native FCM registration path). Device push verification is gated on 0022 merge.
+   native FCM registration path). **0022 is merged** — the dependency is satisfied;
+   device push verification is a human/post-merge on-device check.
 3. **Inject EVERYTHING; committed files stay key-free.** Committed env files keep
    placeholders only. At build time, real values are injected into a **gitignored
    generated file** consumed via Angular `fileReplacements` — **never** `sed` a
@@ -96,8 +100,9 @@ parity** leg only — device push verification is gated on 0022 being merged.
    absent) is reconciled with the loud guard in Task 3.
 5. **Untrack going forward only — do NOT scrub history, do NOT rotate the key.**
    (Settled user decision.) Because the value is a public-by-design Firebase Android
-   `api_key`, a history rewrite has **low security value** and would **disrupt the
-   in-flight 0022 / 0024 PR branches**. "Key-free repo" here means key-free **going
+   `api_key`, a history rewrite has **low security value** and would **disrupt
+   other open branches** (e.g. the in-flight 0024 PR; 0022 has since merged).
+   "Key-free repo" here means key-free **going
    forward in the working tree**, with the deliberate, documented acceptance that the
    public value **remains in past history**. History-scrub (e.g. `filter-repo`) and
    key rotation are **explicitly out of scope** (see Scope, DoD, Risks).
@@ -490,7 +495,8 @@ is edited), so its `nx affected` targets apply.
       android/app/google-services.json` returns **nothing**.
 - [ ] **History scrub + key rotation explicitly NOT done** (decision 5) — the public
       Android `api_key` in past history is left as-is; this is documented as
-      intentional (no `filter-repo`/BFG, no rotation), preserving the 0022/0024 branches.
+      intentional (no `filter-repo`/BFG, no rotation), avoiding disruption to open
+      branches (e.g. the in-flight 0024 PR; 0022 has since merged).
 - [ ] **A single unified injection mechanism** produces the gitignored generated env
       file for **both** local and CI builds (the 0015 CI TMDB step is replaced by it).
 - [ ] The production build's `fileReplacements` uses the **generated** file; the
@@ -539,9 +545,10 @@ is edited), so its `nx affected` targets apply.
 - **History retains the public key (accepted, decision 5).** Because we untrack
   **going forward only** (no `filter-repo`/BFG, no key rotation), the public Android
   `api_key` remains reachable in `git log`. Accepted: the value is public-by-design,
-  so a rewrite has low security value and would disrupt the in-flight **0022 / 0024**
-  PR branches (rebasing every contributor onto rewritten history). Documented so no
-  one mistakes the historical value for a leak requiring remediation.
+  so a rewrite has low security value and would disrupt **open branches** (e.g. the
+  in-flight **0024** PR; **0022** has since merged) by rebasing every contributor onto
+  rewritten history. Documented so no one mistakes the historical value for a leak
+  requiring remediation.
 - **`git rm --cached` must not delete working copies.** The index-only removal keeps
   each contributor's on-disk file so local builds keep working; the implementer must
   verify the file still exists on disk after the command and that `git status` shows
@@ -568,10 +575,12 @@ is edited), so its `nx affected` targets apply.
   with no error. Mitigated by the **separate pre-build preflight guard** (Task 3/4)
   that hard-fails the debug-APK flow before Gradle runs, with an actionable message —
   so the silent-degrade branch is never reached in this flow.
-- **Push verification blocked until 0022 merges.** The push leg (FCM token
-  registration) is owned by spec 0022; until it merges, the device checklist's
-  push/onboarding steps cannot be fully verified. This is a **dependency, not a
-  conflict** — the injection + guard + APK-build legs are independently verifiable now.
+- **Push leg depends on spec 0022 (now merged).** The push leg (FCM token
+  registration) is owned by spec 0022, which is **merged to `main`** (the
+  `libs/mobile/onboarding` slice), so the dependency is **satisfied** and the
+  device checklist's push/onboarding steps can be exercised once this spec lands.
+  This was always a **dependency, not a conflict** — the injection + guard +
+  APK-build legs are independently verifiable regardless.
 - **Testability refactor is minor scope creep.** Exporting a small helper to unit-test
   the substitution/guard is recommended, but the **build gate is the primary
   verification**; skipping the unit test (recorded in the PR) is acceptable per the
