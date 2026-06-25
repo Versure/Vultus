@@ -7,6 +7,13 @@
   "implicitDependencies": ["mobile"],
   "// targets": "to see all targets run: nx show project mobile-e2e --web",
   "targets": {
+    "e2e": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/mobile-e2e",
+        "command": "playwright test"
+      }
+    },
     "open": {
       "continuous": true,
       "executor": "nx:run-commands",

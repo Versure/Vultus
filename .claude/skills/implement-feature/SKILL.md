@@ -103,6 +103,12 @@ Sheriff is an import linter — it does **not** make files disjoint. Therefore:
   `README.md` in the same change — never leave the generated Nx scaffold text.
   Instruct each implementer accordingly and verify on fan-in; the feature-reviewer
   flags a stale/scaffold README as a finding.
+- **e2e fixme un-skip (mobile UI specs):** before fanning out, grep
+  `apps/mobile-e2e/src/` for `test.fixme` annotations that reference this
+  spec number or slug. If any exist, include un-skipping them as an explicit
+  task in the foundation or the relevant parallel task — the implementer
+  removes the `test.fixme` wrapper and verifies the flow passes. The
+  `feature-reviewer` enforces this; flag it if you discover it late.
 
 ### 5. Auto-review → bounded rework
 

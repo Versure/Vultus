@@ -1,0 +1,23 @@
+{
+  "page": 1,
+  "results": [
+    {
+      "id": 603,
+      "media_type": "movie",
+      "title": "The Matrix",
+      "poster_path": "/the-matrix-poster.jpg",
+      "release_date": "1999-03-30",
+      "vote_average": 8.2
+    },
+    {
+      "id": 1396,
+      "media_type": "tv",
+      "name": "Breaking Bad",
+      "poster_path": "/breaking-bad-poster.jpg",
+      "first_air_date": "2008-01-20",
+      "vote_average": 8.9
+    }
+  ],
+  "total_pages": 1,
+  "total_results": 2
+}

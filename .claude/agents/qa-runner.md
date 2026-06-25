@@ -46,6 +46,12 @@ scoped to the change over running the whole repo.
 
 - If a gate's **tooling genuinely isn't bootstrapped yet** (no Nx target,
   workspace not created), record it `SKIPPED (not bootstrapped)` and continue.
+- **e2e is bootstrapped once `apps/mobile-e2e/playwright.config.ts`
+  exists** — check for that file before deciding to skip. After spec 0019
+  merges, e2e is never "not bootstrapped" for `scope:mobile` work; skipping
+  it requires an explicit spec justification. `test.fixme`-gated flows are
+  expected and do not count as failures — they are scaffolded pending stubs;
+  the suite still runs and marks them pending, not failing.
 - But if the **spec explicitly required** a gate (e.g. it named e2e flows or a
   component test) and that gate didn't run, that is an **unmet DoD gate** —
   report it as `FAIL (DoD gate unmet)`, not a quiet skip. Do not let a feature
