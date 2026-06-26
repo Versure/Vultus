@@ -7,6 +7,12 @@ The **Search** tab slice of the Vultus mobile app. It provides live, debounced T
 - Accepts a search query from `IonSearchbar`, debounces it ~400 ms, and calls the TMDB `search/multi` endpoint via the slice-local `TmdbSearchClient`.
 - Displays result cards: poster thumbnail, title, release/first-air year, and a Movie/TV Show badge.
 - Inline **Add** button writes a `planned` watchlist entry at `users/{uid}/watchlist/{titleId}` via `@vultus/shared/firestore-schema` converters.
+
+## Behavior
+
+- **Optimistic add.** Tapping **Add** flips the button to its added/checkmark state **immediately** — the optimistic local update (`_addedIds` + the result's `added` flag) is applied **before** the Firestore `setDoc` write is awaited.
+- **Rollback on failure.** If the write rejects (offline, permission denied, transient network error), `SearchService.add()` **rolls back both** signals (the button reverts to its add state) and **re-throws** so the page can react.
+- **Error feedback.** `SearchPage.onAdd()` is `async`, awaits `service.add()` in a `try/catch`, and on failure presents a `color: 'danger'` Ionic toast ("Failed to add — try again later", bottom, 3000ms). `ToastController` (from `@ionic/angular/standalone`) is therefore a page dependency. There is **no success toast** — the button → checkmark transition is the success affordance. The live `collectionData` subscription reconciles the optimistic set against what actually landed in Firestore.
 - Reads the user's existing watchlist live and marks already-added results as settled/non-actionable (cannot double-add).
 - Five view-states: `prompt` (empty query), `loading`, `results`, `no-results`, `error`. The non-`results` states render via the shared `@vultus/shared/ui-kit` state atoms — `<vultus-skeleton-card>` (loading; replaces the old `ion-spinner`), `<vultus-empty-state>` (prompt + no-results), and `<vultus-error-state>` (error, with built-in retry). The page registers `filmOutline` / `search` (consumed by `vultus-empty-state`); `vultus-error-state` registers its own icons.
 - Handles null `AUTH_UID` gracefully: search works without uid; `add()` is a no-op when uid is null.
