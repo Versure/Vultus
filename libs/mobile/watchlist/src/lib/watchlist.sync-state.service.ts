@@ -1,4 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
+import { FirebaseError } from 'firebase/app';
 import { TRIGGER_SYNC } from '@vultus/shared/domain/tokens';
 
 /** localStorage key holding the ISO timestamp of the last successful manual sync. */
@@ -63,6 +64,25 @@ export class SyncStateService {
       // Do NOT advance the timestamp — the cooldown should not start on failure
       // so the user can retry immediately.
       this.syncing.set(false);
+      if (err instanceof FirebaseError && err.code === 'functions/not-found') {
+        // The callable is not deployed (or deployed to a different region).
+        console.error(
+          '[SyncState] triggerSync not deployed / not found:',
+          err.code,
+          err.message,
+        );
+      } else if (
+        err instanceof FirebaseError &&
+        err.code === 'functions/unauthenticated'
+      ) {
+        console.error(
+          '[SyncState] triggerSync unauthenticated (auth not established):',
+          err.code,
+          err.message,
+        );
+      } else {
+        console.error('[SyncState] triggerSync failed:', err);
+      }
       throw err;
     }
     const now = Date.now();

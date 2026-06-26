@@ -2,7 +2,7 @@
 number: 0033
 slug: fix-manual-sync-error
 title: Diagnose and fix manual sync always failing with "Sync failed — try again later"
-status: approved
+status: done
 slices: [slice:watchlist]
 scopes: [scope:mobile, scope:functions]
 created: 2026-06-26
