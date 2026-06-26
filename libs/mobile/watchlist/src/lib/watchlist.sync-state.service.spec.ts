@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { FirebaseError } from 'firebase/app';
 import { TRIGGER_SYNC } from '@vultus/shared/domain/tokens';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -159,6 +160,9 @@ describe('SyncStateService', () => {
   it('thunk rejection: clears syncing, does NOT advance the timestamp, and re-throws', async () => {
     withStorage(fakeStorage());
     const storage = globalThis.localStorage;
+    const consoleSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
     const thunk = vi.fn(() => Promise.reject(new Error('network down')));
     const service = makeService(thunk);
 
@@ -167,6 +171,31 @@ describe('SyncStateService', () => {
     // No cooldown started → still allowed to retry, timestamp not written.
     expect(service.canSync()).toBe(true);
     expect(storage.getItem(LAST_SYNC_KEY)).toBeNull();
+    // Logging asserted.
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
+    consoleSpy.mockRestore();
+  });
+
+  it('thunk rejection with functions/not-found: logs distinctly and still re-throws', async () => {
+    withStorage(fakeStorage());
+    const storage = globalThis.localStorage;
+    const consoleSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    const notFoundErr = new FirebaseError(
+      'functions/not-found',
+      'callable not found',
+    );
+    const thunk = vi.fn(() => Promise.reject(notFoundErr));
+    const service = makeService(thunk);
+
+    await expect(service.triggerSync()).rejects.toThrow();
+    expect(service.syncing()).toBe(false);
+    expect(service.canSync()).toBe(true);
+    expect(storage.getItem(LAST_SYNC_KEY)).toBeNull();
+    // Should have logged at error level.
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
+    consoleSpy.mockRestore();
   });
 
   it('degrades to "always allowed" when localStorage is unavailable', () => {

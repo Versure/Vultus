@@ -2,7 +2,7 @@
 number: 0033
 slug: fix-manual-sync-error
 title: Diagnose and fix manual sync always failing with "Sync failed — try again later"
-status: approved
+status: done
 slices: [slice:watchlist]
 scopes: [scope:mobile, scope:functions]
 created: 2026-06-26
@@ -256,16 +256,13 @@ functions bundle and the merge, and is an operational step).
 
 3. **[sequential] Deploy `triggerSync` to production + investigate. Depends on
    tasks 1 + 2 and on the PR being merged.** infrastructure-engineer (operational).
-   - Run the investigation checklist **first** (it determines the actual cause):
-     1. **Is the function deployed?** Check the Firebase console / `firebase
+   - Run the investigation checklist **first** (it determines the actual cause): 1. **Is the function deployed?** Check the Firebase console / `firebase
 functions:list` (or `gcloud functions list --regions=europe-west1`) for
-        `triggerSync` in `europe-west1`. (Project id `vultus-cab62` — user memory.)
-     2. **Is anonymous auth enabled** in the prod Firebase project's Authentication
-        → Sign-in providers? (The app signs in anonymously; if disabled, the
-        callable gets `unauthenticated`.)
-     3. **What do the Functions logs say?** `firebase functions:log --only
+     `triggerSync` in `europe-west1`. (Project id `vultus-cab62` — user memory.) 2. **Is anonymous auth enabled** in the prod Firebase project's Authentication
+     → Sign-in providers? (The app signs in anonymously; if disabled, the
+     callable gets `unauthenticated`.) 3. **What do the Functions logs say?** `firebase functions:log --only
 triggerSync` (or the console) for the actual rejection reason on a real
-        invocation.
+     invocation.
    - **Deploy:** run `pnpm nx run functions:deploy-preflight` (CI deploy gate), then
      `/deploy-functions` to ship `triggerSync` to production (the established
      pnpm/gen2 recipe — user memory `functions-deploy-pnpm-recipe`). Note

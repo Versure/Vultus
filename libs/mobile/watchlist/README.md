@@ -59,7 +59,11 @@ exported) owns the **manual-sync cooldown** behind the toolbar refresh button
 `syncing` signal, and a `triggerSync()` method that guards both signals, calls
 the injected **`TRIGGER_SYNC`** thunk, records a fresh timestamp + restarts the
 cooldown on success, and re-throws (without advancing the timestamp) on failure
-so the page can show an error toast. `localStorage` access is guarded — if it is
+so the page can show an error toast. On failure, `triggerSync()` logs at
+`console.error` level with distinct messages for `functions/not-found` (callable
+not deployed / wrong region) and `functions/unauthenticated` (auth not
+established) — visible in Chrome remote-debugging / `adb logcat` for on-device
+diagnosis (spec 0033). `localStorage` access is guarded — if it is
 unavailable or throws, the service degrades to "always allowed". `WatchlistPage`
 maps the resolve/reject to a "Watchlist synced" / "Sync failed — try again
 later" `ToastController` toast.
