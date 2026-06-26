@@ -15,6 +15,10 @@ push-notification explainer, and taps **Get started** to enter the app.
 - **`onboardingGuard`** — a `CanActivateFn` for the tabs route. Returns `true`
   when the `onboarding_done` Preferences flag is `'true'`, otherwise returns a
   `UrlTree` redirect to `/onboarding`.
+- **`reverseOnboardingGuard`** — a `CanActivateFn` for the `/onboarding` route
+  (issue #65). The inverse of `onboardingGuard`: returns a `UrlTree` redirect to
+  `/tabs/watchlist` when the `onboarding_done` flag is `'true'` (onboarding is
+  already complete), otherwise returns `true` to allow the onboarding page.
 
 `ONBOARDING_DONE_KEY` (the Preferences key) is exported from
 `onboarding.guard.ts` for the service; it is not part of the public barrel.
@@ -38,7 +42,12 @@ push-notification explainer, and taps **Get started** to enter the app.
 
 The page sets a loading state during `complete()`, ignores double-taps while in
 flight, and navigates to `/tabs/watchlist` on completion (and also on an
-unexpected error, re-enabling the button).
+unexpected error, re-enabling the button). Both exit paths navigate with
+`{ replaceUrl: true }`, which drops `/onboarding` from the Angular/Ionic history
+stack so the Android hardware back button can't return to it (issue #65). In
+tandem, the `/onboarding` route is protected by `reverseOnboardingGuard`, which
+redirects already-onboarded users to `/tabs/watchlist` should they ever reach
+the route again.
 
 A `mock` build-profile replacement (`onboarding.providers.mock.ts`) supplies a
 no-Firebase / no-native structural mock for the `--configuration=mock` serve

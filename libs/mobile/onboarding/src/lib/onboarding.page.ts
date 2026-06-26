@@ -47,11 +47,14 @@ export class OnboardingPage {
     this.loading.set(true);
     try {
       await this.service.complete(this.selectedRegion());
-      await this.router.navigate(['/tabs/watchlist']);
+      // `replaceUrl: true` drops `/onboarding` from the history stack so the
+      // Android hardware back button can't return to it (issue #65).
+      await this.router.navigate(['/tabs/watchlist'], { replaceUrl: true });
     } catch {
       // Onboarding completion is best-effort; navigate anyway so the user is
-      // never stuck, but re-enable the button on an unexpected error.
-      await this.router.navigate(['/tabs/watchlist']);
+      // never stuck, but re-enable the button on an unexpected error. Still
+      // replaceUrl so the back button never lands on the stuck onboarding page.
+      await this.router.navigate(['/tabs/watchlist'], { replaceUrl: true });
       this.loading.set(false);
     }
   }

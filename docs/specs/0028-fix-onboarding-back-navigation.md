@@ -2,7 +2,7 @@
 number: 0028
 slug: fix-onboarding-back-navigation
 title: Fix back-button navigation returning to the onboarding screen
-status: approved
+status: done
 slices: [slice:onboarding]
 scopes: [scope:mobile]
 created: 2026-06-26

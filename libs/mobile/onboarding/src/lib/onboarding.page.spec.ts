@@ -109,7 +109,25 @@ describe('OnboardingPage', () => {
 
     resolveComplete();
     await fixture.whenStable();
-    expect(navigateMock).toHaveBeenCalledWith(['/tabs/watchlist']);
+    // replaceUrl drops /onboarding from history so the Android back button
+    // can't return to it (issue #65).
+    expect(navigateMock).toHaveBeenCalledWith(['/tabs/watchlist'], {
+      replaceUrl: true,
+    });
+  });
+
+  it('catch path: complete() rejecting still navigates with replaceUrl', async () => {
+    const { el, fixture, service } = await setup();
+    service.complete.mockRejectedValue(new Error('boom'));
+    const button = el.querySelector('ion-button') as HTMLElement & {
+      disabled?: boolean;
+    };
+    button.dispatchEvent(new CustomEvent('click'));
+    await fixture.whenStable();
+
+    expect(navigateMock).toHaveBeenCalledWith(['/tabs/watchlist'], {
+      replaceUrl: true,
+    });
   });
 
   it('no double-fire: second tap while loading is ignored', async () => {

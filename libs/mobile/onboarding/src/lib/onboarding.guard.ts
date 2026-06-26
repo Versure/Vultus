@@ -27,3 +27,24 @@ export const onboardingGuard: CanActivateFn = async () => {
   }
   return router.createUrlTree(['/onboarding']);
 };
+
+/**
+ * Reverse guard for the `/onboarding` route (issue #65): once onboarding has
+ * completed (the `onboarding_done` Preferences flag is `'true'`), re-entry to
+ * `/onboarding` is blocked and the user is redirected to `/tabs/watchlist`.
+ * This prevents the Android hardware back button from landing on the (now
+ * stuck) onboarding page after the flow is done.
+ *
+ * SHERIFF: scope:mobile / slice:onboarding. Uses only `@capacitor/preferences`
+ * (third-party) and `@angular/router`; no cross-slice imports.
+ */
+export const reverseOnboardingGuard: CanActivateFn = async () => {
+  // Capture the Router synchronously before the first await — the injection
+  // context is gone once the Preferences promise resolves.
+  const router = inject(Router);
+  const { value } = await Preferences.get({ key: ONBOARDING_DONE_KEY });
+  if (value === 'true') {
+    return router.createUrlTree(['/tabs/watchlist']);
+  }
+  return true;
+};
