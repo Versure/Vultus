@@ -44,6 +44,12 @@ qualify (watchlist, search, title-detail).
     `--vultus-status-completed` `#10B981`, `--vultus-status-dropped` `#EF4444`,
     `--vultus-status-planned` `#94A3B8` (the watchlist `status` field maps to
     these; later slices consume them).
+  - **Safe-area insets** → `--ion-safe-area-top` / `-right` / `-bottom` / `-left`,
+    each mapped to the standard CSS `env(safe-area-inset-*)` (no pixel values;
+    degrade to `0` where there is no inset). These let Ionic inset
+    `IonHeader`/`IonContent`/footer under the Android system bars when the app
+    runs edge-to-edge with the StatusBar plugin's `overlaysWebView: true`
+    (spec 0029).
 - **`src/index.ts`** — the TS barrel. Exports `SHARED_UI_KIT_THEME_PATH`
   (documenting the SCSS entrypoint) plus the four state atom components below:
   `VultusSkeletonCard`, `VultusSkeletonHero`, `VultusEmptyState`,
