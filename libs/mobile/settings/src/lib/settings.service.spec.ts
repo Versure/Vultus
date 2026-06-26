@@ -1,4 +1,4 @@
-import { signal } from '@angular/core';
+import { signal, type WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Firestore } from '@angular/fire/firestore';
 import { AUTH_UID } from '@vultus/shared/domain/tokens';
@@ -52,14 +52,36 @@ function existingDoc(data: {
 const missingDoc: SnapLike = { exists: () => false, data: () => undefined };
 
 function createService(uid: string | null): SettingsService {
+  return createServiceWithUidSignal(uid).service;
+}
+
+/**
+ * Variant that also returns the writable `AUTH_UID` signal so a test can
+ * `.set(...)` it to simulate anonymous auth resolving AFTER the page mounted
+ * (the spec 0032 load race). The service is constructed inside the TestBed
+ * injection context, so its constructor `effect()` is wired but only fires when
+ * effects are flushed via `TestBed.tick()`.
+ */
+function createServiceWithUidSignal(uid: string | null): {
+  service: SettingsService;
+  uidSignal: WritableSignal<string | null>;
+} {
+  const uidSignal = signal<string | null>(uid);
   TestBed.configureTestingModule({
     providers: [
       SettingsService,
       { provide: Firestore, useValue: {} },
-      { provide: AUTH_UID, useValue: signal<string | null>(uid) },
+      { provide: AUTH_UID, useValue: uidSignal },
     ],
   });
-  return TestBed.inject(SettingsService);
+  return { service: TestBed.inject(SettingsService), uidSignal };
+}
+
+/** Flush Angular effects, then drain the async `load()` microtasks. */
+async function flushEffectsAndMicrotasks(): Promise<void> {
+  TestBed.tick();
+  await Promise.resolve();
+  await Promise.resolve();
 }
 
 describe('SettingsService', () => {
@@ -230,5 +252,51 @@ describe('SettingsService', () => {
     for (const path of writtenPaths) {
       expect(path).toBe(USER_DOC);
     }
+  });
+
+  it('reactive load: uid null→non-null transition auto-loads (spec 0032 regression)', async () => {
+    getDocMock.mockResolvedValue(missingDoc);
+    const { service, uidSignal } = createServiceWithUidSignal(null);
+
+    // Mimic ngOnInit's one-shot load() while uid is still null: silent no-op.
+    await service.load();
+    expect(getDocMock).not.toHaveBeenCalled();
+    expect(service.loaded()).toBe(false);
+    expect(service.loadFailed()).toBe(false);
+
+    // Anonymous auth resolves AFTER mount → the effect must drive load().
+    uidSignal.set(UID);
+    await flushEffectsAndMicrotasks();
+
+    expect(getDocMock).toHaveBeenCalledTimes(1);
+    expect(service.loaded()).toBe(true);
+  });
+
+  it('reactive load: no double-load when uid present at init', async () => {
+    getDocMock.mockResolvedValue(missingDoc);
+    const service = createService(UID);
+
+    // Fast path: ngOnInit-equivalent load() reads/creates the doc once.
+    await service.load();
+    expect(service.loaded()).toBe(true);
+    expect(getDocMock).toHaveBeenCalledTimes(1);
+
+    // Flushing the effect must NOT trigger a second read (the !_loaded guard).
+    await flushEffectsAndMicrotasks();
+    expect(getDocMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('reactive load: does not auto-load while in a failed state (only retryLoad re-enters)', async () => {
+    getDocMock.mockRejectedValue(new Error('offline'));
+    const service = createService(UID);
+
+    await service.load();
+    expect(service.loadFailed()).toBe(true);
+    expect(getDocMock).toHaveBeenCalledTimes(1);
+
+    // Effect must respect the !_loadFailed guard: no auto re-attempt.
+    await flushEffectsAndMicrotasks();
+    expect(getDocMock).toHaveBeenCalledTimes(1);
+    expect(service.loadFailed()).toBe(true);
   });
 });
