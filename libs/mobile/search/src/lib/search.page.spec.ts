@@ -1,5 +1,8 @@
 import { TestBed } from '@angular/core/testing';
-import { provideIonicAngular } from '@ionic/angular/standalone';
+import {
+  ToastController,
+  provideIonicAngular,
+} from '@ionic/angular/standalone';
 import { signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { vi, describe, it, expect } from 'vitest';
@@ -25,6 +28,7 @@ function makeService(
     viewState: string;
     results: SearchResultView[];
     lastQuery: string;
+    add: ReturnType<typeof vi.fn>;
   }> = {},
 ) {
   return {
@@ -32,9 +36,17 @@ function makeService(
     results: signal(overrides.results ?? []),
     lastQuery: signal(overrides.lastQuery ?? ''),
     setQuery: vi.fn(),
-    add: vi.fn().mockResolvedValue(undefined),
+    add: overrides.add ?? vi.fn().mockResolvedValue(undefined),
     retrySearch: vi.fn(),
   };
+}
+
+// ToastController stand-in — `create` resolves to an object with a `present`
+// spy (mirrors watchlist.page.spec.ts).
+function mockToastCtrl() {
+  const present = vi.fn(() => Promise.resolve(undefined));
+  const create = vi.fn(() => Promise.resolve({ present }));
+  return { create, present };
 }
 
 describe('SearchPage', () => {
@@ -53,12 +65,16 @@ describe('SearchPage', () => {
     title: 'Added Movie',
   };
 
-  async function setup(serviceOverrides = {}) {
+  async function setup(serviceOverrides = {}, toast = mockToastCtrl()) {
     const svc = makeService(serviceOverrides);
     const router = { navigate: vi.fn() };
     await TestBed.configureTestingModule({
       imports: [SearchPage],
-      providers: [provideIonicAngular(), { provide: Router, useValue: router }],
+      providers: [
+        provideIonicAngular(),
+        { provide: Router, useValue: router },
+        { provide: ToastController, useValue: toast },
+      ],
     })
       // SearchPage declares `providers: [SearchService]` at the component level,
       // which shadows any module-level provider. Override it so the page uses
@@ -70,7 +86,7 @@ describe('SearchPage', () => {
     const fixture = TestBed.createComponent(SearchPage);
     await fixture.whenStable();
     fixture.detectChanges();
-    return { fixture, svc, router };
+    return { fixture, svc, router, toast };
   }
 
   it('shows prompt state by default', async () => {
@@ -154,6 +170,39 @@ describe('SearchPage', () => {
     addBtn?.click();
     expect(svc.add).toHaveBeenCalledWith(mockResult);
     expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  it('shows a danger error toast when service.add rejects', async () => {
+    const add = vi.fn().mockRejectedValue(new Error('write failed'));
+    const { fixture, toast } = await setup(
+      { viewState: 'results', results: [mockResult], add },
+      mockToastCtrl(),
+    );
+    const el = fixture.nativeElement as HTMLElement;
+    const addBtn = el.querySelector<HTMLElement>('.add-btn');
+    addBtn?.click();
+    // Let the async onAdd() + toast create/present microtasks settle.
+    await fixture.whenStable();
+    expect(toast.create).toHaveBeenCalledWith({
+      message: 'Failed to add — try again later',
+      duration: 3000,
+      position: 'bottom',
+      color: 'danger',
+    });
+    expect(toast.present).toHaveBeenCalled();
+  });
+
+  it('does not show a toast when service.add resolves', async () => {
+    const add = vi.fn().mockResolvedValue(undefined);
+    const { fixture, toast } = await setup(
+      { viewState: 'results', results: [mockResult], add },
+      mockToastCtrl(),
+    );
+    const el = fixture.nativeElement as HTMLElement;
+    const addBtn = el.querySelector<HTMLElement>('.add-btn');
+    addBtn?.click();
+    await fixture.whenStable();
+    expect(toast.create).not.toHaveBeenCalled();
   });
 
   it('does not show Add button for added results', async () => {
