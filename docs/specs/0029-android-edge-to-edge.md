@@ -2,7 +2,7 @@
 number: 0029
 slug: android-edge-to-edge
 title: Enable edge-to-edge / fullscreen rendering on Android via the StatusBar plugin
-status: approved
+status: done
 slices: []
 scopes: [scope:mobile]
 created: 2026-06-26
