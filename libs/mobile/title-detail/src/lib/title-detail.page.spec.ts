@@ -47,8 +47,12 @@ const emptyProviders: GroupedProviders = { flatrate: [], rent: [], buy: [] };
 interface SvcOpts {
   detail?: DetailViewState | 'loading';
   region?: string | null;
+  /** When true, region$ returns NEVER (simulates pending Firestore docData). */
+  regionPending?: boolean;
   providers?: GroupedProviders;
   tracked?: unknown;
+  /** When true, tracked$ returns NEVER (simulates pending Firestore docData). */
+  trackedPending?: boolean;
 }
 
 function makeService(o: SvcOpts = {}) {
@@ -60,11 +64,17 @@ function makeService(o: SvcOpts = {}) {
       : of(
           o.detail ?? { kind: 'loaded', source: 'cache', detail: movieDetail },
         );
+  const region$: Observable<string | null> = o.regionPending
+    ? NEVER
+    : of(o.region === undefined ? 'NL' : o.region);
+  const tracked$: Observable<unknown> = o.trackedPending
+    ? NEVER
+    : of(o.tracked ?? null);
   return {
     detail$: vi.fn(() => detail$),
-    region$: vi.fn(() => of(o.region === undefined ? 'NL' : o.region)),
+    region$: vi.fn(() => region$),
     providers$: vi.fn(() => of(o.providers ?? emptyProviders)),
-    tracked$: vi.fn(() => of(o.tracked ?? null)),
+    tracked$: vi.fn(() => tracked$),
     add: vi.fn().mockResolvedValue(undefined),
     updateStatus: vi.fn().mockResolvedValue(undefined),
     removeTitle: vi.fn().mockResolvedValue(undefined),
@@ -275,5 +285,28 @@ describe('TitleDetailPage', () => {
     const removeBtn = cmp.alertButtons.find((b) => b.text === 'Remove');
     void (removeBtn?.handler as (() => void) | undefined)?.();
     expect(svc.removeTitle).toHaveBeenCalledWith(27205);
+  });
+
+  // Regression: skeleton must render immediately even when region$ is a
+  // never-emitting Firestore stream (pending docData, no synchronous emission).
+  it('shows loading skeleton while region$ is pending (primary regression)', async () => {
+    const { fixture } = await setup({ detail: 'loading', regionPending: true });
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-test="loading"]')).toBeTruthy();
+    expect(el.querySelector('vultus-skeleton-hero')).toBeTruthy();
+  });
+
+  // Regression: loaded content must render immediately even when tracked$ is a
+  // never-emitting Firestore stream (pending watchlist docData).
+  it('shows loaded content while tracked$ is pending (secondary regression)', async () => {
+    const { fixture } = await setup({
+      detail: { kind: 'loaded', source: 'cache', detail: movieDetail },
+      trackedPending: true,
+    });
+    const el = fixture.nativeElement as HTMLElement;
+    // The loaded state (hero title) must be visible.
+    expect(el.textContent).toContain('Inception');
+    // tracked is seeded as null by startWith, so the Add-to-Watchlist CTA shows.
+    expect(el.querySelector('[data-test="add-btn"]')).toBeTruthy();
   });
 });

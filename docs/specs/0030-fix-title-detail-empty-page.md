@@ -2,7 +2,7 @@
 number: 0030
 slug: fix-title-detail-empty-page
 title: Fix title-detail page displaying blank while waiting for Firestore streams
-status: approved
+status: done
 slices: [slice:title-detail]
 scopes: [scope:mobile]
 created: 2026-06-26

@@ -23,6 +23,9 @@ interface ClientHandle {
 interface AddedHandle {
   _addedIds: ReturnType<typeof signal<Set<string>>>;
 }
+interface ResultsHandle {
+  _results: ReturnType<typeof signal<unknown[]>>;
+}
 
 describe('SearchService', () => {
   let service: SearchService;
@@ -168,6 +171,70 @@ describe('SearchService', () => {
     const writeData = mockSetDoc.mock.calls[0][1] as Record<string, unknown>;
     expect(writeData['status']).toBe('planned');
     expect(writeData['traktId']).toBeNull();
+  });
+
+  it('add() applies the optimistic update before setDoc resolves', async () => {
+    // Deferred setDoc — never resolves during the assertion window.
+    let resolveSetDoc: () => void = () => undefined;
+    const deferred = new Promise<void>((res) => {
+      resolveSetDoc = res;
+    });
+    mockSetDoc.mockReturnValueOnce(deferred);
+    const result = {
+      tmdbId: 7,
+      type: 'movie' as const,
+      title: 'Optimistic',
+      year: 2024,
+      posterUrl: null,
+    };
+    // Seed the results list so we can assert the flag flips on it.
+    (service as unknown as ResultsHandle)._results.set([
+      { ...result, added: false },
+    ]);
+
+    // Kick off add() but DO NOT await it — the write is still pending.
+    const pending = service.add(result);
+
+    // Optimistic state is visible immediately, before setDoc resolves.
+    expect(service.results()[0].added).toBe(true);
+    expect((service as unknown as AddedHandle)._addedIds().has('7')).toBe(true);
+
+    resolveSetDoc();
+    await pending;
+    expect(service.results()[0].added).toBe(true);
+  });
+
+  it('add() rolls back both signals when setDoc rejects', async () => {
+    mockSetDoc.mockRejectedValueOnce(new Error('write failed'));
+    const result = {
+      tmdbId: 8,
+      type: 'tv' as const,
+      title: 'Rollback',
+      year: 2024,
+      posterUrl: null,
+    };
+    (service as unknown as ResultsHandle)._results.set([
+      { ...result, added: false },
+    ]);
+
+    await expect(service.add(result)).rejects.toThrow('write failed');
+
+    expect(service.results()[0].added).toBe(false);
+    expect((service as unknown as AddedHandle)._addedIds().has('8')).toBe(
+      false,
+    );
+  });
+
+  it('add() re-throws when setDoc fails', async () => {
+    mockSetDoc.mockRejectedValueOnce(new Error('boom'));
+    const result = {
+      tmdbId: 9,
+      type: 'movie' as const,
+      title: 'Throws',
+      year: 2024,
+      posterUrl: null,
+    };
+    await expect(service.add(result)).rejects.toThrow('boom');
   });
 
   it('add() is no-op when uid is null', async () => {
