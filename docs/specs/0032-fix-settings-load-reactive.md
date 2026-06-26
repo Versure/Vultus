@@ -2,7 +2,7 @@
 number: 0032
 slug: fix-settings-load-reactive
 title: Fix settings page not loading when uid resolves after ngOnInit
-status: implementing
+status: done
 slices: [slice:settings]
 scopes: [scope:mobile]
 created: 2026-06-26
