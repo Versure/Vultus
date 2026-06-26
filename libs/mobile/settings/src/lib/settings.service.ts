@@ -1,4 +1,4 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, effect, inject, signal } from '@angular/core';
 import {
   Firestore,
   doc,
@@ -55,6 +55,20 @@ export class SettingsService {
    * skeleton; checked BEFORE `loaded` in the template.
    */
   readonly loadFailed = this._loadFailed.asReadonly();
+
+  constructor() {
+    // Reactively load once a uid resolves. ngOnInit's load() is the fast path
+    // when uid is already available; this effect handles the slow path where
+    // anonymous auth resolves AFTER the page has mounted (uid was null at init).
+    // The guard prevents a redundant re-load (effect re-running after a
+    // successful fast-path load) and avoids fighting a user-driven retry.
+    effect(() => {
+      const uid = this.uid();
+      if (uid !== null && !this._loaded() && !this._loadFailed()) {
+        void this.load();
+      }
+    });
+  }
 
   /** Reads `users/{uid}`; creates it with defaults if absent. */
   async load(): Promise<void> {
