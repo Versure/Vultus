@@ -148,7 +148,10 @@ export class TitleDetailPage {
 
   private readonly region$ = this.service
     .region$()
-    .pipe(shareReplay({ bufferSize: 1, refCount: true }));
+    .pipe(
+      startWith<Region | null>(null),
+      shareReplay({ bufferSize: 1, refCount: true }),
+    );
 
   readonly vm$: Observable<DetailVm> = combineLatest([
     this.detail$,
@@ -171,7 +174,9 @@ export class TitleDetailPage {
           state.source,
         )
         .pipe(startWith<GroupedProviders>(EMPTY_PROVIDERS));
-      const tracked$ = this.service.tracked$(state.detail.tmdbId);
+      const tracked$ = this.service
+        .tracked$(state.detail.tmdbId)
+        .pipe(startWith<WatchlistItem | null>(null));
       return combineLatest([providers$, tracked$]).pipe(
         map(([providers, tracked]) => ({ state, region, providers, tracked })),
       );

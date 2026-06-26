@@ -172,4 +172,16 @@
   --vultus-status-completed: #10b981;
   --vultus-status-dropped: #ef4444;
   --vultus-status-planned: #94a3b8;
+
+  // ---------------------------------------------------------------------------
+  // Safe-area insets (Android edge-to-edge / overlay mode, spec 0029).
+  // With StatusBar `overlaysWebView: true`, the web view draws under the system
+  // status/navigation bars; Ionic insets IonHeader/IonContent/footer via these
+  // --ion-safe-area-* vars, which it derives from the standard CSS env() insets.
+  // No hand-coded pixels — env() degrades to 0 where there is no inset.
+  // ---------------------------------------------------------------------------
+  --ion-safe-area-top: env(safe-area-inset-top);
+  --ion-safe-area-right: env(safe-area-inset-right);
+  --ion-safe-area-bottom: env(safe-area-inset-bottom);
+  --ion-safe-area-left: env(safe-area-inset-left);
 }

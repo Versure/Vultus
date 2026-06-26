@@ -1,7 +1,11 @@
 import { runInInjectionContext, Injector } from '@angular/core';
 import { Router, type UrlTree } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ONBOARDING_DONE_KEY, onboardingGuard } from './onboarding.guard';
+import {
+  ONBOARDING_DONE_KEY,
+  onboardingGuard,
+  reverseOnboardingGuard,
+} from './onboarding.guard';
 
 // Mock @capacitor/preferences; `get` is stubbed per-test.
 const preferencesGetMock =
@@ -29,6 +33,21 @@ function runGuard(): Promise<boolean | UrlTree> {
     injector,
     () =>
       onboardingGuard(undefined as never, undefined as never) as Promise<
+        boolean | UrlTree
+      >,
+  );
+}
+
+function runReverseGuard(): Promise<boolean | UrlTree> {
+  const injector = Injector.create({
+    providers: [
+      { provide: Router, useValue: { createUrlTree: createUrlTreeMock } },
+    ],
+  });
+  return runInInjectionContext(
+    injector,
+    () =>
+      reverseOnboardingGuard(undefined as never, undefined as never) as Promise<
         boolean | UrlTree
       >,
   );
@@ -68,5 +87,42 @@ describe('onboardingGuard', () => {
 
     expect(result).toBe(urlTreeSentinel);
     expect(createUrlTreeMock).toHaveBeenCalledWith(['/onboarding']);
+  });
+});
+
+describe('reverseOnboardingGuard', () => {
+  beforeEach(() => {
+    preferencesGetMock.mockReset();
+    createUrlTreeMock.mockClear();
+  });
+
+  it('flag true -> returns UrlTree to /tabs/watchlist', async () => {
+    preferencesGetMock.mockResolvedValue({ value: 'true' });
+
+    const result = await runReverseGuard();
+
+    expect(result).toBe(urlTreeSentinel);
+    expect(preferencesGetMock).toHaveBeenCalledWith({
+      key: ONBOARDING_DONE_KEY,
+    });
+    expect(createUrlTreeMock).toHaveBeenCalledWith(['/tabs/watchlist']);
+  });
+
+  it('flag null -> returns true (allows onboarding)', async () => {
+    preferencesGetMock.mockResolvedValue({ value: null });
+
+    const result = await runReverseGuard();
+
+    expect(result).toBe(true);
+    expect(createUrlTreeMock).not.toHaveBeenCalled();
+  });
+
+  it('flag non-true string -> returns true (allows onboarding)', async () => {
+    preferencesGetMock.mockResolvedValue({ value: 'false' });
+
+    const result = await runReverseGuard();
+
+    expect(result).toBe(true);
+    expect(createUrlTreeMock).not.toHaveBeenCalled();
   });
 });
