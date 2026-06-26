@@ -2,7 +2,7 @@
 number: 0031
 slug: fix-search-add-to-watchlist
 title: Fix add-to-watchlist button in search showing no feedback and silently failing
-status: approved
+status: done
 slices: [slice:search]
 scopes: [scope:mobile]
 created: 2026-06-26

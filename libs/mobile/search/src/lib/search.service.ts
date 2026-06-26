@@ -105,11 +105,27 @@ export class SearchService {
     if (q) void this._runSearch(q);
   }
 
+  /**
+   * Adds a result to the user's watchlist with an optimistic local update.
+   *
+   * - No-op when there is no signed-in uid, or when the title is already added.
+   * - Applies the optimistic update (flip `_addedIds` + the result's `added`
+   *   flag) BEFORE awaiting the Firestore write, so the button reflects the add
+   *   immediately.
+   * - On write failure: rolls back BOTH the optimistic signal updates, then
+   *   RE-THROWS so the caller (SearchPage) can present an error toast.
+   */
   async add(result: SearchResult): Promise<void> {
     const uid = this._uid();
     if (!uid) return;
     const titleId = String(result.tmdbId);
     if (this._addedIds().has(titleId)) return; // duplicate guard
+
+    // Optimistic update FIRST — the button flips to "added" immediately.
+    this._addedIds.update((s) => new Set([...s, titleId]));
+    this._results.update((rs) =>
+      rs.map((r) => (r.tmdbId === result.tmdbId ? { ...r, added: true } : r)),
+    );
 
     const item: WatchlistItem = {
       type: result.type,
@@ -120,16 +136,25 @@ export class SearchService {
       status: 'planned',
     };
 
-    await setDoc(
-      doc(this._firestore, watchlistItemPath(uid, titleId)),
-      watchlistItemToData(item),
-    );
-
-    // Optimistic local update (the live watchlist subscription will confirm).
-    this._addedIds.update((s) => new Set([...s, titleId]));
-    this._results.update((rs) =>
-      rs.map((r) => (r.tmdbId === result.tmdbId ? { ...r, added: true } : r)),
-    );
+    try {
+      await setDoc(
+        doc(this._firestore, watchlistItemPath(uid, titleId)),
+        watchlistItemToData(item),
+      );
+    } catch (err) {
+      // Roll back BOTH optimistic updates.
+      this._addedIds.update((s) => {
+        const n = new Set(s);
+        n.delete(titleId);
+        return n;
+      });
+      this._results.update((rs) =>
+        rs.map((r) =>
+          r.tmdbId === result.tmdbId ? { ...r, added: false } : r,
+        ),
+      );
+      throw err; // re-throw so SearchPage can show the toast
+    }
   }
 
   private async _runSearch(query: string): Promise<void> {

@@ -11,6 +11,7 @@ import {
   IonSearchbar,
   IonTitle,
   IonToolbar,
+  ToastController,
 } from '@ionic/angular/standalone';
 import {
   VultusEmptyState,
@@ -52,6 +53,7 @@ import type { SearchResultView } from './search.service';
 export class SearchPage {
   readonly service = inject(SearchService);
   private readonly router = inject(Router);
+  private readonly toastCtrl = inject(ToastController);
 
   constructor() {
     addIcons({
@@ -67,9 +69,19 @@ export class SearchPage {
     this.service.setQuery(event.detail?.value ?? '');
   }
 
-  onAdd(result: SearchResultView, event: Event): void {
+  async onAdd(result: SearchResultView, event: Event): Promise<void> {
     event.stopPropagation();
-    void this.service.add(result);
+    try {
+      await this.service.add(result);
+    } catch {
+      const toast = await this.toastCtrl.create({
+        message: 'Failed to add — try again later',
+        duration: 3000,
+        position: 'bottom',
+        color: 'danger',
+      });
+      await toast.present();
+    }
   }
 
   openDetail(result: SearchResultView): void {
