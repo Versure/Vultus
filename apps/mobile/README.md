@@ -2,6 +2,10 @@
 
 The Vultus mobile app — Ionic + Angular shell wired via Capacitor for Android. It owns routing, environment bootstrapping, and DI root providers; feature UI lives in `libs/mobile/*` slices.
 
+## Shell services
+
+- **`NotificationHandlerService`** (`src/app/notification-handler.service.ts`, spec 0041) — registers the Capacitor `PushNotifications` listeners for incoming FCM messages. A foreground arrival shows an Ionic toast with a "View" action; tapping a delivered notification (background/cold-start) deep-links to `tabs/title-detail/:tmdbId` and marks the matching `users/{uid}/notifications/{id}` doc read (best-effort — a Firestore failure never blocks navigation). Native-only (a no-op in the browser/dev-server) and idempotent. Lives in the shell, not a slice, because it owns cross-cutting navigation; it deep-links by `Router` string segments rather than importing the title-detail slice (Sheriff: `scope:mobile` must not import `slice:*`). Wired from `App.ngOnInit()`.
+
 ## Local dev
 
 ### Prerequisites
