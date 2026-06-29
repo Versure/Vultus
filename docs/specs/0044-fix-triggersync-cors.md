@@ -1,5 +1,5 @@
 ---
-number: 0043
+number: 0044
 slug: fix-triggersync-cors
 title: Add explicit CORS origins to the triggerSync Gen2 callable so browser-origin invocations are not preflight-blocked
 status: approved
@@ -75,7 +75,9 @@ This is a **one-file, config-only `scope:functions` change** — the handler log
          'http://localhost:4200', // Angular dev server (serve-prod-debug)
        ],
      },
-     (request) => { /* unchanged */ },
+     (request) => {
+       /* unchanged */
+     },
    );
    ```
 
@@ -144,9 +146,9 @@ Out of scope (explicitly):
 
 ## 3. Affected slices & Sheriff tags
 
-| Project         | Path                          | Sheriff tags      | Change                                                                 |
-| --------------- | ----------------------------- | ----------------- | ---------------------------------------------------------------------- |
-| functions (app) | `apps/functions/src/main.ts`  | `scope:functions` | **add** a `cors: [...]` array to the `triggerSync` `onCall` options    |
+| Project         | Path                         | Sheriff tags      | Change                                                              |
+| --------------- | ---------------------------- | ----------------- | ------------------------------------------------------------------- |
+| functions (app) | `apps/functions/src/main.ts` | `scope:functions` | **add** a `cors: [...]` array to the `triggerSync` `onCall` options |
 
 - **`slices: []`** — this is a `scope:functions` config change touching only the
   functions entry file; it introduces no slice, library, or app-shell change.
@@ -271,17 +273,16 @@ infrastructure-engineer (operational).
   function's JSON / a CORS error) appears, revisit invoker/IAM as that memory describes
   (that would be spec 0021/0033 territory, not this CORS fix).
 - **Functional verification (the real production check) — BOTH surfaces, required:** 1. **Dev server:** from a browser at `http://localhost:4200` via
-     `pnpm nx run mobile:serve-prod-debug` (which hits **real prod** Functions from the
-     dev origin — requires a populated `.env.local`, per CLAUDE.md), tap the watchlist
-     refresh button and confirm (a) **no CORS preflight error** in the browser console
-     and (b) the call completes (success toast "Watchlist synced", or a function-level
-     JSON error such as `unauthenticated` — i.e. the function is **reached**, which it
-     was not before).
-  2. **Installed Android app:** build/install the production app on a device
-     (`pnpm nx run mobile:android-usb`, WebView origin `http://localhost`) with Chrome
-     remote-debugging attached, tap the refresh button, and confirm the **same**: no
-     CORS preflight error in the WebView console and the call reaches the function.
-     This is the surface the user actually reported failing, so it is **not optional**.
+  `pnpm nx run mobile:serve-prod-debug` (which hits **real prod** Functions from the
+  dev origin — requires a populated `.env.local`, per CLAUDE.md), tap the watchlist
+  refresh button and confirm (a) **no CORS preflight error** in the browser console
+  and (b) the call completes (success toast "Watchlist synced", or a function-level
+  JSON error such as `unauthenticated` — i.e. the function is **reached**, which it
+  was not before). 2. **Installed Android app:** build/install the production app on a device
+  (`pnpm nx run mobile:android-usb`, WebView origin `http://localhost`) with Chrome
+  remote-debugging attached, tap the refresh button, and confirm the **same**: no
+  CORS preflight error in the WebView console and the call reaches the function.
+  This is the surface the user actually reported failing, so it is **not optional**.
   Optionally also confirm a deployed Hosting origin (`web.app`).
 - **File manifest:** none (operational; no repo files change). This task is the
   **required production fix** and is recorded in the PR / follow-up notes, not as code.
@@ -426,5 +427,5 @@ change. Gates that don't apply are marked N/A with the reason.
   the vertical-slice and extract-at-3+ rules (a per-function `cors` option is not
   shared logic). TMDB/Trakt data accuracy is unaffected — the sync flow is unchanged;
   this only lets the existing browser invocation reach it.
-</content>
-</invoke>
+  </content>
+  </invoke>
