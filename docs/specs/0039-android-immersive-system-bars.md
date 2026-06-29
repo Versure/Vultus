@@ -2,7 +2,7 @@
 number: 0039
 slug: android-immersive-system-bars
 title: Auto-hide the Android status & navigation bars (sticky immersive mode)
-status: implementing
+status: done
 slices: []
 scopes: [scope:mobile]
 created: 2026-06-29
@@ -46,7 +46,7 @@ In scope:
 
 - **`android/app/src/main/java/app/vultus/mobile/MainActivity.java`** — the single
   changed file. Currently a bare `public class MainActivity extends
-  BridgeActivity {}`. Add:
+BridgeActivity {}`. Add:
   - an `onCreate(Bundle)` override that, after `super.onCreate(...)`, obtains the
     AndroidX insets controller and **hides the system bars** with
     **transient-show-on-swipe** behavior;
@@ -234,7 +234,7 @@ to add**.
   flows are untouched and nothing is un-skipped. Stated explicitly so the omission
   is intentional.
 - **Automated gate (workspace):** `nx affected -t typecheck lint test build
-  --base=main` will likely show **no affected TS project** (no workspace TS file
+--base=main` will likely show **no affected TS project** (no workspace TS file
   changed); that is expected and acceptable here. **`nx affected` does not compile
   Java**, so a green `nx affected` does **not** prove `MainActivity.java`
   compiles — do not report the Java compile as done off it.
