@@ -44,6 +44,9 @@ describe('inject-mobile-env helpers', () => {
     expect(content).toContain('production: true');
     expect(content).toContain('useEmulators: false');
     expect(content).toContain('mockAuthUid: null as string | null');
+    // Detail hero base (spec 0036): the generated env must carry the w780
+    // detailImageBaseUrl so CI/production-built APKs render a sharp detail hero.
+    expect(content).toContain('https://image.tmdb.org/t/p/w780');
 
     expect(guardGeneratedContent(content, values)).toEqual([]);
   });

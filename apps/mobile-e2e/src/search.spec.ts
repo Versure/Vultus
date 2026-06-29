@@ -1,5 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { clearAll, resolveAnonUid, routeTmdb, seedFor } from './support';
+import {
+  clearAll,
+  resolveAnonUid,
+  routeTmdb,
+  routeTmdbDiscriminated,
+  seedFor,
+} from './support';
 
 /**
  * Flows F2–F3 (spec 0019, Test plan) — emulator-backed, TMDB intercepted.
@@ -135,5 +141,45 @@ test.describe('search (F2–F3)', () => {
     await expect(
       page.locator('.watchlist-card .card-title', { hasText: MOVIE_TITLE }),
     ).toBeVisible();
+  });
+
+  // spec 0037 — search → detail shows the TAPPED title (not a wrong id fallback).
+  test('search-to-detail-correct-title: tapping a result opens the correct title (spec 0037)', async ({
+    page,
+  }) => {
+    // Register path-discriminating routes BEFORE navigation:
+    //   **/search/multi** → tmdb-search-multi.json  (search results)
+    //   **/movie/**       → tmdb-movie-detail-603.json  (detail for The Matrix, id 603)
+    // This exercises the live getDetail path (no cache seeded) which is exactly
+    // where the wrong-title bug bit — without it the detail call gets the search
+    // shape and the hero renders empty.
+    await routeTmdbDiscriminated(page, 'tmdb-movie-detail-603.json');
+
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+
+    const uid = await resolveAnonUid(page);
+    await seedFor(uid, 'empty');
+
+    await page.locator('ion-tab-button[tab="search"]').click();
+    await expect(page).toHaveURL(/\/tabs\/search$/);
+
+    await page.locator('ion-searchbar input').fill('matrix');
+    await expect(page.locator('.result-card')).toHaveCount(2);
+
+    // Tap the movie result card body (The Matrix, id 603 in tmdb-search-multi.json).
+    const movieCard = page
+      .locator('.result-card')
+      .filter({ has: page.locator('.title', { hasText: MOVIE_TITLE }) });
+    await movieCard.click();
+
+    // URL navigates to the title-detail route for id 603.
+    await expect(page).toHaveURL(/\/tabs\/title-detail\/603$/);
+
+    // The detail hero shows "The Matrix" — the tapped title, served by the
+    // /movie/603 fixture, NOT a wrong fall-through title.
+    await expect(page.locator('[data-test="hero"] .hero-title')).toHaveText(
+      MOVIE_TITLE,
+    );
   });
 });

@@ -41,3 +41,38 @@ export async function routeTmdb(
   );
   return fixture;
 }
+
+/**
+ * Path-discriminating TMDB interception for flows that make both a search/multi
+ * call AND a detail call (e.g. search → title-detail). Registers two handlers:
+ *
+ *  - search/multi requests  → tmdb-search-multi.json  (search results)
+ *  - movie detail requests  → provided detailFixtureName (detail shape)
+ *
+ * Playwright matches the most-specific route first. The existing `routeTmdb`
+ * catch-all is NOT registered here — register this instead for tests that need
+ * both shapes. Other specs that only need search can still use `routeTmdb`.
+ *
+ * Returns both parsed fixtures.
+ */
+export async function routeTmdbDiscriminated(
+  page: Page,
+  detailFixtureName: TmdbFixtureName,
+): Promise<{ search: unknown; detail: unknown }> {
+  const searchFixture = loadFixture('tmdb-search-multi.json');
+  const detailFixture = loadFixture(detailFixtureName);
+
+  // Register search/multi last — Playwright gives higher priority to later-
+  // registered routes, so this takes precedence over the detail handler for
+  // search/multi URLs. Both patterns are non-overlapping in practice:
+  //   **/search/multi** → search results shape
+  //   **/movie/**       → detail shape (covers /movie/{id} and /movie/{id}/watch/providers)
+  await page.route('**/movie/**', (route) =>
+    route.fulfill({ json: detailFixture as Record<string, unknown> }),
+  );
+  await page.route('**/search/multi**', (route) =>
+    route.fulfill({ json: searchFixture as Record<string, unknown> }),
+  );
+
+  return { search: searchFixture, detail: detailFixture };
+}

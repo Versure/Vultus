@@ -112,9 +112,17 @@ export const appConfig: ApplicationConfig = {
     // TMDB search config (spec 0013) — provided at root from `environment.tmdb`
     // so the search slice can inject it without importing apps/mobile.
     { provide: TMDB_SEARCH_CONFIG, useValue: environment.tmdb },
-    // TMDB detail config (spec 0016) — same `environment.tmdb` value; a separate
-    // token preserves slice isolation (the detail slice never imports the search
-    // slice's token).
-    { provide: TMDB_DETAIL_CONFIG, useValue: environment.tmdb },
+    // TMDB detail config (spec 0016, 0036) — same `environment.tmdb` base but
+    // with `imageBaseUrl` swapped to the larger detail base (w780) so the
+    // 530px detail hero renders sharp instead of upscaling w185. Search stays
+    // on w185 above. A separate token preserves slice isolation (the detail
+    // slice never imports the search slice's token).
+    {
+      provide: TMDB_DETAIL_CONFIG,
+      useValue: {
+        ...environment.tmdb,
+        imageBaseUrl: environment.tmdb.detailImageBaseUrl,
+      },
+    },
   ],
 };

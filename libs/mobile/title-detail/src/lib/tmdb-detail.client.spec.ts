@@ -95,7 +95,7 @@ describe('createTmdbDetailClient — getDetail', () => {
     expect(fetch.mock.calls[0][0] as string).not.toContain('api_key');
   });
 
-  it('no typeHint → tries movie then falls back to tv', async () => {
+  it('no typeHint → tries movie then falls back to tv on 404', async () => {
     const fetch = vi
       .fn()
       .mockResolvedValueOnce({
@@ -120,12 +120,56 @@ describe('createTmdbDetailClient — getDetail', () => {
     expect(fetch.mock.calls[1][0] as string).toContain('/tv/9');
   });
 
+  // Regression (spec 0037): a non-404 error must NOT fall through to /tv — it
+  // must propagate so the service maps it to { kind: 'error' } instead of
+  // silently returning the tv title for a wrong id.
+  it('no typeHint → non-404 error on movie re-throws without calling tv (0037)', async () => {
+    const fetch = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: () => Promise.resolve({}),
+    });
+    const client = createTmdbDetailClient(config, fetch);
+    await expect(client.getDetail(9)).rejects.toBeInstanceOf(TmdbDetailError);
+    // The /tv endpoint must NOT have been called.
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0][0] as string).toContain('/movie/9');
+  });
+
+  // Regression (spec 0037): network error (fetch rejects) must also re-throw,
+  // not fall through to /tv.
+  it('no typeHint → network error on movie re-throws without calling tv (0037)', async () => {
+    const fetch = vi.fn().mockRejectedValueOnce(new Error('Network failure'));
+    const client = createTmdbDetailClient(config, fetch);
+    await expect(client.getDetail(42)).rejects.toThrow('Network failure');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0][0] as string).toContain('/movie/42');
+  });
+
   it('throws a typed TmdbDetailError on non-2xx', async () => {
     const fetch = makeFetch({ status_message: 'Not Found' }, 404);
     const client = createTmdbDetailClient(config, fetch);
     await expect(client.getDetail(1, 'movie')).rejects.toBeInstanceOf(
       TmdbDetailError,
     );
+  });
+
+  // Spec 0036: the detail slice is wired to the larger w780 base (vs search's
+  // w185) so the 530px hero renders sharp. Guard that posterUrl is built off
+  // whatever base the config carries — a w780 base yields a w780 posterUrl.
+  it('builds posterUrl from the configured (w780) detail base', async () => {
+    const fetch = makeFetch({
+      id: 27205,
+      title: 'Inception',
+      poster_path: '/poster.jpg',
+    });
+    const client = createTmdbDetailClient(
+      { ...config, imageBaseUrl: 'https://image.tmdb.org/t/p/w780' },
+      fetch,
+    );
+    const detail = await client.getDetail(27205, 'movie');
+    expect(detail.posterUrl).toBe('https://image.tmdb.org/t/p/w780/poster.jpg');
+    expect(detail.posterUrl).not.toContain('w185');
   });
 });
 

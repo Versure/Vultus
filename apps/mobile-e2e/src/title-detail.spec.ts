@@ -151,22 +151,15 @@ test('watchlist alert remove: card -> empty state (F6 runnable part)', async ({
 });
 
 // ---------------------------------------------------------------------------
-// DEFERRED (test.fixme — PENDING, NOT FAILING) — title-detail-ORIGINATED flows.
+// RUNNABLE (GREEN) — watchlist-to-detail-correct-title (spec 0037 F4, un-skipped).
 //
-// TODO(spec 0016 / PLAN §6 item 19): un-skip when the title-detail slice +
-// tabs/title-detail/:titleId route land.
-//
-// R1: `libs/mobile/title-detail/` is empty, there is no `tabs/title-detail/:titleId`
-// route, and the watchlist card's `navigateToDetail` catches + no-ops without it.
-// These flows are authored fully against the EXPECTED title-detail DOM/behavior;
-// `test.fixme` keeps the suite green until the slice lands. Do NOT fake a route or
-// stub a detail page to make them pass — that would hide the missing slice.
+// The title-detail slice exists (spec 0016) and a title-cache/2 doc is seeded so
+// detail resolves cache-first — no TMDB_API_KEY required, no live network call.
 // ---------------------------------------------------------------------------
 
-test.describe
-  .fixme('title-detail-originated flows (pending spec 0016 / PLAN §6 item 19 — R1)', () => {
+test.describe('title-detail F4 — watchlist-to-detail-correct-title (spec 0037)', () => {
   // F4 — watchlist -> tap title -> title-detail opens showing the seeded metadata.
-  test('F4: tapping the watchlist card opens the title-detail page', async ({
+  test('watchlist-to-detail-correct-title: tapping card opens the correct title', async ({
     page,
   }) => {
     await bootAndSeed(page);
@@ -179,10 +172,22 @@ test.describe
     // The title-detail route opens for the seeded entry (tmdbId 2).
     await expect(page).toHaveURL(/\/tabs\/title-detail\/2$/);
 
-    // The detail page shows the seeded entry's metadata (title at minimum).
-    await expect(page.locator('ion-content')).toContainText(SEEDED_TITLE);
+    // The detail hero shows the seeded title (cache-first, no TMDB network call).
+    await expect(page.locator('[data-test="hero"] .hero-title')).toHaveText(
+      SEEDED_TITLE,
+    );
   });
+});
 
+// ---------------------------------------------------------------------------
+// DEFERRED (test.fixme — PENDING, NOT FAILING) — F5/F6 title-detail status/remove.
+//
+// These flows require deeper title-detail DOM knowledge for the status + remove
+// controls on the detail page itself. Kept fixme until those flows are tightened.
+// ---------------------------------------------------------------------------
+
+test.describe
+  .fixme('title-detail F5/F6 — status change and remove (deferred)', () => {
   // F5 — title-detail -> change status (planned -> watching) -> return to
   // Watchlist -> the card now sits under the Watching section.
   test('F5: changing status on title-detail reflects on the watchlist', async ({

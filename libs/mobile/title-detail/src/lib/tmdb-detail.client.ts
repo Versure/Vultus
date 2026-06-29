@@ -38,7 +38,7 @@ export interface GroupedProviders {
  */
 export interface TmdbDetailConfig {
   apiBaseUrl: string; // e.g. https://api.themoviedb.org/3
-  imageBaseUrl: string; // e.g. https://image.tmdb.org/t/p/w185
+  imageBaseUrl: string; // e.g. https://image.tmdb.org/t/p/w780 (detail hero, spec 0036)
   auth: { kind: 'bearer'; token: string } | { kind: 'apiKey'; apiKey: string };
   /**
    * Optional fetch override — used in mock/dev environments. Production leaves
@@ -207,11 +207,14 @@ export function createTmdbDetailClient(
       if (typeHint) {
         return fetchDetailFor(tmdbId, typeHint, signal);
       }
-      // No hint: try movie, fall back to tv on a 404/error.
+      // No hint: try movie, fall back to tv ONLY on a genuine 404.
       try {
         return await fetchDetailFor(tmdbId, 'movie', signal);
-      } catch {
-        return fetchDetailFor(tmdbId, 'tv', signal);
+      } catch (err) {
+        if (err instanceof TmdbDetailError && err.status === 404) {
+          return fetchDetailFor(tmdbId, 'tv', signal);
+        }
+        throw err; // 5xx / network / abort → surface as error, not a wrong title
       }
     },
 
