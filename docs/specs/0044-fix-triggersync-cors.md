@@ -2,7 +2,7 @@
 number: 0044
 slug: fix-triggersync-cors
 title: Add explicit CORS origins to the triggerSync Gen2 callable so browser-origin invocations are not preflight-blocked
-status: approved
+status: done
 slices: []
 scopes: [scope:functions]
 created: 2026-06-29
@@ -427,5 +427,3 @@ change. Gates that don't apply are marked N/A with the reason.
   the vertical-slice and extract-at-3+ rules (a per-function `cors` option is not
   shared logic). TMDB/Trakt data accuracy is unaffected — the sync flow is unchanged;
   this only lets the existing browser invocation reach it.
-  </content>
-  </invoke>

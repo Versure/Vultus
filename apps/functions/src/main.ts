@@ -302,7 +302,15 @@ export async function runTriggerSync(
  * so the runtime injects it; reuses the SAME engine wiring as `syncTitles`.
  */
 export const triggerSync = onCall<unknown, Promise<TriggerSyncResponse>>(
-  { secrets: [TMDB_READ_TOKEN] },
+  {
+    secrets: [TMDB_READ_TOKEN],
+    cors: [
+      'https://vultus-cab62.web.app',
+      'https://vultus-cab62.firebaseapp.com',
+      'http://localhost', // Capacitor Android WebView (production native app)
+      'http://localhost:4200', // Angular dev server (serve-prod-debug)
+    ],
+  },
   (request) => {
     const db = ensureAdmin();
     const createEngine = (firestore: Firestore): SyncEngine =>
