@@ -107,9 +107,10 @@ export class SettingsService {
         projectNotifications(user.notificationPrefs),
       );
       this._loaded.set(true);
-    } catch {
+    } catch (error) {
       // Surface the failure as an error state. `_loaded` stays false; the
       // template checks `loadFailed` first, so the skeleton never hangs.
+      console.error('[SettingsService] load() failed:', error);
       this._loadFailed.set(true);
     }
   }
