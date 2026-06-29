@@ -110,6 +110,8 @@ describe('SearchService', () => {
         title: 'Film',
         year: 2020,
         posterUrl: null,
+        posterPath: null,
+        voteAverage: null,
       },
     ];
     (service as unknown as ClientHandle)._client.searchMulti = vi
@@ -140,6 +142,8 @@ describe('SearchService', () => {
         title: 'Film',
         year: 2020,
         posterUrl: null,
+        posterPath: null,
+        voteAverage: null,
       },
       {
         tmdbId: 2,
@@ -147,6 +151,8 @@ describe('SearchService', () => {
         title: 'Show',
         year: 2021,
         posterUrl: null,
+        posterPath: null,
+        voteAverage: null,
       },
     ];
     (service as unknown as ClientHandle)._client.searchMulti = vi
@@ -165,12 +171,33 @@ describe('SearchService', () => {
       title: 'Movie X',
       year: 2021,
       posterUrl: null,
+      posterPath: '/movie-x.jpg',
+      voteAverage: 6.4,
     };
     await service.add(result);
     expect(mockSetDoc).toHaveBeenCalled();
     const writeData = mockSetDoc.mock.calls[0][1] as Record<string, unknown>;
     expect(writeData['status']).toBe('planned');
     expect(writeData['traktId']).toBeNull();
+    expect(writeData['posterPath']).toBe('/movie-x.jpg');
+    expect(writeData['voteAverage']).toBe(6.4);
+  });
+
+  it('add() writes null posterPath and voteAverage when absent', async () => {
+    const result = {
+      tmdbId: 43,
+      type: 'movie' as const,
+      title: 'No Poster',
+      year: 2021,
+      posterUrl: null,
+      posterPath: null,
+      voteAverage: null,
+    };
+    await service.add(result);
+    expect(mockSetDoc).toHaveBeenCalled();
+    const writeData = mockSetDoc.mock.calls[0][1] as Record<string, unknown>;
+    expect(writeData['posterPath']).toBeNull();
+    expect(writeData['voteAverage']).toBeNull();
   });
 
   it('add() applies the optimistic update before setDoc resolves', async () => {
@@ -186,6 +213,8 @@ describe('SearchService', () => {
       title: 'Optimistic',
       year: 2024,
       posterUrl: null,
+      posterPath: null,
+      voteAverage: null,
     };
     // Seed the results list so we can assert the flag flips on it.
     (service as unknown as ResultsHandle)._results.set([
@@ -212,6 +241,8 @@ describe('SearchService', () => {
       title: 'Rollback',
       year: 2024,
       posterUrl: null,
+      posterPath: null,
+      voteAverage: null,
     };
     (service as unknown as ResultsHandle)._results.set([
       { ...result, added: false },
@@ -233,6 +264,8 @@ describe('SearchService', () => {
       title: 'Throws',
       year: 2024,
       posterUrl: null,
+      posterPath: null,
+      voteAverage: null,
     };
     await expect(service.add(result)).rejects.toThrow('boom');
   });
@@ -245,6 +278,8 @@ describe('SearchService', () => {
       title: 'X',
       year: 2020,
       posterUrl: null,
+      posterPath: null,
+      voteAverage: null,
     };
     await service.add(result);
     expect(mockSetDoc).not.toHaveBeenCalled();
@@ -258,6 +293,8 @@ describe('SearchService', () => {
       title: 'X',
       year: 2020,
       posterUrl: null,
+      posterPath: null,
+      voteAverage: null,
     };
     await service.add(result);
     expect(mockSetDoc).not.toHaveBeenCalled();

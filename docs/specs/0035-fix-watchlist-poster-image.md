@@ -2,7 +2,7 @@
 number: 0035
 slug: fix-watchlist-poster-image
 title: Fix watchlist — denormalize posterPath and voteAverage on add
-status: approved
+status: done
 slices: [slice:search]
 scopes: [scope:mobile]
 created: 2026-06-29
@@ -75,11 +75,11 @@ No schema or security-rule changes. The two fields already exist in PLAN §4's
 watchlist item shape and in code:
 
 - `libs/shared/domain/src/lib/documents.ts` — `WatchlistItem.posterPath?:
-  string | null` and `WatchlistItem.voteAverage?: number | null` (already
+string | null` and `WatchlistItem.voteAverage?: number | null` (already
   defined).
 - `libs/shared/firestore-schema/src/lib/converters.ts` — `watchlistItemToData`
   already writes `posterPath: item.posterPath ?? null` and `voteAverage:
-  item.voteAverage ?? null`.
+item.voteAverage ?? null`.
 
 This spec only changes which values reach those fields at write time:
 previously always `null`, now the real TMDB values when present. Firestore
@@ -187,7 +187,7 @@ Unit (Vitest + Analog) — the only tier required; logic-only change.
 > rollback, re-throw, no-op cases) construct `result` literals without the new
 > fields. Since `posterPath`/`voteAverage` are required on `SearchResult`, those
 > literals must be updated to include both fields (e.g. `posterPath: null,
-> voteAverage: null`) or TypeScript will fail to compile the spec. Update all
+voteAverage: null`) or TypeScript will fail to compile the spec. Update all
 > `SearchResult` literals across the two spec files for type-correctness; only
 > the assertions above need new expectations. The 8 affected literals are: in
 > `tmdb-search.client.spec.ts`, the `movieResult` and `tvResult` fixtures; in
