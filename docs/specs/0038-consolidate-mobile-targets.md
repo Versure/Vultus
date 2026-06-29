@@ -2,7 +2,7 @@
 number: 0038
 slug: consolidate-mobile-targets
 title: Consolidate mobile Nx run/build targets into 5 named scenarios
-status: approved
+status: done
 slices: []
 scopes: [scope:mobile]
 created: 2026-06-29
@@ -108,17 +108,17 @@ No domain types, function signatures, HTTP endpoints, or callable shapes change.
 The observable surface change is the **Nx target list** for `apps/mobile`. After
 this spec the project exposes exactly these run/build targets:
 
-| Target            | Kind                  | What it does                                                                  |
-| ----------------- | --------------------- | ----------------------------------------------------------------------------- |
-| `build`           | primitive (kept)      | `@angular/build:application`; configs production / development / mock / **prod-debug** |
-| `serve`           | primitive (kept)      | `@angular/build:dev-server`; default `development` (e2e contract) — unchanged  |
-| `serve-mock`      | scenario (new)        | mock build, **no Firebase**; alias of `serve mobile -c mock`                   |
-| `serve-emulator`  | scenario (kept as-is) | dev build vs **emulated** Firebase (spec 0027 `dependsOn` preserved)           |
-| `serve-prod-debug`| scenario (new)        | **unoptimized + sourcemaps** vs **real prod** Firebase; injects env first      |
-| `serve-prod`      | scenario (new)        | **optimized** prod build vs real prod Firebase; injects env first              |
-| `android-usb`     | scenario (rename of `android-debug`) | inject env → check-native → prod build → cap sync → **cap run** (install + launch on USB device) |
-| `sync`            | primitive (kept)      | `npx cap sync android`, `dependsOn: ["build"]` — unchanged                     |
-| `inject-env`      | primitive (kept)      | `node tools/scripts/inject-mobile-env.mjs` — unchanged                         |
+| Target             | Kind                                 | What it does                                                                                     |
+| ------------------ | ------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `build`            | primitive (kept)                     | `@angular/build:application`; configs production / development / mock / **prod-debug**           |
+| `serve`            | primitive (kept)                     | `@angular/build:dev-server`; default `development` (e2e contract) — unchanged                    |
+| `serve-mock`       | scenario (new)                       | mock build, **no Firebase**; alias of `serve mobile -c mock`                                     |
+| `serve-emulator`   | scenario (kept as-is)                | dev build vs **emulated** Firebase (spec 0027 `dependsOn` preserved)                             |
+| `serve-prod-debug` | scenario (new)                       | **unoptimized + sourcemaps** vs **real prod** Firebase; injects env first                        |
+| `serve-prod`       | scenario (new)                       | **optimized** prod build vs real prod Firebase; injects env first                                |
+| `android-usb`      | scenario (rename of `android-debug`) | inject env → check-native → prod build → cap sync → **cap run** (install + launch on USB device) |
+| `sync`             | primitive (kept)                     | `npx cap sync android`, `dependsOn: ["build"]` — unchanged                                       |
+| `inject-env`       | primitive (kept)                     | `node tools/scripts/inject-mobile-env.mjs` — unchanged                                           |
 
 Removed: `serve-static`, `android`, `open`.
 
@@ -280,6 +280,7 @@ launches). `parallel: false` (strict ordering). The trailing
 ```
 
 Notes the implementer must preserve:
+
 - Keep the `--check-native` preflight (asserts `android/app/google-services.json`,
   spec 0026) **before** the build/sync/run.
 - `pnpm nx run mobile:build` uses the **default `production`** configuration
@@ -292,6 +293,7 @@ Files: `apps/mobile/project.json`.
 ### Task 8 — [sequential] Remove `serve-static`, `android`, `open`
 
 Delete all three target blocks from `apps/mobile/project.json`:
+
 - `serve-static` (`@nx/web:file-server` over dist) — not referenced by CI, e2e,
   or any documented run path.
 - `android` (`build` → `sync` → `open`) — redundant now that `android-usb`
@@ -330,13 +332,13 @@ the root README is the canonical "how do I run this" reference. **Keep** the
 build / lint / test / e2e rows. The new scenario rows (use this exact wording for
 the "What it does / when to use" column):
 
-| Command                              | What it does                                                              |
-| ------------------------------------ | ------------------------------------------------------------------------- |
-| `pnpm nx run mobile:serve-mock`      | Mock data, **no Firebase dependency** — works offline; quickest UI loop   |
-| `pnpm nx run mobile:serve-emulator`  | Dev build vs **emulated** Firebase (offline-capable); starts emulators    |
-| `pnpm nx run mobile:serve-prod-debug`| Dev/**debuggable** build vs **REAL prod** Firebase — diagnose prod data    |
-| `pnpm nx run mobile:serve-prod`      | **Optimized** prod build vs prod Firebase — final pre-deploy check         |
-| `pnpm nx run mobile:android-usb`     | Build + **install + launch** on a USB-tethered phone                       |
+| Command                               | What it does                                                            |
+| ------------------------------------- | ----------------------------------------------------------------------- |
+| `pnpm nx run mobile:serve-mock`       | Mock data, **no Firebase dependency** — works offline; quickest UI loop |
+| `pnpm nx run mobile:serve-emulator`   | Dev build vs **emulated** Firebase (offline-capable); starts emulators  |
+| `pnpm nx run mobile:serve-prod-debug` | Dev/**debuggable** build vs **REAL prod** Firebase — diagnose prod data |
+| `pnpm nx run mobile:serve-prod`       | **Optimized** prod build vs prod Firebase — final pre-deploy check      |
+| `pnpm nx run mobile:android-usb`      | Build + **install + launch** on a USB-tethered phone                    |
 
 Keep the existing `build` (`pnpm nx build mobile` / `functions`), lint, test, and
 `e2e` rows. Files: `README.md`.

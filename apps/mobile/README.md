@@ -71,28 +71,24 @@ Production builds run in CI only. The `TMDB_API_KEY` GitHub Actions secret is in
 
 ### Build flow
 
+The one-command device path builds, installs, and launches the debug APK on a
+USB-connected phone:
+
 ```sh
-# 1. Build the web bundle
-pnpm nx run mobile:build
-
-# 2. Sync web assets + plugins into android/
-pnpm nx run mobile:sync
-
-# 3. Open Android Studio (requires step 2 to complete first)
-pnpm nx run mobile:open
+pnpm nx run mobile:android-usb
 ```
 
-Inside Android Studio:
+It runs, in order: inject env → `--check-native` preflight → `mobile:build`
+(production) → `npx cap sync android` → `npx cap run android` (which builds,
+installs, and launches on the connected device). The phone must be in developer
+mode with USB debugging enabled and visible to `adb devices`. See
+`docs/setup/debug-apk-setup.md` for the full prerequisite + verification checklist.
 
-4. Wait for Gradle sync to complete.
-5. **Build → Build Bundle(s) / APK(s) → Build APK(s)** — or run from terminal:
-   ```sh
-   cd android && ./gradlew assembleDebug
-   ```
-   The debug APK is output to `android/app/build/outputs/apk/debug/app-debug.apk`.
-6. **Run → Run 'app'** (with a device connected via USB or an emulator running) to install and launch directly from Android Studio.
+To open the native project in Android Studio manually instead, run the raw
+`npx cap open android` (there is no dedicated Nx target for this), then **Build →
+Build APK(s)** or **Run → Run 'app'**.
 
-> **Debug-only.** There is no signing config, no release flavour, and no Play Store listing in this setup (spec 0020 decision 1). Sideloading the debug APK via Android Studio / ADB is sufficient for v1.
+> **Debug-only.** There is no signing config, no release flavour, and no Play Store listing in this setup (spec 0020 decision 1). Sideloading the debug APK via `cap run` / Android Studio / ADB is sufficient for v1.
 
 ### What `mobile:sync` does
 
@@ -103,6 +99,29 @@ Inside Android Studio:
 - Resolves all Capacitor plugins (`@capacitor/push-notifications`, `@capacitor/splash-screen`, etc.) into the Gradle project
 
 Run this after every web build before opening Android Studio.
+
+## Run / build targets
+
+Five self-documenting scenario targets cover the common ways to run the app:
+
+| Target                                | What it does / when to use                                              |
+| ------------------------------------- | ----------------------------------------------------------------------- |
+| `pnpm nx run mobile:serve-mock`       | Mock data, **no Firebase dependency** — works offline; quickest UI loop |
+| `pnpm nx run mobile:serve-emulator`   | Dev build vs **emulated** Firebase (offline-capable); starts emulators  |
+| `pnpm nx run mobile:serve-prod-debug` | Dev/**debuggable** build vs **REAL prod** Firebase — diagnose prod data |
+| `pnpm nx run mobile:serve-prod`       | **Optimized** prod build vs prod Firebase — final pre-deploy check      |
+| `pnpm nx run mobile:android-usb`      | Build + **install + launch** on a USB-tethered phone                    |
+
+These build on a small set of kept primitives: **`build`** (Angular application
+build; default `production`), **`serve`** (raw dev-server, default `development` —
+used by the e2e web server, do not change its default), **`sync`**
+(`npx cap sync android`), and **`inject-env`** (generate
+`environment.generated.ts` from `.env.local`).
+
+> `serve-prod-debug`, `serve-prod`, and `android-usb` **require a populated
+> `.env.local`** (repo root). `inject-mobile-env.mjs` runs first and **fails
+> loudly (exit 1) naming the missing key** if any `TMDB_API_KEY` / `FIREBASE_*`
+> value is absent.
 
 ## Sheriff scope
 

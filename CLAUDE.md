@@ -53,8 +53,24 @@ architecture and decisions; read it before non-trivial work.
   `libs/shared/{domain,firestore-schema,ui-kit}`. **Unit tests run on Vitest +
   Analog** (not Jest); **e2e on Playwright** (`apps/mobile-e2e`).
 - Commands: `pnpm nx test`, `pnpm nx lint` (includes Sheriff), `pnpm nx build`,
-  `pnpm nx e2e`, `pnpm nx serve`, `firebase emulators:start` (once Firebase is
-  configured in a later spec). Prefer `nx affected -t <target> --base=main`.
+  `pnpm nx e2e`, `firebase emulators:start`. Prefer
+  `nx affected -t <target> --base=main`.
+- **Run the mobile app** via one of five named scenario targets (not the raw
+  `pnpm nx serve`, which the e2e web server owns) — pick by what you need:
+  - `pnpm nx run mobile:serve-mock` — UI/feature work with **no backend
+    dependency** (offline; mocked Firebase + TMDB fixtures).
+  - `pnpm nx run mobile:serve-emulator` — feature work against **emulated**
+    Firebase / offline-capable.
+  - `pnpm nx run mobile:serve-prod-debug` — diagnosing a **prod data** issue with
+    a debuggable (unminified, sourcemapped) build against **REAL prod** Firebase.
+  - `pnpm nx run mobile:serve-prod` — final **optimized** pre-deploy smoke check
+    against prod Firebase.
+  - `pnpm nx run mobile:android-usb` — on-device testing over USB (build +
+    install + launch).
+  - `serve-prod-debug` / `serve-prod` / `android-usb` **require a populated
+    `.env.local`** — `inject-mobile-env.mjs` runs first and \*\*fails loudly (exit
+    1. naming the missing key\*_ if any `TMDB_API_KEY` / `FIREBASE\__` value is
+       absent.
 - **Definition of done** for any PR: typecheck + lint/Sheriff + unit + component
   (for non-trivial UI) + build + e2e (affected critical flows) all green, and the
   changed slice has tests for its logic. Tooling-absent gates degrade gracefully —
