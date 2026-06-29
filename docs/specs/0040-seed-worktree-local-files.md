@@ -2,7 +2,7 @@
 number: 0040
 slug: seed-worktree-local-files
 title: Seed gitignored local files into feature worktrees on creation
-status: approved
+status: done
 slices: []
 scopes: []
 created: 2026-06-29
@@ -112,11 +112,11 @@ $wt   = [System.IO.Path]::GetFullPath("$root/../Vultus-worktrees/feat-NNNN-slug"
 The substep reuses **those exact variables** (do not re-derive the paths a
 different way) and seeds these three relative paths:
 
-| Relative path (under both `$root` and `$wt`)         | Why it's needed in the worktree                          |
-| ---------------------------------------------------- | -------------------------------------------------------- |
-| `.env.local`                                         | API keys for `inject-mobile-env.mjs`                     |
-| `apps/mobile/src/environments/environment.generated.ts` | prod build `fileReplacements` (specs 0026/0038)       |
-| `android/app/google-services.json`                  | Firebase Android config (Gradle/Capacitor, `--check-native`) |
+| Relative path (under both `$root` and `$wt`)            | Why it's needed in the worktree                              |
+| ------------------------------------------------------- | ------------------------------------------------------------ |
+| `.env.local`                                            | API keys for `inject-mobile-env.mjs`                         |
+| `apps/mobile/src/environments/environment.generated.ts` | prod build `fileReplacements` (specs 0026/0038)              |
+| `android/app/google-services.json`                      | Firebase Android config (Gradle/Capacitor, `--check-native`) |
 
 The contract for the copy loop:
 
@@ -224,7 +224,7 @@ test surface**.
   unchanged. Stated explicitly so the omission is intentional. No existing flow
   is touched or un-skipped.
 - **Automated gate (workspace):** `nx affected -t typecheck lint test build
-  --base=main` will show **no affected project** (no workspace file changed); that
+--base=main` will show **no affected project** (no workspace file changed); that
   is expected and acceptable — a markdown skill file is outside the Nx graph.
 - **Verification by inspection (the real gate for a prompt edit):** confirm the
   edited `SKILL.md` Step 2 contains the substep and that it:
