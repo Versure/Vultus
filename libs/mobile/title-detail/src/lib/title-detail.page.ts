@@ -300,13 +300,13 @@ export class TitleDetailPage {
 
   /** Toggle one episode's watched flag (fire-and-forget; stream re-emits). */
   toggleEpisode(row: EpisodeRow, watched: boolean): void {
-    void this.service.setEpisodeWatched(this.tmdbId, row.id, watched);
+    void this.service.setEpisodeWatched(this.currentTmdbId, row.id, watched);
   }
 
   /** Bulk toggle a whole season to the opposite of its current all-watched. */
   toggleSeason(group: SeasonGroup): void {
     void this.service.setSeasonWatched(
-      this.tmdbId,
+      this.currentTmdbId,
       group.season,
       !group.allWatched,
     );
@@ -329,7 +329,7 @@ export class TitleDetailPage {
   /** Movie mark-as-watched toggle: completed ↔ watching (dropped is no-op). */
   toggleMovieWatched(tracked: WatchlistItem): void {
     void this.service.setMovieWatched(
-      this.tmdbId,
+      this.currentTmdbId,
       tracked.status !== 'completed',
     );
   }
