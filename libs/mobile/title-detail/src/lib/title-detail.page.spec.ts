@@ -1,9 +1,9 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { provideIonicAngular } from '@ionic/angular/standalone';
 import { AUTH_UID } from '@vultus/shared/domain/tokens';
-import { NEVER, type Observable, concat, of } from 'rxjs';
+import { BehaviorSubject, NEVER, type Observable, concat, of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GroupedProviders, TitleDetail } from './tmdb-detail.client';
 import {
@@ -81,7 +81,16 @@ function makeService(o: SvcOpts = {}) {
   };
 }
 
-async function setup(o: SvcOpts = {}) {
+/**
+ * Mutable paramMap — allows simulating Ionic page reuse by pushing a new value
+ * on the same component instance. Starts with titleId='27205' (Inception).
+ */
+let paramMap$: BehaviorSubject<ReturnType<typeof convertToParamMap>>;
+
+async function setup(o: SvcOpts = {}, initialTitleId = '27205') {
+  paramMap$ = new BehaviorSubject(
+    convertToParamMap({ titleId: initialTitleId }),
+  );
   const svc = makeService(o);
   await TestBed.configureTestingModule({
     imports: [TitleDetailPage],
@@ -91,7 +100,12 @@ async function setup(o: SvcOpts = {}) {
       { provide: AUTH_UID, useValue: signal<string | null>('user-123') },
       {
         provide: ActivatedRoute,
-        useValue: { snapshot: { paramMap: new Map([['titleId', '27205']]) } },
+        useValue: {
+          paramMap: paramMap$.asObservable(),
+          snapshot: {
+            paramMap: convertToParamMap({ titleId: initialTitleId }),
+          },
+        },
       },
     ],
   }).compileComponents();
@@ -104,9 +118,11 @@ async function setup(o: SvcOpts = {}) {
 describe('TitleDetailPage', () => {
   beforeEach(() => TestBed.resetTestingModule());
 
-  it('reads :titleId from the route', async () => {
+  it('reads :titleId from the route reactively', async () => {
     const { fixture } = await setup();
-    expect(fixture.componentInstance.tmdbId).toBe(27205);
+    let resolvedId: number | undefined;
+    fixture.componentInstance.tmdbId$.subscribe((id) => (resolvedId = id));
+    expect(resolvedId).toBe(27205);
   });
 
   it('shows the loading skeleton hero before the first emission (no not-found copy)', async () => {
@@ -191,7 +207,7 @@ describe('TitleDetailPage', () => {
     const callsBefore = svc.detail$.mock.calls.length;
     expect(callsBefore).toBeGreaterThanOrEqual(1);
 
-    // Tapping "Try again" re-runs detail$(tmdbId) via the retry trigger.
+    // Tapping "Try again" re-runs detail$(tmdbId) via the combined trigger.
     fixture.componentInstance.onRetry();
     fixture.detectChanges();
     expect(svc.detail$.mock.calls.length).toBeGreaterThan(callsBefore);
@@ -308,5 +324,179 @@ describe('TitleDetailPage', () => {
     expect(el.textContent).toContain('Inception');
     // tracked is seeded as null by startWith, so the Add-to-Watchlist CTA shows.
     expect(el.querySelector('[data-test="add-btn"]')).toBeTruthy();
+  });
+
+  // Regression (spec 0037): Ionic page reuse — a second paramMap emission on the
+  // same component instance must resolve the NEW title, not the first one.
+  it('stale-param reuse: re-emitting paramMap loads the new title (0037 primary)', async () => {
+    // Start with Breaking Bad (tmdbId 1396).
+    const svc = {
+      detail$: vi.fn((id: number) => {
+        const detail: TitleDetail =
+          id === 1396 ? tvDetail : { ...movieDetail, tmdbId: id };
+        return of<DetailViewState>({ kind: 'loaded', source: 'cache', detail });
+      }),
+      region$: vi.fn(() => of('NL')),
+      providers$: vi.fn(() => of(emptyProviders)),
+      tracked$: vi.fn(() => of(null)),
+      add: vi.fn().mockResolvedValue(undefined),
+      updateStatus: vi.fn().mockResolvedValue(undefined),
+      removeTitle: vi.fn().mockResolvedValue(undefined),
+    };
+
+    paramMap$ = new BehaviorSubject(convertToParamMap({ titleId: '1396' }));
+    await TestBed.configureTestingModule({
+      imports: [TitleDetailPage],
+      providers: [
+        provideIonicAngular(),
+        { provide: TitleDetailService, useValue: svc },
+        { provide: AUTH_UID, useValue: signal<string | null>('user-123') },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            paramMap: paramMap$.asObservable(),
+            snapshot: { paramMap: convertToParamMap({ titleId: '1396' }) },
+          },
+        },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(TitleDetailPage);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.textContent).toContain('Breaking Bad');
+    expect(svc.detail$).toHaveBeenLastCalledWith(1396);
+
+    // Simulate Ionic page reuse: same instance, new param.
+    paramMap$.next(convertToParamMap({ titleId: '27205' }));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(el.textContent).toContain('Inception');
+    expect(svc.detail$).toHaveBeenLastCalledWith(27205);
+  });
+
+  // Regression (spec 0037): an invalid/absent :titleId must short-circuit to
+  // not-found without calling the service.
+  it('invalid-id guard: absent titleId → not-found, service not called (0037)', async () => {
+    paramMap$ = new BehaviorSubject(convertToParamMap({})); // no titleId → Number(null) === 0
+    const svc = makeService();
+    await TestBed.configureTestingModule({
+      imports: [TitleDetailPage],
+      providers: [
+        provideIonicAngular(),
+        { provide: TitleDetailService, useValue: svc },
+        { provide: AUTH_UID, useValue: signal<string | null>('user-123') },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            paramMap: paramMap$.asObservable(),
+            snapshot: { paramMap: convertToParamMap({}) },
+          },
+        },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(TitleDetailPage);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-test="not-found"]')).toBeTruthy();
+    expect(svc.detail$).not.toHaveBeenCalled();
+  });
+
+  // Regression (spec 0037): NaN id (non-numeric string) also triggers not-found.
+  it('invalid-id guard: non-numeric titleId → not-found, service not called (0037)', async () => {
+    paramMap$ = new BehaviorSubject(convertToParamMap({ titleId: 'abc' }));
+    const svc = makeService();
+    await TestBed.configureTestingModule({
+      imports: [TitleDetailPage],
+      providers: [
+        provideIonicAngular(),
+        { provide: TitleDetailService, useValue: svc },
+        { provide: AUTH_UID, useValue: signal<string | null>('user-123') },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            paramMap: paramMap$.asObservable(),
+            snapshot: { paramMap: convertToParamMap({ titleId: 'abc' }) },
+          },
+        },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(TitleDetailPage);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-test="not-found"]')).toBeTruthy();
+    expect(svc.detail$).not.toHaveBeenCalled();
+  });
+
+  // Regression (spec 0037): handlers must act on the CURRENT title id after reuse.
+  it('handlers act on the current title after param reuse (0037)', async () => {
+    const svc = {
+      detail$: vi.fn((id: number) => {
+        const detail: TitleDetail =
+          id === 1396 ? tvDetail : { ...movieDetail, tmdbId: id };
+        return of<DetailViewState>({ kind: 'loaded', source: 'cache', detail });
+      }),
+      region$: vi.fn(() => of('NL')),
+      providers$: vi.fn(() => of(emptyProviders)),
+      tracked$: vi.fn(() =>
+        of({
+          type: 'tv',
+          tmdbId: 27205,
+          traktId: null,
+          title: 'Inception',
+          addedAt: '2026-01-01T00:00:00Z',
+          status: 'planned',
+        }),
+      ),
+      add: vi.fn().mockResolvedValue(undefined),
+      updateStatus: vi.fn().mockResolvedValue(undefined),
+      removeTitle: vi.fn().mockResolvedValue(undefined),
+    };
+
+    // Start on title A (1396), then reuse to title B (27205).
+    paramMap$ = new BehaviorSubject(convertToParamMap({ titleId: '1396' }));
+    await TestBed.configureTestingModule({
+      imports: [TitleDetailPage],
+      providers: [
+        provideIonicAngular(),
+        { provide: TitleDetailService, useValue: svc },
+        { provide: AUTH_UID, useValue: signal<string | null>('user-123') },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            paramMap: paramMap$.asObservable(),
+            snapshot: { paramMap: convertToParamMap({ titleId: '1396' }) },
+          },
+        },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(TitleDetailPage);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Reuse to title B (27205).
+    paramMap$.next(convertToParamMap({ titleId: '27205' }));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const cmp = fixture.componentInstance;
+
+    // Status handler must use B's id (27205), not A's (1396).
+    const watchingBtn = cmp.actionSheetButtons.find(
+      (b) => b.text === 'Watching',
+    );
+    void watchingBtn?.handler?.();
+    expect(svc.updateStatus).toHaveBeenCalledWith(27205, 'watching');
+
+    // Remove handler must also use B's id.
+    const removeBtn = cmp.alertButtons.find((b) => b.text === 'Remove');
+    void (removeBtn?.handler as (() => void) | undefined)?.();
+    expect(svc.removeTitle).toHaveBeenCalledWith(27205);
   });
 });
