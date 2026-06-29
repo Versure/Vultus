@@ -10,6 +10,8 @@ export interface SearchResult {
   title: string;
   year: number | null;
   posterUrl: string | null;
+  posterPath: string | null; // raw TMDB poster_path, e.g. '/abc.jpg'; null when unknown
+  voteAverage: number | null; // TMDB vote_average 0–10; null when unknown
 }
 
 /**
@@ -41,6 +43,7 @@ interface RawTmdbResult {
   release_date?: string;
   first_air_date?: string;
   poster_path?: string | null;
+  vote_average?: number | null;
 }
 
 interface RawTmdbResponse {
@@ -108,6 +111,8 @@ export function createTmdbSearchClient(
             posterUrl: r.poster_path
               ? config.imageBaseUrl + r.poster_path
               : null,
+            posterPath: r.poster_path ?? null,
+            voteAverage: r.vote_average ?? null,
           };
         });
     },
