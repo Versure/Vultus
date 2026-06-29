@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GroupedProviders, TitleDetail } from './tmdb-detail.client';
 import {
   type DetailViewState,
+  type SeasonGroup,
   TitleDetailService,
 } from './title-detail.service';
 
@@ -16,8 +17,14 @@ import {
 vi.mock('@angular/fire/firestore', () => ({
   Firestore: class {},
   doc: vi.fn(),
+  collection: vi.fn(),
   docData: vi.fn(),
+  collectionData: vi.fn(),
   getDoc: vi.fn(),
+  getDocs: vi.fn(),
+  query: vi.fn(),
+  where: vi.fn(),
+  writeBatch: vi.fn(),
   setDoc: vi.fn(),
   updateDoc: vi.fn(),
   deleteDoc: vi.fn(),
@@ -44,6 +51,44 @@ const tvDetail: TitleDetail = {
 };
 const emptyProviders: GroupedProviders = { flatrate: [], rent: [], buy: [] };
 
+const sampleSeasons: SeasonGroup[] = [
+  {
+    season: 1,
+    total: 3,
+    watchedCount: 1,
+    allWatched: false,
+    episodes: [
+      {
+        id: 's01e01',
+        season: 1,
+        episode: 1,
+        title: 'Pilot',
+        airDate: '2008-01-20T00:00:00.000Z',
+        watched: true,
+        watchedAt: '2026-06-24T10:00:00.000Z',
+      },
+      {
+        id: 's01e02',
+        season: 1,
+        episode: 2,
+        title: "Cat's in the Bag",
+        airDate: '2008-01-27T00:00:00.000Z',
+        watched: false,
+        watchedAt: null,
+      },
+      {
+        id: 's01e03',
+        season: 1,
+        episode: 3,
+        title: null,
+        airDate: '2008-02-10T00:00:00.000Z',
+        watched: false,
+        watchedAt: null,
+      },
+    ],
+  },
+];
+
 interface SvcOpts {
   detail?: DetailViewState | 'loading';
   region?: string | null;
@@ -53,6 +98,12 @@ interface SvcOpts {
   tracked?: unknown;
   /** When true, tracked$ returns NEVER (simulates pending Firestore docData). */
   trackedPending?: boolean;
+  /**
+   * episodes$ emissions. `undefined` (default) → NEVER (the skeleton/null
+   * sentinel state, since the page seeds `startWith(null)`); an array → that
+   * value (e.g. [] for the empty state, or season groups).
+   */
+  episodes?: SeasonGroup[];
 }
 
 function makeService(o: SvcOpts = {}) {
@@ -70,14 +121,22 @@ function makeService(o: SvcOpts = {}) {
   const tracked$: Observable<unknown> = o.trackedPending
     ? NEVER
     : of(o.tracked ?? null);
+  // episodes$ on the SERVICE returns the seed (NEVER → page's startWith(null)
+  // keeps the skeleton; array → loaded). The page wraps this with startWith.
+  const episodes$: Observable<SeasonGroup[]> =
+    o.episodes === undefined ? NEVER : of(o.episodes);
   return {
     detail$: vi.fn(() => detail$),
     region$: vi.fn(() => region$),
     providers$: vi.fn(() => of(o.providers ?? emptyProviders)),
     tracked$: vi.fn(() => tracked$),
+    episodes$: vi.fn(() => episodes$),
     add: vi.fn().mockResolvedValue(undefined),
     updateStatus: vi.fn().mockResolvedValue(undefined),
     removeTitle: vi.fn().mockResolvedValue(undefined),
+    setEpisodeWatched: vi.fn().mockResolvedValue(undefined),
+    setSeasonWatched: vi.fn().mockResolvedValue(undefined),
+    setMovieWatched: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -339,6 +398,7 @@ describe('TitleDetailPage', () => {
       region$: vi.fn(() => of('NL')),
       providers$: vi.fn(() => of(emptyProviders)),
       tracked$: vi.fn(() => of(null)),
+      episodes$: vi.fn(() => NEVER),
       add: vi.fn().mockResolvedValue(undefined),
       updateStatus: vi.fn().mockResolvedValue(undefined),
       removeTitle: vi.fn().mockResolvedValue(undefined),
@@ -454,6 +514,7 @@ describe('TitleDetailPage', () => {
           status: 'planned',
         }),
       ),
+      episodes$: vi.fn(() => NEVER),
       add: vi.fn().mockResolvedValue(undefined),
       updateStatus: vi.fn().mockResolvedValue(undefined),
       removeTitle: vi.fn().mockResolvedValue(undefined),
@@ -498,5 +559,147 @@ describe('TitleDetailPage', () => {
     const removeBtn = cmp.alertButtons.find((b) => b.text === 'Remove');
     void (removeBtn?.handler as (() => void) | undefined)?.();
     expect(svc.removeTitle).toHaveBeenCalledWith(27205);
+  });
+
+  // --- spec 0034: Episodes section + movie mark-as-watched ---
+
+  it('movie loaded → Episodes section NOT rendered; movie-watched toggle IS in the action area', async () => {
+    const { fixture } = await setup({
+      detail: { kind: 'loaded', source: 'cache', detail: movieDetail },
+      tracked: {
+        type: 'movie',
+        tmdbId: 27205,
+        traktId: null,
+        title: 'Inception',
+        addedAt: '2026-01-01T00:00:00Z',
+        status: 'watching',
+      },
+    });
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-test="episodes-section"]')).toBeFalsy();
+    expect(el.querySelector('[data-test="movie-watched-btn"]')).toBeTruthy();
+    expect(el.textContent).toContain('Mark as watched');
+  });
+
+  it('tv loaded with season groups → Episodes section + season heading + episode rows', async () => {
+    const { fixture } = await setup({
+      detail: { kind: 'loaded', source: 'cache', detail: tvDetail },
+      episodes: sampleSeasons,
+    });
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-test="episodes-section"]')).toBeTruthy();
+    expect(el.querySelector('[data-test="season-group"]')).toBeTruthy();
+    expect(el.textContent).toContain('Season 1');
+    expect(
+      el.querySelector('[data-test="season-count"]')?.textContent,
+    ).toContain('1/3 watched');
+    expect(el.querySelectorAll('[data-test="episode-row"]').length).toBe(3);
+    expect(el.textContent).toContain('Pilot');
+    // Null-title episode falls back to "Episode N".
+    expect(el.textContent).toContain('Episode 3');
+    // Movie toggle must NOT appear for a TV title.
+    expect(el.querySelector('[data-test="movie-watched-btn"]')).toBeFalsy();
+  });
+
+  it('tv loaded + episodes$ not yet emitted → skeleton, no empty copy', async () => {
+    const { fixture } = await setup({
+      detail: { kind: 'loaded', source: 'cache', detail: tvDetail },
+      // episodes undefined → NEVER → page stays on startWith(null) → skeleton.
+    });
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-test="episodes-skeleton"]')).toBeTruthy();
+    expect(el.querySelector('[data-test="episodes-empty"]')).toBeFalsy();
+  });
+
+  it('tv loaded + episodes$ emits [] → empty message', async () => {
+    const { fixture } = await setup({
+      detail: { kind: 'loaded', source: 'cache', detail: tvDetail },
+      episodes: [],
+    });
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-test="episodes-empty"]')).toBeTruthy();
+    expect(el.textContent).toContain(
+      'Episodes will appear after the next sync.',
+    );
+    expect(el.querySelector('[data-test="episodes-skeleton"]')).toBeFalsy();
+  });
+
+  it('episode toggle click → setEpisodeWatched(tmdbId, id, !watched)', async () => {
+    const { fixture, svc } = await setup({
+      detail: { kind: 'loaded', source: 'cache', detail: tvDetail },
+      episodes: sampleSeasons,
+    });
+    const el = fixture.nativeElement as HTMLElement;
+    const toggle = el.querySelector<HTMLElement>(
+      '[data-test="episode-watched-toggle"]',
+    );
+    toggle?.click();
+    // First episode (s01e01) is watched → click marks it unwatched.
+    // tmdbId comes from the route param (27205), not the detail's tmdbId.
+    expect(svc.setEpisodeWatched).toHaveBeenCalledWith(27205, 's01e01', false);
+  });
+
+  it('season bulk toggle click → setSeasonWatched; does NOT collapse the season', async () => {
+    const { fixture, svc } = await setup({
+      detail: { kind: 'loaded', source: 'cache', detail: tvDetail },
+      episodes: sampleSeasons,
+    });
+    const cmp = fixture.componentInstance;
+    const el = fixture.nativeElement as HTMLElement;
+    const bulk = el.querySelector<HTMLElement>('[data-test="bulk-toggle"]');
+    bulk?.click();
+    expect(svc.setSeasonWatched).toHaveBeenCalledWith(27205, 1, true);
+    // stopPropagation must keep the season expanded.
+    expect(cmp.isSeasonCollapsed(1)).toBe(false);
+  });
+
+  it('season heading click → toggles collapsed (episode rows hide)', async () => {
+    const { fixture } = await setup({
+      detail: { kind: 'loaded', source: 'cache', detail: tvDetail },
+      episodes: sampleSeasons,
+    });
+    const cmp = fixture.componentInstance;
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelectorAll('[data-test="episode-row"]').length).toBe(3);
+    el.querySelector<HTMLElement>('.season-heading')?.click();
+    fixture.detectChanges();
+    expect(cmp.isSeasonCollapsed(1)).toBe(true);
+    expect(el.querySelectorAll('[data-test="episode-row"]').length).toBe(0);
+  });
+
+  it('movie toggle click → setMovieWatched(tmdbId, status !== completed)', async () => {
+    const { fixture, svc } = await setup({
+      detail: { kind: 'loaded', source: 'cache', detail: movieDetail },
+      tracked: {
+        type: 'movie',
+        tmdbId: 27205,
+        traktId: null,
+        title: 'Inception',
+        addedAt: '2026-01-01T00:00:00Z',
+        status: 'watching',
+      },
+    });
+    const el = fixture.nativeElement as HTMLElement;
+    el.querySelector<HTMLElement>('[data-test="movie-watched-btn"]')?.click();
+    expect(svc.setMovieWatched).toHaveBeenCalledWith(27205, true);
+  });
+
+  it('movie toggle disabled when status is dropped', async () => {
+    const { fixture } = await setup({
+      detail: { kind: 'loaded', source: 'cache', detail: movieDetail },
+      tracked: {
+        type: 'movie',
+        tmdbId: 27205,
+        traktId: null,
+        title: 'Inception',
+        addedAt: '2026-01-01T00:00:00Z',
+        status: 'dropped',
+      },
+    });
+    const el = fixture.nativeElement as HTMLElement;
+    const btn = el.querySelector<HTMLButtonElement>(
+      '[data-test="movie-watched-btn"]',
+    );
+    expect(btn?.disabled).toBe(true);
   });
 });

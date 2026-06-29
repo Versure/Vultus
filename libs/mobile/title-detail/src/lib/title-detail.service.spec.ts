@@ -5,6 +5,8 @@ import { AUTH_UID } from '@vultus/shared/domain/tokens';
 import { type WatchlistItem } from '@vultus/shared/domain';
 import {
   availabilityDocPath,
+  episodePath,
+  episodesPath,
   titleCacheDocPath,
   userPath,
   watchlistItemPath,
@@ -15,26 +17,54 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TmdbDetailError, type TitleDetail } from './tmdb-detail.client';
 import {
   type DetailViewState,
+  type SeasonGroup,
   TitleDetailService,
 } from './title-detail.service';
 import { TMDB_DETAIL_CONFIG } from './tokens';
 
-// --- AngularFire mock (echo path on doc(); per-test data emitters) ---
+// --- AngularFire mock (echo path on doc()/collection(); per-test emitters) ---
 interface Ref {
   path: string;
 }
 const docMock = vi.fn((_fs: unknown, path: string): Ref => ({ path }));
+const collectionMock = vi.fn((_fs: unknown, path: string): Ref => ({ path }));
 const docDataMock = vi.fn<(ref: Ref) => Observable<unknown>>();
+const collectionDataMock = vi.fn<(ref: Ref) => Observable<unknown>>();
 const getDocMock = vi.fn<(ref: Ref) => Promise<unknown>>();
+const getDocsMock = vi.fn<(q: unknown) => Promise<unknown>>();
 const setDocMock = vi.fn<(ref: Ref, payload: unknown) => Promise<void>>();
 const updateDocMock = vi.fn<(ref: Ref, payload: unknown) => Promise<void>>();
 const deleteDocMock = vi.fn<(ref: Ref) => Promise<void>>();
+// query() echoes the collection ref through; where() returns a marker the fake
+// query carries so the season filter can be asserted/applied in-test.
+const queryMock = vi.fn((ref: Ref, ...constraints: unknown[]) => ({
+  ref,
+  constraints,
+}));
+const whereMock = vi.fn((field: string, op: string, value: unknown) => ({
+  field,
+  op,
+  value,
+}));
+const batchUpdateMock = vi.fn();
+const batchCommitMock = vi.fn(() => Promise.resolve());
+const writeBatchMock = vi.fn(() => ({
+  update: batchUpdateMock,
+  commit: batchCommitMock,
+}));
 
 vi.mock('@angular/fire/firestore', () => ({
   Firestore: class Firestore {},
   doc: (fs: unknown, path: string): Ref => docMock(fs, path),
+  collection: (fs: unknown, path: string): Ref => collectionMock(fs, path),
   docData: (ref: Ref): Observable<unknown> => docDataMock(ref),
+  collectionData: (ref: Ref): Observable<unknown> => collectionDataMock(ref),
   getDoc: (ref: Ref): Promise<unknown> => getDocMock(ref),
+  getDocs: (q: unknown): Promise<unknown> => getDocsMock(q),
+  query: (ref: Ref, ...c: unknown[]): unknown => queryMock(ref, ...c),
+  where: (field: string, op: string, value: unknown): unknown =>
+    whereMock(field, op, value),
+  writeBatch: (): unknown => writeBatchMock(),
   setDoc: (ref: Ref, payload: unknown): Promise<void> =>
     setDocMock(ref, payload),
   updateDoc: (ref: Ref, payload: unknown): Promise<void> =>
@@ -74,6 +104,49 @@ const CONFIG = {
 
 function snap(data: unknown) {
   return { exists: () => data !== undefined, data: () => data };
+}
+
+// --- Episode fixtures (read-data shape: airDate/watchedAt are Timestamp-like) ---
+interface EpFixture {
+  id: string;
+  season: number;
+  episode: number;
+  title: string | null;
+  watched: boolean;
+}
+function epReadData(e: EpFixture) {
+  return {
+    season: e.season,
+    episode: e.episode,
+    title: e.title,
+    airDate: fakeTs(new Date('2008-01-20T00:00:00Z')),
+    watched: e.watched,
+    watchedAt: e.watched ? fakeTs(new Date('2026-06-24T10:00:00Z')) : null,
+  };
+}
+/** A getDocs() snapshot: { docs: [{ id, ref, data() }] }. */
+function docsSnap(eps: EpFixture[]) {
+  return {
+    docs: eps.map((e) => ({
+      id: e.id,
+      ref: { path: `ep/${e.id}` },
+      data: () => epReadData(e),
+    })),
+  };
+}
+/** A watchlist-item read doc carrying a given status. */
+function watchlistSnap(status: string | undefined) {
+  if (status === undefined) {
+    return snap(undefined);
+  }
+  return snap({
+    type: 'tv',
+    tmdbId: 2,
+    traktId: null,
+    title: 'Breaking Bad',
+    addedAt: fakeTs(new Date('2026-06-24T10:00:00Z')),
+    status,
+  });
 }
 
 function liveDetail(over: Partial<TitleDetail> = {}): TitleDetail {
@@ -119,11 +192,19 @@ describe('TitleDetailService', () => {
   beforeEach(() => {
     TestBed.resetTestingModule();
     docMock.mockClear();
+    collectionMock.mockClear();
     docDataMock.mockReset();
+    collectionDataMock.mockReset();
     getDocMock.mockReset();
+    getDocsMock.mockReset();
     setDocMock.mockReset().mockResolvedValue(undefined);
     updateDocMock.mockReset().mockResolvedValue(undefined);
     deleteDocMock.mockReset().mockResolvedValue(undefined);
+    queryMock.mockClear();
+    whereMock.mockClear();
+    batchUpdateMock.mockReset();
+    batchCommitMock.mockReset().mockResolvedValue(undefined);
+    writeBatchMock.mockClear();
     getDetailMock.mockReset();
     getProvidersMock.mockReset();
   });
@@ -400,4 +481,242 @@ describe('TitleDetailService', () => {
       expect(path).not.toContain('episodes');
     }
   });
+
+  // --- spec 0034: episodes$ / setEpisodeWatched / setSeasonWatched / movie ---
+
+  it('episodes$ — movie type → emits [] (no collectionData read)', async () => {
+    const service = createService(UID);
+    const groups = await new Promise<SeasonGroup[]>((resolve) =>
+      service.episodes$(2, 'movie').subscribe(resolve),
+    );
+    expect(groups).toEqual([]);
+    expect(collectionDataMock).not.toHaveBeenCalled();
+  });
+
+  it('episodes$ — null uid → emits []', async () => {
+    const service = createService(null);
+    const groups = await new Promise<SeasonGroup[]>((resolve) =>
+      service.episodes$(2, 'tv').subscribe(resolve),
+    );
+    expect(groups).toEqual([]);
+    expect(collectionDataMock).not.toHaveBeenCalled();
+  });
+
+  it('episodes$ — tv: groups by season asc, episodes asc, derives counts/allWatched', async () => {
+    collectionDataMock.mockReturnValue(
+      of([
+        { id: 's02e01', ...epReadData2({ season: 2, episode: 1, w: false }) },
+        { id: 's01e02', ...epReadData2({ season: 1, episode: 2, w: false }) },
+        { id: 's01e01', ...epReadData2({ season: 1, episode: 1, w: true }) },
+      ]),
+    );
+    const service = createService(UID);
+    const groups = await new Promise<SeasonGroup[]>((resolve) =>
+      service.episodes$(2, 'tv').subscribe(resolve),
+    );
+    expect(collectionMock).toHaveBeenCalledWith({}, episodesPath(UID, '2'));
+    expect(groups.map((g) => g.season)).toEqual([1, 2]);
+    expect(groups[0].episodes.map((e) => e.episode)).toEqual([1, 2]);
+    expect(groups[0].episodes[0].id).toBe('s01e01');
+    expect(groups[0]).toMatchObject({
+      total: 2,
+      watchedCount: 1,
+      allWatched: false,
+    });
+    expect(groups[1]).toMatchObject({
+      total: 1,
+      watchedCount: 0,
+      allWatched: false,
+    });
+  });
+
+  it('episodes$ — empty subcollection → []', async () => {
+    collectionDataMock.mockReturnValue(of([]));
+    const service = createService(UID);
+    const groups = await new Promise<SeasonGroup[]>((resolve) =>
+      service.episodes$(2, 'tv').subscribe(resolve),
+    );
+    expect(groups).toEqual([]);
+  });
+
+  it('setEpisodeWatched(true) → updateDoc {watched:true, watchedAt:Date} at episodePath', async () => {
+    getDocsMock.mockResolvedValue(
+      docsSnap([
+        { id: 's01e01', season: 1, episode: 1, title: 'Pilot', watched: true },
+      ]),
+    );
+    getDocMock.mockResolvedValue(watchlistSnap('watching'));
+    const service = createService(UID);
+    await service.setEpisodeWatched(2, 's01e01', true);
+    const epCall = updateDocMock.mock.calls.find(
+      (c) => c[0].path === episodePath(UID, '2', 's01e01'),
+    );
+    expect(epCall).toBeDefined();
+    const payload = epCall?.[1] as { watched: boolean; watchedAt: unknown };
+    expect(payload.watched).toBe(true);
+    expect(payload.watchedAt).toBeInstanceOf(Date);
+  });
+
+  it('setEpisodeWatched(false) → updateDoc {watched:false, watchedAt:null}', async () => {
+    getDocsMock.mockResolvedValue(
+      docsSnap([
+        { id: 's01e01', season: 1, episode: 1, title: 'Pilot', watched: false },
+      ]),
+    );
+    getDocMock.mockResolvedValue(watchlistSnap('watching'));
+    const service = createService(UID);
+    await service.setEpisodeWatched(2, 's01e01', false);
+    const epCall = updateDocMock.mock.calls.find(
+      (c) => c[0].path === episodePath(UID, '2', 's01e01'),
+    );
+    expect(epCall?.[1]).toEqual({ watched: false, watchedAt: null });
+  });
+
+  it('setSeasonWatched(true) → batches an update per episode in that season + commits', async () => {
+    getDocsMock
+      // first getDocs: setSeasonWatched reads the season's docs
+      .mockResolvedValueOnce(
+        docsSnap([
+          { id: 's01e01', season: 1, episode: 1, title: 'a', watched: false },
+          { id: 's01e02', season: 1, episode: 2, title: 'b', watched: false },
+        ]),
+      )
+      // second getDocs: autoUpdateStatus reads ALL episodes (now all watched)
+      .mockResolvedValueOnce(
+        docsSnap([
+          { id: 's01e01', season: 1, episode: 1, title: 'a', watched: true },
+          { id: 's01e02', season: 1, episode: 2, title: 'b', watched: true },
+        ]),
+      );
+    getDocMock.mockResolvedValue(watchlistSnap('watching'));
+    const service = createService(UID);
+    await service.setSeasonWatched(2, 1, true);
+    expect(whereMock).toHaveBeenCalledWith('season', '==', 1);
+    expect(batchUpdateMock).toHaveBeenCalledTimes(2);
+    expect(batchCommitMock).toHaveBeenCalledTimes(1);
+    const payload = batchUpdateMock.mock.calls[0][1] as { watched: boolean };
+    expect(payload.watched).toBe(true);
+  });
+
+  it('auto-status: planned + first episode watched → updateStatus watching', async () => {
+    getDocsMock.mockResolvedValue(
+      docsSnap([
+        { id: 's01e01', season: 1, episode: 1, title: 'a', watched: true },
+        { id: 's01e02', season: 1, episode: 2, title: 'b', watched: false },
+      ]),
+    );
+    getDocMock.mockResolvedValue(watchlistSnap('planned'));
+    const service = createService(UID);
+    await service.setEpisodeWatched(2, 's01e01', true);
+    const statusCall = updateDocMock.mock.calls.find(
+      (c) => c[0].path === watchlistItemPath(UID, '2'),
+    );
+    expect(statusCall?.[1]).toEqual({ status: 'watching' });
+  });
+
+  it('auto-status: all watched (not dropped) → updateStatus completed', async () => {
+    getDocsMock.mockResolvedValue(
+      docsSnap([
+        { id: 's01e01', season: 1, episode: 1, title: 'a', watched: true },
+        { id: 's01e02', season: 1, episode: 2, title: 'b', watched: true },
+      ]),
+    );
+    getDocMock.mockResolvedValue(watchlistSnap('watching'));
+    const service = createService(UID);
+    await service.setEpisodeWatched(2, 's01e02', true);
+    const statusCall = updateDocMock.mock.calls.find(
+      (c) => c[0].path === watchlistItemPath(UID, '2'),
+    );
+    expect(statusCall?.[1]).toEqual({ status: 'completed' });
+  });
+
+  it('auto-status: back to 0 watched after a slice auto-set watching → updateStatus planned', async () => {
+    const service = createService(UID);
+    // 1) planned + first watch → auto-set watching (remembers it).
+    getDocMock.mockResolvedValue(watchlistSnap('planned'));
+    getDocsMock.mockResolvedValue(
+      docsSnap([
+        { id: 's01e01', season: 1, episode: 1, title: 'a', watched: true },
+        { id: 's01e02', season: 1, episode: 2, title: 'b', watched: false },
+      ]),
+    );
+    await service.setEpisodeWatched(2, 's01e01', true);
+
+    // 2) un-watch the only watched one → 0 watched, status now 'watching'.
+    updateDocMock.mockClear();
+    getDocMock.mockResolvedValue(watchlistSnap('watching'));
+    getDocsMock.mockResolvedValue(
+      docsSnap([
+        { id: 's01e01', season: 1, episode: 1, title: 'a', watched: false },
+        { id: 's01e02', season: 1, episode: 2, title: 'b', watched: false },
+      ]),
+    );
+    await service.setEpisodeWatched(2, 's01e01', false);
+    const statusCall = updateDocMock.mock.calls.find(
+      (c) => c[0].path === watchlistItemPath(UID, '2'),
+    );
+    expect(statusCall?.[1]).toEqual({ status: 'planned' });
+  });
+
+  it('auto-status: dropped → NO status write', async () => {
+    getDocsMock.mockResolvedValue(
+      docsSnap([
+        { id: 's01e01', season: 1, episode: 1, title: 'a', watched: true },
+        { id: 's01e02', season: 1, episode: 2, title: 'b', watched: true },
+      ]),
+    );
+    getDocMock.mockResolvedValue(watchlistSnap('dropped'));
+    const service = createService(UID);
+    await service.setEpisodeWatched(2, 's01e02', true);
+    const statusCall = updateDocMock.mock.calls.find(
+      (c) => c[0].path === watchlistItemPath(UID, '2'),
+    );
+    expect(statusCall).toBeUndefined();
+  });
+
+  it('setMovieWatched(true) → updateStatus completed', async () => {
+    getDocMock.mockResolvedValue(watchlistSnap('watching'));
+    const service = createService(UID);
+    await service.setMovieWatched(2, true);
+    expect(updateDocMock).toHaveBeenCalledWith(
+      { path: watchlistItemPath(UID, '2') },
+      { status: 'completed' },
+    );
+  });
+
+  it('setMovieWatched(false) → updateStatus watching', async () => {
+    getDocMock.mockResolvedValue(watchlistSnap('completed'));
+    const service = createService(UID);
+    await service.setMovieWatched(2, false);
+    expect(updateDocMock).toHaveBeenCalledWith(
+      { path: watchlistItemPath(UID, '2') },
+      { status: 'watching' },
+    );
+  });
+
+  it('setMovieWatched with dropped status → NO status write', async () => {
+    getDocMock.mockResolvedValue(watchlistSnap('dropped'));
+    const service = createService(UID);
+    await service.setMovieWatched(2, true);
+    expect(updateDocMock).not.toHaveBeenCalled();
+  });
+
+  it('setMovieWatched with null uid → no-op', async () => {
+    const service = createService(null);
+    await service.setMovieWatched(2, true);
+    expect(getDocMock).not.toHaveBeenCalled();
+    expect(updateDocMock).not.toHaveBeenCalled();
+  });
 });
+
+/** Episode read-data builder for episodes$ (collectionData) tests. */
+function epReadData2(e: { season: number; episode: number; w: boolean }) {
+  return {
+    season: e.season,
+    episode: e.episode,
+    title: `S${e.season}E${e.episode}`,
+    airDate: fakeTs(new Date('2008-01-20T00:00:00Z')),
+    watched: e.w,
+    watchedAt: e.w ? fakeTs(new Date('2026-06-24T10:00:00Z')) : null,
+  };
+}

@@ -1,31 +1,43 @@
 import { Injectable, inject } from '@angular/core';
 import {
   Firestore,
+  collection,
+  collectionData,
   deleteDoc,
   doc,
   docData,
   getDoc,
+  getDocs,
+  query,
   setDoc,
   updateDoc,
+  where,
+  writeBatch,
 } from '@angular/fire/firestore';
 import { AUTH_UID } from '@vultus/shared/domain/tokens';
 import {
+  type EpisodeDoc,
   type Region,
+  type TitleType,
   type WatchStatus,
   type WatchlistItem,
 } from '@vultus/shared/domain';
 import {
   availabilityDocPath,
   dataToAvailability,
+  dataToEpisode,
   dataToTitleCache,
   dataToUser,
   dataToWatchlistItem,
+  episodePath,
+  episodesPath,
   titleCacheDocPath,
   userPath,
   watchlistItemPath,
   watchlistItemToData,
 } from '@vultus/shared/firestore-schema';
 import type {
+  EpisodeReadData,
   RegionAvailabilityReadData,
   TitleCacheReadData,
   UserReadData,
@@ -67,6 +79,28 @@ export type DetailViewState =
   | { kind: 'not-found' } // genuine cache-miss AND live TMDB 404
   | { kind: 'error' }; // network/Firestore fetch failure (≠ 404), recoverable
 
+/**
+ * One episode row: the shared `EpisodeDoc` plus its Firestore document id
+ * (needed to address `updateDoc` writes). Slice-local — the page + tests consume
+ * it across the barrel (spec 0034). The doc id is the sync engine's
+ * `s{NN}e{NN}` key; we never derive or write it here.
+ */
+export interface EpisodeRow extends EpisodeDoc {
+  id: string; // Firestore doc id (idField)
+}
+
+/**
+ * Episodes of one season, grouped + summarised for the collapsible season UI.
+ * `watchedCount`/`total`/`allWatched` are derived from `episodes` (spec 0034).
+ */
+export interface SeasonGroup {
+  season: number;
+  episodes: EpisodeRow[]; // sorted by episode asc
+  watchedCount: number;
+  total: number;
+  allWatched: boolean; // watchedCount === total && total > 0
+}
+
 /** Empty grouped-providers value (no availability / null region). */
 const EMPTY_PROVIDERS: GroupedProviders = { flatrate: [], rent: [], buy: [] };
 
@@ -91,6 +125,14 @@ export class TitleDetailService {
   private readonly uid = inject(AUTH_UID);
   private readonly config = inject(TMDB_DETAIL_CONFIG);
   private readonly client = createTmdbDetailClient(this.config);
+
+  /**
+   * Per-title memory of whether THIS slice auto-advanced `planned → watching`
+   * (on the first episode mark). Lets `autoUpdateStatus` walk the status back to
+   * `planned` when the user un-watches everything — but only if WE set it, never
+   * clobbering a status the user picked manually (spec 0034 decision).
+   */
+  private readonly autoSetWatching = new Map<number, boolean>();
 
   /**
    * Resolve the detail view model for a tmdbId: title-cache first, live TMDB on
@@ -243,6 +285,157 @@ export class TitleDetailService {
     );
   }
 
+  /**
+   * Realtime, season-grouped episodes for a TV title (spec 0034). Reads
+   * `users/{uid}/watchlist/{titleId}/episodes` (written by the sync engine),
+   * groups by season ascending with episodes sorted ascending, and derives the
+   * per-season watched counts. Non-tv type OR null uid → `of([])` (the empty
+   * state). An empty subcollection emits `[]` (also the empty state).
+   */
+  episodes$(tmdbId: number, type: TitleType): Observable<SeasonGroup[]> {
+    if (type !== 'tv') {
+      return of([]);
+    }
+    const uid = this.uid();
+    if (!uid) {
+      return of([]);
+    }
+    return (
+      collectionData(
+        collection(this.firestore, episodesPath(uid, String(tmdbId))),
+        { idField: 'id' },
+      ) as Observable<(EpisodeReadData & { id: string })[]>
+    ).pipe(map((items) => groupEpisodes(items)));
+  }
+
+  /**
+   * Mark one episode watched/unwatched. `updateDoc` ONLY (the doc is pre-written
+   * by the sync engine; we never create episode docs). Sets `watchedAt` to now
+   * on watch, null on unwatch, then re-derives the title's status. No-op on null
+   * uid.
+   */
+  async setEpisodeWatched(
+    tmdbId: number,
+    episodeId: string,
+    watched: boolean,
+  ): Promise<void> {
+    const uid = this.uid();
+    if (!uid) {
+      return;
+    }
+    await updateDoc(
+      doc(this.firestore, episodePath(uid, String(tmdbId), episodeId)),
+      { watched, watchedAt: watched ? new Date() : null },
+    );
+    await this.autoUpdateStatus(tmdbId);
+  }
+
+  /**
+   * Bulk mark every episode of a season watched/unwatched in one batch. Reads
+   * the season's episode docs (one-shot, filtered by `season`) for their ids,
+   * `updateDoc`s each via a `writeBatch`, then re-derives the title's status.
+   * No-op on null uid.
+   */
+  async setSeasonWatched(
+    tmdbId: number,
+    season: number,
+    watched: boolean,
+  ): Promise<void> {
+    const uid = this.uid();
+    if (!uid) {
+      return;
+    }
+    const snap = await getDocs(
+      query(
+        collection(this.firestore, episodesPath(uid, String(tmdbId))),
+        where('season', '==', season),
+      ),
+    );
+    const batch = writeBatch(this.firestore);
+    const watchedAt = watched ? new Date() : null;
+    for (const docSnap of snap.docs) {
+      batch.update(docSnap.ref, { watched, watchedAt });
+    }
+    await batch.commit();
+    await this.autoUpdateStatus(tmdbId);
+  }
+
+  /**
+   * Movie "mark as watched" toggle (spec 0034). Reads the current tracked status
+   * one-shot; a `dropped` movie is a no-op (we never clobber an explicit drop).
+   * Otherwise watched → `completed`, unwatched → `watching`. No-op on null uid.
+   */
+  async setMovieWatched(tmdbId: number, watched: boolean): Promise<void> {
+    const uid = this.uid();
+    if (!uid) {
+      return;
+    }
+    const status = await this.currentStatus(uid, tmdbId);
+    if (status === 'dropped') {
+      return;
+    }
+    await this.updateStatus(tmdbId, watched ? 'completed' : 'watching');
+  }
+
+  /**
+   * Re-derive the watchlist status from the episodes' current watched-state
+   * after an episode/season write (spec 0034). NEVER touches a `dropped` title.
+   * - first episode watched while `planned` → `watching` (and remember WE did it)
+   * - all episodes watched (total > 0) → `completed`
+   * - back to zero watched, and WE auto-set `watching` earlier → `planned`
+   * One-shot reads (episodes + the watchlist doc); no-op on null uid.
+   */
+  private async autoUpdateStatus(tmdbId: number): Promise<void> {
+    const uid = this.uid();
+    if (!uid) {
+      return;
+    }
+    const status = await this.currentStatus(uid, tmdbId);
+    if (status === null || status === 'dropped') {
+      return;
+    }
+    const snap = await getDocs(
+      collection(this.firestore, episodesPath(uid, String(tmdbId))),
+    );
+    let total = 0;
+    let watchedCount = 0;
+    for (const docSnap of snap.docs) {
+      const ep = dataToEpisode(docSnap.data() as EpisodeReadData);
+      total += 1;
+      if (ep.watched) {
+        watchedCount += 1;
+      }
+    }
+
+    if (total > 0 && watchedCount === total) {
+      await this.updateStatus(tmdbId, 'completed');
+      return;
+    }
+    if (watchedCount >= 1 && status === 'planned') {
+      this.autoSetWatching.set(tmdbId, true);
+      await this.updateStatus(tmdbId, 'watching');
+      return;
+    }
+    if (watchedCount === 0 && this.autoSetWatching.get(tmdbId) === true) {
+      this.autoSetWatching.delete(tmdbId);
+      await this.updateStatus(tmdbId, 'planned');
+    }
+  }
+
+  /** One-shot read of the tracked status; null when untracked / doc absent. */
+  private async currentStatus(
+    uid: string,
+    tmdbId: number,
+  ): Promise<WatchStatus | null> {
+    const snap = await getDoc(
+      doc(this.firestore, watchlistItemPath(uid, String(tmdbId))),
+    );
+    if (!snap.exists()) {
+      return null;
+    }
+    return dataToWatchlistItem(snap.data() as WatchlistItemReadData).status;
+  }
+
   /** Delete the watchlist item. No-op when uid null. */
   async removeTitle(tmdbId: number): Promise<void> {
     const uid = this.uid();
@@ -253,6 +446,42 @@ export class TitleDetailService {
       doc(this.firestore, watchlistItemPath(uid, String(tmdbId))),
     );
   }
+}
+
+/**
+ * Group raw episode read-data into season-ordered `SeasonGroup`s: convert each
+ * via `dataToEpisode` (keeping the doc id), bucket by season, sort seasons +
+ * episodes ascending, and derive the per-season watched counts (spec 0034).
+ */
+function groupEpisodes(
+  items: (EpisodeReadData & { id: string })[],
+): SeasonGroup[] {
+  const bySeason = new Map<number, EpisodeRow[]>();
+  for (const item of items) {
+    const row: EpisodeRow = { ...dataToEpisode(item), id: item.id };
+    const list = bySeason.get(row.season);
+    if (list) {
+      list.push(row);
+    } else {
+      bySeason.set(row.season, [row]);
+    }
+  }
+  return [...bySeason.keys()]
+    .sort((a, b) => a - b)
+    .map((season): SeasonGroup => {
+      const episodes = (bySeason.get(season) ?? []).sort(
+        (a, b) => a.episode - b.episode,
+      );
+      const total = episodes.length;
+      const watchedCount = episodes.filter((e) => e.watched).length;
+      return {
+        season,
+        episodes,
+        watchedCount,
+        total,
+        allWatched: watchedCount === total && total > 0,
+      };
+    });
 }
 
 /** Map a stored availability doc (or absence) to grouped providers. */

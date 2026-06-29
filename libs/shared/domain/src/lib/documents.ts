@@ -40,6 +40,7 @@ export interface WatchlistItem {
 export interface EpisodeDoc {
   season: number;
   episode: number;
+  title: string | null; // episode title; null when unknown / not yet synced (spec 0034)
   airDate: string; // ISO 8601
   watched: boolean;
   watchedAt: string | null; // ISO 8601 or null
