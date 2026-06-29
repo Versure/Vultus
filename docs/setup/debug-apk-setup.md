@@ -89,22 +89,32 @@ and spec 0020 did commit it. Spec 0026 **deliberately overrides** that:
   re-commit `google-services.json` (PLAN §7's "commit it" instruction is
   superseded here).
 
-## 4. Build the debug APK
+## 4. Build + install on a USB device
+
+> **USB device prerequisite.** Before running `android-usb` the phone must be in
+> **developer mode** with **USB debugging enabled**, connected over USB, and
+> visible to `adb devices` (it should appear in the list as `device`, not
+> `unauthorized` — accept the "Allow USB debugging" prompt on the phone). With no
+> target attached `npx cap run android` errors loudly; this is expected.
 
 ```powershell
-pnpm nx run mobile:android-debug
+pnpm nx run mobile:android-usb
 ```
 
 This Nx target runs, in order:
 
 1. `node tools/scripts/inject-mobile-env.mjs` — injects + loud-guards the env.
 2. `node tools/scripts/inject-mobile-env.mjs --check-native` — asserts
-   `android/app/google-services.json` exists (loud guard before Gradle).
+   `android/app/google-services.json` exists (loud guard before the build).
 3. `pnpm nx run mobile:build` — the production web build (uses the generated env).
 4. `npx cap sync android` — copies web assets + plugin config into the native
    project (does **not** clobber `google-services.json`).
-5. `cd android && ./gradlew assembleDebug` — the debug-signed APK
-   (`android/app/build/outputs/apk/debug/app-debug.apk`).
+5. `npx cap run android` — builds the debug-signed APK, then **installs and
+   launches it on the connected USB device** in one step (no separate manual
+   sideload / Android-Studio step).
+
+To open the native project in Android Studio manually instead (no dedicated Nx
+target), run the raw `npx cap open android`.
 
 To only (re)generate the env file without building:
 
@@ -120,8 +130,8 @@ verification**:
 
 - [ ] Populate `.env.local` (`TMDB_API_KEY`, `FIREBASE_*`) and ensure
       `android/app/google-services.json` for `vultus-cab62` is present.
-- [ ] Build the debug APK (`pnpm nx run mobile:android-debug`) and install it on
-      the device.
+- [ ] Run `pnpm nx run mobile:android-usb` — it builds, installs, and launches
+      the debug APK on the connected USB device directly (no manual sideload).
 - [ ] App **boots** against real `vultus-cab62` (anonymous sign-in succeeds).
 - [ ] **Onboarding (0022):** pick region + grant push permission → FCM token
       written to `users/{uid}.fcmTokens`.
