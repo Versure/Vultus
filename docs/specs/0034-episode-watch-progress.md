@@ -2,7 +2,7 @@
 number: 0034
 slug: episode-watch-progress
 title: Add episode list and watch-progress tracking to the title-detail slice
-status: implementing
+status: done
 slices: [slice:title-detail]
 scopes: [scope:mobile, scope:shared]
 created: 2026-06-26
@@ -705,14 +705,14 @@ are `test.fixme` because the emulator cannot run under Claude Code tools and the
 seeded fixture needs episode docs added (decision 6).
 
 - [ ] `pnpm nx run-many -t lint test -p shared-domain shared-firestore-schema
-  mobile-title-detail` passes **with Sheriff active**: the slice imports
+mobile-title-detail` passes **with Sheriff active**: the slice imports
       `@vultus/shared/domain` (`EpisodeDoc`, `TitleType`, `WatchStatus`,
       `WatchlistItem`) + `@vultus/shared/firestore-schema` (`episodesPath`,
       `episodePath`, `dataToEpisode`, `episodeToData`) + AngularFire/Ionic/rxjs
       (third-party) **only** — **no other slice import, no `apps/mobile` deep
       import (uid still via `AUTH_UID`), no `scope:functions` import.**
 - [ ] `pnpm nx typecheck shared-domain shared-firestore-schema mobile-title-detail
-  mobile` passes — the new `EpisodeDoc.title` + converter mapping + the
+mobile` passes — the new `EpisodeDoc.title` + converter mapping + the
       service/page episode surface compile against the merged shared types.
 - [ ] `pnpm nx build mobile` passes (production configuration) within existing
       budgets.
