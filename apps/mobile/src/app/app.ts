@@ -1,7 +1,8 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { IonApp, IonRouterOutlet } from '@ionic/angular/standalone';
 import { Capacitor } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
+import { NotificationHandlerService } from './notification-handler.service';
 
 @Component({
   imports: [IonApp, IonRouterOutlet],
@@ -12,10 +13,14 @@ import { StatusBar, Style } from '@capacitor/status-bar';
 export class App implements OnInit {
   protected title = 'mobile';
 
+  private readonly notificationHandler = inject(NotificationHandlerService);
+
   ngOnInit(): void {
     // Fire-and-forget: ngOnInit must return void (OnInit contract). The
     // edge-to-edge StatusBar setup is native-only and guarded below.
     void this.initStatusBar();
+    // Register FCM push handlers (native-only, idempotent — see the service).
+    void this.notificationHandler.init();
   }
 
   private async initStatusBar(): Promise<void> {
