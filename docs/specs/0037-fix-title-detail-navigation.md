@@ -2,7 +2,7 @@
 number: 0037
 slug: fix-title-detail-navigation
 title: Fix title-detail page showing the wrong title on navigation from watchlist/search
-status: approved
+status: done
 slices: [slice:title-detail]
 scopes: [scope:mobile]
 created: 2026-06-29
@@ -92,7 +92,7 @@ In scope (all `scope:mobile`, `slice:title-detail`):
   silently returning a wrong title.
 - **Action handlers that read `this.tmdbId`.** The status action-sheet, remove
   alert/handler, and remove-confirm currently call `this.service.updateStatus(
-  this.tmdbId, …)` / `this.service.removeTitle(this.tmdbId)` using the old field.
+this.tmdbId, …)` / `this.service.removeTitle(this.tmdbId)` using the old field.
   These must read the **current** reactive id so a reused page acts on the title
   on screen, not the first one opened.
 - Component tests reproducing (a) the stale-param reuse → wrong title, (b) the
@@ -113,8 +113,8 @@ Out of scope (explicitly):
   to `error` (`title-detail.service.ts:140-145`) and are unchanged.
 - **The not-found template.** It **already exists** (`title-detail.page.html:27-38`:
   `<vultus-empty-state data-test="not-found" icon="film-outline" title="Title not
-  found" subtitle="This title no longer exists." />` plus a `fill="clear"
-  routerLink="/tabs/watchlist"` "Go back" button) — so the invalid-id guard's
+found" subtitle="This title no longer exists." />` plus a `fill="clear"
+routerLink="/tabs/watchlist"` "Go back" button) — so the invalid-id guard's
   `{ kind: 'not-found' }` renders the existing card with no new markup. The
   `VultusEmptyState` token wiring is the design-system component already imported
   by the page; tokens live at `docs/design/vultus-design-system.md` (do not
@@ -125,19 +125,19 @@ Out of scope (explicitly):
 
 ## Affected slices & Sheriff tags
 
-| Project              | Path                                                                | Sheriff tags                          | Change                                                                          |
-| -------------------- | ------------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------- |
-| mobile-title-detail  | `libs/mobile/title-detail/src/lib/title-detail.page.ts`             | `scope:mobile`, `slice:title-detail`  | reactive `tmdbId$` from `route.paramMap`; invalid-id guard; handlers read it    |
-| mobile-title-detail  | `libs/mobile/title-detail/src/lib/tmdb-detail.client.ts`            | `scope:mobile`, `slice:title-detail`  | no-hint `getDetail` falls through to tv **only on 404**; re-throws otherwise    |
-| mobile-title-detail  | `libs/mobile/title-detail/src/lib/title-detail.page.spec.ts`        | `scope:mobile`, `slice:title-detail`  | reproduce stale-param-reuse + invalid-id; keep existing specs green             |
-| mobile-title-detail  | `libs/mobile/title-detail/src/lib/tmdb-detail.client.spec.ts`       | `scope:mobile`, `slice:title-detail`  | no-hint 404 fall-through vs non-404 re-throw                                     |
-| mobile-watchlist     | `libs/mobile/watchlist/src/lib/watchlist.page.ts`                   | `scope:mobile`, `slice:watchlist`     | **verify only** — `navigateToDetail(String(tmdbId))` already correct            |
-| mobile-search        | `libs/mobile/search/src/lib/search.page.ts`                         | `scope:mobile`, `slice:search`        | **verify only** — `navigate([... , String(result.tmdbId)])` already correct     |
-| mobile-e2e           | `apps/mobile-e2e/src/title-detail.spec.ts`                          | _(untagged — black-box)_              | un-skip/replace the `test.fixme` F4 watchlist → detail flow as a real assertion |
-| mobile-e2e           | `apps/mobile-e2e/emulator-data/seeded/docs.json`                    | _(untagged — fixture)_                | add a `title-cache/2` doc so watchlist → detail resolves cache-first (no TMDB)  |
-| mobile-e2e           | `apps/mobile-e2e/src/search.spec.ts`                                | _(untagged — black-box)_              | add a search → detail flow asserting the tapped title renders                   |
-| mobile-e2e           | `apps/mobile-e2e/fixtures/tmdb-movie-detail-603.json`               | _(untagged — fixture)_                | new detail-shaped fixture for `GET /movie/603` (The Matrix)                     |
-| mobile-e2e           | `apps/mobile-e2e/src/support/tmdb.ts`                               | _(untagged — black-box)_              | path-discriminate TMDB interception: `search/multi` vs `movie/603`              |
+| Project             | Path                                                          | Sheriff tags                         | Change                                                                          |
+| ------------------- | ------------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------- |
+| mobile-title-detail | `libs/mobile/title-detail/src/lib/title-detail.page.ts`       | `scope:mobile`, `slice:title-detail` | reactive `tmdbId$` from `route.paramMap`; invalid-id guard; handlers read it    |
+| mobile-title-detail | `libs/mobile/title-detail/src/lib/tmdb-detail.client.ts`      | `scope:mobile`, `slice:title-detail` | no-hint `getDetail` falls through to tv **only on 404**; re-throws otherwise    |
+| mobile-title-detail | `libs/mobile/title-detail/src/lib/title-detail.page.spec.ts`  | `scope:mobile`, `slice:title-detail` | reproduce stale-param-reuse + invalid-id; keep existing specs green             |
+| mobile-title-detail | `libs/mobile/title-detail/src/lib/tmdb-detail.client.spec.ts` | `scope:mobile`, `slice:title-detail` | no-hint 404 fall-through vs non-404 re-throw                                    |
+| mobile-watchlist    | `libs/mobile/watchlist/src/lib/watchlist.page.ts`             | `scope:mobile`, `slice:watchlist`    | **verify only** — `navigateToDetail(String(tmdbId))` already correct            |
+| mobile-search       | `libs/mobile/search/src/lib/search.page.ts`                   | `scope:mobile`, `slice:search`       | **verify only** — `navigate([... , String(result.tmdbId)])` already correct     |
+| mobile-e2e          | `apps/mobile-e2e/src/title-detail.spec.ts`                    | _(untagged — black-box)_             | un-skip/replace the `test.fixme` F4 watchlist → detail flow as a real assertion |
+| mobile-e2e          | `apps/mobile-e2e/emulator-data/seeded/docs.json`              | _(untagged — fixture)_               | add a `title-cache/2` doc so watchlist → detail resolves cache-first (no TMDB)  |
+| mobile-e2e          | `apps/mobile-e2e/src/search.spec.ts`                          | _(untagged — black-box)_             | add a search → detail flow asserting the tapped title renders                   |
+| mobile-e2e          | `apps/mobile-e2e/fixtures/tmdb-movie-detail-603.json`         | _(untagged — fixture)_               | new detail-shaped fixture for `GET /movie/603` (The Matrix)                     |
+| mobile-e2e          | `apps/mobile-e2e/src/support/tmdb.ts`                         | _(untagged — black-box)_             | path-discriminate TMDB interception: `search/multi` vs `movie/603`              |
 
 - **Tags already exist** (spec 0016 for `slice:title-detail`; 0013/0014 for
   search/watchlist) — verify by path glob in `sheriff.config.ts`; **do not edit
@@ -177,14 +177,14 @@ schema, and matches the existing `TitleCacheWriteData` shape.
 - `TitleDetailPage` is a routed component (no public method-signature contract
   beyond the existing template-bound handlers). The change is internal: the
   `readonly tmdbId: number` **field** becomes a reactive `tmdbId$:
-  Observable<number>` (and a value read where handlers need it — see below). The
+Observable<number>` (and a value read where handlers need it — see below). The
   barrel export (`TitleDetailPage`) is unchanged.
 - `TmdbDetailClient.getDetail(tmdbId, typeHint?, signal?): Promise<TitleDetail>`
   — **signature unchanged.** Only the no-hint branch's catch is narrowed to a
   404 check. The `TmdbDetailError { status }` class it throws is unchanged and is
   what the narrowing keys on.
 - `DetailViewState` (`title-detail.service.ts`) — unchanged; `{ kind:
-  'not-found' }` already exists and is what the invalid-id guard emits.
+'not-found' }` already exists and is what the invalid-id guard emits.
 - `TitleDetailService` public surface — **unchanged** (no README API change for
   the service). The page README's route description (`tabs/title-detail/:titleId`)
   is unchanged.
@@ -349,7 +349,7 @@ lands in the worktree.
      resolves from cache and never hits TMDB. The doc must match
      `TitleCacheWriteData` (`libs/shared/firestore-schema`): `type: "tv"`,
      `traktId: null`, `metadata: { title: "Breaking Bad", overview: <mock>,
-     posterPath: "/breaking-bad-poster.jpg", releaseDate: null }`, and
+posterPath: "/breaking-bad-poster.jpg", releaseDate: null }`, and
      `lastSyncedAt: { "__timestamp": "..." }` (the same `__timestamp` marker the
      seed encoder uses for `addedAt`). Path: `title-cache/2` (top-level, **not**
      under `users/{uid}` — `title-cache` is not user-scoped).
@@ -376,8 +376,8 @@ lands in the worktree.
    - **New fixture** `apps/mobile-e2e/fixtures/tmdb-movie-detail-603.json` (mock
      data, detail shape — not real TMDB output):
      `{ "id": 603, "title": "The Matrix", "release_date": "1999-03-31",
-     "overview": "A computer hacker learns...", "poster_path": null,
-     "vote_average": 8.7 }`.
+"overview": "A computer hacker learns...", "poster_path": null,
+"vote_average": 8.7 }`.
    - **Extend `routeTmdb`** in `apps/mobile-e2e/src/support/tmdb.ts` to
      **path-discriminate** (or add a sibling helper, e.g. `routeTmdbDetail`):
      requests matching `**/search/multi**` → `tmdb-search-multi.json`; requests
@@ -447,7 +447,7 @@ service mocked via DI; `ActivatedRoute.paramMap` driven by a `BehaviorSubject`):
   skeleton, not-found, error+retry, loaded movie/tv, poster placeholder, provider
   groups, null-region, tracked/untracked actions, cache/live parity). The retry
   trigger still re-runs resolution (now via `combineLatest([tmdbId$,
-  retryTrigger$])`).
+retryTrigger$])`).
 
 **e2e — REQUIRED (per the rubric).** This is a `scope:mobile` fix to the primary
 title-detail navigation route and the exact user-facing symptom is a navigation
@@ -482,8 +482,7 @@ defect, so named flows are required and become DoD gates (`qa-runner` /
 > (spec 0019, `playwright.config.ts`, `support.ts`) runs against the **Firebase
 > emulator with `routeTmdb` interception**, not a `mock` serve configuration.
 > These flows therefore follow the established harness — there is no separate
-> `mock` Playwright target to wire up, and inventing one would diverge from spec
-> 0019. The flows are **fixme-free** (no dependency on an unmerged spec; the route
+> `mock` Playwright target to wire up, and inventing one would diverge from spec 0019. The flows are **fixme-free** (no dependency on an unmerged spec; the route
 > and both entry points already exist).
 
 ## Definition of done

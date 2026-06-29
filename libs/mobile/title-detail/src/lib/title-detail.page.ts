@@ -1,5 +1,6 @@
 import { AsyncPipe, DecimalPipe } from '@angular/common';
 import { Component, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import type { ActionSheetButton, AlertButton } from '@ionic/angular/standalone';
 import {
@@ -37,6 +38,7 @@ import {
   BehaviorSubject,
   type Observable,
   combineLatest,
+  distinctUntilChanged,
   map,
   of,
   shareReplay,
@@ -99,8 +101,19 @@ export class TitleDetailPage {
   readonly STATUS_LABELS = STATUS_LABELS;
   readonly statusOrder = STATUS_DISPLAY_ORDER;
 
-  /** The numeric tmdb id parsed from the `:titleId` route param. */
-  readonly tmdbId = Number(this.route.snapshot.paramMap.get('titleId'));
+  /** Current numeric tmdb id from the live :titleId param (re-emits on Ionic page reuse). */
+  readonly tmdbId$: Observable<number> = this.route.paramMap.pipe(
+    map((p) => Number(p.get('titleId'))),
+    distinctUntilChanged(),
+    shareReplay({ bufferSize: 1, refCount: true }),
+  );
+
+  /**
+   * Synchronously-readable current id for imperative handlers (action-sheet,
+   * remove alert). Updated from tmdbId$ via takeUntilDestroyed so handlers
+   * always act on the title currently on screen, not a stale first navigation.
+   */
+  private currentTmdbId = 0;
 
   // Status action-sheet + remove-alert overlay state.
   actionSheetOpen = false;
@@ -113,7 +126,7 @@ export class TitleDetailPage {
       role: 'destructive',
       cssClass: 'vultus-alert-remove',
       handler: () => {
-        void this.service.removeTitle(this.tmdbId);
+        void this.service.removeTitle(this.currentTmdbId);
       },
     },
   ];
@@ -125,7 +138,7 @@ export class TitleDetailPage {
         (status): ActionSheetButton => ({
           text: STATUS_LABELS[status],
           handler: () => {
-            void this.service.updateStatus(this.tmdbId, status);
+            void this.service.updateStatus(this.currentTmdbId, status);
           },
         }),
       ),
@@ -140,11 +153,17 @@ export class TitleDetailPage {
    */
   private readonly retryTrigger$ = new BehaviorSubject<void>(undefined);
 
-  private readonly detail$: Observable<DetailViewState> =
-    this.retryTrigger$.pipe(
-      switchMap(() => this.service.detail$(this.tmdbId)),
-      shareReplay({ bufferSize: 1, refCount: true }),
-    );
+  private readonly detail$: Observable<DetailViewState> = combineLatest([
+    this.tmdbId$,
+    this.retryTrigger$,
+  ]).pipe(
+    switchMap(([tmdbId]) =>
+      Number.isNaN(tmdbId) || tmdbId === 0
+        ? of<DetailViewState>({ kind: 'not-found' })
+        : this.service.detail$(tmdbId),
+    ),
+    shareReplay({ bufferSize: 1, refCount: true }),
+  );
 
   private readonly region$ = this.service
     .region$()
@@ -195,6 +214,11 @@ export class TitleDetailPage {
       personCircleOutline,
       addCircleOutline,
       trashOutline,
+    });
+    // Keep currentTmdbId in sync so imperative handlers always act on the
+    // title currently on screen (not the first navigation's id).
+    this.tmdbId$.pipe(takeUntilDestroyed()).subscribe((id) => {
+      this.currentTmdbId = id;
     });
   }
 

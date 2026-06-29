@@ -11,7 +11,11 @@
  * emulator REST only) — no Sheriff scope/slice boundary applies.
  */
 export { resolveAnonUid } from './support/auth';
-export { routeTmdb, type TmdbFixtureName } from './support/tmdb';
+export {
+  routeTmdb,
+  routeTmdbDiscriminated,
+  type TmdbFixtureName,
+} from './support/tmdb';
 export {
   resetAndSeed,
   seedFor,
