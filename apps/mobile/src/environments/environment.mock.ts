@@ -215,5 +215,12 @@ export const environment = {
     messagingSenderId: 'demo-sender-id',
     appId: 'demo-app-id',
   },
-  tmdb: mockTmdbConfig,
+  // Spread the search-typed mock config and add the detail base (spec 0036) so
+  // environment.tmdb.detailImageBaseUrl is defined under --configuration=mock.
+  // mockTmdbConfig stays TmdbSearchConfig-typed (adding the key there would be a
+  // TS excess-property error).
+  tmdb: {
+    ...mockTmdbConfig,
+    detailImageBaseUrl: 'https://image.tmdb.org/t/p/w780',
+  },
 };

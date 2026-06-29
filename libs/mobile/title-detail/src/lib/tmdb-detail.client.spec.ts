@@ -127,6 +127,24 @@ describe('createTmdbDetailClient — getDetail', () => {
       TmdbDetailError,
     );
   });
+
+  // Spec 0036: the detail slice is wired to the larger w780 base (vs search's
+  // w185) so the 530px hero renders sharp. Guard that posterUrl is built off
+  // whatever base the config carries — a w780 base yields a w780 posterUrl.
+  it('builds posterUrl from the configured (w780) detail base', async () => {
+    const fetch = makeFetch({
+      id: 27205,
+      title: 'Inception',
+      poster_path: '/poster.jpg',
+    });
+    const client = createTmdbDetailClient(
+      { ...config, imageBaseUrl: 'https://image.tmdb.org/t/p/w780' },
+      fetch,
+    );
+    const detail = await client.getDetail(27205, 'movie');
+    expect(detail.posterUrl).toBe('https://image.tmdb.org/t/p/w780/poster.jpg');
+    expect(detail.posterUrl).not.toContain('w185');
+  });
 });
 
 describe('createTmdbDetailClient — getProviders', () => {
