@@ -99,9 +99,12 @@ test('notifications empty state', async ({ page }) => {
 
   await openInbox(page);
 
-  // No rows; the inbox renders the empty state.
+  // No rows; the inbox renders the empty state. Scope to the notifications page
+  // host (`lib-notifications`) — with the `empty` fixture the Watchlist tab also
+  // renders its own `vultus-empty-state`, and Ionic keeps the previous page in
+  // the router-outlet DOM, so a bare `vultus-empty-state` locator matches both.
   await expect(page.locator('.notification-card')).toHaveCount(0);
-  const emptyState = page.locator('vultus-empty-state');
+  const emptyState = page.locator('lib-notifications vultus-empty-state');
   await expect(emptyState).toBeVisible();
   await expect(emptyState).toContainText('No notifications yet');
 });
