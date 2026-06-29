@@ -206,6 +206,48 @@ describe('WatchlistPage', () => {
     expect(el.textContent).toContain('Show B');
   });
 
+  it('navigates to title-detail with ?type when card is clicked', async () => {
+    const svc = mockService([
+      item({
+        tmdbId: 603,
+        type: 'movie',
+        title: 'The Matrix',
+        status: 'watching',
+      }),
+    ]);
+    const { el } = await setup(svc);
+    const { navigate } = TestBed.inject(Router) as {
+      navigate: ReturnType<typeof vi.fn>;
+    };
+    const card = el.querySelector<HTMLElement>('.watchlist-card');
+    card?.click();
+    expect(navigate).toHaveBeenCalledWith(['tabs', 'title-detail', '603'], {
+      queryParams: { type: 'movie' },
+    });
+  });
+
+  it('navigates to title-detail with ?type on keyup.enter', async () => {
+    const svc = mockService([
+      item({
+        tmdbId: 1396,
+        type: 'tv',
+        title: 'Breaking Bad',
+        status: 'planned',
+      }),
+    ]);
+    const { el } = await setup(svc);
+    const { navigate } = TestBed.inject(Router) as {
+      navigate: ReturnType<typeof vi.fn>;
+    };
+    const card = el.querySelector<HTMLElement>('.watchlist-card');
+    card?.dispatchEvent(
+      new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }),
+    );
+    expect(navigate).toHaveBeenCalledWith(['tabs', 'title-detail', '1396'], {
+      queryParams: { type: 'tv' },
+    });
+  });
+
   it('renders empty state when the stream emits []', async () => {
     const service = mockService([]);
     const { el } = await setup(service);

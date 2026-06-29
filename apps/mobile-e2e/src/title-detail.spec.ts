@@ -170,7 +170,7 @@ test.describe('title-detail F4 — watchlist-to-detail-correct-title (spec 0037)
     await card.click();
 
     // The title-detail route opens for the seeded entry (tmdbId 2).
-    await expect(page).toHaveURL(/\/tabs\/title-detail\/2$/);
+    await expect(page).toHaveURL(/\/tabs\/title-detail\/2\?type=tv/);
 
     // The detail hero shows the seeded title (cache-first, no TMDB network call).
     await expect(page.locator('[data-test="hero"] .hero-title')).toHaveText(
@@ -197,7 +197,7 @@ test.describe
 
     const card = page.locator('.watchlist-card', { hasText: SEEDED_TITLE });
     await card.click();
-    await expect(page).toHaveURL(/\/tabs\/title-detail\/2$/);
+    await expect(page).toHaveURL(/\/tabs\/title-detail\/2\?type=tv/);
 
     // Change the status to "Watching" on the detail page. The exact control
     // selector depends on the (unimplemented) title-detail slice; this targets
@@ -232,7 +232,7 @@ test.describe
 
     const card = page.locator('.watchlist-card', { hasText: SEEDED_TITLE });
     await card.click();
-    await expect(page).toHaveURL(/\/tabs\/title-detail\/2$/);
+    await expect(page).toHaveURL(/\/tabs\/title-detail\/2\?type=tv/);
 
     // Remove the title from the detail page. Selector targets the expected
     // remove control by label; tighten when the title-detail slice DOM lands.
@@ -278,7 +278,7 @@ test.describe
     await bootAndSeed(page);
     // Navigate to the TV title detail page (tmdbId 2, Breaking Bad).
     await page.goto('/tabs/title-detail/2');
-    await expect(page).toHaveURL(/\/tabs\/title-detail\/2$/);
+    await expect(page).toHaveURL(/\/tabs\/title-detail\/2\?type=tv/);
     // Find the Episodes section.
     const episodesSection = page.locator('[data-test="episodes-section"]');
     await expect(episodesSection).toBeVisible();

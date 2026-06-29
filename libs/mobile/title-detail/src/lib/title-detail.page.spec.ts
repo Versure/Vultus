@@ -146,9 +146,24 @@ function makeService(o: SvcOpts = {}) {
  */
 let paramMap$: BehaviorSubject<ReturnType<typeof convertToParamMap>>;
 
-async function setup(o: SvcOpts = {}, initialTitleId = '27205') {
+/**
+ * Mutable queryParamMap — source for the page's `typeHint$` (spec 0043). Seeded
+ * by `setup`'s `initialType` (`?type=tv|movie`); defaults to `{}` (no hint).
+ */
+let queryParamMap$: BehaviorSubject<ReturnType<typeof convertToParamMap>>;
+
+async function setup(
+  o: SvcOpts = {},
+  initialTitleId = '27205',
+  initialType?: string,
+) {
   paramMap$ = new BehaviorSubject(
     convertToParamMap({ titleId: initialTitleId }),
+  );
+  queryParamMap$ = new BehaviorSubject(
+    initialType
+      ? convertToParamMap({ type: initialType })
+      : convertToParamMap({}),
   );
   const svc = makeService(o);
   await TestBed.configureTestingModule({
@@ -161,6 +176,7 @@ async function setup(o: SvcOpts = {}, initialTitleId = '27205') {
         provide: ActivatedRoute,
         useValue: {
           paramMap: paramMap$.asObservable(),
+          queryParamMap: queryParamMap$.asObservable(),
           snapshot: {
             paramMap: convertToParamMap({ titleId: initialTitleId }),
           },
@@ -182,6 +198,28 @@ describe('TitleDetailPage', () => {
     let resolvedId: number | undefined;
     fixture.componentInstance.tmdbId$.subscribe((id) => (resolvedId = id));
     expect(resolvedId).toBe(27205);
+  });
+
+  describe('typeHint$ from queryParamMap (spec 0043)', () => {
+    it('passes typeHint=tv to service.detail$ when ?type=tv', async () => {
+      const { svc } = await setup({}, '27205', 'tv');
+      expect(svc.detail$).toHaveBeenCalledWith(27205, 'tv');
+    });
+
+    it('passes typeHint=movie to service.detail$ when ?type=movie', async () => {
+      const { svc } = await setup({}, '27205', 'movie');
+      expect(svc.detail$).toHaveBeenCalledWith(27205, 'movie');
+    });
+
+    it('passes undefined to service.detail$ when ?type absent', async () => {
+      const { svc } = await setup({});
+      expect(svc.detail$).toHaveBeenCalledWith(27205, undefined);
+    });
+
+    it('passes undefined to service.detail$ when ?type is invalid (anime)', async () => {
+      const { svc } = await setup({}, '27205', 'anime');
+      expect(svc.detail$).toHaveBeenCalledWith(27205, undefined);
+    });
   });
 
   it('shows the loading skeleton hero before the first emission (no not-found copy)', async () => {
@@ -270,7 +308,7 @@ describe('TitleDetailPage', () => {
     fixture.componentInstance.onRetry();
     fixture.detectChanges();
     expect(svc.detail$.mock.calls.length).toBeGreaterThan(callsBefore);
-    expect(svc.detail$).toHaveBeenLastCalledWith(27205);
+    expect(svc.detail$).toHaveBeenLastCalledWith(27205, undefined);
   });
 
   it('renders provider groups as text chips, omitting empty groups', async () => {
@@ -415,6 +453,7 @@ describe('TitleDetailPage', () => {
           provide: ActivatedRoute,
           useValue: {
             paramMap: paramMap$.asObservable(),
+            queryParamMap: of(convertToParamMap({})),
             snapshot: { paramMap: convertToParamMap({ titleId: '1396' }) },
           },
         },
@@ -426,7 +465,7 @@ describe('TitleDetailPage', () => {
 
     const el = fixture.nativeElement as HTMLElement;
     expect(el.textContent).toContain('Breaking Bad');
-    expect(svc.detail$).toHaveBeenLastCalledWith(1396);
+    expect(svc.detail$).toHaveBeenLastCalledWith(1396, undefined);
 
     // Simulate Ionic page reuse: same instance, new param.
     paramMap$.next(convertToParamMap({ titleId: '27205' }));
@@ -434,7 +473,7 @@ describe('TitleDetailPage', () => {
     fixture.detectChanges();
 
     expect(el.textContent).toContain('Inception');
-    expect(svc.detail$).toHaveBeenLastCalledWith(27205);
+    expect(svc.detail$).toHaveBeenLastCalledWith(27205, undefined);
   });
 
   // Regression (spec 0037): an invalid/absent :titleId must short-circuit to
@@ -452,6 +491,7 @@ describe('TitleDetailPage', () => {
           provide: ActivatedRoute,
           useValue: {
             paramMap: paramMap$.asObservable(),
+            queryParamMap: of(convertToParamMap({})),
             snapshot: { paramMap: convertToParamMap({}) },
           },
         },
@@ -480,6 +520,7 @@ describe('TitleDetailPage', () => {
           provide: ActivatedRoute,
           useValue: {
             paramMap: paramMap$.asObservable(),
+            queryParamMap: of(convertToParamMap({})),
             snapshot: { paramMap: convertToParamMap({ titleId: 'abc' }) },
           },
         },
@@ -532,6 +573,7 @@ describe('TitleDetailPage', () => {
           provide: ActivatedRoute,
           useValue: {
             paramMap: paramMap$.asObservable(),
+            queryParamMap: of(convertToParamMap({})),
             snapshot: { paramMap: convertToParamMap({ titleId: '1396' }) },
           },
         },

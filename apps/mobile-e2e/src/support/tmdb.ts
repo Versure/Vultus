@@ -76,3 +76,23 @@ export async function routeTmdbDiscriminated(
 
   return { search: searchFixture, detail: detailFixture };
 }
+
+/**
+ * TV-detail interception for a specific tv id (spec 0043). Registers a glob
+ * that matches any URL containing the tv id as a path segment, so both the
+ * detail and watch/providers calls are fulfilled by the given fixture.
+ *
+ * Register this AFTER the search/multi route — Playwright applies the
+ * most-recently-registered matching route first.
+ */
+export async function routeTmdbTV(
+  page: Page,
+  tvId: number,
+  tvFixture: TmdbFixtureName,
+): Promise<unknown> {
+  const fixture = loadFixture(tvFixture);
+  await page.route(`**/${tvId}**`, (route) =>
+    route.fulfill({ json: fixture as Record<string, unknown> }),
+  );
+  return fixture;
+}

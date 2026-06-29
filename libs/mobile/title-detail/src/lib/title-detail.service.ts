@@ -139,13 +139,16 @@ export class TitleDetailService {
    * miss (decision 2). Emits `loading` first, then `loaded`/`not-found`. Needs
    * no uid — resolves even before the anon session.
    */
-  detail$(tmdbId: number): Observable<DetailViewState> {
-    return from(this.resolveDetail(tmdbId)).pipe(
+  detail$(tmdbId: number, typeHint?: TitleType): Observable<DetailViewState> {
+    return from(this.resolveDetail(tmdbId, typeHint)).pipe(
       startWith<DetailViewState>({ kind: 'loading' }),
     );
   }
 
-  private async resolveDetail(tmdbId: number): Promise<DetailViewState> {
+  private async resolveDetail(
+    tmdbId: number,
+    typeHint?: TitleType,
+  ): Promise<DetailViewState> {
     // Cache path — if Firestore fails, surface the error (don't swallow it).
     try {
       const cacheRef = doc(this.firestore, titleCacheDocPath(tmdbId));
@@ -177,7 +180,7 @@ export class TitleDetailService {
     // (title doesn't exist → not-found) from a transient failure (network /
     // 5xx → error, recoverable via retry).
     try {
-      const detail = await this.client.getDetail(tmdbId);
+      const detail = await this.client.getDetail(tmdbId, typeHint);
       return { kind: 'loaded', source: 'live', detail };
     } catch (err) {
       if (err instanceof TmdbDetailError && err.status === 404) {

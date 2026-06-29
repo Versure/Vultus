@@ -138,11 +138,10 @@ describe('SearchPage', () => {
     const el = fixture.nativeElement as HTMLElement;
     const body = el.querySelector<HTMLElement>('.card-body');
     body?.click();
-    expect(router.navigate).toHaveBeenCalledWith([
-      'tabs',
-      'title-detail',
-      String(mockResult.tmdbId),
-    ]);
+    expect(router.navigate).toHaveBeenCalledWith(
+      ['tabs', 'title-detail', String(mockResult.tmdbId)],
+      { queryParams: { type: mockResult.type } },
+    );
   });
 
   it('navigates to title-detail when poster tapped', async () => {
@@ -153,11 +152,10 @@ describe('SearchPage', () => {
     const el = fixture.nativeElement as HTMLElement;
     const poster = el.querySelector<HTMLElement>('.poster-wrap');
     poster?.click();
-    expect(router.navigate).toHaveBeenCalledWith([
-      'tabs',
-      'title-detail',
-      String(mockResult.tmdbId),
-    ]);
+    expect(router.navigate).toHaveBeenCalledWith(
+      ['tabs', 'title-detail', String(mockResult.tmdbId)],
+      { queryParams: { type: mockResult.type } },
+    );
   });
 
   it('does not navigate when Add button tapped (inline-add only)', async () => {
