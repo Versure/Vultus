@@ -25,6 +25,20 @@
         "posterPath": "/breaking-bad-poster.jpg",
         "voteAverage": 8.9
       }
+    },
+    {
+      "path": "title-cache/2",
+      "data": {
+        "type": "tv",
+        "traktId": null,
+        "metadata": {
+          "title": "Breaking Bad",
+          "overview": "A high school chemistry teacher diagnosed with cancer turns to manufacturing meth.",
+          "posterPath": "/breaking-bad-poster.jpg",
+          "releaseDate": null
+        },
+        "lastSyncedAt": { "__timestamp": "2026-06-24T10:00:00.000Z" }
+      }
     }
   ]
 }

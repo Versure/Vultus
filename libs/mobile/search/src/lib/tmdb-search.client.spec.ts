@@ -21,6 +21,7 @@ const movieResult = {
   title: 'Test Movie',
   release_date: '2023-05-10',
   poster_path: '/poster.jpg',
+  vote_average: 7.5,
 };
 const tvResult = {
   id: 2,
@@ -43,6 +44,8 @@ describe('createTmdbSearchClient', () => {
       title: 'Test Movie',
       year: 2023,
       posterUrl: 'https://image.tmdb.org/t/p/w185/poster.jpg',
+      posterPath: '/poster.jpg',
+      voteAverage: 7.5,
     });
     expect(results[1]).toMatchObject({
       tmdbId: 2,
@@ -50,6 +53,8 @@ describe('createTmdbSearchClient', () => {
       title: 'Test Show',
       year: 2022,
       posterUrl: null,
+      posterPath: null,
+      voteAverage: null,
     });
   });
 

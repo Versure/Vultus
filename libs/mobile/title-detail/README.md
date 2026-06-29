@@ -32,12 +32,16 @@ across the barrel.
 { provide: TMDB_DETAIL_CONFIG, useValue: environment.tmdb }
 ```
 
-The page reads its `:titleId`, resolves the uid via `AUTH_UID`, and renders the
-view-states: loading skeleton, loaded (cache or live — identical for the same
-data), not-found, **error** (recoverable), empty-providers, and null-region. The
-loading / not-found / error states are rendered by the shared `@vultus/shared/ui-kit`
-atoms (`vultus-skeleton-hero`, `vultus-empty-state`, `vultus-error-state`); the
-error state's "Try again" re-resolves the title via a retry trigger (`onRetry()`).
+The page derives its `:titleId` from **`ActivatedRoute.paramMap`** (reactive
+Observable, not snapshot), so Ionic page-reuse re-derives the id in place and
+`detail$` automatically re-resolves the new title. An id of `0` or `NaN` (absent
+or non-numeric param) short-circuits to `{ kind: 'not-found' }` without a TMDB
+call. The page renders view-states: loading skeleton, loaded (cache or live —
+identical for the same data), not-found, **error** (recoverable), empty-providers,
+and null-region. The loading / not-found / error states are rendered by the shared
+`@vultus/shared/ui-kit` atoms (`vultus-skeleton-hero`, `vultus-empty-state`,
+`vultus-error-state`); the error state's "Try again" re-resolves the title via a
+retry trigger (`onRetry()`).
 
 ### `DetailViewState` (slice-internal) and error handling
 
@@ -45,10 +49,14 @@ error state's "Try again" re-resolves the title via a retry trigger (`onRetry()`
 
 - **`loaded`** — cache hit, or live TMDB fallback succeeded.
 - **`not-found`** — a genuine cache-miss **and** a live TMDB **404** (the title
-  does not exist). Only a 404 lands here.
+  does not exist). An invalid/absent `:titleId` also maps here (no TMDB call).
+  Only a 404 lands here.
 - **`error`** — a recoverable transient failure: a **Firestore error on the cache
   read** (no longer silently treated as a cache miss), or a live TMDB failure that
   is **not** a 404 (network error, 5xx). Surfaced as the retryable error state.
+  The no-hint client path falls through from `/movie/{id}` to `/tv/{id}` **only
+  on a genuine 404**; all other errors propagate so they reach `error` instead of
+  silently resolving a wrong title.
 - **`loading`** — emitted first while resolving.
 
 ## Data access

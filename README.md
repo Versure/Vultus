@@ -35,13 +35,17 @@ locally.
 
 Prefer `nx affected -t <target> --base=main` in day-to-day work.
 
-| Command                                            | What it does                                        |
-| -------------------------------------------------- | --------------------------------------------------- |
-| `pnpm nx serve mobile`                             | Run the mobile app (dev server)                     |
-| `pnpm nx build mobile` / `pnpm nx build functions` | Production builds                                   |
-| `pnpm nx run-many -t lint --all`                   | Lint all projects (Sheriff boundaries included)     |
-| `pnpm nx run-many -t test --all`                   | Run unit/config tests (Vitest)                      |
-| `pnpm nx e2e mobile-e2e`                           | Run the Playwright e2e suite against the mobile app |
+| Command                                            | What it does                                                            |
+| -------------------------------------------------- | ----------------------------------------------------------------------- |
+| `pnpm nx run mobile:serve-mock`                    | Mock data, **no Firebase dependency** — works offline; quickest UI loop |
+| `pnpm nx run mobile:serve-emulator`                | Dev build vs **emulated** Firebase (offline-capable); starts emulators  |
+| `pnpm nx run mobile:serve-prod-debug`              | Dev/**debuggable** build vs **REAL prod** Firebase — diagnose prod data |
+| `pnpm nx run mobile:serve-prod`                    | **Optimized** prod build vs prod Firebase — final pre-deploy check      |
+| `pnpm nx run mobile:android-usb`                   | Build + **install + launch** on a USB-tethered phone                    |
+| `pnpm nx build mobile` / `pnpm nx build functions` | Production builds                                                       |
+| `pnpm nx run-many -t lint --all`                   | Lint all projects (Sheriff boundaries included)                         |
+| `pnpm nx run-many -t test --all`                   | Run unit/config tests (Vitest)                                          |
+| `pnpm nx e2e mobile-e2e`                           | Run the Playwright e2e suite against the mobile app                     |
 
 ## Workspace structure
 

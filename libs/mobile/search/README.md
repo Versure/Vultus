@@ -26,7 +26,7 @@ The barrel (`@vultus/mobile/search`) exports:
 | `SearchPage`         | Standalone Ionic page component for the Search tab                                                                   |
 | `TMDB_SEARCH_CONFIG` | `InjectionToken<TmdbSearchConfig>` — provided at root by `apps/mobile`                                               |
 | `TmdbSearchConfig`   | Config type: `apiBaseUrl`, `imageBaseUrl`, `auth` (bearer or apiKey), optional `fetchImpl` (mock/dev fetch override) |
-| `SearchResult`       | Normalized TMDB hit: `tmdbId`, `type`, `title`, `year`, `posterUrl`                                                  |
+| `SearchResult`       | Normalized TMDB hit: `tmdbId`, `type`, `title`, `year`, `posterUrl`, `posterPath`, `voteAverage`                     |
 
 ## DI contract
 

@@ -134,6 +134,8 @@ export class SearchService {
       title: result.title,
       addedAt: new Date().toISOString(),
       status: 'planned',
+      posterPath: result.posterPath ?? null,
+      voteAverage: result.voteAverage ?? null,
     };
 
     try {

@@ -70,6 +70,17 @@
           "optimization": false,
           "extractLicenses": false,
           "sourceMap": true
+        },
+        "prod-debug": {
+          "fileReplacements": [
+            {
+              "replace": "apps/mobile/src/environments/environment.ts",
+              "with": "apps/mobile/src/environments/environment.generated.ts"
+            }
+          ],
+          "optimization": false,
+          "extractLicenses": false,
+          "sourceMap": true
         }
       },
       "defaultConfiguration": "production"
@@ -89,9 +100,18 @@
         },
         "emulator": {
           "buildTarget": "mobile:build:development"
+        },
+        "prod-debug": {
+          "buildTarget": "mobile:build:prod-debug"
         }
       },
       "defaultConfiguration": "development"
+    },
+    "serve-mock": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm nx serve mobile --configuration=mock"
+      }
     },
     "serve-emulator": {
       "executor": "nx:run-commands",
@@ -110,23 +130,24 @@
         "parallel": true
       }
     },
-    "serve-static": {
-      "continuous": true,
-      "executor": "@nx/web:file-server",
-      "options": {
-        "buildTarget": "mobile:build",
-        "staticFilePath": "dist/apps/mobile/browser",
-        "spa": true
-      }
-    },
-    "android": {
+    "serve-prod-debug": {
       "executor": "nx:run-commands",
       "options": {
         "commands": [
-          "pnpm nx run mobile:build",
-          "pnpm nx run mobile:sync",
-          "pnpm nx run mobile:open"
-        ]
+          "node tools/scripts/inject-mobile-env.mjs",
+          "pnpm nx serve mobile --configuration=prod-debug"
+        ],
+        "parallel": false
+      }
+    },
+    "serve-prod": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "node tools/scripts/inject-mobile-env.mjs",
+          "pnpm nx serve mobile --configuration=production"
+        ],
+        "parallel": false
       }
     },
     "inject-env": {
@@ -135,7 +156,7 @@
         "command": "node tools/scripts/inject-mobile-env.mjs"
       }
     },
-    "android-debug": {
+    "android-usb": {
       "executor": "nx:run-commands",
       "options": {
         "commands": [
@@ -143,7 +164,7 @@
           "node tools/scripts/inject-mobile-env.mjs --check-native",
           "pnpm nx run mobile:build",
           "npx cap sync android",
-          "node tools/scripts/gradlew.mjs assembleDebug"
+          "npx cap run android"
         ],
         "parallel": false
       }
@@ -152,13 +173,6 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "npx cap sync android"
-      },
-      "dependsOn": ["build"]
-    },
-    "open": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "npx cap open android"
       },
       "dependsOn": ["build"]
     }
