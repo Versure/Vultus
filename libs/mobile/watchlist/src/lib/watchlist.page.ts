@@ -246,11 +246,17 @@ export class WatchlistPage {
     this.watchlistService.removeTitle(this.uid(), this.titleId(item));
   }
 
-  /** Navigates toward the (not-yet-existing) title-detail route; never crashes. */
-  navigateToDetail(titleId: string): void {
-    this.router.navigate(['tabs', 'title-detail', titleId]).catch(() => {
-      // title-detail route not registered yet — graceful no-op.
-    });
+  /**
+   * Navigates toward the title-detail route; never crashes. Threads the known
+   * media `type` as `?type=tv|movie` so title-detail resolves the right TMDB
+   * namespace (ids collide across movie/tv — spec 0043).
+   */
+  navigateToDetail(titleId: string, type: TitleType): void {
+    this.router
+      .navigate(['tabs', 'title-detail', titleId], { queryParams: { type } })
+      .catch(() => {
+        /* graceful no-op */
+      });
   }
 
   /**

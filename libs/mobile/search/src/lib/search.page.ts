@@ -85,7 +85,9 @@ export class SearchPage {
   }
 
   openDetail(result: SearchResultView): void {
-    void this.router.navigate(['tabs', 'title-detail', String(result.tmdbId)]);
+    void this.router.navigate(['tabs', 'title-detail', String(result.tmdbId)], {
+      queryParams: { type: result.type },
+    });
   }
 
   retry(): void {

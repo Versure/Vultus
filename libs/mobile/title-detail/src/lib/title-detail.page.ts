@@ -36,6 +36,7 @@ import {
 import { AUTH_UID } from '@vultus/shared/domain/tokens';
 import {
   type Region,
+  type TitleType,
   type WatchStatus,
   type WatchlistItem,
 } from '@vultus/shared/domain';
@@ -117,6 +118,22 @@ export class TitleDetailPage {
   );
 
   /**
+   * Optional media-type hint from the `?type=tv|movie` query param (spec 0043).
+   * Search/Watchlist navigate with the known type so the live TMDB fallback
+   * hits the right namespace (movie vs. tv ids collide). Any other value (or
+   * absence) → `undefined`, preserving the no-hint `/movie`→`/tv` 404 fallthrough.
+   */
+  private readonly typeHint$: Observable<TitleType | undefined> =
+    this.route.queryParamMap.pipe(
+      map((p) => {
+        const v = p.get('type');
+        return v === 'movie' || v === 'tv' ? v : undefined;
+      }),
+      distinctUntilChanged(),
+      shareReplay({ bufferSize: 1, refCount: true }),
+    );
+
+  /**
    * Synchronously-readable current id for imperative handlers (action-sheet,
    * remove alert). Updated from tmdbId$ via takeUntilDestroyed so handlers
    * always act on the title currently on screen, not a stale first navigation.
@@ -163,12 +180,13 @@ export class TitleDetailPage {
 
   private readonly detail$: Observable<DetailViewState> = combineLatest([
     this.tmdbId$,
+    this.typeHint$,
     this.retryTrigger$,
   ]).pipe(
-    switchMap(([tmdbId]) =>
+    switchMap(([tmdbId, typeHint]) =>
       Number.isNaN(tmdbId) || tmdbId === 0
         ? of<DetailViewState>({ kind: 'not-found' })
-        : this.service.detail$(tmdbId),
+        : this.service.detail$(tmdbId, typeHint),
     ),
     shareReplay({ bufferSize: 1, refCount: true }),
   );

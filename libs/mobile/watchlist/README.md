@@ -14,7 +14,12 @@ rate-limited sync of the user's tracked titles.
   Shows), status-grouped sections (Watching → Planned → Completed → Dropped),
   poster cards with type/vote/provider badges, a long-press/secondary status
   action sheet, a delete-confirm alert, pull-to-refresh, and shared
-  loading / empty / error states (see below).
+  loading / empty / error states (see below). Tapping a card calls
+  `navigateToDetail(titleId, type)`, which navigates to the title-detail route
+  with `queryParams: { type }` so it receives `?type=tv|movie`. The known media
+  type (`WatchlistItem.type`) is threaded through because TMDB ids collide
+  across the movie and tv namespaces (e.g. id 84773), and the hint disambiguates
+  which title to resolve (spec 0043).
 - **`WatchlistService`** — `providedIn: 'root'` data-access service:
   - `watchlist$(uid, type?)` — realtime `users/{uid}/watchlist`, mapped to
     domain `WatchlistItem`s, optionally filtered by `TitleType`. Null uid →
