@@ -12,6 +12,7 @@ import {
   IonContent,
   IonHeader,
   IonIcon,
+  IonSkeletonText,
   IonTitle,
   IonToolbar,
 } from '@ionic/angular/standalone';
@@ -19,10 +20,14 @@ import { addIcons } from 'ionicons';
 import {
   addCircleOutline,
   calendarOutline,
+  checkmarkCircle,
+  chevronDownOutline,
   documentTextOutline,
   filmOutline,
+  listOutline,
   peopleOutline,
   personCircleOutline,
+  squareOutline,
   star,
   timeOutline,
   trashOutline,
@@ -55,6 +60,8 @@ import {
   STATUS_DISPLAY_ORDER,
   STATUS_LABELS,
   type DetailViewState,
+  type EpisodeRow,
+  type SeasonGroup,
   TitleDetailService,
 } from './title-detail.service';
 
@@ -83,6 +90,7 @@ const EMPTY_PROVIDERS: GroupedProviders = { flatrate: [], rent: [], buy: [] };
     IonIcon,
     IonActionSheet,
     IonAlert,
+    IonSkeletonText,
     VultusSkeletonHero,
     VultusEmptyState,
     VultusErrorState,
@@ -202,6 +210,26 @@ export class TitleDetailPage {
     }),
   );
 
+  /**
+   * Season-grouped episodes for the (TV-only) Episodes section. `null` is the
+   * "not yet loaded" sentinel (the skeleton state) — `startWith(null)` seeds it
+   * and AngularFire's first emission replaces it with `SeasonGroup[]` (possibly
+   * empty → the empty-state copy). Non-tv / non-loaded states resolve to `null`
+   * and the section isn't rendered anyway (guarded in the template).
+   */
+  readonly episodes$: Observable<SeasonGroup[] | null> = this.detail$.pipe(
+    switchMap((state) =>
+      state.kind === 'loaded' && state.detail.type === 'tv'
+        ? this.service
+            .episodes$(state.detail.tmdbId, 'tv')
+            .pipe(startWith<SeasonGroup[] | null>(null))
+        : of<SeasonGroup[] | null>(null),
+    ),
+  );
+
+  /** UI-only: which seasons are collapsed (default expanded). */
+  collapsedSeasons = new Set<number>();
+
   constructor() {
     addIcons({
       filmOutline,
@@ -214,6 +242,10 @@ export class TitleDetailPage {
       personCircleOutline,
       addCircleOutline,
       trashOutline,
+      listOutline,
+      chevronDownOutline,
+      checkmarkCircle,
+      squareOutline,
     });
     // Keep currentTmdbId in sync so imperative handlers always act on the
     // title currently on screen (not the first navigation's id).
@@ -264,5 +296,50 @@ export class TitleDetailPage {
   /** Status accent color CSS var for the tracked status control. */
   statusColorVar(status: WatchStatus): string {
     return `var(--vultus-status-${status})`;
+  }
+
+  /** Toggle one episode's watched flag (fire-and-forget; stream re-emits). */
+  toggleEpisode(row: EpisodeRow, watched: boolean): void {
+    void this.service.setEpisodeWatched(this.currentTmdbId, row.id, watched);
+  }
+
+  /** Bulk toggle a whole season to the opposite of its current all-watched. */
+  toggleSeason(group: SeasonGroup): void {
+    void this.service.setSeasonWatched(
+      this.currentTmdbId,
+      group.season,
+      !group.allWatched,
+    );
+  }
+
+  /** Toggle a season's collapsed (UI-only) state. */
+  toggleSeasonCollapsed(season: number): void {
+    if (this.collapsedSeasons.has(season)) {
+      this.collapsedSeasons.delete(season);
+    } else {
+      this.collapsedSeasons.add(season);
+    }
+  }
+
+  /** Whether a season is currently collapsed. */
+  isSeasonCollapsed(season: number): boolean {
+    return this.collapsedSeasons.has(season);
+  }
+
+  /** Movie mark-as-watched toggle: completed ↔ watching (dropped is no-op). */
+  toggleMovieWatched(tracked: WatchlistItem): void {
+    void this.service.setMovieWatched(
+      this.currentTmdbId,
+      tracked.status !== 'completed',
+    );
+  }
+
+  /** Format an ISO air date as e.g. "Jan 5, 2026". */
+  formatAirDate(airDate: string): string {
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }).format(new Date(airDate));
   }
 }

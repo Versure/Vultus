@@ -18,7 +18,7 @@ The barrel (`src/index.ts`) re-exports:
   discriminated union), `WatchProvider`.
 - **`./lib/documents`** — Firestore document shapes (PLAN §4):
   - `User`, `NotificationPrefs`, `FcmToken`
-  - `WatchlistItem`, `EpisodeDoc`
+  - `WatchlistItem`, `EpisodeDoc` (fields: `season`, `episode`, `title` (nullable, spec 0034), `airDate`, `watched`, `watchedAt`)
   - `NotificationDoc`, `NotificationPayload`
   - `TitleCacheEntry`, `TitleMetadata`, `RegionAvailability`
 - **`./lib/tokens`** — cross-scope dependency-injection tokens. **Not re-exported

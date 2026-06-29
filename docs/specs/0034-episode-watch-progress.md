@@ -2,7 +2,7 @@
 number: 0034
 slug: episode-watch-progress
 title: Add episode list and watch-progress tracking to the title-detail slice
-status: approved
+status: done
 slices: [slice:title-detail]
 scopes: [scope:mobile, scope:shared]
 created: 2026-06-26
@@ -96,7 +96,7 @@ is missing).
    `episodePath` path helpers **already exist** in `@vultus/shared/domain` and
    `@vultus/shared/firestore-schema` (added by spec 0005). **Do NOT duplicate
    them.** The **only** gap: `EpisodeDoc` carries `{ season, episode, airDate,
-   watched, watchedAt }` but **no `title`** — decision 2 needs the per-episode
+watched, watchedAt }` but **no `title`** — decision 2 needs the per-episode
    title. So this spec adds a **single nullable field `title: string | null`** to
    `EpisodeDoc` + its read/write data types + both converters (`scope:shared`).
    No other shared change.
@@ -170,11 +170,11 @@ Out of scope:
 
 ## Affected slices & Sheriff tags
 
-| Project                  | Path                            | Sheriff tags                         | Change                                                                                                                                  |
-| ------------------------ | ------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| shared-domain            | `libs/shared/domain`            | `scope:shared`                       | Add `title: string \| null` to `EpisodeDoc`; README + spec update                                                                       |
-| shared-firestore-schema  | `libs/shared/firestore-schema`  | `scope:shared`                       | Add `title` to `EpisodeReadData`/`EpisodeWriteData`; map it in `episodeToData`/`dataToEpisode`; README + spec update                    |
-| mobile-title-detail      | `libs/mobile/title-detail`      | `scope:mobile`, `slice:title-detail` | Extend `TitleDetailService` (episodes stream + writes + auto-status + movie-watched), `TitleDetailPage` (episode section + movie toggle) |
+| Project                 | Path                           | Sheriff tags                         | Change                                                                                                                                   |
+| ----------------------- | ------------------------------ | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| shared-domain           | `libs/shared/domain`           | `scope:shared`                       | Add `title: string \| null` to `EpisodeDoc`; README + spec update                                                                        |
+| shared-firestore-schema | `libs/shared/firestore-schema` | `scope:shared`                       | Add `title` to `EpisodeReadData`/`EpisodeWriteData`; map it in `episodeToData`/`dataToEpisode`; README + spec update                     |
+| mobile-title-detail     | `libs/mobile/title-detail`     | `scope:mobile`, `slice:title-detail` | Extend `TitleDetailService` (episodes stream + writes + auto-status + movie-watched), `TitleDetailPage` (episode section + movie toggle) |
 
 - **Import boundaries (verified against the spec-0010/0016 Sheriff rules):**
   - `libs/mobile/title-detail` (`slice:title-detail`) is governed by
@@ -204,15 +204,15 @@ Out of scope:
 PLAN §4 paths. The **only** new field anywhere is `EpisodeDoc.title`; all other
 access reuses merged shapes.
 
-| PLAN §4 path                                              | Access by this slice                                  | Fields / note                                                                                            |
-| -------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `users/{uid}/watchlist/{titleId}/episodes` (collection)  | **read (realtime, TV only)**                          | each `EpisodeDoc`: `season`, `episode`, **`title` (NEW)**, `airDate`, `watched`, `watchedAt`             |
-| `users/{uid}/watchlist/{titleId}/episodes/{episodeId}`   | **update** (single), **update** (bulk per-season)     | write only `{ watched, watchedAt }` (`watchedAt = now ISO` on mark, `null` on unmark) via `episodeToData` |
-| `users/{uid}/watchlist/{titleId}` (doc)                  | **read (realtime, already wired)**, **update(status)** | tracked state (0016's `tracked$`); auto-status (TV) + movie mark-watched write `{ status }`               |
-| `title-cache/**`                                         | **none new**                                          | unchanged from 0016 (read-only metadata/providers)                                                       |
+| PLAN §4 path                                            | Access by this slice                                   | Fields / note                                                                                             |
+| ------------------------------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| `users/{uid}/watchlist/{titleId}/episodes` (collection) | **read (realtime, TV only)**                           | each `EpisodeDoc`: `season`, `episode`, **`title` (NEW)**, `airDate`, `watched`, `watchedAt`              |
+| `users/{uid}/watchlist/{titleId}/episodes/{episodeId}`  | **update** (single), **update** (bulk per-season)      | write only `{ watched, watchedAt }` (`watchedAt = now ISO` on mark, `null` on unmark) via `episodeToData` |
+| `users/{uid}/watchlist/{titleId}` (doc)                 | **read (realtime, already wired)**, **update(status)** | tracked state (0016's `tracked$`); auto-status (TV) + movie mark-watched write `{ status }`               |
+| `title-cache/**`                                        | **none new**                                           | unchanged from 0016 (read-only metadata/providers)                                                        |
 
 - **Episode read (decision 2, TV only).** Subscribe to `episodesPath(uid,
-  String(tmdbId))` via AngularFire `collectionData` (with `idField` for the
+String(tmdbId))` via AngularFire `collectionData` (with `idField` for the
   episode doc id), map each doc with `dataToEpisode`, **group by `season`**, and
   **sort by `episode`** within a season (and seasons ascending). The episode doc
   id convention written by the (future) sync engine is **not relied on for
@@ -232,15 +232,15 @@ access reuses merged shapes.
   compute the new watched-count across the just-written state and read the
   current `status` from the realtime `tracked$`/last-known watchlist doc:
   - 0 → ≥1 watched and `status === 'planned'` → `updateStatus(tmdbId,
-    'watching')`.
+'watching')`.
   - all episodes watched and `status !== 'dropped'` → `updateStatus(tmdbId,
-    'completed')`.
+'completed')`.
   - back to 0 watched, and the slice had auto-set `'watching'` → `updateStatus(tmdbId,
-    'planned')`; else leave as-is.
+'planned')`; else leave as-is.
   - `status === 'dropped'` → **no auto-status write**.
-  Reuse the **existing `updateStatus`** write path (0016); do not add a new write
-  target. "Whether the slice auto-set watching" is tracked **in-service** (a
-  flag / derivation from prior state) — it does **not** add a Firestore field.
+    Reuse the **existing `updateStatus`** write path (0016); do not add a new write
+    target. "Whether the slice auto-set watching" is tracked **in-service** (a
+    flag / derivation from prior state) — it does **not** add a Firestore field.
 - **Movie mark-watched write (decision 3).** `updateStatus(tmdbId, 'completed')`
   on mark, `updateStatus(tmdbId, 'watching')` on unmark, **no-op when the current
   status is `'dropped'`**. No new field; reuses 0016's `updateStatus`.
@@ -446,7 +446,7 @@ card, **rendered only when `detail.type === 'tv'`** and the detail state is
      `--vultus-outline-variant`. **Checked:** filled glyph
      (`checkbox` / `checkmark-circle`), `--ion-color-primary` (`#4edea3`).
      `aria-label` "Mark episode N watched/unwatched". Tap → `toggleEpisode(row,
-     !row.watched)`.
+!row.watched)`.
 
 ### View / interactive states (each a checkable acceptance item)
 
@@ -486,8 +486,7 @@ card, **rendered only when `detail.type === 'tv'`** and the detail state is
 - Consume `--vultus-*` / `--ion-*` from `theme.scss`; the checked toggle is
   `--ion-color-primary` (`#4edea3`), **not** `#10B981` (that is
   `--vultus-status-completed`, used only for the completed status accent).
-- **Inter must be LOADED** (already loaded by `apps/mobile/src/index.html` per
-  0016) and the **icon font loaded** — the new chevron/checkbox glyphs must
+- **Inter must be LOADED** (already loaded by `apps/mobile/src/index.html` per 0016) and the **icon font loaded** — the new chevron/checkbox glyphs must
   actually render, not just be named.
 - For focus, rely on Ionic's default `:focus-visible` ring (no `--vultus-focus*`
   token exists — ui-kit owns adding one; do not invent inline).
@@ -505,16 +504,17 @@ other. Tests (task 4) depend on 1–3.
 > [parallel] task** in this spec. Task 1 writes only `libs/shared/domain/**` +
 > `libs/shared/firestore-schema/**`; tasks 2–4 write only
 > `libs/mobile/title-detail/**` plus (task 4) `apps/mobile-e2e/src/title-detail.spec.ts`
-> + `apps/mobile-e2e/emulator-data/seeded/docs.json`. The file sets are disjoint,
-> but tasks 2–4 depend on task 1's shared field, so the whole graph is sequential.
-> No two tasks write the same file.
+>
+> - `apps/mobile-e2e/emulator-data/seeded/docs.json`. The file sets are disjoint,
+>   but tasks 2–4 depend on task 1's shared field, so the whole graph is sequential.
+>   No two tasks write the same file.
 
 1. **[sequential] Shared `EpisodeDoc.title` field (`scope:shared`).**
    backend-engineer / shared-types owner.
    - `libs/shared/domain/src/lib/documents.ts`: add `title: string | null` to
      `EpisodeDoc`.
    - `libs/shared/firestore-schema/src/lib/data-types.ts`: add `title: string |
-     null` to `EpisodeReadData` + `EpisodeWriteData`.
+null` to `EpisodeReadData` + `EpisodeWriteData`.
    - `libs/shared/firestore-schema/src/lib/converters.ts`: map `title` (`?? null`)
      in `episodeToData` + `dataToEpisode`.
    - Update `libs/shared/firestore-schema/src/lib/firestore-schema.spec.ts` (and
@@ -580,8 +580,8 @@ other. Tests (task 4) depend on 1–3.
      here).
    - Service unit (`title-detail.service.spec.ts`): episode grouping/sorting/
      counts, single + bulk writes, auto-status transitions (incl. dropped no-op
-     + back-to-planned), movie mark-watched (incl. dropped no-op), null-uid /
-     movie → `[]`.
+     - back-to-planned), movie mark-watched (incl. dropped no-op), null-uid /
+       movie → `[]`.
    - Component (`title-detail.page.spec.ts`): episode section hidden for movie,
      loading skeleton, empty state, collapse toggle, episode toggle calls
      `setEpisodeWatched`, season bulk calls `setSeasonWatched` (and does not
@@ -610,9 +610,9 @@ is the only `libs/shared/**` touch; the only `apps/mobile-e2e` touches are the
 `test.fixme` stubs in `src/title-detail.spec.ts` and the episode seed docs added
 to `emulator-data/seeded/docs.json`. **No `firestore.rules`, `firestore.indexes.json`,
 `sheriff.config.ts`, `ci.yml`, `playwright.config.ts`, `libs/functions/**`, or any
-`scope:functions` file is touched.** Symbol/file names are recommendations; the
-binding contracts are the `EpisodeDoc.title` field, the realtime episode read +
-client `watched` writes, the TV auto-status rules, the movie mark-watched status
+`scope:functions`file is touched.** Symbol/file names are recommendations; the
+binding contracts are the`EpisodeDoc.title`field, the realtime episode read +
+client`watched` writes, the TV auto-status rules, the movie mark-watched status
 flip, and the no-functions-write / no-cross-slice / no-episode-doc-create
 guardrails.)
 
@@ -670,9 +670,9 @@ mocked; `ActivatedRoute` providing a `:titleId`):**
 - **Empty state (decision 5):** TV `loaded`, `episodes$` → `[]` → "Episodes will
   appear after the next sync." (not an error).
 - **Episode toggle:** tapping a row's toggle calls `setEpisodeWatched(row.id,
-  !watched)`.
+!watched)`.
 - **Season bulk + collapse:** the bulk control calls `setSeasonWatched(season,
-  …)` and does **not** toggle collapse (stopPropagation); the heading tap toggles
+…)` and does **not** toggle collapse (stopPropagation); the heading tap toggles
   collapse (rows hide/show) and persists nothing to Firestore.
 - **Movie toggle:** tapping calls `setMovieWatched`; when the tracked status is
   `'dropped'` the toggle is **disabled** (no call).
@@ -705,14 +705,14 @@ are `test.fixme` because the emulator cannot run under Claude Code tools and the
 seeded fixture needs episode docs added (decision 6).
 
 - [ ] `pnpm nx run-many -t lint test -p shared-domain shared-firestore-schema
-      mobile-title-detail` passes **with Sheriff active**: the slice imports
+mobile-title-detail` passes **with Sheriff active**: the slice imports
       `@vultus/shared/domain` (`EpisodeDoc`, `TitleType`, `WatchStatus`,
       `WatchlistItem`) + `@vultus/shared/firestore-schema` (`episodesPath`,
       `episodePath`, `dataToEpisode`, `episodeToData`) + AngularFire/Ionic/rxjs
       (third-party) **only** — **no other slice import, no `apps/mobile` deep
       import (uid still via `AUTH_UID`), no `scope:functions` import.**
 - [ ] `pnpm nx typecheck shared-domain shared-firestore-schema mobile-title-detail
-      mobile` passes — the new `EpisodeDoc.title` + converter mapping + the
+mobile` passes — the new `EpisodeDoc.title` + converter mapping + the
       service/page episode surface compile against the merged shared types.
 - [ ] `pnpm nx build mobile` passes (production configuration) within existing
       budgets.

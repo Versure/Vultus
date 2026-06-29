@@ -152,10 +152,11 @@ describe('converters — round-trip identity', () => {
     expect(read.voteAverage).toBeNull();
   });
 
-  it('EpisodeDoc: watchedAt set (watched true)', () => {
+  it('EpisodeDoc: watchedAt set (watched true), title present', () => {
     const ep: EpisodeDoc = {
       season: 2,
       episode: 5,
+      title: 'Ozymandias',
       airDate: '2026-04-01T20:00:00.000Z',
       watched: true,
       watchedAt: '2026-04-02T21:30:00.000Z',
@@ -165,10 +166,11 @@ describe('converters — round-trip identity', () => {
     );
   });
 
-  it('EpisodeDoc: watchedAt null (watched false)', () => {
+  it('EpisodeDoc: watchedAt null (watched false), title null', () => {
     const ep: EpisodeDoc = {
       season: 1,
       episode: 1,
+      title: null,
       airDate: '2026-04-01T20:00:00.000Z',
       watched: false,
       watchedAt: null,
@@ -176,6 +178,22 @@ describe('converters — round-trip identity', () => {
     expect(dataToEpisode(simulateStored(episodeToData(ep)) as never)).toEqual(
       ep,
     );
+  });
+
+  it('EpisodeDoc: backward-compat — stored doc missing title field reads back as null', () => {
+    // Simulates a doc written before spec 0034 (no title field in stored data).
+    const ep: EpisodeDoc = {
+      season: 3,
+      episode: 7,
+      title: null,
+      airDate: '2026-05-10T20:00:00.000Z',
+      watched: false,
+      watchedAt: null,
+    };
+    const stored = simulateStored(episodeToData(ep));
+    // Delete the title field to simulate a pre-0034 stored doc.
+    delete (stored as Record<string, unknown>)['title'];
+    expect(dataToEpisode(stored as never)).toEqual(ep);
   });
 
   it('NotificationDoc: readAt set; payload incl optional providerName', () => {
@@ -298,6 +316,7 @@ describe('converters — directional spot-checks', () => {
     const ep: EpisodeDoc = {
       season: 1,
       episode: 1,
+      title: 'Pilot',
       airDate: '2026-04-01T20:00:00.000Z',
       watched: true,
       watchedAt: '2026-04-02T21:30:00.000Z',
