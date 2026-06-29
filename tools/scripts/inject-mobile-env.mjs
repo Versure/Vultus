@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Mobile build-time env injection + loud guard (spec 0026).
  *
@@ -149,6 +148,7 @@ export const environment = {
   tmdb: {
     apiBaseUrl: 'https://api.themoviedb.org/3',
     imageBaseUrl: 'https://image.tmdb.org/t/p/w185',
+    detailImageBaseUrl: 'https://image.tmdb.org/t/p/w780',
     auth: { kind: 'apiKey' as const, apiKey: ${s(values.TMDB_API_KEY)} },
   },
 };

@@ -2,7 +2,7 @@
 number: 0036
 slug: fix-detail-poster-blurry
 title: Fix blurry title-detail hero poster by serving a larger TMDB image size
-status: approved
+status: done
 slices: [slice:title-detail]
 scopes: [scope:mobile]
 created: 2026-06-29

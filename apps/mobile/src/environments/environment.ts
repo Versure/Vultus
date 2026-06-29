@@ -30,6 +30,10 @@ export const environment = {
   tmdb: {
     apiBaseUrl: 'https://api.themoviedb.org/3',
     imageBaseUrl: 'https://image.tmdb.org/t/p/w185',
+    // Larger base for the title-detail hero (spec 0036) — the 530px hero
+    // upscales w185 to blur, so the detail slice gets w780 instead. Search and
+    // watchlist thumbnails stay on imageBaseUrl (w185).
+    detailImageBaseUrl: 'https://image.tmdb.org/t/p/w780',
     auth: { kind: 'apiKey' as const, apiKey: '' },
   },
 };

@@ -38,7 +38,7 @@ export interface GroupedProviders {
  */
 export interface TmdbDetailConfig {
   apiBaseUrl: string; // e.g. https://api.themoviedb.org/3
-  imageBaseUrl: string; // e.g. https://image.tmdb.org/t/p/w185
+  imageBaseUrl: string; // e.g. https://image.tmdb.org/t/p/w780 (detail hero, spec 0036)
   auth: { kind: 'bearer'; token: string } | { kind: 'apiKey'; apiKey: string };
   /**
    * Optional fetch override — used in mock/dev environments. Production leaves
