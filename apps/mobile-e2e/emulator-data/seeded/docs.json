@@ -1,5 +1,5 @@
 {
-  "description": "Seeded fixture (spec 0019 flows F4-F8): the users/{uid} profile doc (region NL) plus ONE TV watchlist entry (Breaking Bad, tmdbId 2, status planned). {uid} is substituted at seed time with the resolved anon uid (R3). addedAt uses the __timestamp marker so the encoder writes a Firestore timestampValue.",
+  "description": "Seeded fixture (spec 0019 flows F4-F8 + spec 0034 episode flows): the users/{uid} profile doc (region NL), ONE TV watchlist entry (Breaking Bad, tmdbId 2, status planned), its title-cache entry, and its 3 season-1 episode docs (spec 0034 — under .../watchlist/2/episodes). {uid} is substituted at seed time with the resolved anon uid (R3). addedAt/airDate use the __timestamp marker so the encoder writes a Firestore timestampValue.",
   "docs": [
     {
       "path": "users/{uid}",
@@ -38,6 +38,39 @@
           "releaseDate": null
         },
         "lastSyncedAt": { "__timestamp": "2026-06-24T10:00:00.000Z" }
+      }
+    },
+    {
+      "path": "users/{uid}/watchlist/2/episodes/s01e01",
+      "data": {
+        "season": 1,
+        "episode": 1,
+        "title": "Pilot",
+        "airDate": { "__timestamp": "2008-01-20T00:00:00.000Z" },
+        "watched": false,
+        "watchedAt": null
+      }
+    },
+    {
+      "path": "users/{uid}/watchlist/2/episodes/s01e02",
+      "data": {
+        "season": 1,
+        "episode": 2,
+        "title": "Cat's in the Bag",
+        "airDate": { "__timestamp": "2008-01-27T00:00:00.000Z" },
+        "watched": false,
+        "watchedAt": null
+      }
+    },
+    {
+      "path": "users/{uid}/watchlist/2/episodes/s01e03",
+      "data": {
+        "season": 1,
+        "episode": 3,
+        "title": "...And the Bag's in the River",
+        "airDate": { "__timestamp": "2008-02-10T00:00:00.000Z" },
+        "watched": false,
+        "watchedAt": null
       }
     }
   ]

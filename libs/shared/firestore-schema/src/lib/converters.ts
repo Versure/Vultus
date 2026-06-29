@@ -100,6 +100,7 @@ export function episodeToData(ep: EpisodeDoc): EpisodeWriteData {
   return {
     season: ep.season,
     episode: ep.episode,
+    title: ep.title ?? null,
     airDate: new Date(ep.airDate),
     watched: ep.watched,
     watchedAt: ep.watchedAt === null ? null : new Date(ep.watchedAt),
@@ -109,6 +110,7 @@ export function dataToEpisode(data: EpisodeReadData): EpisodeDoc {
   return {
     season: data.season,
     episode: data.episode,
+    title: data.title ?? null,
     airDate: data.airDate.toDate().toISOString(),
     watched: data.watched,
     watchedAt:

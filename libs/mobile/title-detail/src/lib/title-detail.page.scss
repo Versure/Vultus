@@ -378,3 +378,184 @@ ion-content {
     color: var(--vultus-status-dropped);
   }
 }
+
+// -----------------------------------------------------------------------------
+// Movie "mark as watched" toggle — mirrors the outlined status-control (the
+// Stitch "Mark as Watched" CTA: outlined, primary, check_circle icon). Sits in
+// the action area below the status/remove row (spec 0034).
+// -----------------------------------------------------------------------------
+.movie-watched-control {
+  height: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--vultus-space-sm);
+  padding: 0 var(--vultus-space-md);
+  border: 2px solid var(--ion-color-primary);
+  border-radius: var(--vultus-radius-md);
+  background: transparent;
+  color: var(--ion-color-primary);
+  font-family: var(--vultus-font-family);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    transform 80ms ease;
+
+  &.is-watched {
+    background: color-mix(in srgb, var(--ion-color-primary) 20%, transparent);
+  }
+
+  &:disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+  }
+
+  &:not(:disabled):active {
+    transform: scale(0.98);
+  }
+
+  ion-icon {
+    font-size: 20px;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Episodes section — season-grouped, collapsible, with a per-season bulk toggle
+// and per-episode watched toggles. No dedicated Stitch screen (spec 0034
+// decision 8); derived from the in-repo design system (8px grid, --vultus-*
+// tokens, primary Emerald accent). FLAGGED for human visual verification.
+// -----------------------------------------------------------------------------
+.season-group + .season-group {
+  margin-top: var(--vultus-space-md);
+}
+
+.season-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  cursor: pointer;
+  padding: var(--vultus-space-sm) 0;
+}
+
+.season-label {
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-body-lg-size);
+  font-weight: 600;
+  color: var(--vultus-on-surface);
+}
+
+.season-heading-right {
+  display: flex;
+  align-items: center;
+  gap: var(--vultus-space-sm);
+}
+
+.season-count {
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-label-md-size);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--vultus-on-surface-variant);
+}
+
+.bulk-toggle {
+  border: none;
+  background: transparent;
+  color: var(--ion-color-primary);
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-label-md-size);
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.chevron-icon {
+  font-size: 18px;
+  color: var(--vultus-on-surface-variant);
+  transition: transform 200ms ease;
+
+  &.expanded {
+    transform: rotate(180deg);
+  }
+}
+
+.episode-list {
+  margin-top: var(--vultus-space-sm);
+}
+
+.episode-row {
+  display: flex;
+  align-items: center;
+  min-height: 56px;
+  padding: var(--vultus-space-sm) 0;
+  gap: var(--vultus-space-sm);
+  border-top: 1px solid var(--vultus-outline-variant);
+}
+
+.episode-number {
+  min-width: 32px;
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-body-md-size);
+  font-weight: 600;
+  color: var(--vultus-on-surface-variant);
+  flex-shrink: 0;
+}
+
+.episode-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.episode-title {
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-body-md-size);
+  font-weight: 400;
+  color: var(--vultus-on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.episode-air-date {
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-label-sm-size);
+  font-weight: var(--vultus-text-label-sm-weight, 500);
+  color: var(--vultus-on-surface-variant);
+}
+
+.watched-toggle {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--vultus-outline-variant);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 80ms ease;
+
+  &.is-watched {
+    color: var(--ion-color-primary);
+  }
+
+  &:active {
+    transform: scale(0.92);
+  }
+
+  ion-icon {
+    font-size: 24px;
+  }
+}
+
+.episodes-skeleton {
+  display: flex;
+  flex-direction: column;
+}

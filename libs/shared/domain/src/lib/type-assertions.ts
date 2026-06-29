@@ -123,6 +123,7 @@ const _watchlistItem = {
 const _episodeDoc = {
   season: 1,
   episode: 1,
+  title: 'Winter Is Coming',
   airDate: '2011-04-17T00:00:00.000Z',
   watched: true,
   watchedAt: '2026-06-18T10:00:00.000Z',
@@ -131,6 +132,7 @@ const _episodeDoc = {
 const _episodeDocUnwatched = {
   season: 1,
   episode: 2,
+  title: null,
   airDate: '2011-04-24T00:00:00.000Z',
   watched: false,
   watchedAt: null,

@@ -70,10 +70,11 @@ export interface WatchlistItemWriteData {
   voteAverage?: number | null;
 }
 
-// --- EpisodeDoc: airDate + nullable watchedAt ---
+// --- EpisodeDoc: airDate + nullable watchedAt + nullable title (spec 0034) ---
 export interface EpisodeReadData {
   season: number;
   episode: number;
+  title?: string | null; // optional on read: stored docs pre-0034 lack this field
   airDate: FirestoreTimestampLike;
   watched: boolean;
   watchedAt: FirestoreTimestampLike | null; // null → null
@@ -81,6 +82,7 @@ export interface EpisodeReadData {
 export interface EpisodeWriteData {
   season: number;
   episode: number;
+  title: string | null;
   airDate: Date;
   watched: boolean;
   watchedAt: Date | null;
