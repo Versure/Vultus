@@ -5,3 +5,4 @@
 export { TitleDetailPage } from './lib/title-detail.page';
 export { TMDB_DETAIL_CONFIG } from './lib/tokens';
 export type { TmdbDetailConfig } from './lib/tmdb-detail.client';
+export type { SeasonGroup, EpisodeRow } from './lib/title-detail.service';

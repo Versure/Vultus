@@ -115,6 +115,24 @@
       }
     </div>
 
+    <!-- Movie: mark-as-watched toggle (TV uses the per-episode toggles below) -->
+    @if (vm.state.kind === 'loaded' && vm.state.detail.type === 'movie' &&
+    vm.tracked !== null) {
+    <button
+      type="button"
+      class="movie-watched-control"
+      data-test="movie-watched-btn"
+      [class.is-watched]="vm.tracked.status === 'completed'"
+      [disabled]="vm.tracked.status === 'dropped'"
+      (click)="toggleMovieWatched(vm.tracked)"
+    >
+      <ion-icon
+        [name]="vm.tracked.status === 'completed' ? 'checkmark-circle' : 'square-outline'"
+      ></ion-icon>
+      {{ vm.tracked.status === 'completed' ? 'Watched' : 'Mark as watched' }}
+    </button>
+    }
+
     <!-- Synopsis (always present) -->
     <div class="glass-panel" data-test="synopsis">
       <h2 class="card-heading">
@@ -171,6 +189,106 @@
       </div>
       } }
     </div>
+
+    <!-- Episodes (TV only) -->
+    @if (vm.state.kind === 'loaded' && vm.state.detail.type === 'tv') {
+    <div class="glass-panel episodes-section" data-test="episodes-section">
+      <h2 class="card-heading">
+        <ion-icon name="list-outline"></ion-icon>
+        Episodes
+      </h2>
+
+      @let episodeData = (episodes$ | async); @if (episodeData !== null) { @if
+      (episodeData.length === 0) {
+      <p class="muted-line" data-test="episodes-empty">
+        Episodes will appear after the next sync.
+      </p>
+      } @else { @for (group of episodeData; track group.season) {
+      <div class="season-group" data-test="season-group">
+        <div
+          class="season-heading"
+          role="button"
+          tabindex="0"
+          [attr.aria-expanded]="!isSeasonCollapsed(group.season)"
+          (click)="toggleSeasonCollapsed(group.season)"
+          (keyup.enter)="toggleSeasonCollapsed(group.season)"
+          (keyup.space)="toggleSeasonCollapsed(group.season)"
+        >
+          <span class="season-label">Season {{ group.season }}</span>
+          <div class="season-heading-right">
+            <span class="season-count" data-test="season-count"
+              >{{ group.watchedCount }}/{{ group.total }} watched</span
+            >
+            <button
+              type="button"
+              class="bulk-toggle"
+              data-test="bulk-toggle"
+              (click)="$event.stopPropagation(); toggleSeason(group)"
+            >
+              {{ group.allWatched ? 'Mark all unwatched' : 'Mark all watched' }}
+            </button>
+            <ion-icon
+              name="chevron-down-outline"
+              class="chevron-icon"
+              [class.expanded]="!isSeasonCollapsed(group.season)"
+            ></ion-icon>
+          </div>
+        </div>
+
+        @if (!isSeasonCollapsed(group.season)) {
+        <div class="episode-list">
+          @for (row of group.episodes; track row.id) {
+          <div class="episode-row" data-test="episode-row">
+            <span class="episode-number">E{{ row.episode }}</span>
+            <div class="episode-info">
+              <span class="episode-title"
+                >{{ row.title ?? 'Episode ' + row.episode }}</span
+              >
+              @if (row.airDate) {
+              <span class="episode-air-date"
+                >{{ formatAirDate(row.airDate) }}</span
+              >
+              }
+            </div>
+            <button
+              type="button"
+              class="watched-toggle"
+              [class.is-watched]="row.watched"
+              [attr.aria-label]="'Mark episode ' + row.episode + (row.watched ? ' unwatched' : ' watched')"
+              data-test="episode-watched-toggle"
+              (click)="toggleEpisode(row, !row.watched)"
+            >
+              <ion-icon
+                [name]="row.watched ? 'checkmark-circle' : 'square-outline'"
+              ></ion-icon>
+            </button>
+          </div>
+          }
+        </div>
+        }
+      </div>
+      } } } @else {
+      <div class="episodes-skeleton" data-test="episodes-skeleton">
+        <ion-skeleton-text
+          animated
+          style="height: 48px; width: 100%; border-radius: 8px"
+        ></ion-skeleton-text>
+        <ion-skeleton-text
+          animated
+          style="height: 56px; width: 100%; border-radius: 8px; margin-top: 8px"
+        ></ion-skeleton-text>
+        <ion-skeleton-text
+          animated
+          style="height: 56px; width: 100%; border-radius: 8px; margin-top: 8px"
+        ></ion-skeleton-text>
+        <ion-skeleton-text
+          animated
+          style="height: 56px; width: 100%; border-radius: 8px; margin-top: 8px"
+        ></ion-skeleton-text>
+      </div>
+      }
+    </div>
+    }
   </div>
   } }
 

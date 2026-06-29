@@ -263,4 +263,69 @@ test.describe
     await expect(emptyState).toBeVisible();
     await expect(emptyState).toContainText('Your watchlist is empty');
   });
+
+  // -------------------------------------------------------------------------
+  // Spec 0034 — episode watch-progress flows (test.fixme).
+  // Un-skip blockers: (a) Firestore emulator must run in the user's own
+  // terminal (cannot run under Claude Code tools — project memory), (b) episode
+  // seed docs for Breaking Bad S1 are seeded in
+  // apps/mobile-e2e/emulator-data/seeded/docs.json; a MOVIE watchlist entry
+  // still needs adding for the movie flow below.
+  // -------------------------------------------------------------------------
+  test.fixme('episode: mark episode watched → row shows watched + season count updates', async ({
+    page,
+  }) => {
+    await bootAndSeed(page);
+    // Navigate to the TV title detail page (tmdbId 2, Breaking Bad).
+    await page.goto('/tabs/title-detail/2');
+    await expect(page).toHaveURL(/\/tabs\/title-detail\/2$/);
+    // Find the Episodes section.
+    const episodesSection = page.locator('[data-test="episodes-section"]');
+    await expect(episodesSection).toBeVisible();
+    // Mark the first episode watched.
+    const firstToggle = episodesSection
+      .locator('[data-test="episode-watched-toggle"]')
+      .first();
+    await firstToggle.click();
+    // The toggle now shows the watched state and the season count updates.
+    await expect(firstToggle).toHaveClass(/is-watched/);
+    const seasonCount = episodesSection
+      .locator('[data-test="season-count"]')
+      .first();
+    await expect(seasonCount).toContainText('/');
+  });
+
+  test.fixme('episode: season progress display after marking multiple episodes', async ({
+    page,
+  }) => {
+    await bootAndSeed(page);
+    await page.goto('/tabs/title-detail/2');
+    const episodesSection = page.locator('[data-test="episodes-section"]');
+    await expect(episodesSection).toBeVisible();
+    // Mark the first two episodes watched.
+    const toggles = episodesSection.locator(
+      '[data-test="episode-watched-toggle"]',
+    );
+    await toggles.nth(0).click();
+    await toggles.nth(1).click();
+    // Season count should show 2/N watched.
+    const seasonCount = episodesSection
+      .locator('[data-test="season-count"]')
+      .first();
+    await expect(seasonCount).toContainText('2/');
+  });
+
+  test.fixme('movie: mark as watched → status changes to completed', async ({
+    page,
+  }) => {
+    // Requires a MOVIE watchlist entry in the seeded fixture (a tmdbId to be
+    // added to docs.json — the current fixture only has the TV entry tmdbId 2).
+    await bootAndSeed(page);
+    const movieWatchedBtn = page.locator('[data-test="movie-watched-btn"]');
+    await expect(movieWatchedBtn).toBeVisible();
+    await movieWatchedBtn.click();
+    // Status should now be completed (the status control shows Completed).
+    const statusControl = page.locator('[data-test="status-control"]');
+    await expect(statusControl).toContainText('Completed');
+  });
 });

@@ -4,8 +4,10 @@ The **pushed per-title detail page** for Vultus (PLAN §6 item 19, spec 0016). I
 is **not** a tab — it is reached from the watchlist or a search result and
 lazy-routed at **`tabs/title-detail/:titleId`** (where `:titleId === String(tmdbId)`).
 It shows the title's metadata (poster, title, year, rating, synopsis), the
-streaming providers that carry it in the user's region (text-only, grouped), and
-the watchlist action area (add / change status / remove).
+streaming providers that carry it in the user's region (text-only, grouped), the
+watchlist action area (add / change status / remove), and — for **TV** titles —
+a season-grouped **Episodes** section; for **movies** a **Mark as watched**
+toggle (spec 0034).
 
 ## Barrel exports (`@vultus/mobile/title-detail`)
 
@@ -14,10 +16,44 @@ the watchlist action area (add / change status / remove).
 | `TitleDetailPage`    | standalone component | the route's `loadComponent` target                                |
 | `TMDB_DETAIL_CONFIG` | `InjectionToken`     | TMDB base URLs + auth, provided at root by `apps/mobile`          |
 | `TmdbDetailConfig`   | type                 | the shape `TMDB_DETAIL_CONFIG` carries (so the shell can wire it) |
+| `SeasonGroup`        | type                 | a season's episodes + derived watched counts (spec 0034)          |
+| `EpisodeRow`         | type                 | `EpisodeDoc` + its Firestore doc `id` (spec 0034)                 |
 
 `TitleDetailService`, `TmdbDetailClient`, `TitleDetail`, `GroupedProviders`, and
 `DetailViewState` are **slice-internal** (not exported) — no consumer needs them
-across the barrel.
+across the barrel. `SeasonGroup` / `EpisodeRow` are exported only because the
+component test (and any future consumer) needs the shapes; they remain
+slice-local data.
+
+## TV Episodes section + movie watched toggle (spec 0034)
+
+- **TV titles** render an **Episodes** card below Where-to-Watch: episodes are
+  **grouped by season** (ascending), each season **collapsible** (UI-only local
+  state) with a `watchedCount/total watched` summary and a **bulk toggle**
+  (mark all watched / unwatched). Each episode row has a per-episode watched
+  toggle. While the realtime episodes stream has not emitted yet a **skeleton**
+  shows; an empty subcollection shows "Episodes will appear after the next sync."
+- **Movie titles** render a **Mark as watched** toggle in the action area
+  (completed ↔ watching; disabled when the title is `dropped`).
+- **Auto status** (service-derived after each episode/season write): first
+  episode watched while `planned` → `watching`; all episodes watched → `completed`;
+  walking back to zero watched → `planned` **only if this slice auto-set
+  `watching`** (a manually chosen status is never clobbered). A `dropped` title is
+  never auto-changed.
+- **No dedicated Stitch screen** for the episode list (spec 0034 decision 8) — its
+  design is derived from the in-repo design system (`docs/design/vultus-design-system.md`)
+  and is **flagged for human visual verification**.
+
+### New service methods (spec 0034)
+
+- `episodes$(tmdbId, type): Observable<SeasonGroup[]>` — realtime, season-grouped
+  episodes; `of([])` for non-tv / null uid / empty subcollection.
+- `setEpisodeWatched(tmdbId, episodeId, watched): Promise<void>` — `updateDoc` the
+  episode doc, then re-derive status.
+- `setSeasonWatched(tmdbId, season, watched): Promise<void>` — batch-update every
+  episode of a season, then re-derive status.
+- `setMovieWatched(tmdbId, watched): Promise<void>` — completed ↔ watching
+  (dropped is a no-op).
 
 ## Usage
 
@@ -70,9 +106,15 @@ retry trigger (`onRetry()`).
   `title-cache`** (functions-only per `firestore.rules`).
 - **Reads** `users/{uid}.region` for the providers region.
 - **Subscribes** to `users/{uid}/watchlist/{titleId}` (realtime) for tracked state.
-- **Writes** ONLY `users/{uid}/watchlist/{titleId}`: `add` (`status: 'planned'`,
-  with denormalized `posterPath` + `voteAverage`), `updateStatus`, `removeTitle`.
-  Never the `episodes` subcollection, never `title-cache`, never `users/{uid}`.
+- **Subscribes** to `users/{uid}/watchlist/{titleId}/episodes` (realtime,
+  `idField: 'id'`) for the TV Episodes section (spec 0034).
+- **Writes** `users/{uid}/watchlist/{titleId}`: `add` (`status: 'planned'`,
+  with denormalized `posterPath` + `voteAverage`), `updateStatus`, `removeTitle`,
+  plus the auto-status re-derivation after an episode/season write.
+- **Writes** `users/{uid}/watchlist/{titleId}/episodes/{episodeId}`: only the
+  `{ watched, watchedAt }` fields, via **`updateDoc` (never `setDoc`)** — episode
+  docs are created by the sync engine and must pre-exist. Never `title-cache`,
+  never `users/{uid}`.
 
 ### Slice-local by design (NOT shared)
 
