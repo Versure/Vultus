@@ -42,6 +42,7 @@ import {
   catchError,
   map,
   of,
+  shareReplay,
   startWith,
   switchMap,
 } from 'rxjs';
@@ -252,14 +253,31 @@ export class WatchlistPage {
     });
   }
 
+  /**
+   * Memoized provider-name streams, keyed by `tmdbId|region`. The template binds
+   * `getProviderName$(...) | async`, which Angular re-invokes on every change
+   * detection pass — returning a fresh Observable each time would make the async
+   * pipe resubscribe (and open a new Firestore `docData` listener) every cycle,
+   * an unbounded Listen-channel loop. Caching one shared instance per key keeps
+   * the reference (and the underlying listener) stable across CD.
+   */
+  private readonly providerCache = new Map<string, Observable<string | null>>();
+
   /** First provider name for an item, in the user's region (badge). */
   getProviderName$(
     item: WatchlistItem,
     region: Region | null,
   ): Observable<string | null> {
-    return this.watchlistService
-      .availability$(item.tmdbId, region)
-      .pipe(map((a) => a?.providers[0]?.name ?? null));
+    const key = `${item.tmdbId}|${region ?? ''}`;
+    let stream = this.providerCache.get(key);
+    if (!stream) {
+      stream = this.watchlistService.availability$(item.tmdbId, region).pipe(
+        map((a) => a?.providers[0]?.name ?? null),
+        shareReplay({ bufferSize: 1, refCount: false }),
+      );
+      this.providerCache.set(key, stream);
+    }
+    return stream;
   }
 
   /** Full poster URL or null when no posterPath is cached. */
