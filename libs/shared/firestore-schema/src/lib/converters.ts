@@ -46,7 +46,7 @@ export function dataToUser(data: UserReadData): User {
   return {
     region: data.region,
     notificationPrefs: data.notificationPrefs,
-    fcmTokens: data.fcmTokens.map(dataToFcmToken),
+    fcmTokens: (data.fcmTokens ?? []).map(dataToFcmToken),
   };
 }
 
