@@ -2,7 +2,7 @@
 number: 0039
 slug: android-immersive-system-bars
 title: Auto-hide the Android status & navigation bars (sticky immersive mode)
-status: approved
+status: implementing
 slices: []
 scopes: [scope:mobile]
 created: 2026-06-29
