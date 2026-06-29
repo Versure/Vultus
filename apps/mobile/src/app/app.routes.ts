@@ -48,6 +48,16 @@ export const appRoutes: Route[] = [
         loadComponent: () =>
           import('@vultus/mobile/title-detail').then((m) => m.TitleDetailPage),
       },
+      {
+        // Pushed (not a tab) in-app notifications inbox (spec 0042). Reached from
+        // the watchlist header bell via ['tabs','notifications']; nested under
+        // `tabs` so the tab bar stays visible.
+        path: 'notifications',
+        loadComponent: () =>
+          import('@vultus/mobile/notifications').then(
+            (m) => m.NotificationsPage,
+          ),
+      },
       { path: '', redirectTo: 'watchlist', pathMatch: 'full' },
     ],
   },

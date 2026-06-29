@@ -7,11 +7,12 @@ import {
   type WatchlistItem,
 } from '@vultus/shared/domain';
 import {
+  notificationsPath,
   watchlistItemPath,
   watchlistPath,
 } from '@vultus/shared/firestore-schema';
 import type { FirestoreTimestampLike } from '@vultus/shared/firestore-schema';
-import { type Observable, of } from 'rxjs';
+import { type Observable, firstValueFrom, of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   WatchlistService,
@@ -239,6 +240,29 @@ describe('WatchlistService', () => {
     );
     expect(result).toBeNull();
     expect(docDataMock).not.toHaveBeenCalled();
+  });
+
+  it('unreadNotificationCount$ counts readAt === null over the streamed collection', async () => {
+    collectionDataMock.mockReturnValue(
+      of([
+        { readAt: null },
+        { readAt: fakeTs(new Date('2026-06-01T00:00:00.000Z')) },
+        { readAt: null },
+        {}, // absent readAt → also unread
+      ]),
+    );
+    const service = createService(UID);
+    const count = await firstValueFrom(service.unreadNotificationCount$);
+    expect(collectionMock).toHaveBeenCalledWith({}, notificationsPath(UID));
+    expect(count).toBe(3);
+  });
+
+  it('unreadNotificationCount$ → 0 with a null uid (no collection ref built)', async () => {
+    const service = createService(null);
+    const count = await firstValueFrom(service.unreadNotificationCount$);
+    expect(count).toBe(0);
+    expect(collectionMock).not.toHaveBeenCalled();
+    expect(collectionDataMock).not.toHaveBeenCalled();
   });
 
   it('every write targets a watchlist item doc (never user/title-cache)', () => {

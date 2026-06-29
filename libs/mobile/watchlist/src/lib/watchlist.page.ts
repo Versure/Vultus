@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import {
   IonActionSheet,
   IonAlert,
+  IonBadge,
   IonButton,
   IonButtons,
   IonContent,
@@ -19,6 +20,7 @@ import {
 import { addIcons } from 'ionicons';
 import {
   filmOutline,
+  notificationsOutline,
   personCircleOutline,
   refreshOutline,
   trashOutline,
@@ -66,6 +68,7 @@ const TMDB_POSTER_BASE = 'https://image.tmdb.org/t/p/w185';
     IonContent,
     IonButtons,
     IonButton,
+    IonBadge,
     IonIcon,
     IonRefresher,
     IonRefresherContent,
@@ -125,6 +128,14 @@ export class WatchlistPage {
   readonly region$: Observable<Region | null> =
     this.watchlistService.userRegion$(this.uid());
 
+  /**
+   * Unread-notification count for the header bell badge (spec 0042, decision 3).
+   * Reactive to the `AUTH_UID` null → uid transition via the service stream;
+   * counts `readAt === null` client-side (index-free). Null uid → `0`.
+   */
+  readonly unreadCount$: Observable<number> =
+    this.watchlistService.unreadNotificationCount$;
+
   // Status action-sheet state.
   actionSheetItem: WatchlistItem | null = null;
   actionSheetOpen = false;
@@ -148,6 +159,7 @@ export class WatchlistPage {
   constructor() {
     addIcons({
       filmOutline,
+      notificationsOutline,
       personCircleOutline,
       refreshOutline,
       trashOutline,
@@ -244,6 +256,19 @@ export class WatchlistPage {
       return;
     }
     this.watchlistService.removeTitle(this.uid(), this.titleId(item));
+  }
+
+  /** Opens the notifications inbox (spec 0042). Navigates by string segments —
+   *  NO import of `@vultus/mobile/notifications` (Sheriff-clean cross-slice nav). */
+  openNotifications(): void {
+    this.router.navigate(['tabs', 'notifications']).catch(() => {
+      // notifications route not registered yet — graceful no-op.
+    });
+  }
+
+  /** Bell-badge display string: "9+" when count > 9, else the number. */
+  badgeLabel(count: number): string {
+    return count > 9 ? '9+' : String(count);
   }
 
   /**

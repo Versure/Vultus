@@ -1,0 +1,9 @@
+{
+  "name": "mobile-notifications",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/mobile/notifications/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "tags": [],
+  "targets": {}
+}

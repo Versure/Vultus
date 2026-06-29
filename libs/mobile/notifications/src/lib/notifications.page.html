@@ -1,0 +1,90 @@
+<ion-header class="notifications-header">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="tabs/watchlist"></ion-back-button>
+    </ion-buttons>
+    <ion-title>Notifications</ion-title>
+    @if (vm$ | async; as vm) { @if (vm.unreadIds.length > 0) {
+    <ion-buttons slot="end">
+      <ion-button
+        fill="clear"
+        color="primary"
+        class="mark-all-read"
+        (click)="onMarkAllRead(vm.unreadIds)"
+      >
+        Mark all read
+      </ion-button>
+    </ion-buttons>
+    } }
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="notifications-content">
+  <ion-refresher slot="fixed" (ionRefresh)="onRefresh($event)">
+    <ion-refresher-content></ion-refresher-content>
+  </ion-refresher>
+
+  @if (vm$ | async; as vm) { @if (vm.rows === null) {
+  <div class="notifications-list">
+    <vultus-skeleton-card [count]="6" />
+  </div>
+  } @else if (vm.rows.length === 0) {
+  <vultus-empty-state
+    icon="notifications-off-outline"
+    title="No notifications yet"
+    subtitle="You'll see new-episode and now-streaming alerts here."
+  />
+  } @else {
+  <div class="notifications-list">
+    @for (row of vm.rows; track row.id) {
+    <ion-item-sliding class="notification-sliding">
+      <ion-item
+        lines="none"
+        button="true"
+        detail="false"
+        class="notification-card"
+        [class.notification-card--unread]="row.unread"
+        [class.notification-card--read]="!row.unread"
+        (click)="onRowTap(row)"
+      >
+        <div class="notification-row">
+          <div class="notification-thumb">
+            @if (posterUrl$(row.payload.tmdbId) | async; as poster) {
+            <img
+              class="notification-thumb__img"
+              [src]="poster"
+              [alt]="row.payload.title"
+            />
+            } @else {
+            <ion-icon
+              class="notification-thumb__icon"
+              [name]="kindIcon(row.kind)"
+              aria-hidden="true"
+            />
+            }
+          </div>
+          <div class="notification-body">
+            <h3 class="notification-title">{{ row.payload.title }}</h3>
+            <p class="notification-text">{{ body(row) }}</p>
+            <span class="notification-time">{{ timestamp(row) }}</span>
+          </div>
+          @if (row.unread) {
+          <span class="notification-dot" aria-label="Unread"></span>
+          }
+        </div>
+      </ion-item>
+      <ion-item-options side="end">
+        <ion-item-option
+          color="danger"
+          class="notification-delete"
+          (click)="onDelete(row)"
+        >
+          <ion-icon slot="icon-only" name="trash" aria-hidden="true" />
+          <ion-label>Delete</ion-label>
+        </ion-item-option>
+      </ion-item-options>
+    </ion-item-sliding>
+    }
+  </div>
+  } }
+</ion-content>

@@ -2,7 +2,7 @@
 number: 42
 slug: notifications-inbox
 title: Add an in-app notifications inbox slice and a watchlist-header bell entry point
-status: approved
+status: done
 slices: [slice:notifications, slice:watchlist]
 scopes: [scope:mobile]
 created: 2026-06-29
@@ -71,7 +71,7 @@ the bell. This completes the user-facing notification loop — sync → detect �
 
 4. **Inbox actions (all four, v1):**
    - **a. Tap a row** → deep-link `Router.navigate(['tabs','title-detail',
-     String(tmdbId)])` (reuse 0016; canonical segment is `tmdbId` per 0041) **and** mark
+String(tmdbId)])` (reuse 0016; canonical segment is `tmdbId` per 0041) **and** mark
      that notification read. Mark-read identical to 0041's convention:
      `updateDoc(doc(firestore, notificationPath(uid, id)), { readAt: Timestamp.now() })`
      (`Timestamp` from `@angular/fire/firestore`), best-effort in `try/catch`, null-uid
@@ -128,8 +128,7 @@ In scope:
 
 Out of scope (explicitly):
 
-- **Live FCM push rendering / the single-push deep-link + mark-read** — owned by spec
-  0041. This spec reads the persisted history; it does not register tokens, listen for
+- **Live FCM push rendering / the single-push deep-link + mark-read** — owned by spec 0041. This spec reads the persisted history; it does not register tokens, listen for
   pushes, or render toasts.
 - **Pagination / infinite scroll** beyond the 50-item cap — a later spec if needed.
 - **A delete-confirm dialog** — the swipe is deliberate (decision 4c).
@@ -144,11 +143,11 @@ Out of scope (explicitly):
 
 ## 3. Affected slices & Sheriff tags
 
-| Project              | Path                                               | Sheriff tags                         | Change                                                                                              |
-| -------------------- | -------------------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| mobile-notifications | `libs/mobile/notifications`                        | `scope:mobile`, `slice:notifications` | **NEW** lib: `NotificationsPage` + `NotificationsService` + relative-time helper; README; tests     |
-| mobile (app)         | `apps/mobile/src/app/app.routes.ts`                | `scope:mobile`                       | register the lazy `tabs/notifications` child route (mirrors the 0016 `title-detail` child)          |
-| mobile-watchlist     | `libs/mobile/watchlist`                            | `scope:mobile`, `slice:watchlist`    | header bell + `ion-badge` unread count + `Router.navigate(['tabs','notifications'])`; unread stream  |
+| Project              | Path                                | Sheriff tags                          | Change                                                                                              |
+| -------------------- | ----------------------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| mobile-notifications | `libs/mobile/notifications`         | `scope:mobile`, `slice:notifications` | **NEW** lib: `NotificationsPage` + `NotificationsService` + relative-time helper; README; tests     |
+| mobile (app)         | `apps/mobile/src/app/app.routes.ts` | `scope:mobile`                        | register the lazy `tabs/notifications` child route (mirrors the 0016 `title-detail` child)          |
+| mobile-watchlist     | `libs/mobile/watchlist`             | `scope:mobile`, `slice:watchlist`     | header bell + `ion-badge` unread count + `Router.navigate(['tabs','notifications'])`; unread stream |
 
 - **Tagging is by PATH GLOB in `sheriff.config.ts`** (spec 0010): the config declares
   `'libs/mobile/<slice>': ['scope:mobile', 'slice:<slice>']`, so a newly-generated
@@ -158,9 +157,9 @@ Out of scope (explicitly):
   the vocabulary lists `slice:notifications`; **edit only if a gap exists** (e.g. the
   vocabulary omits it), and record "no `sheriff.config.ts` change needed" in the PR if
   the verification passes. Generated `project.json` keeps `tags: []` (correct — tagging
-  is by glob). **Per project memory the glob targets `libs/**/src` (the barrel module),
-  not the lib root — confirm the new lib's `src` is matched so runtime barrel imports
-  resolve.**
+  is by glob). **Per project memory the glob targets `libs/**/src`(the barrel module),
+not the lib root — confirm the new lib's`src` is matched so runtime barrel imports
+  resolve.\*\*
 - **Import boundaries (notifications slice, `slice:notifications`)** — governed by
   `'slice:*': ['scope:shared', sameTag]`: it imports **only** `scope:shared` and its own
   modules. Concretely:
@@ -194,13 +193,13 @@ PLAN §4 paths. **No new field is added to any shared type.** `NotificationDoc`
 readAt }`) and its converters (`dataToNotification` / `notificationToData`) already exist
 (`libs/shared/domain/src/lib/documents.ts`, `libs/shared/firestore-schema/src/lib/converters.ts`).
 
-| PLAN §4 path                                 | Access                                       | By                                                                                  |
-| -------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `users/{uid}/notifications` (collection)     | **read** (realtime, `sentAt` desc, limit 50) | notifications slice (the inbox list); watchlist slice (the unread count — see note) |
-| `users/{uid}/notifications/{id}`             | **update** `readAt`                          | notifications slice — single on row tap; batched on "Mark all read"                 |
-| `users/{uid}/notifications/{id}`             | **delete**                                   | notifications slice — swipe-to-delete                                               |
-| `title-cache/{tmdbId}` (doc)                 | **read** `metadata.posterPath`               | notifications slice — the row thumbnail                                             |
-| `title-cache/{tmdbId}` (write)               | **none**                                     | functions-only (`write: if false`) — confirm not written                            |
+| PLAN §4 path                             | Access                                       | By                                                                                  |
+| ---------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `users/{uid}/notifications` (collection) | **read** (realtime, `sentAt` desc, limit 50) | notifications slice (the inbox list); watchlist slice (the unread count — see note) |
+| `users/{uid}/notifications/{id}`         | **update** `readAt`                          | notifications slice — single on row tap; batched on "Mark all read"                 |
+| `users/{uid}/notifications/{id}`         | **delete**                                   | notifications slice — swipe-to-delete                                               |
+| `title-cache/{tmdbId}` (doc)             | **read** `metadata.posterPath`               | notifications slice — the row thumbnail                                             |
+| `title-cache/{tmdbId}` (write)           | **none**                                     | functions-only (`write: if false`) — confirm not written                            |
 
 - **List read (decision 5).** Build the collection ref via `notificationsPath(uid)`,
   apply `query(col, orderBy('sentAt', 'desc'), limit(50))`, stream with `collectionData`
@@ -209,7 +208,7 @@ readAt }`) and its converters (`dataToNotification` / `notificationToData`) alre
   `dataToNotification` and keep the `id` alongside.
 - **Doc-id note (load-bearing — defuses the apparent 0041 dependency).** Mark-read and
   delete target the notification by the **real Firestore doc id read from the live stream
-  via `idField`**, *not* by 0041's deterministic `${tmdbId}-${region}-${kind}` id scheme.
+  via `idField`**, _not_ by 0041's deterministic `${tmdbId}-${region}-${kind}` id scheme.
   So the inbox is **robust regardless of how the dispatcher ids docs** — its only genuine
   cross-spec deps are the **0016 `title-detail` route** (merged) and the `readAt` /
   `Timestamp` convention (already in domain + 0041). State this in Risks.
@@ -219,12 +218,12 @@ readAt }`) and its converters (`dataToNotification` / `notificationToData`) alre
   cannot route through the whole-doc converter, so writing a `Timestamp` directly is
   correct and storage-compatible; the field stays `timestamp | null` per PLAN §4). Batch:
   a `writeBatch(firestore)`, one `batch.update(doc(firestore, notificationPath(uid, id)),
-  { readAt: Timestamp.now() })` per currently-unread id, then `batch.commit()`. Both
+{ readAt: Timestamp.now() })` per currently-unread id, then `batch.commit()`. Both
   null-uid-guarded and wrapped best-effort (a failure must not crash the page).
 - **Delete write (decision 4c).** `deleteDoc(doc(firestore, notificationPath(uid, id)))`,
   null-uid-guarded, best-effort.
 - **Poster read (decision 6).** `docData(doc(firestore, titleCacheDocPath(tmdbId)),
-  { idField: ... })` (or `getDoc`) mapped through `dataToTitleCache`; compose
+{ idField: ... })` (or `getDoc`) mapped through `dataToTitleCache`; compose
   `TMDB_POSTER_BASE + metadata.posterPath` when present, else emit `null` so the row
   renders the kind-based icon placeholder. The read is per-row and best-effort; a missing
   cache doc is **normal** (not an error), exactly as title-detail treats a cache miss.
@@ -258,14 +257,27 @@ exported (as needed) from `libs/mobile/notifications/src/index.ts`.
 ```ts
 import { Injectable, inject } from '@angular/core';
 import {
-  Firestore, Timestamp, collection, collectionData, deleteDoc, doc,
-  docData, limit, orderBy, query, updateDoc, writeBatch,
+  Firestore,
+  Timestamp,
+  collection,
+  collectionData,
+  deleteDoc,
+  doc,
+  docData,
+  limit,
+  orderBy,
+  query,
+  updateDoc,
+  writeBatch,
 } from '@angular/fire/firestore';
 import { AUTH_UID } from '@vultus/shared/domain/tokens';
 import type { NotificationDoc } from '@vultus/shared/domain';
 import {
-  dataToNotification, dataToTitleCache, notificationPath,
-  notificationsPath, titleCacheDocPath,
+  dataToNotification,
+  dataToTitleCache,
+  notificationPath,
+  notificationsPath,
+  titleCacheDocPath,
 } from '@vultus/shared/firestore-schema';
 import { Observable, of } from 'rxjs';
 
@@ -372,20 +384,20 @@ which is `primary-container`).
 
 ### Layout & tokens — pinned contract (each row a checkable acceptance item)
 
-| Element                  | Spec (from the screen markup)                                                                                                                                                                                              | Token / var                                                                  |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| **Header**               | Height **64px** (`h-16`), bg `surface` (#0b1326), bottom border `outline-variant` at 30% (#3c4a42). Realize as `ion-header > ion-toolbar`.                                                                                  | `--vultus-surface`, `--vultus-outline-variant`                               |
-| Header back              | Chevron back affordance, `on-surface`. Realize as `ion-back-button slot="start"` (`defaultHref="tabs/watchlist"`), default chevron.                                                                                        | `--vultus-on-surface`                                                        |
-| Header title             | "Notifications", role **headline-sm** (Inter 20/600), `on-surface`. `ion-title`.                                                                                                                                          | type role `headline-sm`; `--vultus-on-surface`                               |
-| Header **"Mark all read"** | Right action, role **label-md** (12/600, +0.05em), `primary` (#4edea3), **hover → opacity 80%**. `ion-buttons slot="end"` → `ion-button fill="clear"` themed primary. Disabled/hidden when there are **0 unread** rows. | type role `label-md`; `--ion-color-primary` / `--vultus-primary`             |
-| **List container**       | Side padding **16px** (`margin-mobile`), top padding **24px** (`lg`), vertical gap **8px** (`sm`) between rows.                                                                                                            | `--vultus-space-md` (16), `--vultus-space-lg` (24), `--vultus-space-sm` (8)  |
-| **Row card**             | Radius **24px** (`rounded-xl` / 1.5rem), 1px border `outline-variant` (#3c4a42), bg `surface-container` (#171f33), inner padding **8px** (`sm`), flex row, gap **16px** (`md`).                                            | `--vultus-radius-*` (1.5rem), `--vultus-outline-variant`, `--vultus-surface-container` |
-| **Poster thumb**         | **48 × 72px** (2:3), radius **16px** (`rounded-lg`), `object-cover`, `surface-variant` (#2d3449) placeholder bg behind the image. Fallback = kind-based ionicon centered on the placeholder when no poster.               | `--vultus-surface-variant`                                                   |
-| **Content column**       | Vertical, gap **4px** (`xs`). Title = role **body-lg** (16) **semibold**, `on-surface` (#dae2fd). Body = role **body-md** (14), `on-surface-variant` (#bbcabf). Timestamp = role **label-sm** (11), `outline` (#86948a), relative. | `--vultus-on-surface`, `--vultus-on-surface-variant`, `--vultus-outline`     |
-| **Unread row**           | Add `bg-primary-container/5` (5% emerald #10b981 tint over the container) **and** a trailing **emerald dot** (10px, `w-2.5 h-2.5`, `rounded-full`, `primary` #4edea3, 4px right margin). Text full opacity.                | `--vultus-primary-container` (alpha), `--vultus-primary`                     |
-| **Read row**             | Plain `surface-container`, **no tint, no dot**; **content opacity 70%, poster opacity 60%**.                                                                                                                               | —                                                                            |
-| **Swipe-delete action**  | Trailing red action (`status-dropped` #EF4444) revealed behind the row; `trash` ionicon + "Delete" label (role label-sm), both **white**. Realize as `ion-item-sliding` + `ion-item-options side="end"` + `ion-item-option color="danger"`. | `--vultus-status-dropped`; Ionic `color="danger"`                            |
-| **Pressed state**        | Subtle **5% emerald overlay**, **not** a lift (design-system "Interactions").                                                                                                                                              | `--vultus-primary` (alpha overlay)                                           |
+| Element                    | Spec (from the screen markup)                                                                                                                                                                                                               | Token / var                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **Header**                 | Height **64px** (`h-16`), bg `surface` (#0b1326), bottom border `outline-variant` at 30% (#3c4a42). Realize as `ion-header > ion-toolbar`.                                                                                                  | `--vultus-surface`, `--vultus-outline-variant`                                         |
+| Header back                | Chevron back affordance, `on-surface`. Realize as `ion-back-button slot="start"` (`defaultHref="tabs/watchlist"`), default chevron.                                                                                                         | `--vultus-on-surface`                                                                  |
+| Header title               | "Notifications", role **headline-sm** (Inter 20/600), `on-surface`. `ion-title`.                                                                                                                                                            | type role `headline-sm`; `--vultus-on-surface`                                         |
+| Header **"Mark all read"** | Right action, role **label-md** (12/600, +0.05em), `primary` (#4edea3), **hover → opacity 80%**. `ion-buttons slot="end"` → `ion-button fill="clear"` themed primary. Disabled/hidden when there are **0 unread** rows.                     | type role `label-md`; `--ion-color-primary` / `--vultus-primary`                       |
+| **List container**         | Side padding **16px** (`margin-mobile`), top padding **24px** (`lg`), vertical gap **8px** (`sm`) between rows.                                                                                                                             | `--vultus-space-md` (16), `--vultus-space-lg` (24), `--vultus-space-sm` (8)            |
+| **Row card**               | Radius **24px** (`rounded-xl` / 1.5rem), 1px border `outline-variant` (#3c4a42), bg `surface-container` (#171f33), inner padding **8px** (`sm`), flex row, gap **16px** (`md`).                                                             | `--vultus-radius-*` (1.5rem), `--vultus-outline-variant`, `--vultus-surface-container` |
+| **Poster thumb**           | **48 × 72px** (2:3), radius **16px** (`rounded-lg`), `object-cover`, `surface-variant` (#2d3449) placeholder bg behind the image. Fallback = kind-based ionicon centered on the placeholder when no poster.                                 | `--vultus-surface-variant`                                                             |
+| **Content column**         | Vertical, gap **4px** (`xs`). Title = role **body-lg** (16) **semibold**, `on-surface` (#dae2fd). Body = role **body-md** (14), `on-surface-variant` (#bbcabf). Timestamp = role **label-sm** (11), `outline` (#86948a), relative.          | `--vultus-on-surface`, `--vultus-on-surface-variant`, `--vultus-outline`               |
+| **Unread row**             | Add `bg-primary-container/5` (5% emerald #10b981 tint over the container) **and** a trailing **emerald dot** (10px, `w-2.5 h-2.5`, `rounded-full`, `primary` #4edea3, 4px right margin). Text full opacity.                                 | `--vultus-primary-container` (alpha), `--vultus-primary`                               |
+| **Read row**               | Plain `surface-container`, **no tint, no dot**; **content opacity 70%, poster opacity 60%**.                                                                                                                                                | —                                                                                      |
+| **Swipe-delete action**    | Trailing red action (`status-dropped` #EF4444) revealed behind the row; `trash` ionicon + "Delete" label (role label-sm), both **white**. Realize as `ion-item-sliding` + `ion-item-options side="end"` + `ion-item-option color="danger"`. | `--vultus-status-dropped`; Ionic `color="danger"`                                      |
+| **Pressed state**          | Subtle **5% emerald overlay**, **not** a lift (design-system "Interactions").                                                                                                                                                               | `--vultus-primary` (alpha overlay)                                                     |
 
 - **Structure note (do not assume a 1:1 Ionic mapping):** the Stitch rows are plain
   bordered cards in a flex column, not an `ion-list` of default `ion-item`s — but
@@ -396,7 +408,7 @@ which is `primary-container`).
   agree** across all rows and with the empty/loading states (no shift on swap).
 - **Token wiring (easy to miss):** the emerald used for the dot, the "Mark all read"
   action, and the unread tint is **`primary` `#4edea3`** via `--ion-color-primary` /
-  `--vultus-primary`; the 5% *tint background* is `primary-container` `#10b981` at 5%
+  `--vultus-primary`; the 5% _tint background_ is `primary-container` `#10b981` at 5%
   alpha (`--vultus-primary-container`). Do not conflate them.
 
 ### Empty + loading states — NOT in the Stitch screen (derived from spec 0024)
@@ -408,7 +420,7 @@ not a skipped capture — stated explicitly so the spec-reviewer does not flag i
 
 - **Empty state** (`notifications$()` emits `[]`): render
   `<vultus-empty-state icon="notifications-off-outline" title="No notifications yet"
-  subtitle="You'll see new-episode and now-streaming alerts here.">` from
+subtitle="You'll see new-episode and now-streaming alerts here.">` from
   `@vultus/shared/ui-kit`. Register `notificationsOffOutline` in the page via `addIcons`
   (the atom does not register consumer icons — 0024 contract). Title = body-lg, subtitle =
   body-md, centered, per the atom.
@@ -421,14 +433,14 @@ not a skipped capture — stated explicitly so the spec-reviewer does not flag i
 
 ### Interactive-state contract (tick each off in review)
 
-| Element                 | default                                                                 | focus                          | hover / active                                       | result                                        |
-| ----------------------- | ----------------------------------------------------------------------- | ------------------------------ | ---------------------------------------------------- | --------------------------------------------- |
-| **Row (tap target)**    | card silhouette above; unread tint+dot or read dimming per state        | Ionic `:focus-visible` ring    | **active → 5% emerald overlay** (no lift)            | navigate `['tabs','title-detail', tmdbId]` + `markRead(id)` |
-| **Row swipe**           | trailing red `status-dropped` delete option revealed on left-swipe      | —                              | swipe transition (Ionic `ion-item-sliding` default)  | `remove(id)`                                  |
-| **"Mark all read"**     | `fill="clear"`, text `primary`, label-md; **hidden/disabled at 0 unread** | Ionic `:focus-visible` ring   | **hover → opacity 80%**                              | `markAllRead(unreadIds)`                      |
-| **Back button**         | `ion-back-button` default chevron, `on-surface`                          | Ionic `:focus-visible` ring    | Ionic default                                        | pop to `tabs/watchlist`                       |
-| **Pull-to-refresh**     | `ion-refresher` at top                                                   | —                              | Ionic refresher spinner during pull                  | complete on next stream tick / re-read        |
-| **Watchlist bell**      | `notifications-outline`, `ion-badge` unread count (hidden 0, "9+" cap)   | Ionic `:focus-visible` ring    | Ionic toolbar-button default                         | navigate `['tabs','notifications']`           |
+| Element              | default                                                                   | focus                       | hover / active                                      | result                                                      |
+| -------------------- | ------------------------------------------------------------------------- | --------------------------- | --------------------------------------------------- | ----------------------------------------------------------- |
+| **Row (tap target)** | card silhouette above; unread tint+dot or read dimming per state          | Ionic `:focus-visible` ring | **active → 5% emerald overlay** (no lift)           | navigate `['tabs','title-detail', tmdbId]` + `markRead(id)` |
+| **Row swipe**        | trailing red `status-dropped` delete option revealed on left-swipe        | —                           | swipe transition (Ionic `ion-item-sliding` default) | `remove(id)`                                                |
+| **"Mark all read"**  | `fill="clear"`, text `primary`, label-md; **hidden/disabled at 0 unread** | Ionic `:focus-visible` ring | **hover → opacity 80%**                             | `markAllRead(unreadIds)`                                    |
+| **Back button**      | `ion-back-button` default chevron, `on-surface`                           | Ionic `:focus-visible` ring | Ionic default                                       | pop to `tabs/watchlist`                                     |
+| **Pull-to-refresh**  | `ion-refresher` at top                                                    | —                           | Ionic refresher spinner during pull                 | complete on next stream tick / re-read                      |
+| **Watchlist bell**   | `notifications-outline`, `ion-badge` unread count (hidden 0, "9+" cap)    | Ionic `:focus-visible` ring | Ionic toolbar-button default                        | navigate `['tabs','notifications']`                         |
 
 - **Animations/transitions:** page push/back uses Ionic's default route transition; the
   swipe uses Ionic's `ion-item-sliding` transition (the screen's `swipe-transition` is
@@ -517,7 +529,7 @@ Firebase access in unit/component tests is **mocked** — no live Firebase, no e
   maps wire docs through `dataToNotification`, and carries the `idField` id on each row;
   **null uid → `of([])`** (assert no collection ref built).
 - `markRead(id)` calls `updateDoc` on `notificationPath(uid, id)` with `{ readAt:
-  <Timestamp> }`; **null uid → no write**; a rejected `updateDoc` is caught (non-fatal).
+<Timestamp> }`; **null uid → no write**; a rejected `updateDoc` is caught (non-fatal).
 - `markAllRead(unreadIds)` opens a `writeBatch`, issues one `update` per id, and commits;
   empty array → no commit (or a harmless empty commit); null uid → no-op.
 - `remove(id)` calls `deleteDoc` on `notificationPath(uid, id)`; null uid → no-op;
@@ -580,7 +592,7 @@ Tailored from the PLAN §5 checklist. `<app>` = `mobile`; affected projects:
       bell/badge/unread-count tests, all green.
 - [ ] `pnpm nx affected -t build --base=main` passes for all affected projects.
 - [ ] **e2e authored** for the two named flows (`notifications inbox lists seeded
-      notifications and deep-links a tap`, `notifications empty state`); they **pass in the
+    notifications and deep-links a tap`, `notifications empty state`); they **pass in the
       user's terminal** against the emulator (the gate cannot run under Claude Code tools —
       recorded, not skipped).
 - [ ] The new lib has a real `README.md` (purpose, public surface = barrel, usage,

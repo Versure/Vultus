@@ -67,12 +67,13 @@ interface MockService {
   removeTitle: ReturnType<typeof vi.fn>;
   userRegion$: ReturnType<typeof vi.fn>;
   availability$: ReturnType<typeof vi.fn>;
+  unreadNotificationCount$: ReturnType<typeof of>;
 }
 
 // The page calls watchlist$(uid, type) and applies groupByStatus itself, but the
 // type filter lives in the service (filterByType). Replicate that here so the
 // segment-switch test exercises real filtering.
-function mockService(items: WatchlistItem[]): MockService {
+function mockService(items: WatchlistItem[], unreadCount = 0): MockService {
   return {
     watchlist$: vi.fn((_uid: string | null, type?: 'movie' | 'tv') =>
       of(filterByType(items, type)),
@@ -81,6 +82,7 @@ function mockService(items: WatchlistItem[]): MockService {
     removeTitle: vi.fn(),
     userRegion$: vi.fn(() => of(null)),
     availability$: vi.fn(() => of(null)),
+    unreadNotificationCount$: of(unreadCount),
   };
 }
 
@@ -104,11 +106,16 @@ function mockToastCtrl() {
   return { create, present };
 }
 
+function mockRouter() {
+  return { navigate: vi.fn(() => Promise.resolve(true)) };
+}
+
 async function setup(
   service: MockService,
   uid: string | null = 'uid-123',
   syncState: MockSyncState = mockSyncState(),
   toast = mockToastCtrl(),
+  router = mockRouter(),
 ) {
   await TestBed.configureTestingModule({
     imports: [WatchlistPage],
@@ -116,10 +123,7 @@ async function setup(
       provideIonicAngular(),
       { provide: WatchlistService, useValue: service },
       { provide: AUTH_UID, useValue: signal<string | null>(uid) },
-      {
-        provide: Router,
-        useValue: { navigate: vi.fn().mockResolvedValue(undefined) },
-      },
+      { provide: Router, useValue: router },
       { provide: SyncStateService, useValue: syncState },
       { provide: ToastController, useValue: toast },
     ],
@@ -130,7 +134,7 @@ async function setup(
   await fixture.whenStable();
   fixture.detectChanges();
   const el = fixture.nativeElement as HTMLElement;
-  return { fixture, el, syncState, toast };
+  return { fixture, el, syncState, toast, router };
 }
 
 /** The refresh button is the first ion-button in the toolbar's slot="end". */
@@ -140,6 +144,17 @@ function refreshButton(el: HTMLElement): HTMLElement {
   );
   if (!btn) {
     throw new Error('refresh button not found');
+  }
+  return btn;
+}
+
+/** The notifications bell button (aria-label="Notifications"). */
+function bellButton(el: HTMLElement): HTMLElement {
+  const btn = el.querySelector<HTMLElement>(
+    'ion-buttons[slot="end"] ion-button[aria-label="Notifications"]',
+  );
+  if (!btn) {
+    throw new Error('bell button not found');
   }
   return btn;
 }
@@ -399,6 +414,73 @@ describe('WatchlistPage', () => {
       expect(
         btn.querySelector('ion-icon[name="refresh-outline"]'),
       ).toBeTruthy();
+    });
+  });
+
+  describe('notifications bell + unread badge (spec 0042)', () => {
+    it('renders the bell button with the notifications-outline icon', async () => {
+      const service = mockService([]);
+      const { el } = await setup(service);
+      const btn = bellButton(el);
+      expect(
+        btn.querySelector('ion-icon[name="notifications-outline"]'),
+      ).toBeTruthy();
+    });
+
+    it('hides the badge when the unread count is 0', async () => {
+      const service = mockService([], 0);
+      const { el } = await setup(service);
+      const btn = bellButton(el);
+      expect(btn.querySelector('ion-badge')).toBeFalsy();
+    });
+
+    it('shows the unread count on the badge when > 0', async () => {
+      const service = mockService([], 3);
+      const { el } = await setup(service);
+      const badge = bellButton(el).querySelector('ion-badge');
+      expect(badge).toBeTruthy();
+      expect(badge?.textContent?.trim()).toBe('3');
+    });
+
+    it('caps the badge display at "9+" above 9', async () => {
+      const service = mockService([], 42);
+      const { el } = await setup(service);
+      const badge = bellButton(el).querySelector('ion-badge');
+      expect(badge?.textContent?.trim()).toBe('9+');
+    });
+
+    it('shows "9" (not "9+") exactly at 9', async () => {
+      const service = mockService([], 9);
+      const { el } = await setup(service);
+      const badge = bellButton(el).querySelector('ion-badge');
+      expect(badge?.textContent?.trim()).toBe('9');
+    });
+
+    it('tapping the bell navigates to tabs/notifications', async () => {
+      const service = mockService([]);
+      const router = mockRouter();
+      const { fixture } = await setup(
+        service,
+        'uid-123',
+        mockSyncState(),
+        mockToastCtrl(),
+        router,
+      );
+
+      fixture.componentInstance.openNotifications();
+
+      expect(router.navigate).toHaveBeenCalledWith(['tabs', 'notifications']);
+    });
+
+    it('badgeLabel: number ≤ 9 verbatim, > 9 → "9+"', async () => {
+      const service = mockService([]);
+      const { fixture } = await setup(service);
+      const c = fixture.componentInstance;
+      expect(c.badgeLabel(0)).toBe('0');
+      expect(c.badgeLabel(5)).toBe('5');
+      expect(c.badgeLabel(9)).toBe('9');
+      expect(c.badgeLabel(10)).toBe('9+');
+      expect(c.badgeLabel(99)).toBe('9+');
     });
   });
 });

@@ -52,6 +52,40 @@ ion-content {
 }
 
 // -----------------------------------------------------------------------------
+// Header bell + unread badge (spec 0042). The badge overlays the bell icon in
+// the top-right corner; emerald (`primary`) bg with `on-primary` text — all via
+// theme tokens, never a hand-set hex. Hidden when count is 0 (template-gated).
+// -----------------------------------------------------------------------------
+.bell-button {
+  position: relative;
+  overflow: visible;
+}
+
+.bell-badge {
+  position: absolute;
+  top: 2px;
+  inset-inline-end: 0;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--vultus-radius-pill);
+  --background: var(--ion-color-primary);
+  --color: var(--ion-color-primary-contrast);
+  --padding-start: 4px;
+  --padding-end: 4px;
+  --padding-top: 0;
+  --padding-bottom: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--vultus-font-family);
+  font-size: 0.625rem;
+  font-weight: 600;
+  line-height: 1;
+  pointer-events: none;
+}
+
+// -----------------------------------------------------------------------------
 // Type filter — plain flex row of rounded-full pills.
 // Stitch: active = bg-primary (#4edea3) text-on-primary (#003824);
 //         inactive = bg-surface-container-high (#222a3d) text-on-surface-variant (#bbcabf)

@@ -29,6 +29,9 @@
       "@vultus/functions/sync-titles": [
         "./libs/functions/sync-titles/src/index.ts"
       ],
+      "@vultus/mobile/notifications": [
+        "./libs/mobile/notifications/src/index.ts"
+      ],
       "@vultus/mobile/onboarding": ["./libs/mobile/onboarding/src/index.ts"],
       "@vultus/mobile/watchlist": ["./libs/mobile/watchlist/src/index.ts"],
       "@vultus/mobile/search": ["./libs/mobile/search/src/index.ts"],

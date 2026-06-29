@@ -1,4 +1,5 @@
 import { Injectable, inject } from '@angular/core';
+import { toObservable } from '@angular/core/rxjs-interop';
 import {
   Firestore,
   collection,
@@ -21,6 +22,7 @@ import {
   dataToAvailability,
   dataToUser,
   dataToWatchlistItem,
+  notificationsPath,
   userPath,
   watchlistItemPath,
   watchlistPath,
@@ -30,7 +32,7 @@ import type {
   UserReadData,
   WatchlistItemReadData,
 } from '@vultus/shared/firestore-schema';
-import { Observable, map, of } from 'rxjs';
+import { Observable, map, of, switchMap } from 'rxjs';
 
 /**
  * Display order for status grouping / the status action-sheet. Deliberately
@@ -118,6 +120,33 @@ export class WatchlistService {
       map((items) => filterByType(items, type)),
     );
   }
+
+  /**
+   * Count of the user's UNREAD notifications (`readAt === null`), reactive to the
+   * `AUTH_UID` signal transitioning null → uid as the anonymous session resolves.
+   * Drives the watchlist header bell badge (spec 0042, decision 3 / §4 note).
+   *
+   * Reads `users/{uid}/notifications` (a `scope:shared` schema path via
+   * `notificationsPath`, NOT a cross-slice import) and counts `readAt` null/absent
+   * CLIENT-SIDE over the streamed collection — deliberately the index-free path
+   * (no `where('readAt','==',null)` query, no `firestore.indexes.json` entry; §4
+   * unread-count note). The wire `readAt` is a Timestamp-or-null, so "unread" =
+   * `readAt == null` (covers both an explicit `null` and an absent field). Null
+   * uid → `0`.
+   */
+  readonly unreadNotificationCount$: Observable<number> = toObservable(
+    this.uid,
+  ).pipe(
+    switchMap((uid) => {
+      if (!uid) {
+        return of(0);
+      }
+      const col = collection(this.firestore, notificationsPath(uid));
+      return (collectionData(col) as Observable<{ readAt?: unknown }[]>).pipe(
+        map((docs) => docs.filter((d) => d.readAt == null).length),
+      );
+    }),
+  );
 
   /** Updates only the `status` field on a watchlist item. Null uid → no-op. */
   updateStatus(uid: string | null, titleId: string, status: WatchStatus): void {
