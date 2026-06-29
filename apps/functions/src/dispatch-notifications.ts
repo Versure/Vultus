@@ -61,9 +61,14 @@ export async function handleDispatch(
   // per-region availability doc.
   const titleSnap = await db.doc('title-cache/' + tmdbId).get();
   if (!titleSnap.exists) return; // unknown title — nothing to dispatch
-  const titleData = titleSnap.data() as { type: TitleType } | undefined;
+  const titleData = titleSnap.data() as
+    | { type: TitleType; metadata?: { title?: string } }
+    | undefined;
   if (!titleData) return;
   const type = titleData.type;
+  // The display title for the OS-rendered FCM notification body (spec 0041).
+  // Falls back to '' if the cache doc predates the metadata write.
+  const titleStr = titleData.metadata?.title ?? '';
 
   // The sync engine rolls `previousSnapshot` into the doc before writing the new
   // providers, so a single (after) read carries both sides of the diff.
@@ -86,7 +91,7 @@ export async function handleDispatch(
     watchlist: createFirestoreWatchlistStore(db),
     episodes: createFirestoreEpisodeStore(db),
     notifications: createFirestoreNotificationStore(db),
-    fcm: createMessagingFcmSender(messaging),
+    fcm: createMessagingFcmSender(messaging, titleStr),
   });
 
   await dispatcher.dispatch(change);

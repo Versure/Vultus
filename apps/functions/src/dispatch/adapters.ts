@@ -6,7 +6,10 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import type { Firestore } from 'firebase-admin/firestore';
 import type { Messaging } from 'firebase-admin/messaging';
-import { notificationToData } from '@vultus/shared/firestore-schema';
+import {
+  notificationPath,
+  notificationToData,
+} from '@vultus/shared/firestore-schema';
 import type {
   FcmToken,
   NotificationPrefs,
@@ -99,18 +102,22 @@ export function createFirestoreEpisodeStore(db: Firestore): EpisodeStore {
 }
 
 /**
- * Notification store that appends to `users/{uid}/notifications` with a
- * Firestore-generated id, mapping ISO timestamps to Timestamps via the shared
- * schema converter.
+ * Notification store that writes to `users/{uid}/notifications/{id}` keyed by the
+ * deterministic id `{tmdbId}-{region}-{kind}` (spec 0041). Pinning the doc id —
+ * rather than appending with a Firestore-generated id — lets the mobile app's
+ * mark-as-read write target the exact doc, and makes a re-fired availability
+ * trigger idempotent (it merges onto the same doc instead of duplicating).
+ * ISO timestamps are mapped to Timestamps via the shared schema converter.
  */
 export function createFirestoreNotificationStore(
   db: Firestore,
 ): NotificationStore {
   return {
     async write(uid, doc): Promise<void> {
+      const id = `${doc.payload.tmdbId}-${doc.payload.region}-${doc.kind}`;
       await db
-        .collection('users/' + uid + '/notifications')
-        .add(notificationToData(doc));
+        .doc(notificationPath(uid, id))
+        .set(notificationToData(doc), { merge: true });
     },
   };
 }
@@ -127,19 +134,58 @@ function errorCode(err: unknown): string | undefined {
   return undefined;
 }
 
+// `providerName` is not carried in the FCM `data` record (only
+// `{ notificationId, titleId, kind, region, tmdbId }`), so the body copy uses a
+// generic platform phrase. The mobile app renders richer copy from its own
+// cache on tap; the OS-rendered notification only needs to be intelligible.
+const PLATFORM_FALLBACK = 'a streaming platform';
+
 /**
- * FCM sender over the Admin Messaging API. Sends data-only messages and maps the
- * platform's stale-token error codes to `{ unregistered: true }` so the
- * dispatcher can prune them; all other errors propagate.
+ * Build the OS-rendered `notification` block per notification kind (spec 0041).
+ * Android renders this natively when the app is backgrounded/terminated; the
+ * `data` block still drives the deep-link tap handling in-app.
  */
-export function createMessagingFcmSender(messaging: Messaging): FcmSender {
+function buildNotification(
+  kind: string,
+  titleStr: string,
+): { title: string; body: string } {
+  if (kind === 'episode-aired') {
+    return {
+      title: 'New episode available',
+      body: `${titleStr} has a new episode on ${PLATFORM_FALLBACK}`,
+    };
+  }
+  // movie-available + show-came-to-platform share the availability copy.
+  return {
+    title: 'Now available to stream',
+    body: `${titleStr} is available on ${PLATFORM_FALLBACK}`,
+  };
+}
+
+/**
+ * FCM sender over the Admin Messaging API. Sends each message with both a `data`
+ * block (drives in-app deep-link handling) and a `notification` block (spec
+ * 0041 — lets the Android OS render the notification natively when the app is
+ * backgrounded/terminated). The body copy is built from `titleStr`, read by the
+ * caller from the title-cache doc. Maps the platform's stale-token error codes
+ * to `{ unregistered: true }` so the dispatcher can prune them; all other errors
+ * propagate.
+ */
+export function createMessagingFcmSender(
+  messaging: Messaging,
+  titleStr: string,
+): FcmSender {
   return {
     async send(
       token: string,
       data: Record<string, string>,
     ): Promise<FcmSendResult> {
       try {
-        await messaging.send({ token, data });
+        await messaging.send({
+          token,
+          data,
+          notification: buildNotification(data.kind ?? '', titleStr),
+        });
         return { token, unregistered: false };
       } catch (err) {
         const code = errorCode(err);
