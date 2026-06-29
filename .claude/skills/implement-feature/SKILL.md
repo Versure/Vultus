@@ -59,6 +59,61 @@ Sheriff is an import linter — it does **not** make files disjoint. Therefore:
   `git worktree add -b feat/NNNN-slug $wt main`. Branch must not be active in the
   primary checkout. Set `status: implementing` **in the worktree** (worktree-local
   only — `main` advances `approved → done`).
+- **Seed local-only files.** Immediately after the worktree is created or reused
+  (so `$wt` exists on disk), copy these three gitignored files from the primary
+  checkout (`$root`) into the worktree at the same relative paths. They are
+  required to build and run the mobile app but are absent from a fresh worktree
+  because git only populates committed files.
+
+  | Relative path | Why needed |
+  |---|---|
+  | `.env.local` | API keys for `inject-mobile-env.mjs` |
+  | `apps/mobile/src/environments/environment.generated.ts` | prod build `fileReplacements` (specs 0026/0038) |
+  | `android/app/google-services.json` | Firebase Android config (Gradle/Capacitor, `--check-native`) |
+
+  Reuse the `$root` and `$wt` variables already computed above — do **not**
+  re-derive the paths a different way. Use the following PowerShell pattern (exact
+  phrasing may vary; the behavior is the contract):
+
+  ```powershell
+  $seed = @(
+    '.env.local',
+    'apps/mobile/src/environments/environment.generated.ts',
+    'android/app/google-services.json'
+  )
+  $seedWarnings = @()
+  foreach ($rel in $seed) {
+    $src = Join-Path $root $rel
+    $dst = Join-Path $wt   $rel
+    if (Test-Path -LiteralPath $src) {
+      try {
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
+        Copy-Item -LiteralPath $src -Destination $dst -Force
+      } catch {
+        $seedWarnings += "⚠ Failed to copy $rel — worktree may not build: $_"
+      }
+    } else {
+      $seedWarnings += "⚠ $rel not found in primary checkout — app may not build in this worktree"
+    }
+  }
+  ```
+
+  Rules:
+  - **Create the destination's parent directory first** (`New-Item -ItemType
+    Directory -Force`) — required for brand-new worktrees where
+    `apps/mobile/src/environments/` and `android/app/` do not yet exist. The flag
+    is a no-op when the directory already exists, so worktree reuse is safe.
+  - **`Copy-Item -Force`** overwrites a stale seeded file on reuse so the
+    worktree tracks the primary checkout's current values.
+  - **On a missing source** (or a copy error): **skip it** — do **not** throw or
+    abort. Record a warning string in `$seedWarnings` (or equivalent) to be
+    **surfaced in Step 9's report** so a worktree that cannot build is flagged to
+    the user, not silently broken.
+  - The seeded files are **gitignored and remain gitignored** in the worktree —
+    they are copied as opaque local files and are **never read, logged, staged, or
+    committed**. A reviewer must not "improve" this step by printing or templating
+    their contents.
+
 - **Bootstrap check:** if no `nx.json` exists, go to step 3a.
 
 ### 3. Decompose & route (you)
