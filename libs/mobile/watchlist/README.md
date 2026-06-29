@@ -13,7 +13,8 @@ rate-limited sync of the user's tracked titles.
   `lib-watchlist`) rendering the Watchlist tab: type segment (All / Movies / TV
   Shows), status-grouped sections (Watching → Planned → Completed → Dropped),
   poster cards with type/vote/provider badges, a long-press/secondary status
-  action sheet, a delete-confirm alert, pull-to-refresh, and shared
+  action sheet, a delete-confirm alert, pull-to-refresh, a header
+  **notifications bell** with an **unread badge** (see below), and shared
   loading / empty / error states (see below).
 - **`WatchlistService`** — `providedIn: 'root'` data-access service:
   - `watchlist$(uid, type?)` — realtime `users/{uid}/watchlist`, mapped to
@@ -27,6 +28,27 @@ rate-limited sync of the user's tracked titles.
   - `availability$(tmdbId, region)` — provider availability from
     `title-cache/{tmdbId}/availability/{region}` for the provider badge. Null
     region / missing doc → `null`.
+  - `unreadNotificationCount$` — a realtime stream of the count of UNREAD
+    notifications (spec 0042). Reactive to the `AUTH_UID` null → uid transition
+    (`toObservable(uid) → switchMap`), it reads `users/{uid}/notifications` via
+    the `scope:shared` `notificationsPath` helper and counts `readAt == null`
+    **client-side** over the streamed collection — deliberately the index-free
+    path (no `where('readAt','==',null)` query, no `firestore.indexes.json`
+    entry). Null uid → `0`.
+
+## Header notifications bell + unread badge (spec 0042)
+
+The toolbar's `ion-buttons slot="end"` carries a **bell `ion-button`**
+(`notifications-outline` ionicon) between the refresh and account buttons. An
+overlaid `ion-badge` shows the unread-notification count from
+`unreadNotificationCount$`: **hidden when the count is 0**, displaying the number
+otherwise and **capped at "9+"** above 9 (`badgeLabel()`). Tapping it calls
+`openNotifications()`, which navigates **by string segments**
+(`Router.navigate(['tabs','notifications'])`) — the watchlist does **not** import
+`@vultus/mobile/notifications` (Sheriff-clean cross-slice navigation; the
+`tabs/notifications` route is owned by the shell). The badge is themed with the
+`--ion-color-primary` (emerald) background and `--ion-color-primary-contrast`
+text via theme tokens — no hand-set hex.
 
 ## Loading / empty / error states
 

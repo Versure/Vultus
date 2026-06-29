@@ -65,6 +65,10 @@
             {
               "replace": "libs/mobile/onboarding/src/lib/onboarding.providers.ts",
               "with": "libs/mobile/onboarding/src/lib/onboarding.providers.mock.ts"
+            },
+            {
+              "replace": "libs/mobile/notifications/src/lib/notifications.providers.ts",
+              "with": "libs/mobile/notifications/src/lib/notifications.providers.mock.ts"
             }
           ],
           "optimization": false,

@@ -1,5 +1,5 @@
 {
-  "description": "Seeded fixture (spec 0019 flows F4-F8 + spec 0034 episode flows): the users/{uid} profile doc (region NL), ONE TV watchlist entry (Breaking Bad, tmdbId 2, status planned), its title-cache entry, and its 3 season-1 episode docs (spec 0034 — under .../watchlist/2/episodes). {uid} is substituted at seed time with the resolved anon uid (R3). addedAt/airDate use the __timestamp marker so the encoder writes a Firestore timestampValue.",
+  "description": "Seeded fixture (spec 0019 flows F4-F8 + spec 0034 episode flows + spec 0042 notifications inbox): the users/{uid} profile doc (region NL), ONE TV watchlist entry (Breaking Bad, tmdbId 2, status planned), its title-cache entry, its 3 season-1 episode docs (spec 0034), and TWO users/{uid}/notifications docs (spec 0042 — one unread, one read; both pointing at tmdbId 2 so a row-tap deep-links to the already-cached title-detail/2 without a TMDB call). {uid} is substituted at seed time with the resolved anon uid (R3). addedAt/airDate/sentAt/readAt use the __timestamp marker so the encoder writes a Firestore timestampValue.",
   "docs": [
     {
       "path": "users/{uid}",
@@ -71,6 +71,38 @@
         "airDate": { "__timestamp": "2008-02-10T00:00:00.000Z" },
         "watched": false,
         "watchedAt": null
+      }
+    },
+    {
+      "path": "users/{uid}/notifications/2-NL-episode-aired",
+      "data": {
+        "titleId": "2",
+        "kind": "episode-aired",
+        "payload": {
+          "tmdbId": 2,
+          "titleId": "2",
+          "title": "Breaking Bad",
+          "region": "NL",
+          "providerName": "Netflix"
+        },
+        "sentAt": { "__timestamp": "2026-06-29T08:00:00.000Z" },
+        "readAt": null
+      }
+    },
+    {
+      "path": "users/{uid}/notifications/2-NL-show-came-to-platform",
+      "data": {
+        "titleId": "2",
+        "kind": "show-came-to-platform",
+        "payload": {
+          "tmdbId": 2,
+          "titleId": "2",
+          "title": "Breaking Bad",
+          "region": "NL",
+          "providerName": "Prime Video"
+        },
+        "sentAt": { "__timestamp": "2026-06-22T08:00:00.000Z" },
+        "readAt": { "__timestamp": "2026-06-23T09:00:00.000Z" }
       }
     }
   ]
