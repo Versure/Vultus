@@ -87,8 +87,8 @@
       [class]="'watchlist-card status-' + item.status"
       role="button"
       tabindex="0"
-      (click)="navigateToDetail(titleId(item))"
-      (keyup.enter)="navigateToDetail(titleId(item))"
+      (click)="navigateToDetail(titleId(item), item.type)"
+      (keyup.enter)="navigateToDetail(titleId(item), item.type)"
       (keyup.space)="openStatusSheet(item)"
       (contextmenu)="openStatusSheet(item); $event.preventDefault()"
     >

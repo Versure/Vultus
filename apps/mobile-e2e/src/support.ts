@@ -14,6 +14,7 @@ export { resolveAnonUid } from './support/auth';
 export {
   routeTmdb,
   routeTmdbDiscriminated,
+  routeTmdbTV,
   type TmdbFixtureName,
 } from './support/tmdb';
 export {

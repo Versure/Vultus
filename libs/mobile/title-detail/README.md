@@ -72,7 +72,18 @@ The page derives its `:titleId` from **`ActivatedRoute.paramMap`** (reactive
 Observable, not snapshot), so Ionic page-reuse re-derives the id in place and
 `detail$` automatically re-resolves the new title. An id of `0` or `NaN` (absent
 or non-numeric param) short-circuits to `{ kind: 'not-found' }` without a TMDB
-call. The page renders view-states: loading skeleton, loaded (cache or live —
+call.
+
+The route also accepts an optional **`?type=tv|movie`** query param (spec 0043).
+Search and Watchlist already know each result's media type, so they navigate with
+it; the page reads it from **`ActivatedRoute.queryParamMap`**, validates it
+(anything other than `tv`/`movie` → `undefined`), and threads it to
+`TitleDetailService.detail$(tmdbId, typeHint?)` → `TmdbDetailClient.getDetail`.
+This **only affects the live TMDB fallback** (cache hits ignore it): without a
+hint the client falls through `/movie/{id}` → `/tv/{id}` on a 404, which can
+resolve the wrong title when a movie and a tv title share a tmdb id (e.g. 84773).
+A correct hint pins the right namespace; an absent/invalid hint preserves the old
+fallthrough behavior. The page renders view-states: loading skeleton, loaded (cache or live —
 identical for the same data), not-found, **error** (recoverable), empty-providers,
 and null-region. The loading / not-found / error states are rendered by the shared
 `@vultus/shared/ui-kit` atoms (`vultus-skeleton-hero`, `vultus-empty-state`,

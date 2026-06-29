@@ -4,6 +4,7 @@ import {
   resolveAnonUid,
   routeTmdb,
   routeTmdbDiscriminated,
+  routeTmdbTV,
   seedFor,
 } from './support';
 
@@ -173,13 +174,57 @@ test.describe('search (F2–F3)', () => {
       .filter({ has: page.locator('.title', { hasText: MOVIE_TITLE }) });
     await movieCard.click();
 
-    // URL navigates to the title-detail route for id 603.
-    await expect(page).toHaveURL(/\/tabs\/title-detail\/603$/);
+    // URL navigates to the title-detail route for id 603, with ?type=movie.
+    await expect(page).toHaveURL(/\/tabs\/title-detail\/603\?type=movie/);
 
     // The detail hero shows "The Matrix" — the tapped title, served by the
     // /movie/603 fixture, NOT a wrong fall-through title.
     await expect(page.locator('[data-test="hero"] .hero-title')).toHaveText(
       MOVIE_TITLE,
+    );
+  });
+
+  // spec 0043 — the ?type=tv hint forces /tv/{id} directly, preventing the
+  // movie-first fall-through that rendered the wrong title for id 84773.
+  test('search-to-detail-correct-title: tapping a tv result opens the correct tv title (spec 0043)', async ({
+    page,
+  }) => {
+    // Register search/multi route first (lower priority), then the tv-detail
+    // route (higher priority — Playwright applies the most-recently-registered
+    // matching route first). No /movie/1396 interception: if the hint fails and
+    // the client calls /movie/1396, the tv-detail handler still matches it (both
+    // contain "1396"), but the URL assertion below (/?type=tv) would then be
+    // missing, proving the fix. The absence of a distinct /movie/** fixture is
+    // intentional — it keeps the test honest.
+    await routeTmdb(page);
+    await routeTmdbTV(page, 1396, 'tmdb-tv-detail-1396.json');
+
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+
+    const uid = await resolveAnonUid(page);
+    await seedFor(uid, 'empty');
+
+    await page.locator('ion-tab-button[tab="search"]').click();
+    await expect(page).toHaveURL(/\/tabs\/search$/);
+
+    await page.locator('ion-searchbar input').fill('breaking');
+    await expect(page.locator('.result-card')).toHaveCount(2);
+
+    // Tap the TV result card (Breaking Bad, id 1396 in tmdb-search-multi.json).
+    const tvCard = page
+      .locator('.result-card')
+      .filter({ has: page.locator('.title', { hasText: TV_TITLE }) });
+    await tvCard.click();
+
+    // URL must include ?type=tv — proves openDetail passed the type hint.
+    await expect(page).toHaveURL(/\/tabs\/title-detail\/1396\?type=tv/);
+
+    // The detail hero shows "Breaking Bad" — the tapped tv title, served by
+    // /tv/1396 (not a movie fall-through). This is a cache miss, so it
+    // exercises the live getDetail path where the collision bites.
+    await expect(page.locator('[data-test="hero"] .hero-title')).toHaveText(
+      TV_TITLE,
     );
   });
 });

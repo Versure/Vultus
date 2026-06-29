@@ -1,8 +1,8 @@
 ---
 number: 0043
 slug: fix-media-type-hint-navigation
-title: "Fix: thread media-type hint through navigation to prevent wrong-title TMDB collision"
-status: approved
+title: 'Fix: thread media-type hint through navigation to prevent wrong-title TMDB collision'
+status: done
 slices: [slice:search, slice:watchlist, slice:title-detail]
 scopes: [scope:mobile]
 created: 2026-06-29
@@ -98,23 +98,23 @@ Out of scope (explicitly):
 
 ## Affected slices & Sheriff tags
 
-| Project             | Path                                                          | Sheriff tags                         | Change                                                                          |
-| ------------------- | ------------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------- |
-| mobile-search       | `libs/mobile/search/src/lib/search.page.ts`                   | `scope:mobile`, `slice:search`       | `openDetail` adds `queryParams: { type: result.type }`                          |
-| mobile-search       | `libs/mobile/search/src/lib/search.page.spec.ts`              | `scope:mobile`, `slice:search`       | update the two `navigate` assertions to include `queryParams`                   |
-| mobile-search       | `libs/mobile/search/README.md`                                | `scope:mobile`, `slice:search`       | note the `?type` query param now passed on navigate                             |
-| mobile-watchlist    | `libs/mobile/watchlist/src/lib/watchlist.page.ts`             | `scope:mobile`, `slice:watchlist`    | `navigateToDetail(titleId, type)` adds `queryParams: { type }`                  |
-| mobile-watchlist    | `libs/mobile/watchlist/src/lib/watchlist.page.html`           | `scope:mobile`, `slice:watchlist`    | **both** `(click)` and `(keyup.enter)` pass `item.type` (lines 90-91)            |
-| mobile-watchlist    | `libs/mobile/watchlist/src/lib/watchlist.page.spec.ts`        | `scope:mobile`, `slice:watchlist`    | **add a new** navigate assertion for click and keyup.enter (none exists today)  |
-| mobile-watchlist    | `libs/mobile/watchlist/README.md`                             | `scope:mobile`, `slice:watchlist`    | note `navigateToDetail` now passes `?type`                                      |
-| mobile-title-detail | `libs/mobile/title-detail/src/lib/title-detail.page.ts`       | `scope:mobile`, `slice:title-detail` | `typeHint$` from `queryParamMap`; `combineLatest` into `detail$`; pass hint     |
-| mobile-title-detail | `libs/mobile/title-detail/src/lib/title-detail.service.ts`    | `scope:mobile`, `slice:title-detail` | `detail$` / `resolveDetail` accept + thread `typeHint?` to `client.getDetail`   |
-| mobile-title-detail | `libs/mobile/title-detail/src/lib/title-detail.page.spec.ts`  | `scope:mobile`, `slice:title-detail` | `queryParamMap`-driven hint cases; shim existing specs                          |
-| mobile-title-detail | `libs/mobile/title-detail/src/lib/title-detail.service.spec.ts` | `scope:mobile`, `slice:title-detail` | hint threaded to client; no-hint unchanged                                    |
-| mobile-title-detail | `libs/mobile/title-detail/README.md`                          | `scope:mobile`, `slice:title-detail` | note the route accepts an optional `?type=tv\|movie` typeHint                   |
-| mobile-e2e          | `apps/mobile-e2e/src/search.spec.ts`                          | _(untagged — black-box)_             | new tv flow asserts tv title; **and** fix the existing movie test's `$`-anchored URL regex (line 177) for the new `?type=movie` |
-| mobile-e2e          | `apps/mobile-e2e/fixtures/tmdb-tv-detail-1396.json`           | _(untagged — fixture)_               | new detail-shaped fixture for `GET /tv/1396` (Breaking Bad)                     |
-| mobile-e2e          | `apps/mobile-e2e/src/support/tmdb.ts`                         | _(untagged — black-box)_             | add a `routeTmdbTV(page, tvId, tvFixture)` helper for `**/${tvId}**` tv detail (existing `routeTmdb`/`routeTmdbDiscriminated` unchanged) |
+| Project             | Path                                                            | Sheriff tags                         | Change                                                                                                                                   |
+| ------------------- | --------------------------------------------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| mobile-search       | `libs/mobile/search/src/lib/search.page.ts`                     | `scope:mobile`, `slice:search`       | `openDetail` adds `queryParams: { type: result.type }`                                                                                   |
+| mobile-search       | `libs/mobile/search/src/lib/search.page.spec.ts`                | `scope:mobile`, `slice:search`       | update the two `navigate` assertions to include `queryParams`                                                                            |
+| mobile-search       | `libs/mobile/search/README.md`                                  | `scope:mobile`, `slice:search`       | note the `?type` query param now passed on navigate                                                                                      |
+| mobile-watchlist    | `libs/mobile/watchlist/src/lib/watchlist.page.ts`               | `scope:mobile`, `slice:watchlist`    | `navigateToDetail(titleId, type)` adds `queryParams: { type }`                                                                           |
+| mobile-watchlist    | `libs/mobile/watchlist/src/lib/watchlist.page.html`             | `scope:mobile`, `slice:watchlist`    | **both** `(click)` and `(keyup.enter)` pass `item.type` (lines 90-91)                                                                    |
+| mobile-watchlist    | `libs/mobile/watchlist/src/lib/watchlist.page.spec.ts`          | `scope:mobile`, `slice:watchlist`    | **add a new** navigate assertion for click and keyup.enter (none exists today)                                                           |
+| mobile-watchlist    | `libs/mobile/watchlist/README.md`                               | `scope:mobile`, `slice:watchlist`    | note `navigateToDetail` now passes `?type`                                                                                               |
+| mobile-title-detail | `libs/mobile/title-detail/src/lib/title-detail.page.ts`         | `scope:mobile`, `slice:title-detail` | `typeHint$` from `queryParamMap`; `combineLatest` into `detail$`; pass hint                                                              |
+| mobile-title-detail | `libs/mobile/title-detail/src/lib/title-detail.service.ts`      | `scope:mobile`, `slice:title-detail` | `detail$` / `resolveDetail` accept + thread `typeHint?` to `client.getDetail`                                                            |
+| mobile-title-detail | `libs/mobile/title-detail/src/lib/title-detail.page.spec.ts`    | `scope:mobile`, `slice:title-detail` | `queryParamMap`-driven hint cases; shim existing specs                                                                                   |
+| mobile-title-detail | `libs/mobile/title-detail/src/lib/title-detail.service.spec.ts` | `scope:mobile`, `slice:title-detail` | hint threaded to client; no-hint unchanged                                                                                               |
+| mobile-title-detail | `libs/mobile/title-detail/README.md`                            | `scope:mobile`, `slice:title-detail` | note the route accepts an optional `?type=tv\|movie` typeHint                                                                            |
+| mobile-e2e          | `apps/mobile-e2e/src/search.spec.ts`                            | _(untagged — black-box)_             | new tv flow asserts tv title; **and** fix the existing movie test's `$`-anchored URL regex (line 177) for the new `?type=movie`          |
+| mobile-e2e          | `apps/mobile-e2e/fixtures/tmdb-tv-detail-1396.json`             | _(untagged — fixture)_               | new detail-shaped fixture for `GET /tv/1396` (Breaking Bad)                                                                              |
+| mobile-e2e          | `apps/mobile-e2e/src/support/tmdb.ts`                           | _(untagged — black-box)_             | add a `routeTmdbTV(page, tvId, tvFixture)` helper for `**/${tvId}**` tv detail (existing `routeTmdb`/`routeTmdbDiscriminated` unchanged) |
 
 - **Tags already exist** (0013 search, 0014 watchlist, 0016 title-detail) — verify
   by path glob in `sheriff.config.ts`; **do not edit `sheriff.config.ts`**.

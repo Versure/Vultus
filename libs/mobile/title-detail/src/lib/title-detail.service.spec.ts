@@ -188,6 +188,21 @@ function lastState(
   });
 }
 
+/** Like `lastState`, but threads the spec-0043 media-type hint. */
+function lastState2(
+  service: TitleDetailService,
+  id: number,
+  typeHint: 'movie' | 'tv',
+): Promise<DetailViewState> {
+  return new Promise((resolve) => {
+    let latest: DetailViewState = { kind: 'loading' };
+    service.detail$(id, typeHint).subscribe({
+      next: (s) => (latest = s),
+      complete: () => resolve(latest),
+    });
+  });
+}
+
 describe('TitleDetailService', () => {
   beforeEach(() => {
     TestBed.resetTestingModule();
@@ -322,6 +337,53 @@ describe('TitleDetailService', () => {
     expect(state.kind).toBe('error');
     // The cache read failed → surfaced as error; the live path is NOT attempted.
     expect(getDetailMock).not.toHaveBeenCalled();
+  });
+
+  // --- spec 0043: media-type hint threading to the live TMDB client ---
+
+  describe('detail$ hint threading', () => {
+    it('calls client.getDetail with typeHint=tv on cache miss', async () => {
+      getDocMock.mockResolvedValue(snap(undefined));
+      getDetailMock.mockResolvedValue(liveDetail({ type: 'tv', tmdbId: 1396 }));
+      const service = createService(UID);
+      await lastState2(service, 1396, 'tv');
+      expect(getDetailMock).toHaveBeenCalledWith(1396, 'tv');
+    });
+
+    it('calls client.getDetail with typeHint=movie on cache miss', async () => {
+      getDocMock.mockResolvedValue(snap(undefined));
+      getDetailMock.mockResolvedValue(liveDetail({ type: 'movie' }));
+      const service = createService(UID);
+      await lastState2(service, 27205, 'movie');
+      expect(getDetailMock).toHaveBeenCalledWith(27205, 'movie');
+    });
+
+    it('calls client.getDetail with undefined hint when no hint given', async () => {
+      getDocMock.mockResolvedValue(snap(undefined));
+      getDetailMock.mockResolvedValue(liveDetail({ type: 'movie' }));
+      const service = createService(UID);
+      await lastState(service, 27205);
+      expect(getDetailMock).toHaveBeenCalledWith(27205, undefined);
+    });
+
+    it('does NOT call client.getDetail when cache hit (hint irrelevant)', async () => {
+      getDocMock.mockResolvedValue(
+        snap({
+          type: 'movie',
+          traktId: null,
+          metadata: {
+            title: 'Inception',
+            overview: 'dream heist',
+            posterPath: '/p.jpg',
+            releaseDate: '2010-07-16',
+          },
+          lastSyncedAt: fakeTs(new Date('2026-06-01T00:00:00Z')),
+        }),
+      );
+      const service = createService(UID);
+      await lastState2(service, 27205, 'movie');
+      expect(getDetailMock).not.toHaveBeenCalled();
+    });
   });
 
   it('region$ emits the user region, and null when the doc is absent', async () => {
