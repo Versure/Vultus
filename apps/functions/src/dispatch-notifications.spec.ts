@@ -1,8 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Firestore } from 'firebase-admin/firestore';
 import type { Messaging } from 'firebase-admin/messaging';
+import {
+  notificationPath,
+  notificationToData,
+} from '@vultus/shared/firestore-schema';
+import type { NotificationDoc } from '@vultus/shared/domain';
 import { handleDispatch, type DispatchEvent } from './dispatch-notifications';
-import { createMessagingFcmSender } from './dispatch/adapters';
+import {
+  createFirestoreNotificationStore,
+  createMessagingFcmSender,
+} from './dispatch/adapters';
 
 // --- Fakes -----------------------------------------------------------------
 
@@ -70,7 +78,12 @@ describe('handleDispatch', () => {
       type: 'flatrate' as const,
     };
     const { db } = createFakeDb({
-      titleCache: { 'title-cache/603': { type: 'movie' } },
+      titleCache: {
+        'title-cache/603': {
+          type: 'movie',
+          metadata: { title: 'Test Movie' },
+        },
+      },
     });
     const getSpy = vi.spyOn(db, 'doc');
 
@@ -131,7 +144,12 @@ describe('handleDispatch', () => {
       type: 'flatrate' as const,
     };
     const { db, writes } = createFakeDb({
-      titleCache: { 'title-cache/603': { type: 'movie' } },
+      titleCache: {
+        'title-cache/603': {
+          type: 'movie',
+          metadata: { title: 'Test Movie' },
+        },
+      },
     });
 
     const event: DispatchEvent = {
@@ -159,26 +177,119 @@ function codedError(code: string): Error & { code: string } {
   return Object.assign(new Error(code), { code });
 }
 
+// Typed view of the `notification` block on the first message passed to a send
+// spy — the spy's call arg is otherwise untyped (`unknown`).
+function notificationOf(send: { mock: { calls: unknown[][] } }): {
+  title: string;
+  body: string;
+} {
+  const message = send.mock.calls[0][0] as {
+    notification: { title: string; body: string };
+  };
+  return message.notification;
+}
+
 describe('createMessagingFcmSender', () => {
   it('returns unregistered:false on a successful send', async () => {
     const send = vi.fn(() => Promise.resolve('msg-id'));
     const messaging = { send } as unknown as Messaging;
-    const sender = createMessagingFcmSender(messaging);
+    const sender = createMessagingFcmSender(messaging, 'Test Movie');
 
     const result = await sender.send('tok-1', { kind: 'movie-available' });
 
     expect(result).toEqual({ token: 'tok-1', unregistered: false });
+  });
+
+  it('sends both the data block and an OS-rendered notification block (spec 0041)', async () => {
+    const send = vi.fn(() => Promise.resolve('msg-id'));
+    const sender = createMessagingFcmSender(
+      { send } as unknown as Messaging,
+      'Test Movie',
+    );
+
+    await sender.send('tok-1', { kind: 'movie-available' });
+
     expect(send).toHaveBeenCalledWith({
       token: 'tok-1',
       data: { kind: 'movie-available' },
+      notification: {
+        title: 'Now available to stream',
+        body: 'Test Movie is available on a streaming platform',
+      },
     });
+  });
+
+  it('builds movie-available copy', async () => {
+    const send = vi.fn(() => Promise.resolve('msg-id'));
+    const sender = createMessagingFcmSender(
+      { send } as unknown as Messaging,
+      'Inception',
+    );
+
+    await sender.send('tok', { kind: 'movie-available' });
+
+    expect(notificationOf(send)).toEqual({
+      title: 'Now available to stream',
+      body: 'Inception is available on a streaming platform',
+    });
+  });
+
+  it('builds show-came-to-platform copy (shares availability copy)', async () => {
+    const send = vi.fn(() => Promise.resolve('msg-id'));
+    const sender = createMessagingFcmSender(
+      { send } as unknown as Messaging,
+      'Severance',
+    );
+
+    await sender.send('tok', { kind: 'show-came-to-platform' });
+
+    expect(notificationOf(send)).toEqual({
+      title: 'Now available to stream',
+      body: 'Severance is available on a streaming platform',
+    });
+  });
+
+  it('builds episode-aired copy', async () => {
+    const send = vi.fn(() => Promise.resolve('msg-id'));
+    const sender = createMessagingFcmSender(
+      { send } as unknown as Messaging,
+      'Severance',
+    );
+
+    await sender.send('tok', { kind: 'episode-aired' });
+
+    expect(notificationOf(send)).toEqual({
+      title: 'New episode available',
+      body: 'Severance has a new episode on a streaming platform',
+    });
+  });
+
+  it('uses the generic platform phrase (providerName is not in the FCM data)', async () => {
+    const send = vi.fn(() => Promise.resolve('msg-id'));
+    const sender = createMessagingFcmSender(
+      { send } as unknown as Messaging,
+      'Test Movie',
+    );
+
+    await sender.send('tok', {
+      kind: 'movie-available',
+      // even if a providerName-like key were present, the body ignores it
+      region: 'NL',
+    });
+
+    expect(notificationOf(send).body).toBe(
+      'Test Movie is available on a streaming platform',
+    );
   });
 
   it('maps registration-token-not-found to unregistered:true', async () => {
     const send = vi.fn(() =>
       Promise.reject(codedError('messaging/registration-token-not-found')),
     );
-    const sender = createMessagingFcmSender({ send } as unknown as Messaging);
+    const sender = createMessagingFcmSender(
+      { send } as unknown as Messaging,
+      'Test Movie',
+    );
 
     const result = await sender.send('stale', {});
 
@@ -189,7 +300,10 @@ describe('createMessagingFcmSender', () => {
     const send = vi.fn(() =>
       Promise.reject(codedError('messaging/invalid-registration-token')),
     );
-    const sender = createMessagingFcmSender({ send } as unknown as Messaging);
+    const sender = createMessagingFcmSender(
+      { send } as unknown as Messaging,
+      'Test Movie',
+    );
 
     const result = await sender.send('bad', {});
 
@@ -200,10 +314,69 @@ describe('createMessagingFcmSender', () => {
     const send = vi.fn(() =>
       Promise.reject(codedError('messaging/internal-error')),
     );
-    const sender = createMessagingFcmSender({ send } as unknown as Messaging);
+    const sender = createMessagingFcmSender(
+      { send } as unknown as Messaging,
+      'Test Movie',
+    );
 
     await expect(sender.send('tok', {})).rejects.toMatchObject({
       code: 'messaging/internal-error',
     });
+  });
+});
+
+// --- Notification store adapter (deterministic doc id, spec 0041) -----------
+
+function makeNotificationDoc(
+  overrides: Partial<NotificationDoc> = {},
+): NotificationDoc {
+  return {
+    titleId: 'title-1',
+    kind: 'movie-available',
+    payload: {
+      tmdbId: 603,
+      titleId: 'title-1',
+      title: '',
+      region: 'NL',
+    },
+    sentAt: '2026-06-29T00:00:00.000Z',
+    readAt: null,
+    ...overrides,
+  };
+}
+
+describe('createFirestoreNotificationStore', () => {
+  it('writes to the deterministic {tmdbId}-{region}-{kind} doc id with merge', async () => {
+    const { db, writes } = createFakeDb({ titleCache: {} });
+    const setSpy = vi.spyOn(db, 'doc');
+    const store = createFirestoreNotificationStore(db);
+    const doc = makeNotificationDoc();
+
+    await store.write('u1', doc);
+
+    const expectedPath = notificationPath('u1', '603-NL-movie-available');
+    expect(setSpy).toHaveBeenCalledWith(expectedPath);
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toEqual({
+      path: expectedPath,
+      data: notificationToData(doc),
+    });
+  });
+
+  it('derives the id from payload.tmdbId, payload.region and kind for episode-aired', async () => {
+    const { db, writes } = createFakeDb({ titleCache: {} });
+    const store = createFirestoreNotificationStore(db);
+
+    await store.write(
+      'u2',
+      makeNotificationDoc({
+        kind: 'episode-aired',
+        payload: { tmdbId: 1399, titleId: 't', title: '', region: 'US' },
+      }),
+    );
+
+    expect(writes[0].path).toBe(
+      notificationPath('u2', '1399-US-episode-aired'),
+    );
   });
 });
