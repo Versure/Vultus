@@ -2,7 +2,7 @@
 number: 0041
 slug: notification-deep-links
 title: Display FCM push notifications and deep-link taps to the title-detail page
-status: approved
+status: done
 slices: [slice:title-detail]
 scopes: [scope:mobile, scope:functions]
 created: 2026-06-29
@@ -62,9 +62,9 @@ title**).
 3. **Three listener paths** over `@capacitor/push-notifications` (already installed,
    spec 0022): **foreground** (`pushNotificationReceived`) → Ionic toast with a "View"
    action; **background/terminated tap** (`pushNotificationActionPerformed`) → navigate
-   + mark read; **cold start from a tap** → same event, fired after bootstrap, so the
-   handler must be initialised early. Wire `NotificationHandlerService.init()` from the
-   shell root component's `ngOnInit()`.
+   - mark read; **cold start from a tap** → same event, fired after bootstrap, so the
+     handler must be initialised early. Wire `NotificationHandlerService.init()` from the
+     shell root component's `ngOnInit()`.
 4. **Mark as read on explicit tap only.** On a user tap (foreground "View" button, or
    background/terminated tap) write `readAt` to
    `users/{uid}/notifications/{notificationId}`. On foreground arrival (before the user
@@ -116,10 +116,10 @@ Out of scope (explicitly):
 
 ## Affected slices & Sheriff tags
 
-| Project        | Path                                      | Sheriff tags                       | Change                                                                                              |
-| -------------- | ----------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------- |
-| mobile (app)   | `apps/mobile`                             | `scope:mobile`                     | **add** `notification-handler.service.ts` + spec; wire `init()` into `App.ngOnInit()` (`app.ts`)    |
-| functions (app)| `apps/functions`                          | `scope:functions`                  | **add** `notification: { title, body }` to the FCM send; pin notification-store doc id; update specs |
+| Project         | Path             | Sheriff tags      | Change                                                                                               |
+| --------------- | ---------------- | ----------------- | ---------------------------------------------------------------------------------------------------- |
+| mobile (app)    | `apps/mobile`    | `scope:mobile`    | **add** `notification-handler.service.ts` + spec; wire `init()` into `App.ngOnInit()` (`app.ts`)     |
+| functions (app) | `apps/functions` | `scope:functions` | **add** `notification: { title, body }` to the FCM send; pin notification-store doc id; update specs |
 
 - **No new lib, no `slice:title-detail` import.** The handler is in the **shell**
   (`apps/mobile/src/app`), which Sheriff tags `scope:mobile` and which legitimately
@@ -143,10 +143,10 @@ Out of scope (explicitly):
 
 ## Data model touchpoints
 
-| PLAN §4 path                                    | Access     | By                                                                                                   |
-| ----------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------- |
-| `users/{uid}/notifications/{notificationId}`    | **update** | the handler writes `readAt` on an explicit tap/view (decision 4)                                     |
-| `users/{uid}/notifications/{notificationId}`    | **create** | functions: the notification-store id is pinned to the deterministic `notificationId` (see caveat)    |
+| PLAN §4 path                                 | Access     | By                                                                                                |
+| -------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------- |
+| `users/{uid}/notifications/{notificationId}` | **update** | the handler writes `readAt` on an explicit tap/view (decision 4)                                  |
+| `users/{uid}/notifications/{notificationId}` | **create** | functions: the notification-store id is pinned to the deterministic `notificationId` (see caveat) |
 
 - **No new fields.** `NotificationDoc.readAt: string | null` already exists
   (`libs/shared/domain/src/lib/documents.ts`); the handler sets it via the schema
@@ -154,7 +154,7 @@ Out of scope (explicitly):
   `titleId`, `title`, `region`, `providerName?` (added in spec 0012) — **no domain
   change is needed**.
 - **Mark-as-read write.** `updateDoc(doc(firestore, notificationPath(uid,
-  notificationId)), { readAt: <Timestamp.now()> })`. Match the existing mobile
+notificationId)), { readAt: <Timestamp.now()> })`. Match the existing mobile
   pattern in `libs/mobile/settings/src/lib/settings.service.ts` (inject `Firestore`,
   build the ref via the `@vultus/shared/firestore-schema` path helper
   `notificationPath(uid, notificationId)`, call AngularFire `updateDoc`). For the
@@ -167,7 +167,7 @@ Out of scope (explicitly):
 - **DOC-ID CAVEAT (load-bearing — this is why a functions change is in scope).** The
   FCM `data.notificationId` the app receives is the dispatcher's deterministic id
   `${tmdbId}-${region}-${kind}` (`libs/functions/dispatch-notifications/src/lib/
-  dispatcher.ts`), but the notification-store **adapter writes with an auto-generated
+dispatcher.ts`), but the notification-store **adapter writes with an auto-generated
   Firestore id** (`apps/functions/src/dispatch/adapters.ts`
   `createFirestoreNotificationStore` uses `.collection(...).add(...)`). So
   `data.notificationId !== <Firestore doc id>` today — a mark-as-read keyed on
@@ -234,7 +234,7 @@ export class NotificationHandlerService {
   `init()` must run in `App.ngOnInit()` before the user can interact — registering the
   listener early ensures the queued cold-start action is delivered to it.
 - **Mark read:** `const id = this.uid(); if (id) await updateDoc(doc(this.firestore,
-  notificationPath(id, data.notificationId)), { readAt: Timestamp.now() });` Guard the
+notificationPath(id, data.notificationId)), { readAt: Timestamp.now() });` Guard the
   null uid (pre-auth) — skip the write rather than throw (mirrors the slices' uid guard).
   Wrap navigation/mark-read in try/catch so a Firestore failure never blocks the
   navigation (mark-read is best-effort, like the onboarding push flow).
@@ -251,8 +251,8 @@ the call options:
 ```ts
 const toast = await this.toastController.create({
   message: notification.body ?? notification.title ?? 'New notification',
-  duration: 4000,             // 4 seconds (decision 3)
-  position: 'top',            // below the status bar; the tab bar owns the bottom
+  duration: 4000, // 4 seconds (decision 3)
+  position: 'top', // below the status bar; the tab bar owns the bottom
   buttons: [
     {
       text: 'View',
@@ -297,11 +297,11 @@ functions README / PR.
 Per-kind copy (fields from the title metadata + `payload.providerName`):
 
 - `kind: 'movie-available'` → `{ title: 'Now available to stream', body: '<title> is
-  available on <providerName ?? 'a streaming platform'>' }`
+available on <providerName ?? 'a streaming platform'>' }`
 - `kind: 'show-came-to-platform'` → `{ title: 'Now available to stream', body: '<title>
-  is available on <providerName ?? 'a streaming platform'>' }`
+is available on <providerName ?? 'a streaming platform'>' }`
 - `kind: 'episode-aired'` → `{ title: 'New episode available', body: '<title> has a new
-  episode on <providerName ?? 'a streaming platform'>' }`
+episode on <providerName ?? 'a streaming platform'>' }`
 
 Also pin the notification-store doc id to the deterministic `notificationId` (Data model
 caveat) so the app's mark-as-read targets the right doc.
@@ -387,7 +387,7 @@ UI is a transient toast, exercised at unit level via a mocked `ToastController`)
   (idempotency flag).
 - **Background tap** (`pushNotificationActionPerformed`, `actionId: 'tap'`,
   `data: { notificationId:'603-NL-movie-available', titleId:'603', tmdbId:'603',
-  kind:'movie-available', region:'NL' }`): `Router.navigate` called with
+kind:'movie-available', region:'NL' }`): `Router.navigate` called with
   `['tabs','title-detail','603']`; `updateDoc` called once on
   `notificationPath(uid,'603-NL-movie-available')` with `{ readAt: <Timestamp> }`.
 - **Foreground arrival** (`pushNotificationReceived`): `ToastController.create` called
@@ -481,7 +481,7 @@ designed page).
   sets `payload.title = ''`. **Resolution (in scope):** build the `notification` block
   in the `apps/functions` layer (thread `metadata.title` from `handleDispatch`'s
   existing `title-cache` read into the adapter), keeping `libs/functions/
-  dispatch-notifications` unchanged. The "core unchanged" half of decision 1 **is**
+dispatch-notifications` unchanged. The "core unchanged" half of decision 1 **is**
   honoured; the "single file" half is relaxed to "the `apps/functions` dispatch layer".
   Flagged so the implementer does not waste effort trying to edit only the trigger file
   or, worse, modify the pure core.
