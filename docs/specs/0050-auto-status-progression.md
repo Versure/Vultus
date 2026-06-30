@@ -2,7 +2,7 @@
 number: 0050
 slug: auto-status-progression
 title: Auto-progress TV watchlist status between watching and completed in title-detail
-status: approved
+status: done
 slices: [slice:title-detail]
 scopes: [scope:mobile]
 created: 2026-06-30
@@ -125,7 +125,7 @@ rewrite**, and **must preserve** every other spec-0034 transition and its tests:
     keeps a single `autoUpdateStatus` pass converging — see Data model for the
     exact ordering). **Decision 3 is the contract: `completed` is reached from
     `'watching'`.** No existing spec-0034 test asserts `planned + all-watched →
-    completed` in one shot (the 0034 suite's "all watched" test already uses status
+completed` in one shot (the 0034 suite's "all watched" test already uses status
     `'watching'` and survives unchanged). A **new convergence test** is **added** to
     pin the decision-3 semantics (advance lands on `watching`, then `completed`
     because the effective status is `watching`).
@@ -173,8 +173,8 @@ Out of scope:
 
 ## Affected slices & Sheriff tags
 
-| Project             | Path                       | Sheriff tags                         | Change                                                                                                                                                |
-| ------------------- | -------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Project             | Path                       | Sheriff tags                         | Change                                                                                                                                             |
+| ------------------- | -------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | mobile-title-detail | `libs/mobile/title-detail` | `scope:mobile`, `slice:title-detail` | Refine `autoUpdateStatus` (advance from `'watching'`); add `revertIfNewEpisodes`; wire it into `TitleDetailPage` init; README + service/page tests |
 
 - **Import boundaries (verified against the merged slice).** The change reuses
@@ -198,11 +198,11 @@ Out of scope:
 PLAN §4 paths. **No new field anywhere.** All access reuses spec-0016/0034
 shapes.
 
-| PLAN §4 path                                            | Access by this slice                            | Fields / note                                                                       |
-| ------------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `users/{uid}/watchlist/{titleId}/episodes` (collection) | **read (one-shot)** in `autoUpdateStatus` + `revertIfNewEpisodes` | count `watched` over `EpisodeDoc`; **never written** by this spec                     |
-| `users/{uid}/watchlist/{titleId}` (doc)                 | **read (one-shot status)**, **update (`status`)** | auto-advance writes `{ status: 'completed' }`; auto-revert writes `{ status: 'watching' }` |
-| `title-cache/**`                                        | **none**                                        | unchanged                                                                           |
+| PLAN §4 path                                            | Access by this slice                                              | Fields / note                                                                              |
+| ------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `users/{uid}/watchlist/{titleId}/episodes` (collection) | **read (one-shot)** in `autoUpdateStatus` + `revertIfNewEpisodes` | count `watched` over `EpisodeDoc`; **never written** by this spec                          |
+| `users/{uid}/watchlist/{titleId}` (doc)                 | **read (one-shot status)**, **update (`status`)**                 | auto-advance writes `{ status: 'completed' }`; auto-revert writes `{ status: 'watching' }` |
+| `title-cache/**`                                        | **none**                                                          | unchanged                                                                                  |
 
 - **Auto-advance read+write (decision 3).** Reuses spec 0034's
   `autoUpdateStatus(tmdbId)`: after the episode `{ watched }` write, one-shot
@@ -382,10 +382,8 @@ because tasks 2–3 build on task 1's service surface and they share
 
 (All edits stay under `libs/mobile/title-detail/**`. **No `libs/shared/**`, no
 `apps/functions/**`, no `apps/mobile-e2e/**`, no `firestore.rules`,
-`firestore.indexes.json`, `sheriff.config.ts`, `ci.yml`, or `playwright.config.ts`
-touch.** Symbol/file names are recommendations; the binding contracts are the
-decision-3 `→ completed`-from-`watching` advance, the decision-4 page-init
-`completed → watching` auto-revert, the TV-only / empty-subcollection / null-uid
+`firestore.indexes.json`, `sheriff.config.ts`, `ci.yml`, or `playwright.config.ts`touch.** Symbol/file names are recommendations; the binding contracts are the
+decision-3`→ completed`-from-`watching`advance, the decision-4 page-init`completed → watching` auto-revert, the TV-only / empty-subcollection / null-uid
 no-ops, and the no-functions-write / no-cross-slice / no-episode-doc-write
 guardrails.)
 
@@ -561,7 +559,7 @@ mobile:serve-mock` or the component test. **No new Stitch screen / no static-
   does not gain new episodes, so the revert is a no-op in practice (correct —
   there is nothing new to watch). **This is NOT a PLAN conflict:** reading the
   subcollection and reacting to its contents is squarely within `slice:title-
-  detail`'s charter (PLAN §6 item 19); populating it is 0047's `scope:functions`
+detail`'s charter (PLAN §6 item 19); populating it is 0047's `scope:functions`
   concern, explicitly out of scope here (decision 2). **Flag this dependency in the
   PR** so a reviewer does not treat a no-op revert (empty/append-only
   subcollection in dev) as a bug.
