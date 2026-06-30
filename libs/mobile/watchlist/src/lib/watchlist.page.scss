@@ -121,6 +121,85 @@ ion-content {
   }
 }
 
+// -----------------------------------------------------------------------------
+// New filter rows (spec 0043 — token-derived; NO Stitch counterpart).
+// Status-filter chips, search bar, and provider-filter chips stack between the
+// type-filter row and the grouped list. Each row reuses the `.filter-pill`
+// style above for visual consistency. 16px side margins (margin-mobile) match
+// the type filter; 8px (spacing.sm) between sibling rows; rows scroll
+// horizontally (no wrap) like the type filter.
+// -----------------------------------------------------------------------------
+.status-filter,
+.provider-filter {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: var(--vultus-space-sm);
+  padding: 0 var(--vultus-space-md);
+  margin-bottom: var(--vultus-space-sm);
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  .filter-pill {
+    white-space: nowrap;
+  }
+}
+
+// Status chip accent — when inactive, tint the label with the per-status color
+// (matching the section-header counts); the active pill keeps the primary fill.
+.status-pill {
+  &:not(.active) {
+    &.status-watching {
+      color: var(--vultus-status-watching);
+    }
+    &.status-completed {
+      color: var(--vultus-status-completed);
+    }
+    &.status-dropped {
+      color: var(--vultus-status-dropped);
+    }
+    &.status-planned {
+      color: var(--vultus-status-planned);
+    }
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Search bar — design-system Search Bar: surface-container fill, 0.5rem radius,
+// magnifying-glass icon, placeholder in on-surface-variant. On focus the border
+// transitions to primary Emerald. Style the inner `.searchbar-input` (where the
+// box-shadow/border actually render) via Ionic's CSS vars; the icon re-centers
+// for the default height. Token-derived (no Stitch counterpart).
+// -----------------------------------------------------------------------------
+.watchlist-search {
+  --background: var(--vultus-surface-container);
+  --color: var(--vultus-on-surface);
+  --placeholder-color: var(--vultus-on-surface-variant);
+  --placeholder-opacity: 1;
+  --icon-color: var(--vultus-on-surface-variant);
+  --clear-button-color: var(--vultus-on-surface-variant);
+  --border-radius: var(--vultus-radius);
+  --box-shadow: 0 0 0 1px var(--vultus-border);
+  padding-inline: var(--vultus-space-md);
+  padding-top: 0;
+  padding-bottom: var(--vultus-space-sm);
+
+  // The visible field is the inner `.searchbar-input` (box-shadow renders
+  // there, driven by `--box-shadow`); ease the focus transition on it.
+  ::ng-deep .searchbar-input {
+    transition: box-shadow 150ms ease-in-out;
+  }
+
+  // Focus → primary-Emerald border (re-set the same `--box-shadow` knob).
+  &.searchbar-has-focus {
+    --box-shadow: 0 0 0 1px var(--vultus-primary);
+  }
+}
+
 .status-section {
   margin-bottom: var(--vultus-space-3);
 }

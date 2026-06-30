@@ -27,7 +27,7 @@ The barrel (`@vultus/mobile/search`) exports:
 | `SearchPage`         | Standalone Ionic page component for the Search tab                                                                   |
 | `TMDB_SEARCH_CONFIG` | `InjectionToken<TmdbSearchConfig>` — provided at root by `apps/mobile`                                               |
 | `TmdbSearchConfig`   | Config type: `apiBaseUrl`, `imageBaseUrl`, `auth` (bearer or apiKey), optional `fetchImpl` (mock/dev fetch override) |
-| `SearchResult`       | Normalized TMDB hit: `tmdbId`, `type`, `title`, `year`, `posterUrl`, `posterPath`, `voteAverage`                     |
+| `SearchResult`       | Normalized TMDB hit: `tmdbId`, `type`, `title`, `year`, `posterUrl`, `posterPath`, `voteAverage`, `releaseDate`      |
 
 ## DI contract
 
@@ -65,7 +65,7 @@ Poster thumbnails are omitted from mock data (placeholder shown). Firebase still
 ## Data access
 
 - **Reads:** `users/{uid}/watchlist` (collection snapshot) — to compute the already-added set.
-- **Writes:** `users/{uid}/watchlist/{titleId}` (set doc) — `status: 'planned'`, `traktId: null`, `titleId = String(tmdbId)`.
+- **Writes:** `users/{uid}/watchlist/{titleId}` (set doc) — `status: 'planned'`, `traktId: null`, `titleId = String(tmdbId)`, plus `posterPath`, `voteAverage`, and `releaseDate` (raw TMDB `release_date`/`first_air_date`, or `null`).
 - Uses `watchlistPath`, `watchlistItemPath`, `watchlistItemToData` from `@vultus/shared/firestore-schema`.
 - Does **not** touch `episodes`, `title-cache`, or the `users/{uid}` root doc.
 

@@ -78,6 +78,7 @@ export function watchlistItemToData(
     status: item.status,
     posterPath: item.posterPath ?? null,
     voteAverage: item.voteAverage ?? null,
+    releaseDate: item.releaseDate ?? null,
   };
 }
 export function dataToWatchlistItem(
@@ -92,6 +93,7 @@ export function dataToWatchlistItem(
     status: data.status,
     posterPath: data.posterPath ?? null,
     voteAverage: data.voteAverage ?? null,
+    releaseDate: data.releaseDate ?? null,
   };
 }
 

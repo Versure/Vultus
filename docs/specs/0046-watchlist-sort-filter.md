@@ -2,7 +2,7 @@
 number: 0043
 slug: watchlist-sort-filter
 title: Add sort, status filter, text search, and provider filter to the watchlist
-status: approved
+status: done
 slices: [slice:watchlist, slice:search]
 scopes: [scope:mobile, scope:shared]
 created: 2026-06-30
@@ -95,7 +95,7 @@ field addition. All four capabilities filter/sort the **already-subscribed**
     `availability$` is unchanged. The page already subscribes to
     `availability$(tmdbId, region)` once per tmdbId (memoized in `providerCache`).
     For the provider filter the page builds a local `availabilityMap: Map<number,
-    string[]>` (tmdbId → all provider names) **from that same memoized
+string[]>` (tmdbId → all provider names) **from that same memoized
     subscription** — see "Provider stream reconciliation" in Public types / APIs.
     No second Firestore Listen channel per card is opened. The
     `getAvailableProviders` helper takes this map to derive the chip list.
@@ -136,12 +136,12 @@ Out of scope:
 
 ## Affected slices & Sheriff tags
 
-| Path                            | Scope / slice tag                  | Change                                                                 |
-| ------------------------------- | ---------------------------------- | ---------------------------------------------------------------------- |
-| `libs/shared/domain/src`        | `scope:shared`                     | add `releaseDate?: string \| null` to `WatchlistItem`                  |
-| `libs/shared/firestore-schema/src` | `scope:shared`                  | add field to read/write data + both converters + round-trip test       |
-| `libs/mobile/watchlist/src`     | `scope:mobile`, `slice:watchlist`  | new pure helpers + `WatchlistPage` sort/filter UI + tests + README     |
-| `libs/mobile/search/src`        | `scope:mobile`, `slice:search`     | write `releaseDate` when adding a title (additive)                     |
+| Path                               | Scope / slice tag                 | Change                                                             |
+| ---------------------------------- | --------------------------------- | ------------------------------------------------------------------ |
+| `libs/shared/domain/src`           | `scope:shared`                    | add `releaseDate?: string \| null` to `WatchlistItem`              |
+| `libs/shared/firestore-schema/src` | `scope:shared`                    | add field to read/write data + both converters + round-trip test   |
+| `libs/mobile/watchlist/src`        | `scope:mobile`, `slice:watchlist` | new pure helpers + `WatchlistPage` sort/filter UI + tests + README |
+| `libs/mobile/search/src`           | `scope:mobile`, `slice:search`    | write `releaseDate` when adding a title (additive)                 |
 
 **No cross-slice import.** `slice:watchlist` and `slice:search` do **not** import
 each other; the only shared touchpoint is the additive `WatchlistItem.releaseDate`
@@ -159,8 +159,8 @@ uid continues to come from the `scope:shared` `AUTH_UID` token — never from an
 
 PLAN §4 `users/{uid}/watchlist/{titleId}` gains **one new denormalized field**:
 
-| PLAN §4 path                      | Access            | Field                                                  |
-| --------------------------------- | ----------------- | ------------------------------------------------------ |
+| PLAN §4 path                      | Access                                   | Field                                                 |
+| --------------------------------- | ---------------------------------------- | ----------------------------------------------------- |
 | `users/{uid}/watchlist/{titleId}` | **write** (search), **read** (watchlist) | `releaseDate?: string \| null` — ISO 8601 date string |
 
 **Binding: `releaseDate` MUST be optional (`?`) and nullable**, exactly like
@@ -231,8 +231,8 @@ behavior changes.
 export type WatchlistSort =
   | 'titleAsc'
   | 'titleDesc'
-  | 'addedDesc'   // newest first (DEFAULT)
-  | 'addedAsc'    // oldest first
+  | 'addedDesc' // newest first (DEFAULT)
+  | 'addedAsc' // oldest first
   | 'releaseDesc' // newest release first
   | 'releaseAsc'; // oldest release first
 
@@ -282,12 +282,12 @@ groupByStatus`. Extend it so the full client-side composition order is
 - Add component-local reactive state for: `selectedStatus: WatchStatus | null`
   (null = All), `searchTerm$` (debounced 200ms — reuse the existing `BehaviorSubject`
   pattern or `IonSearchbar`'s `ionInput` + a debounce), `selectedProviders:
-  Set<string>`, and `selectedSort: WatchlistSort` (default `'addedDesc'`).
+Set<string>`, and `selectedSort: WatchlistSort` (default `'addedDesc'`).
 - The vm pipeline applies, **in order**: the type filter (existing
   `watchlist$(uid, type)` re-subscribe), then over the emitted `WatchlistItem[]`:
   text-search filter (case-insensitive `title.includes`), then **derive the
   provider-chip set** via `getAvailableProviders(<type+search-filtered items>,
-  availabilityMap)` (so the chips reflect exactly what type+search left visible),
+availabilityMap)` (so the chips reflect exactly what type+search left visible),
   then the provider filter (keep an item if `selectedProviders` is empty OR the
   item's providers — looked up in `availabilityMap` — intersect
   `selectedProviders`), then `groupByStatus`, then narrow to `selectedStatus` if
@@ -302,14 +302,14 @@ groupByStatus`. Extend it so the full client-side composition order is
   `` `${tmdbId}|${region}` ``) producing only the **first** provider name
   (`a?.providers[0]?.name`) — to cache `Observable<string[]>`: the **full** list
   of provider names for a tmdbId, `availability$(tmdbId, region).pipe(map(a =>
-  a?.providers.map(p => p.name) ?? []), shareReplay(...))`. This is a **pure
+a?.providers.map(p => p.name) ?? []), shareReplay(...))`. This is a **pure
   internal refactor of the same memoized subscription**: `availability$` is still
   called **once per tmdbId** and memoized via `shareReplay`, so **no second
   Firestore Listen channel per card is opened**. `WatchlistService.availability$`
   is unchanged.
   - The existing **per-card provider badge** derives its single display name from
     the same cached stream: `providerNames$(item, region).pipe(map(names =>
-    names[0] ?? null))` (preserving today's `getProviderName$` behavior — first
+names[0] ?? null))` (preserving today's `getProviderName$` behavior — first
     name only — on top of the widened cache).
   - The **`availabilityMap: Map<number, string[]>`** consumed by
     `getAvailableProviders` and the provider filter is built by combining the
@@ -425,7 +425,7 @@ domain.
 - `libs/shared/domain/src/lib/documents.ts`: add `releaseDate?: string | null`
   to `WatchlistItem` (optional + nullable — binding).
 - `libs/shared/firestore-schema/src/lib/data-types.ts`: add `releaseDate?: string
-  | null` to `WatchlistItemReadData` and `WatchlistItemWriteData` (pass-through,
+| null` to `WatchlistItemReadData` and `WatchlistItemWriteData` (pass-through,
   **no `Date` coercion** — it is a plain ISO string, not a Timestamp).
 - `libs/shared/firestore-schema/src/lib/converters.ts`: map `releaseDate` in
   `watchlistItemToData` (`?? null`, never `undefined`) and `dataToWatchlistItem`
@@ -447,7 +447,7 @@ frontend-engineer.
 
 - `tmdb-search.client.ts`: add `releaseDate: string | null` to `SearchResult`;
   in `searchMulti`'s `.map`, set `releaseDate: (isMovie ? r.release_date :
-  r.first_air_date) ?? null` (empty string → `null`).
+r.first_air_date) ?? null` (empty string → `null`).
 - `search.service.ts`: in `add()`, set `releaseDate: result.releaseDate ?? null`
   on the `WatchlistItem` it writes.
 - Extend `tmdb-search.client.spec.ts` (releaseDate normalization for movie/tv and
@@ -598,7 +598,7 @@ Green gate is **typecheck + lint/Sheriff + unit + component + build** (what CI
 runs); e2e is not required (decision 8).
 
 - [ ] `pnpm nx run-many -t lint test typecheck -p mobile-watchlist mobile-search
-      shared-domain shared-firestore-schema` passes **with Sheriff active**: the
+  shared-domain shared-firestore-schema` passes **with Sheriff active**: the
       additive `releaseDate` field compiles in both slices; **no cross-slice import**
       (watchlist ↔ search), no `apps/mobile` deep import, no `scope:functions`
       import; the new helpers stay slice-local; the uid is obtained only via

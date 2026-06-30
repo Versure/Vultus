@@ -34,6 +34,7 @@ export interface WatchlistItem {
   status: WatchStatus;
   posterPath?: string | null; // TMDB poster path, e.g. '/abc123.jpg'; null when unknown
   voteAverage?: number | null; // TMDB vote average 0–10; null when unknown
+  releaseDate?: string | null; // plain ISO date, e.g. '2024-03-15'; null when unknown
 }
 
 // users/{userId}/watchlist/{titleId}/episodes/{episodeId} — tv only.

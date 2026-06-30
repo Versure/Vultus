@@ -69,7 +69,9 @@ test.describe('search (F2–F3)', () => {
 
     // Type a query into the searchbar's inner native input. The component reads
     // `(ionInput)` -> service debounces (~400ms) -> results render.
-    await page.locator('ion-searchbar input').fill('matrix');
+    // Scoped to lib-search: the watchlist tab also has an IonSearchbar and Ionic
+    // keeps inactive tabs in the DOM, so an unscoped locator resolves to 2 elements.
+    await page.locator('lib-search ion-searchbar input').fill('matrix');
 
     // Wait for the debounced results rather than asserting immediately.
     await expect(page.locator('.result-card')).toHaveCount(2);
@@ -97,7 +99,7 @@ test.describe('search (F2–F3)', () => {
     await page.locator('ion-tab-button[tab="search"]').click();
     await expect(page).toHaveURL(/\/tabs\/search$/);
 
-    await page.locator('ion-searchbar input').fill('matrix');
+    await page.locator('lib-search ion-searchbar input').fill('matrix');
     await expect(page.locator('.result-card')).toHaveCount(2);
 
     // Scope to the movie card so the assertions target one specific result.
@@ -165,7 +167,7 @@ test.describe('search (F2–F3)', () => {
     await page.locator('ion-tab-button[tab="search"]').click();
     await expect(page).toHaveURL(/\/tabs\/search$/);
 
-    await page.locator('ion-searchbar input').fill('matrix');
+    await page.locator('lib-search ion-searchbar input').fill('matrix');
     await expect(page.locator('.result-card')).toHaveCount(2);
 
     // Tap the movie result card body (The Matrix, id 603 in tmdb-search-multi.json).
@@ -208,7 +210,7 @@ test.describe('search (F2–F3)', () => {
     await page.locator('ion-tab-button[tab="search"]').click();
     await expect(page).toHaveURL(/\/tabs\/search$/);
 
-    await page.locator('ion-searchbar input').fill('breaking');
+    await page.locator('lib-search ion-searchbar input').fill('breaking');
     await expect(page.locator('.result-card')).toHaveCount(2);
 
     // Tap the TV result card (Breaking Bad, id 1396 in tmdb-search-multi.json).

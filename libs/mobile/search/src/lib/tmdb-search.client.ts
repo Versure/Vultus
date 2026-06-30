@@ -12,6 +12,7 @@ export interface SearchResult {
   posterUrl: string | null;
   posterPath: string | null; // raw TMDB poster_path, e.g. '/abc.jpg'; null when unknown
   voteAverage: number | null; // TMDB vote_average 0–10; null when unknown
+  releaseDate: string | null; // raw TMDB release_date (movie) / first_air_date (tv); null when absent/empty
 }
 
 /**
@@ -113,6 +114,10 @@ export function createTmdbSearchClient(
               : null,
             posterPath: r.poster_path ?? null,
             voteAverage: r.vote_average ?? null,
+            // `||` (not `??`) is intentional: TMDB returns '' (not null/undefined)
+            // for unknown dates, and an empty string must coerce to null.
+            // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+            releaseDate: (isMovie ? r.release_date : r.first_air_date) || null,
           };
         });
     },

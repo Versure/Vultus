@@ -94,15 +94,20 @@ describe('converters — round-trip identity', () => {
       addedAt: '2026-03-04T05:06:07.000Z',
       status: 'watching',
     };
-    // posterPath/voteAverage are absent on the source item; the write converter
-    // coerces them to null (never undefined), so the round-trip reads them back
-    // as null.
+    // posterPath/voteAverage/releaseDate are absent on the source item; the write
+    // converter coerces them to null (never undefined), so the round-trip reads
+    // them back as null.
     expect(
       dataToWatchlistItem(simulateStored(watchlistItemToData(item)) as never),
-    ).toEqual({ ...item, posterPath: null, voteAverage: null });
+    ).toEqual({
+      ...item,
+      posterPath: null,
+      voteAverage: null,
+      releaseDate: null,
+    });
   });
 
-  it('WatchlistItem: posterPath + voteAverage set round-trip', () => {
+  it('WatchlistItem: posterPath + voteAverage + releaseDate set round-trip', () => {
     const item: WatchlistItem = {
       type: 'movie',
       tmdbId: 603,
@@ -112,13 +117,14 @@ describe('converters — round-trip identity', () => {
       status: 'completed',
       posterPath: '/matrix.jpg',
       voteAverage: 8.2,
+      releaseDate: '1999-03-31',
     };
     expect(
       dataToWatchlistItem(simulateStored(watchlistItemToData(item)) as never),
     ).toEqual(item);
   });
 
-  it('WatchlistItem: posterPath + voteAverage explicit null round-trip', () => {
+  it('WatchlistItem: posterPath + voteAverage + releaseDate explicit null round-trip', () => {
     const item: WatchlistItem = {
       type: 'tv',
       tmdbId: 1396,
@@ -128,13 +134,14 @@ describe('converters — round-trip identity', () => {
       status: 'planned',
       posterPath: null,
       voteAverage: null,
+      releaseDate: null,
     };
     expect(
       dataToWatchlistItem(simulateStored(watchlistItemToData(item)) as never),
     ).toEqual(item);
   });
 
-  it('WatchlistItem: posterPath/voteAverage absent are written as null (never undefined)', () => {
+  it('WatchlistItem: posterPath/voteAverage/releaseDate absent are written as null (never undefined)', () => {
     const item: WatchlistItem = {
       type: 'movie',
       tmdbId: 27205,
@@ -146,10 +153,31 @@ describe('converters — round-trip identity', () => {
     const write = watchlistItemToData(item);
     expect(write.posterPath).toBeNull();
     expect(write.voteAverage).toBeNull();
+    expect(write.releaseDate).toBeNull();
+    // releaseDate key is present and null, never undefined.
+    expect('releaseDate' in write).toBe(true);
+    expect(write.releaseDate).not.toBeUndefined();
     // Round-trip reads them back as null.
     const read = dataToWatchlistItem(simulateStored(write) as never);
     expect(read.posterPath).toBeNull();
     expect(read.voteAverage).toBeNull();
+    expect(read.releaseDate).toBeNull();
+  });
+
+  it('WatchlistItem: releaseDate is a plain ISO date string (no Timestamp coercion)', () => {
+    const item: WatchlistItem = {
+      type: 'movie',
+      tmdbId: 1891,
+      traktId: 9,
+      title: 'The Empire Strikes Back',
+      addedAt: '2026-03-04T05:06:07.000Z',
+      status: 'completed',
+      releaseDate: '1980-05-21',
+    };
+    const write = watchlistItemToData(item);
+    // Stored as the raw string, NOT a Date/Timestamp.
+    expect(write.releaseDate).toBe('1980-05-21');
+    expect(write.releaseDate).not.toBeInstanceOf(Date);
   });
 
   it('EpisodeDoc: watchedAt set (watched true), title present', () => {

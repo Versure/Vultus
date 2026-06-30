@@ -85,6 +85,103 @@ export function filterByType(
   return items.filter((i) => i.type === type);
 }
 
+/** The six sort modes the toolbar offers. Default is 'addedDesc'. */
+export type WatchlistSort =
+  | 'titleAsc'
+  | 'titleDesc'
+  | 'addedDesc' // newest first (DEFAULT)
+  | 'addedAsc' // oldest first
+  | 'releaseDesc' // newest release first
+  | 'releaseAsc'; // oldest release first
+
+/**
+ * Pure, stable sort of a single status group's items (slice-local, used by
+ * `WatchlistPage` per group). Does NOT mutate the input — returns a copy.
+ * Binding tie-breaks:
+ * - title sorts: case-insensitive locale compare on `title`.
+ * - added sorts: compare `addedAt` (ISO string) ascending/descending.
+ * - release sorts: items with `releaseDate` null/absent sort to the END in BOTH
+ *   directions (a missing date is never "newest" or "oldest"); present dates
+ *   compare by ISO string.
+ */
+export function sortItems(
+  items: WatchlistItem[],
+  sort: WatchlistSort,
+): WatchlistItem[] {
+  const copy = items.slice();
+  switch (sort) {
+    case 'titleAsc':
+      return copy.sort((a, b) =>
+        a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }),
+      );
+    case 'titleDesc':
+      return copy.sort((a, b) =>
+        b.title.localeCompare(a.title, undefined, { sensitivity: 'base' }),
+      );
+    case 'addedDesc':
+      return copy.sort((a, b) =>
+        a.addedAt < b.addedAt ? 1 : a.addedAt > b.addedAt ? -1 : 0,
+      );
+    case 'addedAsc':
+      return copy.sort((a, b) =>
+        a.addedAt < b.addedAt ? -1 : a.addedAt > b.addedAt ? 1 : 0,
+      );
+    case 'releaseDesc':
+      return copy.sort((a, b) => compareRelease(a, b, 'desc'));
+    case 'releaseAsc':
+      return copy.sort((a, b) => compareRelease(a, b, 'asc'));
+  }
+}
+
+/**
+ * Release-date comparator: null/absent `releaseDate` always sorts to the END
+ * regardless of direction; two present dates compare by ISO string.
+ */
+function compareRelease(
+  a: WatchlistItem,
+  b: WatchlistItem,
+  dir: 'asc' | 'desc',
+): number {
+  const ar = a.releaseDate ?? null;
+  const br = b.releaseDate ?? null;
+  if (ar === null && br === null) {
+    return 0;
+  }
+  if (ar === null) {
+    return 1; // a (missing) after b
+  }
+  if (br === null) {
+    return -1; // b (missing) after a
+  }
+  const cmp = ar < br ? -1 : ar > br ? 1 : 0;
+  return dir === 'asc' ? cmp : -cmp;
+}
+
+/**
+ * Unique, sorted (case-insensitive A→Z) list of provider names present across
+ * the given items, looked up by tmdbId in the availability map. Items with no
+ * entry (or an empty array) contribute nothing. Returns `[]` when the map yields
+ * no providers (→ the page hides the provider chip row). Slice-local, pure.
+ */
+export function getAvailableProviders(
+  items: WatchlistItem[],
+  availabilityMap: Map<number, string[]>,
+): string[] {
+  const seen = new Set<string>();
+  for (const item of items) {
+    const names = availabilityMap.get(item.tmdbId);
+    if (!names) {
+      continue;
+    }
+    for (const name of names) {
+      seen.add(name);
+    }
+  }
+  return [...seen].sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: 'base' }),
+  );
+}
+
 /**
  * Watchlist data-access for the Vultus watchlist tab (spec 0014, PLAN §6 item
  * 18). Reads `users/{uid}/watchlist` (realtime), `users/{uid}` (region) and

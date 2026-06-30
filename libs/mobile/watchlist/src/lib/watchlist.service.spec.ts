@@ -17,7 +17,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   WatchlistService,
   filterByType,
+  getAvailableProviders,
   groupByStatus,
+  sortItems,
 } from './watchlist.service';
 
 // Mock AngularFire's free functions. `doc`/`collection` echo the path so we can
@@ -117,6 +119,98 @@ describe('filterByType', () => {
   });
   it('returns all for undefined', () => {
     expect(filterByType(items, undefined)).toHaveLength(3);
+  });
+});
+
+describe('sortItems', () => {
+  const A = item({
+    tmdbId: 1,
+    title: 'apple',
+    addedAt: '2026-01-01T00:00:00.000Z',
+    releaseDate: '2020-05-01',
+  });
+  const B = item({
+    tmdbId: 2,
+    title: 'Banana',
+    addedAt: '2026-03-01T00:00:00.000Z',
+    releaseDate: '2022-09-01',
+  });
+  const C = item({
+    tmdbId: 3,
+    title: 'cherry',
+    addedAt: '2026-02-01T00:00:00.000Z',
+    releaseDate: null,
+  });
+  const D = item({
+    tmdbId: 4,
+    title: 'Date',
+    addedAt: '2026-04-01T00:00:00.000Z',
+    // releaseDate absent
+  });
+
+  it('titleAsc / titleDesc sort case-insensitively', () => {
+    const asc = sortItems([B, D, A, C], 'titleAsc').map((i) => i.tmdbId);
+    expect(asc).toEqual([1, 2, 3, 4]); // apple, Banana, cherry, Date
+    const desc = sortItems([B, D, A, C], 'titleDesc').map((i) => i.tmdbId);
+    expect(desc).toEqual([4, 3, 2, 1]);
+  });
+
+  it('addedDesc is newest-first, addedAsc is oldest-first by addedAt', () => {
+    const desc = sortItems([A, B, C, D], 'addedDesc').map((i) => i.tmdbId);
+    expect(desc).toEqual([4, 2, 3, 1]); // 04, 03, 02, 01
+    const asc = sortItems([A, B, C, D], 'addedAsc').map((i) => i.tmdbId);
+    expect(asc).toEqual([1, 3, 2, 4]);
+  });
+
+  it('releaseDesc / releaseAsc push null/absent releaseDate to the END in both directions', () => {
+    const desc = sortItems([A, B, C, D], 'releaseDesc').map((i) => i.tmdbId);
+    // present sorted newest→oldest: B(2022) A(2020); then C(null) D(absent) at end
+    expect(desc.slice(0, 2)).toEqual([2, 1]);
+    expect(desc.slice(2).sort()).toEqual([3, 4]);
+
+    const asc = sortItems([A, B, C, D], 'releaseAsc').map((i) => i.tmdbId);
+    // present sorted oldest→newest: A(2020) B(2022); then C/D at end
+    expect(asc.slice(0, 2)).toEqual([1, 2]);
+    expect(asc.slice(2).sort()).toEqual([3, 4]);
+  });
+
+  it('does not mutate the input array (returns a copy)', () => {
+    const input = [B, A, C, D];
+    const snapshot = [...input];
+    const out = sortItems(input, 'titleAsc');
+    expect(input).toEqual(snapshot); // same order, untouched
+    expect(out).not.toBe(input);
+  });
+});
+
+describe('getAvailableProviders', () => {
+  const i1 = item({ tmdbId: 1 });
+  const i2 = item({ tmdbId: 2 });
+  const i3 = item({ tmdbId: 3 });
+
+  it('returns the unique, A→Z (case-insensitive) sorted union of provider names', () => {
+    const map = new Map<number, string[]>([
+      [1, ['Netflix', 'disney+']],
+      [2, ['Netflix', 'Apple TV']],
+    ]);
+    expect(getAvailableProviders([i1, i2], map)).toEqual([
+      'Apple TV',
+      'disney+',
+      'Netflix',
+    ]);
+  });
+
+  it('items with no map entry or an empty array contribute nothing', () => {
+    const map = new Map<number, string[]>([
+      [1, ['Netflix']],
+      [2, []], // empty → contributes nothing
+      // i3 has no entry
+    ]);
+    expect(getAvailableProviders([i1, i2, i3], map)).toEqual(['Netflix']);
+  });
+
+  it('returns [] when the map yields no providers', () => {
+    expect(getAvailableProviders([i1, i2], new Map())).toEqual([]);
   });
 });
 

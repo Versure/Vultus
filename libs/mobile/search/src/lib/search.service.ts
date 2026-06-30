@@ -136,6 +136,7 @@ export class SearchService {
       status: 'planned',
       posterPath: result.posterPath ?? null,
       voteAverage: result.voteAverage ?? null,
+      releaseDate: result.releaseDate ?? null,
     };
 
     try {
