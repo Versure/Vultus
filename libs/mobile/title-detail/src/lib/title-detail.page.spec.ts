@@ -137,6 +137,7 @@ function makeService(o: SvcOpts = {}) {
     setEpisodeWatched: vi.fn().mockResolvedValue(undefined),
     setSeasonWatched: vi.fn().mockResolvedValue(undefined),
     setMovieWatched: vi.fn().mockResolvedValue(undefined),
+    revertIfNewEpisodes: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -440,6 +441,7 @@ describe('TitleDetailPage', () => {
       add: vi.fn().mockResolvedValue(undefined),
       updateStatus: vi.fn().mockResolvedValue(undefined),
       removeTitle: vi.fn().mockResolvedValue(undefined),
+      revertIfNewEpisodes: vi.fn().mockResolvedValue(undefined),
     };
 
     paramMap$ = new BehaviorSubject(convertToParamMap({ titleId: '1396' }));
@@ -559,6 +561,7 @@ describe('TitleDetailPage', () => {
       add: vi.fn().mockResolvedValue(undefined),
       updateStatus: vi.fn().mockResolvedValue(undefined),
       removeTitle: vi.fn().mockResolvedValue(undefined),
+      revertIfNewEpisodes: vi.fn().mockResolvedValue(undefined),
     };
 
     // Start on title A (1396), then reuse to title B (27205).
@@ -743,5 +746,65 @@ describe('TitleDetailPage', () => {
       '[data-test="movie-watched-btn"]',
     );
     expect(btn?.disabled).toBe(true);
+  });
+
+  describe('revertIfNewEpisodes page-init wire-up (spec 0050)', () => {
+    it('TV detail on init → calls revertIfNewEpisodes(tmdbId, "tv") once', async () => {
+      const { svc } = await setup({
+        detail: { kind: 'loaded', source: 'cache', detail: tvDetail },
+      });
+      expect(svc.revertIfNewEpisodes).toHaveBeenCalledWith(1396, 'tv');
+      expect(svc.revertIfNewEpisodes).toHaveBeenCalledTimes(1);
+    });
+
+    it('movie detail on init → does NOT call revertIfNewEpisodes', async () => {
+      const { svc } = await setup({
+        detail: { kind: 'loaded', source: 'cache', detail: movieDetail },
+      });
+      expect(svc.revertIfNewEpisodes).not.toHaveBeenCalled();
+    });
+
+    it('same TV title re-emitting → revertIfNewEpisodes called only once (dedupe by tmdbId)', async () => {
+      // Use a BehaviorSubject so we can push a second emission of the same detail.
+      const detailSubject = new BehaviorSubject<DetailViewState>({
+        kind: 'loaded',
+        source: 'cache',
+        detail: tvDetail,
+      });
+      const svc = makeService();
+      svc.detail$ = vi.fn(() => detailSubject.asObservable());
+
+      await TestBed.configureTestingModule({
+        imports: [TitleDetailPage],
+        providers: [
+          provideIonicAngular(),
+          { provide: TitleDetailService, useValue: svc },
+          { provide: AUTH_UID, useValue: signal<string | null>('user-123') },
+          {
+            provide: ActivatedRoute,
+            useValue: {
+              paramMap: of(convertToParamMap({ titleId: '1396' })),
+              queryParamMap: of(convertToParamMap({})),
+              snapshot: { paramMap: convertToParamMap({ titleId: '1396' }) },
+            },
+          },
+        ],
+      }).compileComponents();
+      const fixture = TestBed.createComponent(TitleDetailPage);
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      // Re-emit the same TV detail.
+      detailSubject.next({
+        kind: 'loaded',
+        source: 'cache',
+        detail: tvDetail,
+      });
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      // Still only called once (dedupe by tmdbId).
+      expect(svc.revertIfNewEpisodes).toHaveBeenCalledTimes(1);
+    });
   });
 });

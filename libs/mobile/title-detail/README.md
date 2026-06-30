@@ -35,11 +35,19 @@ slice-local data.
   shows; an empty subcollection shows "Episodes will appear after the next sync."
 - **Movie titles** render a **Mark as watched** toggle in the action area
   (completed ↔ watching; disabled when the title is `dropped`).
-- **Auto status** (service-derived after each episode/season write): first
-  episode watched while `planned` → `watching`; all episodes watched → `completed`;
+- **Auto status** (service-derived after each episode/season write): first episode
+  watched while `planned` → `watching` (advance evaluated first); all episodes
+  watched **while status is `'watching'`** → `completed` (spec 0050 refinement —
+  `completed` is only reached from `'watching'`, never directly from `'planned'`);
   walking back to zero watched → `planned` **only if this slice auto-set
   `watching`** (a manually chosen status is never clobbered). A `dropped` title is
   never auto-changed.
+- **Auto-revert on page init** (spec 0050, decision 4): when `TitleDetailPage`
+  loads a `'completed'` TV show whose episodes subcollection contains at least one
+  `watched: false` episode (e.g. new episodes added by the spec-0047 sync), the
+  status is silently reverted to `'watching'` — no toast, no user-facing message.
+  The existing `tracked$` status badge updates reactively. No-op on movies, null
+  uid, non-`completed` status, or empty subcollection.
 - **No dedicated Stitch screen** for the episode list (spec 0034 decision 8) — its
   design is derived from the in-repo design system (`docs/design/vultus-design-system.md`)
   and is **flagged for human visual verification**.
@@ -54,6 +62,10 @@ slice-local data.
   episode of a season, then re-derive status.
 - `setMovieWatched(tmdbId, watched): Promise<void>` — completed ↔ watching
   (dropped is a no-op).
+- `revertIfNewEpisodes(tmdbId, type): Promise<void>` — **(spec 0050)** page-init
+  auto-revert for TV: if status is `'completed'` and at least one episode is
+  `watched: false`, silently writes `status: 'watching'`. No-op on movie / null
+  uid / empty subcollection / non-`'completed'` status.
 
 ## Usage
 
