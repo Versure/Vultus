@@ -29,6 +29,7 @@ export function mapCalendarEntry(
   const episode: Episode = {
     season,
     episode: number,
+    title: null, // Trakt calendar does not carry episode names
     // Pass through unchanged — Trakt already gives a full UTC instant.
     airDate: firstAired,
   };

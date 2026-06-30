@@ -1,0 +1,52 @@
+// Ports for the episode-sync engine (spec 0047). The engine depends ONLY on
+// these interfaces; the concrete Admin-SDK + sync-titles TmdbClient adapters
+// that satisfy them live in `apps/functions`. Keeping these abstract is what
+// lets the lib stay Firebase-free and free of any `slice:sync-titles` import.
+
+import type { Episode, EpisodeDoc, TitleType } from '@vultus/shared/domain';
+
+/** A single TV show pulled from the global watchlist for the daily pass (entry
+ *  point B). Not deduped by `tmdbId` — episodes are written per (uid, titleId). */
+export interface WatchlistTvShow {
+  uid: string;
+  titleId: string;
+  tmdbId: number;
+}
+
+/** The minimal watchlist-doc projection the on-add trigger (entry point A)
+ *  inspects to decide whether to sync episodes (tv only). */
+export interface WatchlistDocRef {
+  type: TitleType;
+  tmdbId: number;
+}
+
+/** Source of all TV shows across every user's watchlist (entry point B). */
+export interface WatchlistTvSource {
+  listAllTvShows(): Promise<WatchlistTvShow[]>;
+}
+
+/** Read-only TMDB episode source. `null` signals "show/season not found in
+ *  TMDB" (404) so the engine can skip rather than error. */
+export interface TmdbEpisodeSource {
+  /** Total season count, or null when the show is not found in TMDB. */
+  getSeasonCount(tmdbId: number): Promise<number | null>;
+  /** The season's episodes, or null when the season is not found in TMDB.
+   *  Episodes with no air date are never produced by the upstream mapper. */
+  getSeasonEpisodes(
+    tmdbId: number,
+    seasonNumber: number,
+  ): Promise<Episode[] | null>;
+}
+
+/** Per-user episode subcollection store. Insert-only: the engine pre-filters
+ *  against `getExistingEpisodeIds`, so `writeEpisodes` only ever receives new
+ *  ids — existing docs (and their `watched`/`watchedAt` state) are never
+ *  overwritten. */
+export interface EpisodeStore {
+  getExistingEpisodeIds(uid: string, titleId: string): Promise<Set<string>>;
+  writeEpisodes(
+    uid: string,
+    titleId: string,
+    docs: { id: string; doc: EpisodeDoc }[],
+  ): Promise<void>;
+}

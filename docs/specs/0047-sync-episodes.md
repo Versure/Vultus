@@ -2,7 +2,7 @@
 number: 0047
 slug: sync-episodes
 title: Sync TV episodes from TMDB into the per-user episodes subcollection
-status: approved
+status: done
 slices: [slice:sync-episodes]
 scopes: [scope:functions, scope:shared]
 created: 2026-06-30
@@ -68,6 +68,7 @@ tmdbId)` TV show in every user's watchlist, to pick up newly-aired episodes for
    `s01e100`. (Episode numbers exceeding 999 are not expected in v1; see Risks.)
 
 3. **Merge strategy — insert only NEW episodes; never overwrite.**
+
    ```
    existingIds = EpisodeStore.getExistingEpisodeIds(uid, titleId)   // keys only
    fetched     = TMDB seasons/episodes
@@ -83,6 +84,7 @@ tmdbId)` TV show in every user's watchlist, to pick up newly-aired episodes for
 
 4. **`EpisodeDoc` fields written on creation** (only on a doc that does NOT yet
    exist):
+
    ```ts
    {
      season: number,        // from TMDB
@@ -93,6 +95,7 @@ tmdbId)` TV show in every user's watchlist, to pick up newly-aired episodes for
      watchedAt: null        // ALWAYS null on creation — user data, never overwritten
    }
    ```
+
    `EpisodeDoc.title` already exists (spec 0034). **See Risks R1 / R2:** the TMDB
    layer that feeds these fields does **not yet carry the episode `name`, the show
    season count, or a nullable air date** — small additive changes to the
@@ -103,8 +106,8 @@ tmdbId)` TV show in every user's watchlist, to pick up newly-aired episodes for
 5. **New slice `libs/functions/sync-episodes`**, port/adapter, following
    `dispatch-notifications` / `sync-titles`:
    - **Pure, Firebase-free engine** in `src/lib/engine/` (the upsert orchestration
-     + the `episodeId` / `EpisodeDoc`-construction helpers — all unit-tested with
-     fakes).
+     - the `episodeId` / `EpisodeDoc`-construction helpers — all unit-tested with
+       fakes).
    - **Thin Admin-SDK wiring** in `apps/functions`: the `onDocumentCreated` trigger
      (`apps/functions/src/sync-episodes.ts`) + the daily-sync integration in
      `apps/functions/src/main.ts`, plus the Admin-SDK port adapters.
@@ -202,20 +205,20 @@ seed; `dispatch-notifications` changes; Trakt calendar episodes; any
 
 ## Affected slices & Sheriff tags
 
-| Project                  | Path                          | Sheriff tags                            | Change                                                                                                              |
-| ------------------------ | ----------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| functions-sync-episodes  | `libs/functions/sync-episodes`| `scope:functions`, `slice:sync-episodes`| **new lib** — episode-upsert engine, `episodeId`/`EpisodeDoc` helpers, ports, barrel, README, tests                 |
-| functions (app)          | `apps/functions`              | `scope:functions`                       | **add** `sync-episodes.ts` (onDocumentCreated trigger + adapters); extend `main.ts` daily-sync + export trigger     |
-| functions-sync-titles    | `libs/functions/sync-titles`  | `scope:functions`, `slice:sync-titles`  | **additive** TMDB layer: episode `name`, season count, nullable air date in mapper (Risks R1/R2)                    |
-| shared-domain (edit)     | `libs/shared/domain`          | `scope:shared`                          | **add** `title: string \| null` to the `Episode` entity (so the mapper can carry it) — additive                    |
+| Project                 | Path                           | Sheriff tags                             | Change                                                                                                          |
+| ----------------------- | ------------------------------ | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| functions-sync-episodes | `libs/functions/sync-episodes` | `scope:functions`, `slice:sync-episodes` | **new lib** — episode-upsert engine, `episodeId`/`EpisodeDoc` helpers, ports, barrel, README, tests             |
+| functions (app)         | `apps/functions`               | `scope:functions`                        | **add** `sync-episodes.ts` (onDocumentCreated trigger + adapters); extend `main.ts` daily-sync + export trigger |
+| functions-sync-titles   | `libs/functions/sync-titles`   | `scope:functions`, `slice:sync-titles`   | **additive** TMDB layer: episode `name`, season count, nullable air date in mapper (Risks R1/R2)                |
+| shared-domain (edit)    | `libs/shared/domain`           | `scope:shared`                           | **add** `title: string \| null` to the `Episode` entity (so the mapper can carry it) — additive                 |
 
 - **Tagging is by PATH GLOB in `sheriff.config.ts`** (verified — lines 56–57:
   `'libs/functions/<slice>/src': ['scope:functions', 'slice:<slice>']`): the new
   lib's source under `libs/functions/sync-episodes/src` inherits `scope:functions`
-  + `slice:sync-episodes` automatically. **This spec does NOT edit `sheriff.config.ts`**
-  — the wildcard already covers the new slice; the generated `project.json` keeps
-  `"tags": []` (like `sync-titles` / `dispatch-notifications`). Do **not** pass
-  `--tags=…` to the generator and do **not** hand-edit a `tags` array.
+  - `slice:sync-episodes` automatically. **This spec does NOT edit `sheriff.config.ts`**
+    — the wildcard already covers the new slice; the generated `project.json` keeps
+    `"tags": []` (like `sync-titles` / `dispatch-notifications`). Do **not** pass
+    `--tags=…` to the generator and do **not** hand-edit a `tags` array.
 - **Import boundaries (verified against `sheriff.config.ts` depRules):**
   - The sync-episodes **core lib** imports `@vultus/shared/domain` (`EpisodeDoc`,
     `Episode`, `TitleType`) and **MAY** import `@vultus/shared/firestore-schema`
@@ -224,8 +227,7 @@ seed; `dispatch-notifications` changes; Trakt calendar episodes; any
     `@vultus/shared/domain`. It must import **no** `scope:mobile`, **no other
     slice** (critically **not** `slice:sync-titles` — rule 2 / `'slice:*':
 ['scope:shared', sameTag]`), and **no** `firebase-admin`/`firebase-functions`.
-    The no-SDK / no-cross-slice constraint is verified by code review of the diff
-    + the SDK-free unit tests passing with fakes (Sheriff governs workspace
+    The no-SDK / no-cross-slice constraint is verified by code review of the diff + the SDK-free unit tests passing with fakes (Sheriff governs workspace
     scope/slice edges, not third-party `firebase-admin`).
   - `apps/functions` importing **both** `@vultus/functions/sync-episodes` **and**
     `@vultus/functions/sync-titles` + `@vultus/shared/*` is **allowed** (rule 3:
@@ -252,14 +254,14 @@ seed; `dispatch-notifications` changes; Trakt calendar episodes; any
 PLAN §4. The engine **reads** watchlist docs + existing episode doc ids and
 **creates** new episode docs; it touches nothing else.
 
-| PLAN §4 path                                              | Access                       | By                                                                                                  |
-| --------------------------------------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------- |
-| `users/{uid}/watchlist/{titleId}`                         | **trigger source** (entry A) | the `onDocumentCreated` event's `data` → `{ type, tmdbId }`; `type !== 'tv'` → no-op                 |
-| `users/{uid}/watchlist/{titleId}`                         | **read** (entry B)           | `collectionGroup('watchlist')` → every TV `{ uid, titleId, tmdbId }` (uid from `parent.parent.id`)  |
-| `users/{uid}/watchlist/{titleId}/episodes/{episodeId}`    | **read** (keys only)         | existing episode doc ids for the merge filter (read ids; do NOT read `watched`/`watchedAt` to write)|
-| `users/{uid}/watchlist/{titleId}/episodes/{episodeId}`    | **create** (new docs only)   | one `EpisodeDoc` per missing `episodeId`, via the spec-0005 `episodeToData` converter               |
-| `title-cache/**`                                          | **none**                     | unchanged — this spec does not touch the title cache (the title-cache pass is the existing engine)  |
-| `users/{uid}/notifications/**`                            | **none**                     | unchanged — dispatch is spec 0012's job; this spec only populates the episodes the dispatcher reads |
+| PLAN §4 path                                           | Access                       | By                                                                                                   |
+| ------------------------------------------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `users/{uid}/watchlist/{titleId}`                      | **trigger source** (entry A) | the `onDocumentCreated` event's `data` → `{ type, tmdbId }`; `type !== 'tv'` → no-op                 |
+| `users/{uid}/watchlist/{titleId}`                      | **read** (entry B)           | `collectionGroup('watchlist')` → every TV `{ uid, titleId, tmdbId }` (uid from `parent.parent.id`)   |
+| `users/{uid}/watchlist/{titleId}/episodes/{episodeId}` | **read** (keys only)         | existing episode doc ids for the merge filter (read ids; do NOT read `watched`/`watchedAt` to write) |
+| `users/{uid}/watchlist/{titleId}/episodes/{episodeId}` | **create** (new docs only)   | one `EpisodeDoc` per missing `episodeId`, via the spec-0005 `episodeToData` converter                |
+| `title-cache/**`                                       | **none**                     | unchanged — this spec does not touch the title cache (the title-cache pass is the existing engine)   |
+| `users/{uid}/notifications/**`                         | **none**                     | unchanged — dispatch is spec 0012's job; this spec only populates the episodes the dispatcher reads  |
 
 - **On-add trigger doc (entry A).** Path `users/{uid}/watchlist/{titleId}`. The
   wildcards give `uid` + `titleId`; read `event.data.data()` for `{ type, tmdbId }`
@@ -296,7 +298,7 @@ null`. The existing `episodeToData` converter does
   **Pick (b) for v1** — it requires **no** further `shared/` change (only the
   `Episode.title` addition), keeps the converter untouched, and matches the
   existing mapper; decision 4's `airDate: string | null` is then satisfied by
-  *never inserting* a null-air-date episode rather than storing a null. State the
+  _never inserting_ a null-air-date episode rather than storing a null. State the
   choice in the README; the unit test pins it.
 - **No `firestore.rules` change — VERIFY and RECORD.** The episode docs are written
   by the **Admin SDK** (both entry points run server-side as the function's
@@ -347,7 +349,10 @@ export interface TmdbEpisodeSource {
   /** The show's season count, or null if the show is unknown (TMDB 404). */
   getSeasonCount(tmdbId: number): Promise<number | null>;
   /** A season's episodes (each carries season/episode/airDate/title), or null on 404. */
-  getSeasonEpisodes(tmdbId: number, seasonNumber: number): Promise<Episode[] | null>;
+  getSeasonEpisodes(
+    tmdbId: number,
+    seasonNumber: number,
+  ): Promise<Episode[] | null>;
 }
 
 /** Reads existing episode doc ids and batch-writes new episode docs.
@@ -386,8 +391,7 @@ export interface Episode {
 }
 ```
 
-This is the only `scope:shared` change. `EpisodeDoc` already has `title` (spec
-0034) and is **not** modified (decision: v1 keeps `EpisodeDoc.airDate` non-null,
+This is the only `scope:shared` change. `EpisodeDoc` already has `title` (spec 0034) and is **not** modified (decision: v1 keeps `EpisodeDoc.airDate` non-null,
 Data-model option (b)).
 
 ### The `sync-titles` TMDB additions (`slice:sync-titles`, additive — Risks R1)
@@ -413,7 +417,11 @@ So `apps/functions` can build the `TmdbEpisodeSource` adapter:
 
 ```ts
 import type { Episode, EpisodeDoc } from '@vultus/shared/domain';
-import type { EpisodeStore, TmdbEpisodeSource, WatchlistTvSource } from '../ports';
+import type {
+  EpisodeStore,
+  TmdbEpisodeSource,
+  WatchlistTvSource,
+} from '../ports';
 
 /** `s${SS}e${EEE}` — season padded to 2, episode padded to 3.
  *  episodeId(1, 1) === 's01e001'; episodeId(10, 100) === 's10e100'. */
@@ -443,13 +451,19 @@ export interface EpisodeUpsertResult {
 
 export interface EpisodeSyncEngine {
   /** Upsert episodes for ONE tv title (entry point A). */
-  syncOne(uid: string, titleId: string, tmdbId: number): Promise<EpisodeUpsertResult>;
+  syncOne(
+    uid: string,
+    titleId: string,
+    tmdbId: number,
+  ): Promise<EpisodeUpsertResult>;
   /** Upsert episodes for EVERY tv watchlist item (entry point B). Requires
    *  `watchlist` in the config; per-(uid,titleId) errors are isolated. */
   syncAll(): Promise<EpisodeUpsertResult[]>;
 }
 
-export function createEpisodeSyncEngine(config: EpisodeSyncConfig): EpisodeSyncEngine;
+export function createEpisodeSyncEngine(
+  config: EpisodeSyncConfig,
+): EpisodeSyncEngine;
 ```
 
 `syncOne` semantics, in order:
@@ -477,6 +491,7 @@ fields on existing docs are never touched.
 ### The deployable functions (`apps/functions`)
 
 - **Entry point A — `apps/functions/src/sync-episodes.ts`:**
+
   ```ts
   import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 
@@ -488,8 +503,10 @@ fields on existing docs are never touched.
     },
   );
   ```
+
   `setGlobalOptions({ region: 'europe-west1', maxInstances: 1 })` in `main.ts`
   already applies app-wide. Export `syncWatchlistEpisodes` from `main.ts`.
+
 - **Entry point B — daily-sync integration in `main.ts`:** after the existing
   title-cache `engine.sync(inputs)` completes in `runSync`, build the episode
   engine (with the `WatchlistTvSource` + `EpisodeStore` + `TmdbEpisodeSource`
@@ -736,8 +753,9 @@ Code tools — project memory; the engine is proven with fakes, the design's poi
 
 Component tests: **none** (no UI). e2e / emulator tests: **none added** — the
 episode e2e flows are the existing spec-0034 `test.fixme` stubs; un-skipping them
-+ adding episode emulator seed data is out of scope (the emulator cannot run under
-Claude Code tools, and seeding is a later step).
+
+- adding episode emulator seed data is out of scope (the emulator cannot run under
+  Claude Code tools, and seeding is a later step).
 
 ## Definition of done
 

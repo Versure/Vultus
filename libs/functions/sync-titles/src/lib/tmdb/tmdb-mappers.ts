@@ -43,6 +43,12 @@ export function mapTvShow(dto: TmdbTvResponse): TitleMetadata {
   };
 }
 
+/** Returns the show's `number_of_seasons` from a TV response, or null when absent.
+ *  Consumed by the episode-sync adapter (spec 0047). */
+export function mapTvSeasonCount(dto: TmdbTvResponse): number | null {
+  return dto.number_of_seasons ?? null;
+}
+
 // Only flatrate/rent/buy map to a WatchProviderType; ads/free are dropped.
 const PROVIDER_BUCKETS: WatchProviderType[] = ['flatrate', 'rent', 'buy'];
 
@@ -80,7 +86,9 @@ export function mapWatchProviders(
 }
 
 // Episodes with a null/empty/missing air_date are skipped (Episode.airDate is a
-// required string). `season_number` falls back to the season argument if absent.
+// required string — Data-model option (b), spec 0047). `season_number` falls back
+// to the season argument if absent. `title` carries the TMDB episode name (null
+// when TMDB omits the name field).
 export function mapSeasonEpisodes(
   dto: TmdbSeasonResponse,
   seasonNumber: number,
@@ -92,6 +100,7 @@ export function mapSeasonEpisodes(
     episodes.push({
       season: entry.season_number ?? seasonNumber,
       episode: entry.episode_number,
+      title: entry.name ?? null,
       airDate,
     });
   }

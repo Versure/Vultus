@@ -15,7 +15,8 @@ The barrel (`src/index.ts`) re-exports:
   `Region`/`REGIONS`, `WatchStatus`/`WATCH_STATUSES`,
   `NotificationKind`/`NOTIFICATION_KINDS`, `TitleType`.
 - **`./lib/entities`** — non-document domain entities: `Title` (movie/tv
-  discriminated union), `WatchProvider`.
+  discriminated union), `WatchProvider`, `Episode` (fields: `season`, `episode`,
+  `title` (nullable, spec 0047), `airDate`).
 - **`./lib/documents`** — Firestore document shapes (PLAN §4):
   - `User`, `NotificationPrefs`, `FcmToken`
   - `WatchlistItem`, `EpisodeDoc` (fields: `season`, `episode`, `title` (nullable, spec 0034), `airDate`, `watched`, `watchedAt`)

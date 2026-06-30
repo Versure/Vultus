@@ -41,6 +41,9 @@
       ],
       "@vultus/functions/dispatch-notifications": [
         "./libs/functions/dispatch-notifications/src/index.ts"
+      ],
+      "@vultus/functions/sync-episodes": [
+        "./libs/functions/sync-episodes/src/index.ts"
       ]
     }
   },

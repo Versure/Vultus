@@ -84,13 +84,23 @@ describe('getCalendar happy path', () => {
         traktId: 152334,
         tmdbId: 95396,
         showTitle: 'Severance',
-        episode: { season: 2, episode: 5, airDate: '2026-06-20T01:00:00.000Z' },
+        episode: {
+          season: 2,
+          episode: 5,
+          title: null,
+          airDate: '2026-06-20T01:00:00.000Z',
+        },
       },
       {
         traktId: 2,
         tmdbId: null,
         showTitle: 'Show B',
-        episode: { season: 1, episode: 8, airDate: '2026-06-21T02:00:00.000Z' },
+        episode: {
+          season: 1,
+          episode: 8,
+          title: null,
+          airDate: '2026-06-21T02:00:00.000Z',
+        },
       },
     ]);
   });

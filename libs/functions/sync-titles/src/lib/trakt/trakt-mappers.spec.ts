@@ -27,7 +27,12 @@ describe('mapCalendarEntry', () => {
       traktId: 152334,
       tmdbId: 95396,
       showTitle: 'Severance',
-      episode: { season: 2, episode: 5, airDate: '2026-06-20T01:00:00.000Z' },
+      episode: {
+        season: 2,
+        episode: 5,
+        title: null,
+        airDate: '2026-06-20T01:00:00.000Z',
+      },
     });
   });
 

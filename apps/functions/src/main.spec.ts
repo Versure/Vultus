@@ -4,6 +4,10 @@ import type {
   SyncResult,
   SyncTitleInput,
 } from '@vultus/functions/sync-titles';
+import type {
+  EpisodeSyncEngine,
+  EpisodeUpsertResult,
+} from '@vultus/functions/sync-episodes';
 import {
   RATE_LIMIT_MS,
   STALENESS_WINDOW_MS,
@@ -329,6 +333,86 @@ describe('runSync handler wiring', () => {
     expect(body.errored).toBe(1);
     // reason never leaks into the response.
     expect(JSON.stringify(body)).not.toContain('boom');
+  });
+
+  it('runs the episode pass (syncAll) AFTER the title-cache pass when createEpisodeEngine is provided; SyncRunResponse shape is unchanged', async () => {
+    const { db } = createFakeDb({
+      watchlist: [
+        { tmdbId: 603, type: 'movie' },
+        { tmdbId: 1396, type: 'tv' },
+      ],
+    });
+
+    const order: string[] = [];
+    const titleEngine = createFakeEngine((inputs) => {
+      order.push('title-sync');
+      return inputs.map(syncedResult);
+    });
+    const syncAll = vi.fn((): Promise<EpisodeUpsertResult[]> => {
+      order.push('episode-sync');
+      return Promise.resolve([
+        {
+          uid: 'u1',
+          titleId: 't1',
+          tmdbId: 1396,
+          seasonsFetched: 1,
+          episodesWritten: 2,
+          outcome: 'synced',
+        },
+      ]);
+    });
+    const episodeEngine: EpisodeSyncEngine = {
+      syncOne: vi.fn(),
+      syncAll,
+    };
+
+    const out = await runSync(
+      baseDeps({
+        db,
+        createEngine: () => titleEngine.engine,
+        createEpisodeEngine: () => episodeEngine,
+      }),
+      req({
+        headers: { 'x-vultus-sync-secret': SECRET },
+        body: { force: true },
+      }),
+    );
+
+    expect(syncAll).toHaveBeenCalledTimes(1);
+    // Episode pass runs after the title-cache sync.
+    expect(order).toEqual(['title-sync', 'episode-sync']);
+
+    // SyncRunResponse shape is UNCHANGED — exactly these keys, no episode fields.
+    const body = out.body as SyncRunResponse;
+    expect(Object.keys(body).sort()).toEqual(
+      [
+        'durationMs',
+        'errored',
+        'forced',
+        'gathered',
+        'ok',
+        'skipped',
+        'synced',
+        'trigger',
+      ].sort(),
+    );
+  });
+
+  it('omitting createEpisodeEngine skips the episode pass (existing-deps shape stays green)', async () => {
+    const { db } = createFakeDb({
+      watchlist: [{ tmdbId: 603, type: 'movie' }],
+    });
+    const out = await runSync(
+      baseDeps({ db, createEngine }),
+      req({
+        headers: { 'x-vultus-sync-secret': SECRET },
+        body: { force: true },
+      }),
+    );
+    expect(out.status).toBe(200);
+    // No episode fields leak into the response.
+    const body = out.body as SyncRunResponse;
+    expect('episodesSynced' in body).toBe(false);
   });
 
   it('BOUNDARY: across all paths only title-cache/** and system/sync are written — never users/** or notifications', async () => {

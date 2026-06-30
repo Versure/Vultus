@@ -234,8 +234,18 @@ describe('getSeasonEpisodes', () => {
     ]);
     const result = await client(fetchMock).getSeasonEpisodes(1396, 1);
     expect(result).toEqual([
-      { season: 1, episode: 1, airDate: '2008-01-20T00:00:00.000Z' },
-      { season: 1, episode: 5, airDate: '2008-02-10T00:00:00.000Z' },
+      {
+        season: 1,
+        episode: 1,
+        title: null,
+        airDate: '2008-01-20T00:00:00.000Z',
+      },
+      {
+        season: 1,
+        episode: 5,
+        title: null,
+        airDate: '2008-02-10T00:00:00.000Z',
+      },
     ]);
   });
 
