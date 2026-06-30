@@ -2,7 +2,7 @@
 number: 0049
 slug: sync-health
 title: Surface the daily sync's last-run status in the settings slice (sync-runs)
-status: approved
+status: implementing
 slices: [slice:settings]
 scopes: [scope:shared, scope:functions, scope:mobile]
 created: 2026-06-30
@@ -91,17 +91,17 @@ Out of scope (each stated explicitly so its absence is intentional):
   later concern (see Risks). v1 volume is trivial (one cron/day + occasional
   manual).
 - **Changing the sync logic, the engine, the staleness filter, or the
-  `system/sync` rate-limit doc** — this spec only *adds* a record write at the
+  `system/sync` rate-limit doc** — this spec only _adds_ a record write at the
   end of each existing flow.
 
 ## Affected slices & Sheriff tags
 
-| Project                 | Path                                  | Sheriff tags                     | Change                                                                               |
-| ----------------------- | ------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------ |
-| shared-firestore-schema | `libs/shared/firestore-schema`        | `scope:shared`                   | **add** `SyncRunDoc` + read/write data-types + converters + `syncRunsCollection()`   |
-| functions (app)         | `apps/functions`                      | `scope:functions`                | **write** a `sync-runs` record in `runSync` + `runTriggerSync`; thin Firestore glue  |
-| (root config)           | `firestore.rules`, `firestore.indexes.json` | — (not a workspace project) | **allow** authenticated `sync-runs` read; index unchanged (single-field orderBy)     |
-| mobile-settings         | `libs/mobile/settings`                | `scope:mobile`, `slice:settings` | **add** `SyncStatusService` + `SyncStatusCardComponent`; render on `SettingsPage`    |
+| Project                 | Path                                        | Sheriff tags                     | Change                                                                              |
+| ----------------------- | ------------------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------- |
+| shared-firestore-schema | `libs/shared/firestore-schema`              | `scope:shared`                   | **add** `SyncRunDoc` + read/write data-types + converters + `syncRunsCollection()`  |
+| functions (app)         | `apps/functions`                            | `scope:functions`                | **write** a `sync-runs` record in `runSync` + `runTriggerSync`; thin Firestore glue |
+| (root config)           | `firestore.rules`, `firestore.indexes.json` | — (not a workspace project)      | **allow** authenticated `sync-runs` read; index unchanged (single-field orderBy)    |
+| mobile-settings         | `libs/mobile/settings`                      | `scope:mobile`, `slice:settings` | **add** `SyncStatusService` + `SyncStatusCardComponent`; render on `SettingsPage`   |
 
 - **Tagging is by PATH GLOB in `sheriff.config.ts`** (per specs 0009/0011) — all
   four paths already carry the tags above. **This spec does NOT edit
@@ -113,12 +113,12 @@ Out of scope (each stated explicitly so its absence is intentional):
     `SyncRunDoc` domain type belongs in `@vultus/shared/domain` if it is a pure
     persistence-agnostic shape, but its **wire/converter** parts live in
     `@vultus/shared/firestore-schema` alongside the other `*ReadData`/`*WriteData`
-    + converters. See Public types / APIs for the exact split (the domain ISO-string
-    type in `shared/domain`, the wire types + converters in
-    `shared/firestore-schema`) — both `scope:shared`, importable by both the
-    settings slice and `apps/functions`.
+    - converters. See Public types / APIs for the exact split (the domain ISO-string
+      type in `shared/domain`, the wire types + converters in
+      `shared/firestore-schema`) — both `scope:shared`, importable by both the
+      settings slice and `apps/functions`.
   - `libs/mobile/settings` (`slice:settings`) may import `['scope:shared',
-    'slice:settings']` only. It imports `@vultus/shared/domain` (the `SyncRun`
+'slice:settings']` only. It imports `@vultus/shared/domain` (the `SyncRun`
     domain type) and `@vultus/shared/firestore-schema` (`syncRunsCollection`,
     `dataToSyncRun`) — both `scope:shared`, allowed (rule 4). It imports **no other
     slice** and **no `apps/mobile`**; AngularFire (`@angular/fire/firestore`) is
@@ -132,13 +132,13 @@ Out of scope (each stated explicitly so its absence is intentional):
     **no** `scope:mobile` symbol.
 - **`SyncRunDoc` IS a legitimate `shared/` addition, not a premature DRY.** It is
   a **cross-scope persistence contract**: `apps/functions` (`scope:functions`)
-  *writes* it and `libs/mobile/settings` (`scope:mobile`) *reads* it, and the two
+  _writes_ it and `libs/mobile/settings` (`scope:mobile`) _reads_ it, and the two
   scopes may never import each other. A shared wire type + converter is the
-  *only* correct place for a Firestore document shape that crosses the
+  _only_ correct place for a Firestore document shape that crosses the
   functions↔mobile boundary — exactly what `shared/firestore-schema` exists for
   (it already holds `TitleCacheReadData` etc. for the same reason). This is not
-  the "extract at 3+ slices" rule (that governs *behaviour* duplication); a
-  shared *data shape* read by a slice and written by functions is the established
+  the "extract at 3+ slices" rule (that governs _behaviour_ duplication); a
+  shared _data shape_ read by a slice and written by functions is the established
   pattern. No business logic is hoisted to `shared/` — the query lives in the
   settings slice, the record-build lives in `apps/functions`.
 
@@ -150,13 +150,13 @@ sibling global collection, like `title-cache`). It is **written only by Cloud
 Functions** (Admin SDK, bypasses rules) and **read by the client** (the settings
 slice).
 
-| Path                       | Access                | By                                                                     |
-| -------------------------- | --------------------- | ---------------------------------------------------------------------- |
-| `sync-runs/{runId}`        | **write** (functions) | `runSync` (cron) + `runTriggerSync` (manual) via the Admin SDK         |
-| `sync-runs/{runId}`        | **read** (client)     | `SyncStatusService` — `orderBy('startedAt','desc')`, `limit(1)`        |
-| `title-cache/**`           | r/w (unchanged)       | the engine, as today — no change                                       |
-| `system/sync`              | r/w (unchanged)       | the cron rate-limit doc, as today — no change                          |
-| `users/**`                 | **none**              | this spec writes no `users/**` doc                                     |
+| Path                | Access                | By                                                              |
+| ------------------- | --------------------- | --------------------------------------------------------------- |
+| `sync-runs/{runId}` | **write** (functions) | `runSync` (cron) + `runTriggerSync` (manual) via the Admin SDK  |
+| `sync-runs/{runId}` | **read** (client)     | `SyncStatusService` — `orderBy('startedAt','desc')`, `limit(1)` |
+| `title-cache/**`    | r/w (unchanged)       | the engine, as today — no change                                |
+| `system/sync`       | r/w (unchanged)       | the cron rate-limit doc, as today — no change                   |
+| `users/**`          | **none**              | this spec writes no `users/**` doc                              |
 
 - **Document ID (`runId`).** Use an auto-generated Firestore document ID
   (`collection(...).add(...)` server-side, or `doc(collection(...))` then `.set`)
@@ -186,10 +186,11 @@ slice).
   ```
 
   Place it **before** the final `match /{document=**} { allow read, write: if
-  false; }` default-deny (which must stay last). Like `title-cache`, do **not**
+false; }` default-deny (which must stay last). Like `title-cache`, do **not**
   add a "functions can write" allowance — the Admin SDK does not pass through
   these rules. Without this block, the default-deny would reject the client read
   and the Settings card would error.
+
 - **No change to any existing document shape** — `title-cache`, `users/**`,
   `system/sync` are untouched. This spec only adds the new `sync-runs` collection.
 
@@ -250,7 +251,7 @@ export interface SyncRun {
 > and the **Timestamp boundary lives in `shared/firestore-schema`** read/write
 > data-types + converters (see `data-types.ts` / `converters.ts`). This spec
 > follows that convention — `SyncRun` (domain) uses ISO strings; the wire types
-> below carry the Timestamp boundary. The persisted *fields* are exactly those in
+> below carry the Timestamp boundary. The persisted _fields_ are exactly those in
 > the decision record; only the in-memory representation follows the house style.
 > The interface is named `SyncRun` (domain) with `SyncRunReadData`/`SyncRunWriteData`
 > wire types, consistent with `User`/`UserReadData` etc.
@@ -388,7 +389,10 @@ field-mapping pure where convenient.
   `apps/functions/src/lib/firestore-io.ts`:
 
   ```ts
-  import { syncRunsCollection, syncRunToData } from '@vultus/shared/firestore-schema';
+  import {
+    syncRunsCollection,
+    syncRunToData,
+  } from '@vultus/shared/firestore-schema';
   import type { SyncRun } from '@vultus/shared/domain';
 
   /** Write one completed sync run to `sync-runs/{runId}` (auto-id == runId). */
@@ -406,6 +410,7 @@ field-mapping pure where convenient.
   (Generating the id from `.doc()` so `runId == ref.id` is set into the document,
   then `.set(...)`. The helper takes the `Omit<SyncRun,'runId'>` so callers do not
   pre-invent the id.)
+
 - **Best-effort / non-fatal.** The record write must **not** change the response
   contract or fail the run. Wrap it so a `sync-runs` write error is logged
   (`logger.error('[syncRun] failed to record run', err)`) but does **not** alter
@@ -428,7 +433,7 @@ spec 0018: project `projects/13590348714018893783`, screen ID
 body column with a title and helper/value text). The implementer should pull that
 screen for visual reference if extending the layout meaningfully, but the
 authoritative structure is the **in-repo** card pattern that spec 0018 already
-built to match it — match the *sibling* Region/Notifications cards, do not invent
+built to match it — match the _sibling_ Region/Notifications cards, do not invent
 a new card shape.
 
 **Authoritative tokens live in `docs/design/vultus-design-system.md`** and are
@@ -603,7 +608,7 @@ tasks (functions write + mobile UI) that write **disjoint** file sets.
      ≤10 and credential-free; that a **failing `writeSyncRun` does NOT change the
      response** and does NOT throw (best-effort); and that all **existing** 0009/
      0025/0048 cases stay green (the `users/**` no-write boundary still holds —
-     `sync-runs` is the only *new* write).
+     `sync-runs` is the only _new_ write).
    - Update `apps/functions` README **only if one exists** (lib-README rule binds
      only `libs/**`).
    - **File manifest (creates/modifies):**
@@ -621,7 +626,7 @@ tasks (functions write + mobile UI) that write **disjoint** file sets.
    - `libs/mobile/settings/src/lib/sync-status.service.ts`: a `SyncStatusService`
      (`@Injectable`) that injects AngularFire `Firestore`, queries
      `query(collection(firestore, syncRunsCollection()), orderBy('startedAt','desc'),
-     limit(1))`, maps the single doc via `dataToSyncRun`, and exposes the result as
+limit(1))`, maps the single doc via `dataToSyncRun`, and exposes the result as
      signals: e.g. `lastRun: Signal<SyncRun | null>`, `loaded: Signal<boolean>`,
      `loadFailed: Signal<boolean>` (mirror `SettingsService`'s loaded/loadFailed
      pattern). Provide a `load()` (one-shot `getDocs`) — a live subscription is
@@ -676,8 +681,9 @@ new.)
 ## Test plan
 
 Per the PLAN §5 pyramid: **unit** for the converters + the functions record-build
-+ the service query + the relative-time helper; **component** for the card's
-visual states; **no new e2e** (read-only display — rubric below).
+
+- the service query + the relative-time helper; **component** for the card's
+  visual states; **no new e2e** (read-only display — rubric below).
 
 **Unit — `scope:shared` (`firestore-schema.spec.ts`):**
 
@@ -687,23 +693,24 @@ visual states; **no new e2e** (read-only display — rubric below).
 - `syncRunsCollection()` === `'sync-runs'`; `syncRunDocPath('abc')` ===
   `'sync-runs/abc'`.
 
-**Unit — `scope:functions` (`main.spec.ts` / `trigger-sync.spec.ts`, fake engine
-+ fake `db`):**
+\*\*Unit — `scope:functions` (`main.spec.ts` / `trigger-sync.spec.ts`, fake engine
 
-- **Cron:** after a `runSync` pass, a `sync-runs` write occurs with `kind:
-  'cron'`, `userId: null`, `titlesGathered`/`titlesUpdated`/`errorCount` matching
+- fake `db`):\*\*
+
+* **Cron:** after a `runSync` pass, a `sync-runs` write occurs with `kind:
+'cron'`, `userId: null`, `titlesGathered`/`titlesUpdated`/`errorCount` matching
   the gathered/synced/errored counts, `durationMs == end - start`, and
   `startedAt`/`completedAt` set; the `SyncRunResponse` is **unchanged**.
-- **Manual:** after a `runTriggerSync` pass, a `sync-runs` write occurs with
+* **Manual:** after a `runTriggerSync` pass, a `sync-runs` write occurs with
   `kind: 'manual'`, `userId: <uid>`, counts mapped from `inputs.length`/`synced`/
   `errored`; the `{ syncedAt }` response is **unchanged**.
-- **`errors` cap + hygiene:** when the engine returns >10 `outcome:'error'`
+* **`errors` cap + hygiene:** when the engine returns >10 `outcome:'error'`
   results, the recorded `errors` array has **≤10** entries and contains no secret
   (the engine guarantees credential-free reasons).
-- **Best-effort:** a `writeSyncRun` that **rejects** is caught/logged and does
+* **Best-effort:** a `writeSyncRun` that **rejects** is caught/logged and does
   **not** change the response and does **not** propagate (the cron still 200s; the
   manual still resolves `{ syncedAt }`).
-- **Boundary (regression):** the only *new* write is to `sync-runs`; the existing
+* **Boundary (regression):** the only _new_ write is to `sync-runs`; the existing
   no-`users/**`-write boundary still holds for both flows; `system/sync` is still
   written by the cron exactly as before; all existing 0009/0025/0048 cases stay
   green.
@@ -734,7 +741,7 @@ Ionic; mocked `SyncStatusService`):**
 display** added to an existing route (Settings). It introduces **no new
 navigation route and no new user-facing action** (no add/status-change/persist —
 the only writes are server-side, by Cloud Functions). The PLAN §5 e2e rubric
-makes e2e *required* only for a new route or a critical user action; a passive
+makes e2e _required_ only for a new route or a critical user action; a passive
 status card is neither. The `sync-runs` write happens inside the already-e2e'd
 sync flow (spec 0025's `manual-sync-trigger`), and the card's correctness is
 fully covered by the unit + component tests above against mocked Firestore. State
@@ -751,8 +758,7 @@ build**; no new e2e (read-only display).
       passes — the `SyncRun` type, the wire types + converters + path helpers, the
       functions record-build, and the service/card all compile.
 - [ ] `pnpm nx lint shared-domain shared-firestore-schema functions mobile-settings`
-      passes **with Sheriff active**: `mobile-settings` imports `@vultus/shared/domain`
-      + `@vultus/shared/firestore-schema` + AngularFire/Ionic (third-party) only —
+      passes **with Sheriff active**: `mobile-settings` imports `@vultus/shared/domain` + `@vultus/shared/firestore-schema` + AngularFire/Ionic (third-party) only —
       **no other-slice import, no `apps/mobile` import, no `scope:functions` import**;
       `apps/functions` imports `@vultus/shared/*` + Firebase only — **no `scope:mobile`
       import**.
@@ -842,7 +848,7 @@ build**; no new e2e (read-only display).
   of `kind`/`userId` — which is the desired "did the pipeline run?" signal. A
   per-user breakdown is explicitly out of scope (decision 4).
 - **Single-field `orderBy` index assumption.** The `orderBy('startedAt','desc') +
-  limit(1)` query has no `where`, so Firestore's automatic single-field index
+limit(1)` query has no `where`, so Firestore's automatic single-field index
   serves it — **no composite index, `firestore.indexes.json` unchanged**. If the
   emulator/prod ever demands an index for this exact query (it should not for a
   single-field order), add only the suggested entry; do not pre-emptively add one.
@@ -851,10 +857,10 @@ build**; no new e2e (read-only display).
   manual per `docs/specs/README.md` "Scope & limitations"). Until then the card
   shows "Never synced" (no `sync-runs` docs yet). Per project memory
   (`emulator-tooling-limitation`), the agent verifies the write path via unit tests
-  + the mock-seeded card locally; the real prod record + card-reflects-it check is
-  a post-deploy human step — flag it, do not report "working" off a green build.
-  (Project memory `verify-daily-sync-processes-titles` is the exact scenario this
-  card makes visible.)
+  - the mock-seeded card locally; the real prod record + card-reflects-it check is
+    a post-deploy human step — flag it, do not report "working" off a green build.
+    (Project memory `verify-daily-sync-processes-titles` is the exact scenario this
+    card makes visible.)
 - **Best-effort write must not regress the sync.** The biggest risk is making the
   `sync-runs` write fail the cron or the callable. **Binding:** the write is
   wrapped, logged on failure, and **never** alters or rejects the existing
@@ -865,6 +871,6 @@ build**; no new e2e (read-only display).
   a shared data shape (correctly placed in `shared/firestore-schema` because it
   crosses the functions↔mobile boundary), a server-side record write, and a
   read-only slice card. Vertical slice and the extract-at-3+ rule are respected
-  (no behaviour is hoisted to `shared/`; only the cross-scope *data shape* is, as
+  (no behaviour is hoisted to `shared/`; only the cross-scope _data shape_ is, as
   the existing wire types already are). TMDB/Trakt accuracy is unaffected — the
   card reports counts the engine already derived, it does not re-fetch.

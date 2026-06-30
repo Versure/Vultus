@@ -49,6 +49,7 @@ import {
   gatherWatchlistTitles,
   readSyncState,
   writeSyncState,
+  writeSyncRun,
   verifyIdToken,
 } from './lib/firestore-io';
 
@@ -227,6 +228,30 @@ export async function runSync(
   const end = deps.now();
   await writeSyncState(deps.db, end, start);
 
+  // Best-effort sync-run record (observability only). A write failure is logged
+  // and NEVER alters or fails the run — the sync already succeeded above. The
+  // SyncRunResponse below is byte-for-byte unchanged regardless of this write.
+  const errors = results
+    .filter((r) => r.outcome === 'error')
+    .map((r) => r.reason)
+    .filter((s): s is string => !!s)
+    .slice(0, 10);
+  try {
+    await writeSyncRun(deps.db, {
+      kind: 'cron',
+      userId: null,
+      startedAt: new Date(start).toISOString(),
+      completedAt: new Date(end).toISOString(),
+      durationMs: end - start,
+      titlesGathered: gathered,
+      titlesUpdated: synced,
+      errorCount: errored,
+      errors,
+    });
+  } catch (err) {
+    logger.error('[syncRun] failed to record run', err);
+  }
+
   const response: SyncRunResponse = {
     ok: true,
     trigger,
@@ -311,6 +336,9 @@ export interface RunTriggerSyncDeps {
   /** Builds the credentialed engine for the gathered store. Injected so the
    *  handler test can supply a fake engine without the real clients. */
   createEngine: (db: Firestore) => SyncEngine;
+  /** Clock in epoch ms; injected for deterministic `startedAt`/`durationMs`
+   *  tests (mirrors `RunSyncDeps.now`). Defaults to `Date.now()`. */
+  now?: () => number;
 }
 
 /**
@@ -328,6 +356,8 @@ export async function runTriggerSync(
   if (!uid) {
     throw new HttpsError('unauthenticated', 'Sign-in required');
   }
+
+  const start = deps.now?.() ?? Date.now();
 
   let rawTitles: GatheredUserTitle[];
   try {
@@ -353,6 +383,31 @@ export async function runTriggerSync(
     skipped,
     errored,
   });
+
+  // Best-effort sync-run record (observability only). A write failure is logged
+  // and NEVER alters or fails the callable — the `{ syncedAt }` return below is
+  // unchanged regardless of this write.
+  const end = deps.now?.() ?? Date.now();
+  const errors = results
+    .filter((r) => r.outcome === 'error')
+    .map((r) => r.reason)
+    .filter((s): s is string => !!s)
+    .slice(0, 10);
+  try {
+    await writeSyncRun(deps.db, {
+      kind: 'manual',
+      userId: uid,
+      startedAt: new Date(start).toISOString(),
+      completedAt: new Date(end).toISOString(),
+      durationMs: end - start,
+      titlesGathered: inputs.length,
+      titlesUpdated: synced,
+      errorCount: errored,
+      errors,
+    });
+  } catch (err) {
+    logger.error('[syncRun] failed to record run', err);
+  }
 
   return { syncedAt: new Date().toISOString() };
 }

@@ -225,6 +225,9 @@ title-cache/{tmdbId}/availability/{region}
   providers: [ { providerId, name, type } ]   # type: "flatrate" | "rent" | "buy"
   lastSyncedAt: timestamp
   previousSnapshot: [ ... ]               # For transition detection
+
+sync-runs/{runId}                         # One doc per full sync run (spec 0049); authenticated read, Admin-SDK-only write
+  kind, userId, startedAt, completedAt, durationMs, titlesGathered, titlesUpdated, errorCount, errors
 ```
 
 `title-cache` is shared across users — if you and a future user both track
@@ -472,13 +475,12 @@ These you have to do yourself; Claude Code can't.
       setup.)
 - [ ] Grant **public invokability** to the `synctitles` Cloud Run service
       (Blaze, per project setup):
-      ```
-      gcloud run services add-iam-policy-binding synctitles \
-        --region=europe-west1 \
-        --member=allUsers \
-        --role=roles/run.invoker \
-        --project=vultus-cab62
-      ```
+      `     gcloud run services add-iam-policy-binding synctitles \
+      --region=europe-west1 \
+      --member=allUsers \
+      --role=roles/run.invoker \
+      --project=vultus-cab62
+    `
       **Why:** gen2 `onRequest` functions are Cloud Run services, **private by
       default**. `syncTitles` self-authenticates via the `X-Vultus-Sync-Secret`
       shared secret (spec 0009), so the service must be **publicly invokable**

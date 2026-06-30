@@ -11,8 +11,45 @@ The barrel (`@vultus/mobile/settings`) exports:
   by the tabs shell in `apps/mobile` via
   `loadComponent: () => import('@vultus/mobile/settings').then(m => m.SettingsPage)`.
 
-`SettingsService` is an internal data-access service used only by `SettingsPage`
-and is intentionally **not** barrel-exported (keeps the public surface minimal).
+`SettingsService` and `SyncStatusService` are internal data-access services used
+only by `SettingsPage` / its cards and are intentionally **not** barrel-exported
+(keeps the public surface minimal). `SyncStatusCardComponent`
+(selector `lib-sync-status-card`) is likewise an internal component composed into
+`SettingsPage` only.
+
+### Last-synced card (spec 0049)
+
+`SyncStatusCardComponent` is a **read-only** "Last synced" status card rendered as
+a sibling `.settings-card` below the Region / Notifications controls. It is backed
+by `SyncStatusService`, which **one-shot** reads the single most-recent run from the
+global `sync-runs` collection
+(`query(collection(firestore, syncRunsCollection()), orderBy('startedAt','desc'), limit(1))`)
+via `getDocs` and maps it through `@vultus/shared/firestore-schema`'s `dataToSyncRun`.
+The query is **not** uid-scoped (a cron run records `userId: null`; the card answers
+"did the pipeline run?"), so the slice needs no uid for it. The service exposes
+`lastRun: Signal<SyncRun | null>`, `loaded`, and `loadFailed` signals plus `load()`,
+mirroring `SettingsService`'s loaded/loadFailed idiom.
+
+The card is **non-interactive** (no click handler, no focus ring, no control) and
+renders these states:
+
+- **loading** — an `ion-skeleton-text` card placeholder; never stale/blank content.
+- **never-synced** (`lastRun() === null`) — `sync-outline` icon, "Never synced", no
+  counts, no chip.
+- **load-failed** — the service leaves `lastRun` null and the card renders
+  **identically to never-synced**: no error banner/toast/string (a failed read of
+  this non-essential observability data must not surface to the user).
+- **success** (`errorCount === 0`) — `sync-outline`; a relative timestamp
+  ("Last synced 3 hours ago" / "just now", computed by the pure `relativeTime`
+  helper) + "{titlesGathered} gathered · {titlesUpdated} updated"; no chip.
+- **with-errors** (`errorCount > 0`) — `alert-circle-outline` in the design `error`
+  color + a danger "{n} error(s)" chip; **count only — no specific error strings**
+  (decision 3).
+
+The `mock` build profile provides a structural `SyncStatusService` (no Firebase)
+seeded with a recent success run so `mobile:serve-mock` renders the success state;
+flip `SEEDED_RUN` / `errorCount` in `settings.providers.mock.ts` to eyeball the
+never-synced / with-errors states.
 
 ## Behaviour
 
@@ -55,8 +92,12 @@ The current uid is obtained via the `scope:shared` `AUTH_UID` injection token
 ## Sheriff boundaries
 
 - Tags: `scope:mobile`, `slice:settings` (by path glob in `sheriff.config.ts`).
-- May import: `scope:shared` libs (`@vultus/shared/domain`,
-  `@vultus/shared/firestore-schema`) and third-party packages (Ionic,
+- May import: `scope:shared` libs (`@vultus/shared/domain` — `Region`, `User`,
+  `SyncRun`; `@vultus/shared/firestore-schema` — `userPath`/`dataToUser`/`userToData`,
+  `syncRunsCollection`/`dataToSyncRun`) and third-party packages (Ionic,
   AngularFire).
 - Must not import: other slices (`slice:search` / `slice:watchlist`),
-  `apps/mobile`, or any `scope:functions` code.
+  `apps/mobile`, or any `scope:functions` code. The `sync-runs` collection is a
+  cross-scope persistence contract: `apps/functions` writes it, this slice only
+  **reads** it (client writes are denied by `firestore.rules`) — the two scopes
+  share only the `scope:shared` data shape, never each other's code.

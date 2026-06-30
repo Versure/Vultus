@@ -12,6 +12,7 @@ import type {
   FcmToken,
   NotificationDoc,
   RegionAvailability,
+  SyncRun,
   TitleCacheEntry,
   User,
   WatchlistItem,
@@ -26,6 +27,8 @@ import type {
   NotificationWriteData,
   RegionAvailabilityReadData,
   RegionAvailabilityWriteData,
+  SyncRunReadData,
+  SyncRunWriteData,
   TitleCacheReadData,
   TitleCacheWriteData,
   UserReadData,
@@ -157,6 +160,36 @@ export function dataToTitleCache(data: TitleCacheReadData): TitleCacheEntry {
     traktId: data.traktId,
     metadata: data.metadata,
     lastSyncedAt: data.lastSyncedAt.toDate().toISOString(),
+  };
+}
+
+// --- SyncRun ---
+export function syncRunToData(run: SyncRun): SyncRunWriteData {
+  return {
+    runId: run.runId,
+    kind: run.kind,
+    userId: run.userId,
+    startedAt: new Date(run.startedAt),
+    completedAt: new Date(run.completedAt),
+    durationMs: run.durationMs,
+    titlesGathered: run.titlesGathered,
+    titlesUpdated: run.titlesUpdated,
+    errorCount: run.errorCount,
+    errors: run.errors,
+  };
+}
+export function dataToSyncRun(data: SyncRunReadData): SyncRun {
+  return {
+    runId: data.runId,
+    kind: data.kind,
+    userId: data.userId,
+    startedAt: data.startedAt.toDate().toISOString(),
+    completedAt: data.completedAt.toDate().toISOString(),
+    durationMs: data.durationMs,
+    titlesGathered: data.titlesGathered,
+    titlesUpdated: data.titlesUpdated,
+    errorCount: data.errorCount,
+    errors: data.errors,
   };
 }
 
