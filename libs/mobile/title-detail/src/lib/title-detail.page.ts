@@ -140,6 +140,12 @@ export class TitleDetailPage {
    */
   private currentTmdbId = 0;
 
+  /**
+   * Guard so the page-init auto-revert (spec 0050) fires at most once per
+   * distinct tmdbId. Holds the last id `revertIfNewEpisodes` was called for.
+   */
+  private revertCheckedForId = 0;
+
   // Status action-sheet + remove-alert overlay state.
   actionSheetOpen = false;
   alertOpen = false;
@@ -269,6 +275,19 @@ export class TitleDetailPage {
     // title currently on screen (not the first navigation's id).
     this.tmdbId$.pipe(takeUntilDestroyed()).subscribe((id) => {
       this.currentTmdbId = id;
+    });
+    // Page-init auto-revert (spec 0050): a 'completed' TV show whose episodes
+    // gained an unwatched entry (new episodes synced) silently reverts to
+    // 'watching'. Deduped to once per distinct tmdbId via revertCheckedForId.
+    this.detail$.pipe(takeUntilDestroyed()).subscribe((state) => {
+      if (
+        state.kind === 'loaded' &&
+        state.detail.type === 'tv' &&
+        state.detail.tmdbId !== this.revertCheckedForId
+      ) {
+        this.revertCheckedForId = state.detail.tmdbId;
+        void this.service.revertIfNewEpisodes(state.detail.tmdbId, 'tv');
+      }
     });
   }
 
