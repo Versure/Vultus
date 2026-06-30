@@ -2,7 +2,7 @@
 number: 0049
 slug: sync-health
 title: Surface the daily sync's last-run status in the settings slice (sync-runs)
-status: implementing
+status: done
 slices: [slice:settings]
 scopes: [scope:shared, scope:functions, scope:mobile]
 created: 2026-06-30
