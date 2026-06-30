@@ -21,6 +21,7 @@ The barrel (`src/index.ts`) re-exports:
   - `User`, `NotificationPrefs`, `FcmToken`
   - `WatchlistItem`, `EpisodeDoc` (fields: `season`, `episode`, `title` (nullable, spec 0034), `airDate`, `watched`, `watchedAt`)
   - `NotificationDoc`, `NotificationPayload`
+  - `SyncRun` — one completed sync-pipeline run (global `sync-runs/{runId}`); written by Cloud Functions, read by the settings slice (spec 0049)
   - `TitleCacheEntry`, `TitleMetadata`, `RegionAvailability`
 - **`./lib/tokens`** — cross-scope dependency-injection tokens. **Not re-exported
   from the main barrel** — import via the dedicated subpath

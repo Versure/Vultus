@@ -53,6 +53,16 @@ service cloud.firestore {
       }
     }
 
+    // ---- Global sync-run records — authenticated read, NEVER client-write ----
+    // Written ONLY by Cloud Functions (Admin SDK, which bypasses these rules).
+    // Any authenticated user (incl. anonymous) may READ to see last-sync status.
+    // Like `title-cache`, do NOT add a "functions can write" allowance — the
+    // Admin SDK does not pass through these rules; `write: if false` is complete.
+    match /sync-runs/{runId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
     // ---- Default: deny all -------------------------------------------------
     // Anything not explicitly allowed above is denied. Keep this LAST.
     match /{document=**} {

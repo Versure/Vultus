@@ -1,0 +1,120 @@
+// "Last synced" card (spec 0049) — visual sibling of the Region / Notifications
+// cards on the Settings page (Stitch screen 81945ff3381e453dafcc4e5ce896fcfa).
+//
+// This component has its own view-encapsulation scope, so it re-declares the
+// shared .settings-card / .settings-row / .settings-row__icon / .settings-row__body
+// / .settings-row__helper structure here (matching settings.page.scss exactly)
+// so the card aligns with its siblings in the stack. All colours/spacing/radius/
+// type come from the shared/ui-kit theme vars (--vultus-* / --ion-* / the design
+// `error` token --vultus-error) — NO hard-coded hex.
+
+:host {
+  display: block;
+}
+
+// One settings card — surface-container fill, 0.75rem (`md`) radius, a 1px
+// outline-variant hairline at low alpha, 16px internal padding. Identical to
+// the sibling Region/Notifications cards. The card is READ-ONLY: no :active
+// press tint, no focus ring (it is not tappable/focusable).
+.settings-card {
+  background: var(--vultus-surface-container);
+  border: 1px solid
+    color-mix(in srgb, var(--vultus-outline-variant) 20%, transparent);
+  border-radius: var(--vultus-radius-md);
+  padding: var(--vultus-space-md);
+}
+
+// Row layout: icon tile + body column, 16px gap (`md`).
+.settings-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--vultus-space-md);
+}
+
+// 40x40 rounded icon tile, primary-coloured 22px glyph, 0.5rem radius.
+.settings-row__icon {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--vultus-radius);
+  background: color-mix(
+    in srgb,
+    var(--vultus-surface-container-highest) 50%,
+    transparent
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  ion-icon {
+    font-size: 22px;
+    color: var(--ion-color-primary);
+  }
+
+  // With-errors: the alert glyph turns the design `error` color.
+  &.sync-card__icon--error ion-icon {
+    color: var(--vultus-error);
+  }
+}
+
+.settings-row__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+// Title row: the "Last synced" title (leading) with the error chip trailing on
+// the same row's right edge (mirrors how the Region card trails its value).
+.sync-card__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--vultus-space-sm);
+}
+
+// Title — body-lg (16/24), weight 600 like the sibling card labels, on-surface.
+.sync-card__title {
+  font-size: var(--vultus-text-body-lg-size);
+  font-weight: 600;
+  line-height: var(--vultus-text-body-lg-line);
+  color: var(--vultus-on-surface);
+}
+
+// Error chip — label-md (12/600, +0.05em) pill in the design `error` color, on
+// a low-alpha error-tinted fill so it reads prominently on the dark card.
+.sync-card__chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  padding: var(--vultus-space-xs) var(--vultus-space-sm);
+  border-radius: var(--vultus-radius-pill);
+  background: color-mix(in srgb, var(--vultus-error) 16%, transparent);
+  color: var(--vultus-error);
+  font-size: var(--vultus-text-label-md-size);
+  font-weight: var(--vultus-text-label-md-weight);
+  line-height: var(--vultus-text-label-md-line);
+  letter-spacing: var(--vultus-text-label-md-spacing);
+  white-space: nowrap;
+}
+
+// Value/helper text — body-md (14/400) in on-surface-variant, 8px (`sm`) below
+// the title row.
+.settings-row__helper {
+  margin: var(--vultus-space-sm) 0 0;
+  font-size: var(--vultus-text-body-md-size);
+  font-weight: var(--vultus-text-body-md-weight);
+  line-height: var(--vultus-text-body-md-line);
+  color: var(--vultus-on-surface-variant);
+}
+
+// Loading placeholder — a single card-height skeleton (matches the page's
+// .settings-skeleton__card so it lines up while the query is in flight).
+.sync-card__skeleton {
+  display: block;
+  height: 64px;
+  border-radius: var(--vultus-radius);
+  background: color-mix(
+    in srgb,
+    var(--vultus-surface-container-highest) 50%,
+    transparent
+  );
+}

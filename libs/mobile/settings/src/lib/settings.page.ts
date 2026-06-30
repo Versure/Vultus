@@ -23,6 +23,7 @@ import {
 } from 'ionicons/icons';
 import { SETTINGS_PROVIDERS } from './settings.providers';
 import { SettingsService } from './settings.service';
+import { SyncStatusCardComponent } from './sync-status-card.component';
 
 @Component({
   selector: 'lib-settings',
@@ -40,6 +41,7 @@ import { SettingsService } from './settings.service';
     IonToggle,
     IonSkeletonText,
     VultusErrorState,
+    SyncStatusCardComponent,
   ],
   templateUrl: './settings.page.html',
   styleUrl: './settings.page.scss',

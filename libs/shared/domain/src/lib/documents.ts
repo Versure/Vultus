@@ -65,6 +65,31 @@ export interface NotificationDoc {
   readAt: string | null; // ISO 8601 or null
 }
 
+/** A single completed sync-pipeline run, written by Cloud Functions to the
+ *  global `sync-runs/{runId}` collection and read by the settings slice. */
+export interface SyncRun {
+  /** == the Firestore document ID. */
+  runId: string;
+  /** Which entry point wrote this run. */
+  kind: 'cron' | 'manual';
+  /** The calling UID for a manual run; `null` for a cron run (covers all users). */
+  userId: string | null;
+  /** ISO 8601 — when the run started. */
+  startedAt: string;
+  /** ISO 8601 — when the run completed. */
+  completedAt: string;
+  /** Wall-clock duration of the run, ms. */
+  durationMs: number;
+  /** Distinct titles gathered for this run. */
+  titlesGathered: number;
+  /** Titles the engine reported as `outcome: 'synced'`. */
+  titlesUpdated: number;
+  /** Number of titles the engine reported as `outcome: 'error'`. */
+  errorCount: number;
+  /** First ~10 error messages (credential-free); `[]` when none. */
+  errors: string[];
+}
+
 // Provisional metadata — see Risks. Minimal cached TMDB fields now.
 export interface TitleMetadata {
   title: string;

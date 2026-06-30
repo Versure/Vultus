@@ -33,9 +33,12 @@ function createFakeDb(opts: {
   watchlist: { tmdbId: number; type: 'movie' | 'tv' }[];
   titleCache?: Record<string, FakeDoc>; // keyed by full doc path
   syncState?: { lastRunAt: number } | null;
+  /** When set, `sync-runs/...doc().set()` rejects with this error (best-effort). */
+  failSyncRunWrite?: Error;
 }) {
   const writes: { path: string; data: unknown }[] = [];
   const titleCache = opts.titleCache ?? {};
+  let autoIdCounter = 0;
 
   const docRef = (path: string) => ({
     get: () => Promise.resolve(makeSnapshot(path)),
@@ -87,6 +90,21 @@ function createFakeDb(opts: {
     collection: (path: string) => ({
       get: () =>
         Promise.resolve({ docs: [] as { id: string; data: () => unknown }[] }),
+      // Auto-id child doc — supports writeSyncRun's `.doc().set()`.
+      doc: () => {
+        const id = `auto-${++autoIdCounter}`;
+        const childPath = `${path}/${id}`;
+        return {
+          id,
+          set: (data: unknown) => {
+            if (path === 'sync-runs' && opts.failSyncRunWrite) {
+              return Promise.reject(opts.failSyncRunWrite);
+            }
+            writes.push({ path: childPath, data });
+            return Promise.resolve();
+          },
+        };
+      },
       _path: path,
     }),
   };
@@ -491,7 +509,7 @@ describe('runSync handler wiring', () => {
     expect('episodesSynced' in body).toBe(false);
   });
 
-  it('BOUNDARY: across all paths only title-cache/** and system/sync are written — never users/** or notifications', async () => {
+  it('BOUNDARY: across all paths only title-cache/**, system/sync and sync-runs/** are written — never users/** or notifications', async () => {
     const { db, writes } = createFakeDb({
       watchlist: [
         { tmdbId: 603, type: 'movie' },
@@ -506,15 +524,160 @@ describe('runSync handler wiring', () => {
       }),
     );
 
-    // The fake engine writes nothing through the store, so the only write is
-    // system/sync; assert NOTHING under users/** or notifications/** is written.
+    // The fake engine writes nothing through the store, so the writes are
+    // system/sync + the new sync-runs record; assert NOTHING under users/** or
+    // notifications/** is written (the no-users/**-write boundary still holds).
     for (const w of writes) {
       expect(w.path.startsWith('users/')).toBe(false);
       expect(w.path).not.toContain('notifications');
       expect(
-        w.path === 'system/sync' || w.path.startsWith('title-cache/'),
+        w.path === 'system/sync' ||
+          w.path.startsWith('title-cache/') ||
+          w.path.startsWith('sync-runs/'),
       ).toBe(true);
     }
     expect(writes.some((w) => w.path === 'system/sync')).toBe(true);
+  });
+
+  it('cron path: writes a sync-runs record with kind:cron, userId:null, counts mapped, durationMs == end - start, timestamps set; SyncRunResponse unchanged', async () => {
+    const { db, writes } = createFakeDb({
+      watchlist: [
+        { tmdbId: 1, type: 'movie' },
+        { tmdbId: 2, type: 'movie' },
+        { tmdbId: 3, type: 'movie' },
+      ],
+    });
+    // Distinct start/end via a sequenced clock so durationMs is observable.
+    const start = NOW;
+    const end = NOW + 4242;
+    const clock = vi
+      .fn<() => number>()
+      .mockReturnValueOnce(start)
+      .mockReturnValue(end);
+
+    const mixed = createFakeEngine((inputs) =>
+      inputs.map((input, i) =>
+        i === 1
+          ? { ...input, outcome: 'error', transitions: [], reason: 'boom' }
+          : syncedResult(input),
+      ),
+    );
+
+    const out = await runSync(
+      baseDeps({ db, createEngine: () => mixed.engine, now: clock }),
+      req({
+        headers: { 'x-vultus-sync-secret': SECRET },
+        body: { force: true },
+      }),
+    );
+
+    // Response unchanged: exact key set.
+    const body = out.body as SyncRunResponse;
+    expect(Object.keys(body).sort()).toEqual(
+      [
+        'durationMs',
+        'errored',
+        'forced',
+        'gathered',
+        'ok',
+        'skipped',
+        'synced',
+        'trigger',
+      ].sort(),
+    );
+
+    const runWrite = writes.find((w) => w.path.startsWith('sync-runs/'));
+    expect(runWrite).toBeDefined();
+    const data = runWrite?.data as {
+      runId: string;
+      kind: string;
+      userId: string | null;
+      startedAt: Date;
+      completedAt: Date;
+      durationMs: number;
+      titlesGathered: number;
+      titlesUpdated: number;
+      errorCount: number;
+      errors: string[];
+    };
+    expect(data.kind).toBe('cron');
+    expect(data.userId).toBeNull();
+    expect(data.runId).toBe(runWrite?.path.split('/')[1]); // runId == doc id
+    expect(data.titlesGathered).toBe(3);
+    expect(data.titlesUpdated).toBe(2);
+    expect(data.errorCount).toBe(1);
+    expect(data.durationMs).toBe(end - start);
+    expect(data.startedAt).toBeInstanceOf(Date);
+    expect(data.completedAt).toBeInstanceOf(Date);
+    expect(data.startedAt.toISOString()).toBe(new Date(start).toISOString());
+    expect(data.completedAt.toISOString()).toBe(new Date(end).toISOString());
+  });
+
+  it('cron path: sync-runs errors are credential-free and capped at 10', async () => {
+    const titles = Array.from({ length: 15 }, (_, i) => ({
+      tmdbId: i + 1,
+      type: 'movie' as const,
+    }));
+    const { db, writes } = createFakeDb({ watchlist: titles });
+
+    const allErrors = createFakeEngine((inputs) =>
+      inputs.map((input, i) => ({
+        ...input,
+        outcome: 'error' as const,
+        transitions: [],
+        reason: `reason-${i}`,
+      })),
+    );
+
+    await runSync(
+      baseDeps({ db, createEngine: () => allErrors.engine }),
+      req({
+        headers: { 'x-vultus-sync-secret': SECRET },
+        body: { force: true },
+      }),
+    );
+
+    const runWrite = writes.find((w) => w.path.startsWith('sync-runs/'));
+    const data = runWrite?.data as { errorCount: number; errors: string[] };
+    expect(data.errorCount).toBe(15);
+    expect(data.errors).toHaveLength(10); // capped
+    // No secret/token text leaks (engine reasons are credential-free).
+    expect(JSON.stringify(data.errors)).not.toMatch(/secret|token|bearer/i);
+  });
+
+  it('BEST-EFFORT: a failing sync-runs write is logged, does NOT throw, and does NOT change the response (cron still 200)', async () => {
+    const { db, writes } = createFakeDb({
+      watchlist: [{ tmdbId: 603, type: 'movie' }],
+      failSyncRunWrite: new Error('sync-runs write boom'),
+    });
+
+    const out = await runSync(
+      baseDeps({ db, createEngine }),
+      req({
+        headers: { 'x-vultus-sync-secret': SECRET },
+        body: { force: true },
+      }),
+    );
+
+    // Run still succeeds with the normal 200 response shape.
+    expect(out.status).toBe(200);
+    const body = out.body as SyncRunResponse;
+    expect(body.ok).toBe(true);
+    expect(Object.keys(body).sort()).toEqual(
+      [
+        'durationMs',
+        'errored',
+        'forced',
+        'gathered',
+        'ok',
+        'skipped',
+        'synced',
+        'trigger',
+      ].sort(),
+    );
+    // system/sync still written exactly as before; the sync-runs write failed
+    // (so it was not recorded), but that did not regress the run.
+    expect(writes.some((w) => w.path === 'system/sync')).toBe(true);
+    expect(writes.some((w) => w.path.startsWith('sync-runs/'))).toBe(false);
   });
 });

@@ -12,6 +12,7 @@ export const COLLECTIONS = {
   notifications: 'notifications',
   titleCache: 'title-cache',
   availability: 'availability',
+  syncRuns: 'sync-runs',
 } as const;
 
 // Tiny private joiner — no leading/trailing slash, segments joined by '/'.
@@ -74,4 +75,13 @@ export function availabilityPath(tmdbId: number): string {
 // title-cache/{tmdbId}/availability/{region}   — region is a domain Region
 export function availabilityDocPath(tmdbId: number, region: Region): string {
   return join(availabilityPath(tmdbId), region);
+}
+
+// sync-runs                 (collection)
+export function syncRunsCollection(): string {
+  return COLLECTIONS.syncRuns;
+}
+// sync-runs/{runId} — document id is the run id (== runId field; PLAN §4)
+export function syncRunDocPath(runId: string): string {
+  return join(syncRunsCollection(), runId);
 }

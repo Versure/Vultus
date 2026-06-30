@@ -26,6 +26,25 @@ vi.mock('./settings.service', () => ({
   SettingsService: class SettingsService {},
 }));
 
+// Stub the sync-status card with a lightweight standalone component of the same
+// selector so the page test never pulls in the real `@angular/fire/firestore`
+// import chain (rxfire ESM-in-CJS breaks the jsdom transform). The card's own
+// behaviour is covered by sync-status-card.component.spec.ts. The class is
+// defined INSIDE the (hoisted) factory to avoid a temporal-dead-zone reference.
+vi.mock('./sync-status-card.component', async () => {
+  const { Component } = await import('@angular/core');
+  @Component({ selector: 'lib-sync-status-card', template: '' })
+  class StubSyncStatusCardComponent {}
+  return { SyncStatusCardComponent: StubSyncStatusCardComponent };
+});
+
+// `./settings.providers` (imported transitively by the page) statically imports
+// the real `SyncStatusService`, which pulls in `@angular/fire/firestore`. Mock
+// it to a bare class so the page test stays off the rxfire ESM-in-CJS chain.
+vi.mock('./sync-status.service', () => ({
+  SyncStatusService: class SyncStatusService {},
+}));
+
 import { SettingsPage } from './settings.page';
 import { SettingsService } from './settings.service';
 
@@ -83,6 +102,14 @@ describe('SettingsPage', () => {
     expect(el.querySelector('ion-toggle')).toBeTruthy();
     expect(el.querySelector('ion-skeleton-text')).toBeFalsy();
     expect(el.querySelector('vultus-error-state')).toBeFalsy();
+  });
+
+  it('renders the sync-status card in the .settings-cards stack once loaded', async () => {
+    const { el } = await setup(true);
+    const stack = el.querySelector('.settings-cards');
+    expect(stack).toBeTruthy();
+    const card = stack?.querySelector('lib-sync-status-card');
+    expect(card).toBeTruthy();
   });
 
   it('lists the ten regions as select options', async () => {
