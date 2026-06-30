@@ -1,0 +1,9 @@
+{
+  "name": "sync-episodes",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/functions/sync-episodes/src",
+  "projectType": "library",
+  "tags": [],
+  "// targets": "to see all targets run: nx show project sync-episodes --web",
+  "targets": {}
+}

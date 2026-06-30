@@ -32,6 +32,13 @@ import type {
   SyncResult,
   SyncTitleInput,
 } from '@vultus/functions/sync-titles';
+import { createEpisodeSyncEngine } from '@vultus/functions/sync-episodes';
+import type { EpisodeSyncEngine } from '@vultus/functions/sync-episodes';
+import {
+  createTmdbEpisodeSourceAdapter,
+  createEpisodeUpsertStore,
+  createWatchlistTvSourceAdapter,
+} from './sync-episodes';
 import { classifyAuth } from './lib/auth';
 import type { VerifyToken } from './lib/auth';
 import { dedupeTitles } from './lib/gather';
@@ -86,6 +93,9 @@ export interface RunSyncDeps {
   now: () => number;
   rateLimitMs: number;
   stalenessWindowMs: number;
+  /** Factory for the episode sync engine (best-effort daily pass, entry point B).
+   *  Optional — omit to skip the episode pass (existing tests remain green). */
+  createEpisodeEngine?: (db: Firestore) => EpisodeSyncEngine;
 }
 
 /** A minimal view of the request `runSync` needs — satisfied by the real
@@ -190,6 +200,30 @@ export async function runSync(
   const engineSkipped = results.filter((r) => r.outcome === 'skipped').length;
   const errored = results.filter((r) => r.outcome === 'error').length;
 
+  // Episode sync pass (entry point B) — best-effort. `syncAll()` isolates
+  // per-show errors, but watchlist enumeration (and engine construction) run
+  // before that loop and can reject on a transient Firestore error; a wrapping
+  // try/catch keeps the title-cache result, sync-state persistence, and the
+  // returned SyncRunResponse unaffected by any episode-pass failure (R9 / DoD e).
+  if (deps.createEpisodeEngine) {
+    try {
+      const episodeEngine = deps.createEpisodeEngine(deps.db);
+      const episodeResults = await episodeEngine.syncAll();
+      const episodesSynced = episodeResults.filter(
+        (r) => r.outcome === 'synced',
+      ).length;
+      const episodesErrored = episodeResults.filter(
+        (r) => r.outcome === 'error',
+      ).length;
+      logger.info('episode sync pass complete', {
+        episodesSynced,
+        episodesErrored,
+      });
+    } catch (err) {
+      logger.error('episode sync pass failed (best-effort, continuing)', err);
+    }
+  }
+
   const end = deps.now();
   await writeSyncState(deps.db, end, start);
 
@@ -244,6 +278,14 @@ export const syncTitles = onRequest(
       {
         db,
         createEngine,
+        createEpisodeEngine: (firestore: Firestore): EpisodeSyncEngine =>
+          createEpisodeSyncEngine({
+            tmdb: createTmdbEpisodeSourceAdapter(
+              createTmdbClient({ readAccessToken: TMDB_READ_TOKEN.value() }),
+            ),
+            episodes: createEpisodeUpsertStore(firestore),
+            watchlist: createWatchlistTvSourceAdapter(firestore),
+          }),
         verifyToken: verifyIdToken,
         secret: SYNC_SHARED_SECRET.value(),
         now: () => Date.now(),
@@ -349,3 +391,4 @@ export const triggerSync = onCall<unknown, Promise<TriggerSyncResponse>>(
 );
 
 export { dispatchNotifications } from './dispatch-notifications';
+export { syncWatchlistEpisodes } from './sync-episodes';

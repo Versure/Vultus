@@ -16,6 +16,7 @@ export interface TmdbTvResponse {
   overview?: string;
   poster_path?: string | null;
   first_air_date?: string | null;
+  number_of_seasons?: number;
 }
 
 // A single provider as returned inside a flatrate/rent/buy/ads/free bucket.
@@ -43,6 +44,7 @@ export interface TmdbEpisodeEntry {
   season_number?: number;
   episode_number: number;
   air_date?: string | null;
+  name?: string;
 }
 
 export interface TmdbSeasonResponse {

@@ -31,5 +31,6 @@ export type Title = Movie | Show;
 export interface Episode {
   season: number;
   episode: number;
+  title: string | null; // episode name; null when unset (spec 0047)
   airDate: string; // ISO 8601
 }

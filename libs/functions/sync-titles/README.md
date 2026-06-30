@@ -17,11 +17,12 @@ lives in `apps/functions` (spec 0009).
 Imported from `@vultus/functions/sync-titles`:
 
 - `createTmdbClient(config: TmdbClientConfig): TmdbClient` — factory returning a
-  client with four methods:
+  client with five methods:
   - `getMovie(tmdbId)` → `Promise<TitleMetadata | null>`
   - `getTvShow(tmdbId)` → `Promise<TitleMetadata | null>`
+  - `getTvSeasonCount(tmdbId)` → `Promise<number | null>` — total season count for a TV show (TMDB 404 → null); added for the episode-sync consumer (spec 0047)
   - `getWatchProviders(tmdbId, type)` → `Promise<RegionProviders | null>`
-  - `getSeasonEpisodes(tmdbId, seasonNumber)` → `Promise<Episode[] | null>`
+  - `getSeasonEpisodes(tmdbId, seasonNumber)` → `Promise<Episode[] | null>` — each returned `Episode` now carries `title: string | null` (spec 0047)
 - `createTraktClient(config: TraktClientConfig): TraktClient` — factory returning
   a client with two methods:
   - `getCalendar(startDate, days)` → `Promise<TraktCalendarEntry[]>` — every show

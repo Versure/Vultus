@@ -23,6 +23,7 @@ import type {
   TmdbTvResponse,
   TmdbWatchProvidersResponse,
 } from './tmdb-dtos';
+import { mapTvSeasonCount } from './tmdb-mappers';
 
 /** Per-region streaming-availability map returned by `getWatchProviders`. */
 export type RegionProviders = Partial<Record<Region, WatchProvider[]>>;
@@ -46,6 +47,9 @@ export interface TmdbClientConfig {
 export interface TmdbClient {
   getMovie(tmdbId: number): Promise<TitleMetadata | null>;
   getTvShow(tmdbId: number): Promise<TitleMetadata | null>;
+  /** Returns the show's total season count, or null on TMDB 404. Added for the
+   *  episode-sync consumer (spec 0047). */
+  getTvSeasonCount(tmdbId: number): Promise<number | null>;
   getWatchProviders(
     tmdbId: number,
     type: TitleType,
@@ -100,6 +104,13 @@ export function createTmdbClient(config: TmdbClientConfig): TmdbClient {
         `/tv/${tmdbId}?${langQuery}`,
       );
       return result === NOT_FOUND ? null : mapTvShow(result);
+    },
+
+    async getTvSeasonCount(tmdbId: number): Promise<number | null> {
+      const result = await core.request<TmdbTvResponse>(
+        `/tv/${tmdbId}?${langQuery}`,
+      );
+      return result === NOT_FOUND ? null : mapTvSeasonCount(result);
     },
 
     async getWatchProviders(
