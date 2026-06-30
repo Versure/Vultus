@@ -2,7 +2,7 @@
 number: 0048
 slug: fix-triggersync-500
 title: Make the triggerSync callable surface diagnosable errors instead of an opaque INTERNAL 500
-status: approved
+status: done
 slices: []
 scopes: [scope:functions]
 created: 2026-06-30
@@ -139,10 +139,10 @@ Out of scope (explicitly):
 
 ## 3. Affected slices & Sheriff tags
 
-| Project         | Path                                | Sheriff tags      | Change                                                                                  |
-| --------------- | ----------------------------------- | ----------------- | --------------------------------------------------------------------------------------- |
-| functions (app) | `apps/functions/src/main.ts`        | `scope:functions` | try-catch in `runTriggerSync` + `triggerSync` handler; capture + `logger.info` summary  |
-| functions (app) | `apps/functions/src/trigger-sync.spec.ts` | `scope:functions` | add one unit case (rejecting gather → `internal`); existing cases unchanged       |
+| Project         | Path                                      | Sheriff tags      | Change                                                                                 |
+| --------------- | ----------------------------------------- | ----------------- | -------------------------------------------------------------------------------------- |
+| functions (app) | `apps/functions/src/main.ts`              | `scope:functions` | try-catch in `runTriggerSync` + `triggerSync` handler; capture + `logger.info` summary |
+| functions (app) | `apps/functions/src/trigger-sync.spec.ts` | `scope:functions` | add one unit case (rejecting gather → `internal`); existing cases unchanged            |
 
 - **`slices: []`** — a `scope:functions` logic change touching only the functions
   entry file + its spec; introduces no slice, library, or app-shell change.
@@ -174,7 +174,7 @@ HTTP contract.**
   `{ syncedAt: string }`. Its **failure surface improves** but stays within the
   existing callable error model: `HttpsError('unauthenticated', 'Sign-in required')`
   when no `uid` (unchanged), and **now** `HttpsError('internal', 'Failed to read
-  watchlist')` when the watchlist read fails (previously a bare framework
+watchlist')` when the watchlist read fails (previously a bare framework
   `INTERNAL`). The success response, region (`europe-west1`), `cors` array
   (spec 0044), and `TMDB_READ_TOKEN` binding are unchanged.
 - `runTriggerSync` — **signature unchanged**:
@@ -342,7 +342,7 @@ infrastructure-engineer (operational).
   **Cloud Logging** the `[triggerSync] sync complete` `logger.info` summary line
   appears with the count fields. If a failure is reproducible (e.g. against a
   signed-out / permission-restricted account), confirm a `[triggerSync] gather
-  failed` or `[triggerSync] unhandled error` `logger.error` line appears and the
+failed` or `[triggerSync] unhandled error` `logger.error` line appears and the
   client shows `'Failed to read watchlist'` (a typed error) rather than the prior
   opaque `INTERNAL`.
 - **File manifest:** none (operational; no repo files change).
@@ -369,7 +369,7 @@ component test (no UI), no e2e (rubric below).
   **rejects** (e.g. `get: () => Promise.reject(new Error('permission-denied'))`).
   A valid `uid` is supplied. Assert the returned promise **rejects** with an
   `HttpsError` whose `code` is `'internal'` (and message `'Failed to read
-  watchlist'`), and that the fake engine's `sync` was **not** called (gather failed
+watchlist'`), and that the fake engine's `sync` was **not** called (gather failed
   before the engine pass). Implement by extending `createFakeDb` to accept an
   optional `getRejects` flag (or add a small dedicated fake) so the existing
   happy-path `createFakeDb` is unaffected.
@@ -410,12 +410,12 @@ logic+observability change. Gates that don't apply are marked N/A with the reaso
 
 - [ ] `apps/functions/src/main.ts` — `runTriggerSync` try-catches
       `gatherUserWatchlistTitles`; on catch it `logger.error('[triggerSync] gather
-      failed', err)` then `throw new HttpsError('internal', 'Failed to read
-      watchlist')` (Edit A, decision 1). The `if (!uid)` guard and `{ syncedAt }`
+    failed', err)` then `throw new HttpsError('internal', 'Failed to read
+    watchlist')` (Edit A, decision 1). The `if (!uid)` guard and `{ syncedAt }`
       return are unchanged.
 - [ ] `runTriggerSync` captures the `SyncResult[]` from `engine.sync` and emits a
       `logger.info('[triggerSync] sync complete', { gathered, synced, skipped,
-      errored })` summary — aggregate counts only, **no** per-title reason / secret
+    errored })` summary — aggregate counts only, **no** per-title reason / secret
       (Edit A, decision 3). Counts derived from `result.outcome`.
 - [ ] The `triggerSync` `onCall` handler body has a top-level try-catch that
       `logger.error('[triggerSync] unhandled error', err)` and **re-throws** `err`;
@@ -446,15 +446,14 @@ logic+observability change. Gates that don't apply are marked N/A with the reaso
       `sheriff.config.ts` / shared-type change** — verified, recorded in the PR.
 - [ ] **No secret read/written, none logged** — `logger.error` receives only the
       caught `err` (server-side); the client message is the fixed string `'Failed
-      to read watchlist'`; the summary logs aggregate counts only.
-- [ ] **Component / e2e: N/A** — no UI change; `scope:functions`-only change, error
-      + logging not exercisable from the emulator-backed e2e (stated in the PR).
+    to read watchlist'`; the summary logs aggregate counts only.
+- [ ] **Component / e2e: N/A** — no UI change; `scope:functions`-only change, error + logging not exercisable from the emulator-backed e2e (stated in the PR).
 - [ ] **Operational (task 2) recorded in the PR / follow-up:** the
       `/deploy-functions` run and the post-deploy verification —
       `mobile:serve-prod-debug` shows the refresh returning `{ syncedAt }` (200),
       the `[triggerSync] sync complete` `logger.info` appears in Cloud Logging, and
       (if reproducible) a failure shows the `logger.error` line + the typed `'Failed
-      to read watchlist'` client error instead of the opaque `INTERNAL`. If deploy
+    to read watchlist'` client error instead of the opaque `INTERNAL`. If deploy
       can't happen within the PR window, recorded as a **required follow-up** with
       the named blocker — the code change alone doesn't fix the user's app until
       deployed.
@@ -471,8 +470,8 @@ logic+observability change. Gates that don't apply are marked N/A with the reaso
   diagnosable; it does not retroactively explain past 500s. Task 2 (deploy + log
   verification) is the required production step, and the DoD is not fully met by a
   green build alone.
-- **This makes the error *diagnosable*, not necessarily *fixed*.** #103's 500 is
-  caused by *some* Firestore read failure; this spec ensures that failure is logged
+- **This makes the error _diagnosable_, not necessarily _fixed_.** #103's 500 is
+  caused by _some_ Firestore read failure; this spec ensures that failure is logged
   and surfaced with a typed error + message. The **underlying** cause (e.g. a
   security-rule denial on `users/{uid}/watchlist`, a region/credential issue, or an
   unexpected doc shape) may then be revealed by the new `logger.error` line and
@@ -503,5 +502,5 @@ logic+observability change. Gates that don't apply are marked N/A with the reaso
   extract-at-3+ rules (the `HttpsError` translation + summary log are callable-local,
   matching the cron path's own in-`main.ts` logging). TMDB/Trakt data accuracy is
   unaffected — the sync flow is unchanged; this only makes its failures legible.
-</content>
-</invoke>
+  </content>
+  </invoke>

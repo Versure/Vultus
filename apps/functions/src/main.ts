@@ -27,6 +27,7 @@ import {
   gatherUserWatchlistTitles,
 } from '@vultus/functions/sync-titles';
 import type {
+  GatheredUserTitle,
   SyncEngine,
   SyncResult,
   SyncTitleInput,
@@ -285,13 +286,32 @@ export async function runTriggerSync(
   if (!uid) {
     throw new HttpsError('unauthenticated', 'Sign-in required');
   }
-  const rawTitles = await gatherUserWatchlistTitles(deps.db, uid);
+
+  let rawTitles: GatheredUserTitle[];
+  try {
+    rawTitles = await gatherUserWatchlistTitles(deps.db, uid);
+  } catch (err) {
+    logger.error('[triggerSync] gather failed', err);
+    throw new HttpsError('internal', 'Failed to read watchlist');
+  }
+
   const inputs: SyncTitleInput[] = rawTitles.map((t) => ({
     tmdbId: t.tmdbId,
     type: t.type,
   }));
   const engine = deps.createEngine(deps.db);
-  await engine.sync(inputs);
+  const results: SyncResult[] = await engine.sync(inputs);
+
+  const synced = results.filter((r) => r.outcome === 'synced').length;
+  const skipped = results.filter((r) => r.outcome === 'skipped').length;
+  const errored = results.filter((r) => r.outcome === 'error').length;
+  logger.info('[triggerSync] sync complete', {
+    gathered: inputs.length,
+    synced,
+    skipped,
+    errored,
+  });
+
   return { syncedAt: new Date().toISOString() };
 }
 
@@ -311,15 +331,20 @@ export const triggerSync = onCall<unknown, Promise<TriggerSyncResponse>>(
       'http://localhost:4200', // Angular dev server (serve-prod-debug)
     ],
   },
-  (request) => {
-    const db = ensureAdmin();
-    const createEngine = (firestore: Firestore): SyncEngine =>
-      createSyncEngine({
-        tmdb: createTmdbClient({ readAccessToken: TMDB_READ_TOKEN.value() }),
-        trakt: createTraktClient({ clientId: TRAKT_CLIENT_ID.value() }),
-        store: createFirestoreTitleCacheStore(firestore),
-      });
-    return runTriggerSync({ db, createEngine }, request.auth?.uid);
+  async (request) => {
+    try {
+      const db = ensureAdmin();
+      const createEngine = (firestore: Firestore): SyncEngine =>
+        createSyncEngine({
+          tmdb: createTmdbClient({ readAccessToken: TMDB_READ_TOKEN.value() }),
+          trakt: createTraktClient({ clientId: TRAKT_CLIENT_ID.value() }),
+          store: createFirestoreTitleCacheStore(firestore),
+        });
+      return await runTriggerSync({ db, createEngine }, request.auth?.uid);
+    } catch (err) {
+      logger.error('[triggerSync] unhandled error', err);
+      throw err;
+    }
   },
 );
 

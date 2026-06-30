@@ -81,6 +81,30 @@ describe('runTriggerSync handler wiring', () => {
     expect(writes).toHaveLength(0);
   });
 
+  it('gather rejects → throws HttpsError(internal, "Failed to read watchlist"); engine NOT called', async () => {
+    const rejectingDb = {
+      collection: () => ({
+        get: () => Promise.reject(new Error('permission-denied')),
+      }),
+      doc: () => ({
+        get: () => Promise.resolve({ exists: false, data: () => undefined }),
+        set: () => Promise.resolve(),
+      }),
+    } as unknown as RunTriggerSyncDeps['db'];
+
+    const factory = createFakeEngine((inputs) => inputs.map(syncedResult));
+
+    const err: unknown = await runTriggerSync(
+      { db: rejectingDb, createEngine: () => factory.engine },
+      'user-1',
+    ).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(HttpsError);
+    expect((err as HttpsError).code).toBe('internal');
+    expect((err as HttpsError).message).toBe('Failed to read watchlist');
+    expect(factory.calls).toHaveLength(0); // engine never reached
+  });
+
   it('valid uid → engine called with the deduped per-user titles; resolves { syncedAt }', async () => {
     const { db, collectionPaths } = createFakeDb({
       watchlist: [
