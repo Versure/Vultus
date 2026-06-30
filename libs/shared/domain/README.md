@@ -18,7 +18,7 @@ The barrel (`src/index.ts`) re-exports:
   discriminated union), `WatchProvider`, `Episode` (fields: `season`, `episode`,
   `title` (nullable, spec 0047), `airDate`).
 - **`./lib/documents`** — Firestore document shapes (PLAN §4):
-  - `User`, `NotificationPrefs`, `FcmToken`
+  - `User`, `NotificationPrefs` (per-kind opt-in toggles plus `deliveryHour: number | null` — quiet-hours delivery preference, spec 0051; `null` = any time, a number 0–23 = that UTC hour), `FcmToken`
   - `WatchlistItem`, `EpisodeDoc` (fields: `season`, `episode`, `title` (nullable, spec 0034), `airDate`, `watched`, `watchedAt`)
   - `NotificationDoc`, `NotificationPayload`
   - `SyncRun` — one completed sync-pipeline run (global `sync-runs/{runId}`); written by Cloud Functions, read by the settings slice (spec 0049)

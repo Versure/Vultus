@@ -31,6 +31,7 @@ const allPrefs = (
   episodeAired: true,
   movieAvailable: true,
   cameToPlatform: true,
+  deliveryHour: null,
   ...overrides,
 });
 
@@ -117,13 +118,16 @@ function makeChange(
   };
 }
 
-function makeDispatcher(stores: ReturnType<typeof makeStores>) {
+function makeDispatcher(
+  stores: ReturnType<typeof makeStores>,
+  nowIso: string = NOW,
+) {
   return createNotificationDispatcher({
     watchlist: stores.watchlist,
     episodes: stores.episodes,
     notifications: stores.notifications,
     fcm: stores.fcm,
-    now: () => NOW,
+    now: () => nowIso,
   });
 }
 
@@ -320,5 +324,126 @@ describe('createNotificationDispatcher', () => {
     expect(stores.sent[0].data.notificationId).toBe(
       stores.sent[1].data.notificationId,
     );
+  });
+
+  describe('delivery window (spec 0051)', () => {
+    // Fixed clock: 2024-03-15T08:30:00Z → UTC hour 8.
+    const FIXED = '2024-03-15T08:30:00.000Z';
+
+    it('outside window: FCM skipped, inbox doc still written', async () => {
+      const stores = makeStores({
+        users: [user({ notificationPrefs: allPrefs({ deliveryHour: 10 }) })],
+      });
+      const summary = await makeDispatcher(stores, FIXED).dispatch(
+        makeChange(),
+      );
+
+      expect(stores.written).toHaveLength(1);
+      expect(summary.notificationsWritten).toBeGreaterThan(0);
+      expect(stores.sent).toHaveLength(0);
+      expect(summary.fcmSent).toBe(0);
+    });
+
+    it('inside window: sends FCM per token as normal', async () => {
+      const stores = makeStores({
+        users: [user({ notificationPrefs: allPrefs({ deliveryHour: 8 }) })],
+      });
+      const summary = await makeDispatcher(stores, FIXED).dispatch(
+        makeChange(),
+      );
+
+      expect(stores.written).toHaveLength(1);
+      expect(stores.sent).toHaveLength(1);
+      expect(stores.sent[0].token).toBe('tok-1');
+      expect(summary.fcmSent).toBe(1);
+    });
+
+    it('deliveryHour null: sends FCM at any time', async () => {
+      const stores = makeStores({
+        users: [user({ notificationPrefs: allPrefs({ deliveryHour: null }) })],
+      });
+      const summary = await makeDispatcher(stores, FIXED).dispatch(
+        makeChange(),
+      );
+
+      expect(stores.written).toHaveLength(1);
+      expect(stores.sent).toHaveLength(1);
+      expect(summary.fcmSent).toBe(1);
+    });
+
+    it('per-user independence: null + match send FCM; mismatch gets doc only', async () => {
+      const users = [
+        user({
+          uid: 'a',
+          titleId: 't-a',
+          fcmTokens: [token('ta')],
+          notificationPrefs: allPrefs({ deliveryHour: null }),
+        }),
+        user({
+          uid: 'b',
+          titleId: 't-b',
+          fcmTokens: [token('tb')],
+          notificationPrefs: allPrefs({ deliveryHour: 8 }),
+        }),
+        user({
+          uid: 'c',
+          titleId: 't-c',
+          fcmTokens: [token('tc')],
+          notificationPrefs: allPrefs({ deliveryHour: 10 }),
+        }),
+      ];
+      const stores = makeStores({ users });
+      const summary = await makeDispatcher(stores, FIXED).dispatch(
+        makeChange(),
+      );
+
+      // all three get an inbox doc
+      expect(stores.written.map((w) => w.uid).sort()).toEqual(['a', 'b', 'c']);
+      expect(summary.notificationsWritten).toBe(3);
+      // only a (null) and b (match) get FCM; c (mismatch) does not
+      expect(stores.sent.map((s) => s.token).sort()).toEqual(['ta', 'tb']);
+      expect(summary.fcmSent).toBe(2);
+    });
+
+    it('legacy doc (deliveryHour absent/undefined): treated as any time → FCM sent', async () => {
+      // Build prefs WITHOUT a deliveryHour key to mimic a pre-0051 doc; the
+      // dispatcher's `== null` check must treat undefined as "any time".
+      const legacyPrefs = {
+        episodeAired: true,
+        movieAvailable: true,
+        cameToPlatform: true,
+      } as unknown as NotificationPrefs;
+      const stores = makeStores({
+        users: [user({ notificationPrefs: legacyPrefs })],
+      });
+      const summary = await makeDispatcher(stores, FIXED).dispatch(
+        makeChange(),
+      );
+
+      expect(stores.written).toHaveLength(1);
+      expect(stores.sent).toHaveLength(1);
+      expect(summary.fcmSent).toBe(1);
+    });
+
+    it('clock determinism: window decision and sentAt share the injected now', async () => {
+      // FIXED = UTC hour 8. A user with deliveryHour 8 is inside the window.
+      const stores = makeStores({
+        users: [user({ notificationPrefs: allPrefs({ deliveryHour: 8 }) })],
+      });
+      await makeDispatcher(stores, FIXED).dispatch(makeChange());
+
+      expect(stores.written).toHaveLength(1);
+      expect(stores.written[0].doc.sentAt).toBe(FIXED);
+      // consistent with the timestamp: inside window → FCM sent
+      expect(stores.sent).toHaveLength(1);
+
+      // And the converse with a mismatching hour against the same clock.
+      const miss = makeStores({
+        users: [user({ notificationPrefs: allPrefs({ deliveryHour: 9 }) })],
+      });
+      await makeDispatcher(miss, FIXED).dispatch(makeChange());
+      expect(miss.written[0].doc.sentAt).toBe(FIXED);
+      expect(miss.sent).toHaveLength(0);
+    });
   });
 });

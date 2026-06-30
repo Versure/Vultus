@@ -4,6 +4,7 @@ import {
   classifyFlatrateTransition,
   decideKinds,
   hasFlatrate,
+  isWithinDeliveryWindow,
 } from './transitions';
 
 const flatrate = (id: number, name = `p${id}`): WatchProvider => ({
@@ -187,5 +188,61 @@ describe('decideKinds', () => {
         now: NOW,
       }),
     ).toEqual(['episode-aired']);
+  });
+});
+
+describe('isWithinDeliveryWindow', () => {
+  it('null → true at any UTC hour', () => {
+    expect(isWithinDeliveryWindow(null, new Date('2024-03-15T03:00:00Z'))).toBe(
+      true,
+    );
+    expect(isWithinDeliveryWindow(null, new Date('2024-03-15T17:45:00Z'))).toBe(
+      true,
+    );
+  });
+
+  it('undefined (cast as null) → true — the == null check covers legacy docs', () => {
+    expect(
+      isWithinDeliveryWindow(
+        undefined as unknown as number | null,
+        new Date('2024-03-15T09:00:00Z'),
+      ),
+    ).toBe(true);
+  });
+
+  it('deliveryHour === now UTC hour → true', () => {
+    expect(isWithinDeliveryWindow(8, new Date('2024-03-15T08:30:00Z'))).toBe(
+      true,
+    );
+  });
+
+  it('deliveryHour !== now UTC hour → false', () => {
+    expect(isWithinDeliveryWindow(10, new Date('2024-03-15T08:30:00Z'))).toBe(
+      false,
+    );
+  });
+
+  it('boundary deliveryHour = 0 with UTC midnight → true; non-midnight → false', () => {
+    expect(isWithinDeliveryWindow(0, new Date('2024-03-15T00:00:00Z'))).toBe(
+      true,
+    );
+    expect(isWithinDeliveryWindow(0, new Date('2024-03-15T00:59:59Z'))).toBe(
+      true,
+    );
+    expect(isWithinDeliveryWindow(0, new Date('2024-03-15T01:00:00Z'))).toBe(
+      false,
+    );
+  });
+
+  it('boundary deliveryHour = 23 with UTC 23:xx → true; other → false', () => {
+    expect(isWithinDeliveryWindow(23, new Date('2024-03-15T23:00:00Z'))).toBe(
+      true,
+    );
+    expect(isWithinDeliveryWindow(23, new Date('2024-03-15T23:59:59Z'))).toBe(
+      true,
+    );
+    expect(isWithinDeliveryWindow(23, new Date('2024-03-15T22:30:00Z'))).toBe(
+      false,
+    );
   });
 });

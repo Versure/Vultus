@@ -38,8 +38,24 @@ export class SettingsService {
   /** The selectable regions (the shared REGIONS const). */
   readonly regions: readonly Region[] = REGIONS;
 
+  /** Selectable delivery hours 0..23 (UTC). `null` = "Any time". */
+  readonly deliveryHours: readonly number[] = Array.from(
+    { length: 24 },
+    (_v, i) => i,
+  );
+
   private readonly _region = signal<Region | null>(null);
   private readonly _notificationsEnabled = signal<boolean>(true);
+  private readonly _deliveryHour = signal<number | null>(null);
+  // Full per-type prefs tracked in state so both `setNotificationsEnabled` and
+  // `setDeliveryHour` can rebuild and write all four `notificationPrefs` fields
+  // together — neither setter clobbers the other's data.
+  private readonly _prefs = signal<User['notificationPrefs']>({
+    episodeAired: true,
+    movieAvailable: true,
+    cameToPlatform: true,
+    deliveryHour: null,
+  });
   private readonly _loaded = signal<boolean>(false);
   private readonly _loadFailed = signal<boolean>(false);
 
@@ -47,6 +63,8 @@ export class SettingsService {
   readonly region = this._region.asReadonly();
   /** Global notifications projection (true when all notificationPrefs are true). */
   readonly notificationsEnabled = this._notificationsEnabled.asReadonly();
+  /** Current persisted delivery hour (UTC), or null for "Any time". */
+  readonly deliveryHour = this._deliveryHour.asReadonly();
   /** True once `load()` has resolved (render-gate for the page). */
   readonly loaded = this._loaded.asReadonly();
   /**
@@ -96,6 +114,7 @@ export class SettingsService {
             episodeAired: true,
             movieAvailable: true,
             cameToPlatform: true,
+            deliveryHour: null,
           },
           fcmTokens: [],
         };
@@ -103,9 +122,11 @@ export class SettingsService {
       }
 
       this._region.set(user.region);
+      this._prefs.set(user.notificationPrefs);
       this._notificationsEnabled.set(
         projectNotifications(user.notificationPrefs),
       );
+      this._deliveryHour.set(user.notificationPrefs.deliveryHour);
       this._loaded.set(true);
     } catch (error) {
       // Surface the failure as an error state. `_loaded` stays false; the
@@ -132,22 +153,53 @@ export class SettingsService {
   }
 
   /**
-   * Persists the global notifications toggle: sets ALL THREE notificationPrefs
-   * to `enabled` (decision 2). `fcmTokens` is never touched here.
+   * Persists the global notifications toggle: sets ALL THREE per-type
+   * notificationPrefs to `enabled` (decision 2), while PRESERVING the current
+   * `deliveryHour` (spec 0051) — the whole `notificationPrefs` object is
+   * rewritten from state so the delivery-hour setter is never clobbered.
+   * `fcmTokens` is never touched here.
    */
   async setNotificationsEnabled(enabled: boolean): Promise<void> {
     const uid = this.uid();
     if (uid === null) {
       return;
     }
+    const prefs: User['notificationPrefs'] = {
+      episodeAired: enabled,
+      movieAvailable: enabled,
+      cameToPlatform: enabled,
+      deliveryHour: this._deliveryHour(),
+    };
     await updateDoc(doc(this.firestore, userPath(uid)), {
-      notificationPrefs: {
-        episodeAired: enabled,
-        movieAvailable: enabled,
-        cameToPlatform: enabled,
-      },
+      notificationPrefs: prefs,
     });
+    this._prefs.set(prefs);
     this._notificationsEnabled.set(enabled);
+  }
+
+  /**
+   * Persists the quiet-hours delivery preference (spec 0051). Rewrites the
+   * WHOLE `notificationPrefs` object, PRESERVING the three per-type booleans
+   * from state and setting `deliveryHour` to `hour` (null = "Any time").
+   * `fcmTokens` is never touched here.
+   */
+  async setDeliveryHour(hour: number | null): Promise<void> {
+    const uid = this.uid();
+    if (uid === null) {
+      return;
+    }
+    const current = this._prefs();
+    const prefs: User['notificationPrefs'] = {
+      episodeAired: current.episodeAired,
+      movieAvailable: current.movieAvailable,
+      cameToPlatform: current.cameToPlatform,
+      deliveryHour: hour,
+    };
+    await updateDoc(doc(this.firestore, userPath(uid)), {
+      notificationPrefs: prefs,
+    });
+    this._prefs.set(prefs);
+    this._deliveryHour.set(hour);
   }
 }
 

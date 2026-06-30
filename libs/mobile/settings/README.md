@@ -68,6 +68,28 @@ The page exposes:
   `notificationPrefs` booleans (reads on when all three are true; writing sets
   all three at once). No `notificationsEnabled` field is persisted; per-type
   toggles are a later spec.
+- a **Notification time** `ion-select` (spec 0051) — the quiet-hours delivery
+  preference over `notificationPrefs.deliveryHour`. Options are "Any time"
+  (`null`) plus the 24 UTC hours `00:00 UTC`..`23:00 UTC` (`deliveryHours`,
+  zero-padded by the page's `formatHour` helper). It is **disabled** while the
+  global Notifications toggle is off (no pushes to schedule). Pushes are only
+  sent during the chosen UTC hour; notifications still appear in the in-app
+  inbox.
+
+### Preserve-other-prefs write rule (spec 0051)
+
+`notificationPrefs` now has four fields (`episodeAired`, `movieAvailable`,
+`cameToPlatform`, `deliveryHour`). The service tracks the full object in state so
+**both** setters rebuild and write the WHOLE `notificationPrefs` object,
+preserving the other setter's data:
+
+- `setNotificationsEnabled(enabled)` sets the three booleans to `enabled` while
+  preserving the current `deliveryHour`.
+- `setDeliveryHour(hour)` sets `deliveryHour` (a number 0–23, or `null` for "Any
+  time") while preserving the three booleans.
+
+Neither setter touches `fcmTokens`. The eager-create default writes
+`deliveryHour: null`.
 
 Writes happen on user interaction (no Save button). The form is render-gated on
 `load()`:
@@ -80,8 +102,10 @@ Writes happen on user interaction (no Save button). The form is render-gated on
   retry button wired to `SettingsService.retryLoad()`. `loadFailed` is checked
   **before** `loaded`, so a failure never leaves the skeleton hanging.
 
-`SettingsService` exposes `loaded`, `loadFailed` (readonly signals) and
-`retryLoad()` (resets `loadFailed` and re-runs `load()`) for this gate.
+`SettingsService` exposes `region`, `notificationsEnabled`, `deliveryHour`
+(readonly signals), the `regions` / `deliveryHours` option lists, `loaded`,
+`loadFailed` (readonly signals) and `retryLoad()` (resets `loadFailed` and
+re-runs `load()`) for this gate.
 `fcmTokens` is never written beyond the `[]` default (FCM registration is
 PLAN §6 item 21).
 
