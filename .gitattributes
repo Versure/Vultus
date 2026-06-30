@@ -1,0 +1,4 @@
+# Capacitor regenerates these on `cap sync` and stores them with LF. Pin LF so
+# Windows checkouts (autocrlf) don't surface a phantom CRLF-only diff every time
+# git touches them. Targeted on purpose — no repo-wide renormalization.
+*.gradle text eol=lf
