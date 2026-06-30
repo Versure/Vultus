@@ -200,20 +200,28 @@ export async function runSync(
   const engineSkipped = results.filter((r) => r.outcome === 'skipped').length;
   const errored = results.filter((r) => r.outcome === 'error').length;
 
-  // Episode sync pass (entry point B) — best-effort, per-show errors isolated.
+  // Episode sync pass (entry point B) — best-effort. `syncAll()` isolates
+  // per-show errors, but watchlist enumeration (and engine construction) run
+  // before that loop and can reject on a transient Firestore error; a wrapping
+  // try/catch keeps the title-cache result, sync-state persistence, and the
+  // returned SyncRunResponse unaffected by any episode-pass failure (R9 / DoD e).
   if (deps.createEpisodeEngine) {
-    const episodeEngine = deps.createEpisodeEngine(deps.db);
-    const episodeResults = await episodeEngine.syncAll();
-    const episodesSynced = episodeResults.filter(
-      (r) => r.outcome === 'synced',
-    ).length;
-    const episodesErrored = episodeResults.filter(
-      (r) => r.outcome === 'error',
-    ).length;
-    logger.info('episode sync pass complete', {
-      episodesSynced,
-      episodesErrored,
-    });
+    try {
+      const episodeEngine = deps.createEpisodeEngine(deps.db);
+      const episodeResults = await episodeEngine.syncAll();
+      const episodesSynced = episodeResults.filter(
+        (r) => r.outcome === 'synced',
+      ).length;
+      const episodesErrored = episodeResults.filter(
+        (r) => r.outcome === 'error',
+      ).length;
+      logger.info('episode sync pass complete', {
+        episodesSynced,
+        episodesErrored,
+      });
+    } catch (err) {
+      logger.error('episode sync pass failed (best-effort, continuing)', err);
+    }
   }
 
   const end = deps.now();

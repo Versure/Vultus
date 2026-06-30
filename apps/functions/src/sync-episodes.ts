@@ -94,7 +94,7 @@ export function createWatchlistTvSourceAdapter(
       const shows: WatchlistTvShow[] = [];
       for (const doc of snap.docs) {
         const data = doc.data() as { type?: string; tmdbId?: number };
-        if (data.type !== 'tv' || !data.tmdbId) continue;
+        if (data.type !== 'tv' || data.tmdbId == null) continue;
         const parent = doc.ref.parent.parent;
         if (!parent) continue;
         shows.push({
@@ -131,7 +131,7 @@ export async function handleWatchlistCreate(
   const data = event.data?.data() as
     | { type?: string; tmdbId?: number }
     | undefined;
-  if (data?.type !== 'tv' || !data?.tmdbId) return;
+  if (data?.type !== 'tv' || data?.tmdbId == null) return;
 
   const { uid, titleId } = event.params;
   const tmdbId = data.tmdbId;

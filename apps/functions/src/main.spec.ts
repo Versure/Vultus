@@ -398,6 +398,82 @@ describe('runSync handler wiring', () => {
     );
   });
 
+  it('BEST-EFFORT: an episode-pass failure (syncAll rejects) does NOT fail the run — SyncRunResponse shape is unchanged and system/sync is still written (R9 / DoD e)', async () => {
+    const { db, writes } = createFakeDb({
+      watchlist: [
+        { tmdbId: 603, type: 'movie' },
+        { tmdbId: 1396, type: 'tv' },
+      ],
+    });
+
+    const episodeEngine: EpisodeSyncEngine = {
+      syncOne: vi.fn(),
+      syncAll: vi.fn(() =>
+        Promise.reject(new Error('watchlist enumeration failed')),
+      ),
+    };
+
+    const out = await runSync(
+      baseDeps({
+        db,
+        createEngine,
+        createEpisodeEngine: () => episodeEngine,
+      }),
+      req({
+        headers: { 'x-vultus-sync-secret': SECRET },
+        body: { force: true },
+      }),
+    );
+
+    // The run still succeeds with the normal 200-shaped response.
+    expect(out.status).toBe(200);
+    const body = out.body as SyncRunResponse;
+    expect(body.ok).toBe(true);
+    expect(Object.keys(body).sort()).toEqual(
+      [
+        'durationMs',
+        'errored',
+        'forced',
+        'gathered',
+        'ok',
+        'skipped',
+        'synced',
+        'trigger',
+      ].sort(),
+    );
+    // Sync-state persistence is unaffected by the episode-pass failure.
+    expect(writes.some((w) => w.path === 'system/sync')).toBe(true);
+  });
+
+  it('BEST-EFFORT: an episode engine whose syncAll throws synchronously is also swallowed — run still returns 200 and persists system/sync', async () => {
+    const { db, writes } = createFakeDb({
+      watchlist: [{ tmdbId: 1396, type: 'tv' }],
+    });
+
+    const episodeEngine: EpisodeSyncEngine = {
+      syncOne: vi.fn(),
+      syncAll: vi.fn((): Promise<EpisodeUpsertResult[]> => {
+        throw new Error('engine construction / enumeration blew up');
+      }),
+    };
+
+    const out = await runSync(
+      baseDeps({
+        db,
+        createEngine,
+        createEpisodeEngine: () => episodeEngine,
+      }),
+      req({
+        headers: { 'x-vultus-sync-secret': SECRET },
+        body: { force: true },
+      }),
+    );
+
+    expect(out.status).toBe(200);
+    expect((out.body as SyncRunResponse).ok).toBe(true);
+    expect(writes.some((w) => w.path === 'system/sync')).toBe(true);
+  });
+
   it('omitting createEpisodeEngine skips the episode pass (existing-deps shape stays green)', async () => {
     const { db } = createFakeDb({
       watchlist: [{ tmdbId: 603, type: 'movie' }],
