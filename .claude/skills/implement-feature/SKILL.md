@@ -11,6 +11,16 @@ and **qa-runner** do the work, all in one dedicated worktree so the user keeps
 working on `main`. (Project-wide rules — shell, secrets, architecture, DoD — are
 in `CLAUDE.md`.)
 
+> **You are the orchestrator, not the implementer.** Across this entire skill you
+> dispatch agents and edit only foundation/shared/root files — you never write
+> slice source yourself, and you never run the review (Step 5) or QA (Step 6)
+> gates by hand instead of via `feature-reviewer` / `qa-runner`. **If this skill
+> resumes after a context compaction**, the summary may read as though you were
+> implementing directly — re-read this SKILL.md and re-establish the orchestrator
+> role before continuing. Confirm which agent steps (implement / review / QA)
+> actually ran; any step done by the orchestrator instead of its agent is unmet
+> and must be (re-)dispatched before opening — or before merging — the PR.
+
 ## Conventions
 
 - Feature branch `feat/NNNN-slug`, one worktree per feature.
@@ -65,11 +75,11 @@ Sheriff is an import linter — it does **not** make files disjoint. Therefore:
   required to build and run the mobile app but are absent from a fresh worktree
   because git only populates committed files.
 
-  | Relative path | Why needed |
-  |---|---|
-  | `.env.local` | API keys for `inject-mobile-env.mjs` |
-  | `apps/mobile/src/environments/environment.generated.ts` | prod build `fileReplacements` (specs 0026/0038) |
-  | `android/app/google-services.json` | Firebase Android config (Gradle/Capacitor, `--check-native`) |
+  | Relative path                                           | Why needed                                                   |
+  | ------------------------------------------------------- | ------------------------------------------------------------ |
+  | `.env.local`                                            | API keys for `inject-mobile-env.mjs`                         |
+  | `apps/mobile/src/environments/environment.generated.ts` | prod build `fileReplacements` (specs 0026/0038)              |
+  | `android/app/google-services.json`                      | Firebase Android config (Gradle/Capacitor, `--check-native`) |
 
   Reuse the `$root` and `$wt` variables already computed above — do **not**
   re-derive the paths a different way. Use the following PowerShell pattern (exact
@@ -100,7 +110,7 @@ Sheriff is an import linter — it does **not** make files disjoint. Therefore:
 
   Rules:
   - **Create the destination's parent directory first** (`New-Item -ItemType
-    Directory -Force`) — required for brand-new worktrees where
+Directory -Force`) — required for brand-new worktrees where
     `apps/mobile/src/environments/` and `android/app/` do not yet exist. The flag
     is a no-op when the directory already exists, so worktree reuse is safe.
   - **`Copy-Item -Force`** overwrites a stale seeded file on reuse so the
@@ -145,6 +155,19 @@ Sheriff is an import linter — it does **not** make files disjoint. Therefore:
 
 ### 4. Implement
 
+- **The orchestrator never writes slice source/test files** — anything under
+  `libs/**/src/` or `apps/**/src/` (excluding the shared/root files Step 3 lists:
+  registration barrels, `apps/*` route/export registration). That work goes to a
+  specialist subagent, always. You own only foundation/shared/root edits. A
+  `PreToolUse` hook enforces this from inside a `feat-*` worktree; if you find
+  yourself reaching for Edit/Write on a slice file, that is the signal you've
+  dropped the orchestrator role — dispatch the agent instead.
+- **Agent failure is never a license to implement manually.** If a routed
+  specialist fails, returns null, dies, or reports success but wrote nothing,
+  **re-dispatch it** (state "Attempt N/2"). If it still fails after the 2-retry
+  bound, **halt that slice as `needs-human`** (draft PR, unresolved item atop the
+  body per the Conventions block) — taking the work over by hand is **not** the
+  fallback and defeats the independent-implementer guarantee.
 - Do **foundation** first, sequentially. Then run the disjointness assertion and
   **fan out** routed specialists in parallel (all calls in one message), each
   confined to its manifest and forbidden from shared/root files or
