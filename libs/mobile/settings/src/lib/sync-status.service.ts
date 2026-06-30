@@ -42,7 +42,11 @@ export class SyncStatusService {
 
   /** The most-recent sync run, or null when none has happened (never-synced). */
   readonly lastRun = this._lastRun.asReadonly();
-  /** True once `load()` has resolved (render-gate for the card). */
+  /**
+   * True once a `load()` attempt has settled — render-gate for the card.
+   * Resolves on BOTH success and failure (see `load()`'s `finally`), so a
+   * failed read never leaves the card stuck on its skeleton.
+   */
   readonly loaded = this._loaded.asReadonly();
   /**
    * True when the last `load()` attempt threw (e.g. Firestore offline / read
@@ -67,14 +71,19 @@ export class SyncStatusService {
       this._lastRun.set(
         first ? dataToSyncRun(first.data() as SyncRunReadData) : null,
       );
-      this._loaded.set(true);
     } catch (error) {
       // Best-effort: the "Last synced" card is non-blocking observability. A
       // failed read leaves `lastRun` null (renders as never-synced) and never
-      // surfaces an error. `_loaded` stays false; the card treats failed and
-      // never-synced identically.
+      // surfaces an error. `_loadFailed` is set for observability only.
       console.error('[SyncStatusService] load() failed:', error);
       this._loadFailed.set(true);
+    } finally {
+      // ALWAYS resolve the render-gate — on success AND on failure. With
+      // `lastRun` left null on a failed read, the card then renders identically
+      // to never-synced (sync-outline / "Never synced"), never a perpetual
+      // skeleton. This is the spec's pinned contract: loadFailed renders the
+      // same as never-synced.
+      this._loaded.set(true);
     }
   }
 }

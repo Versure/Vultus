@@ -117,7 +117,7 @@ describe('SyncStatusService', () => {
     );
   });
 
-  it('a rejecting read → loadFailed() true, lastRun() stays null', async () => {
+  it('a rejecting read → loadFailed() true, lastRun() null, render-gate resolved', async () => {
     getDocsMock.mockRejectedValue(new Error('permission-denied'));
     const service = createService();
 
@@ -125,6 +125,8 @@ describe('SyncStatusService', () => {
 
     expect(service.loadFailed()).toBe(true);
     expect(service.lastRun()).toBeNull();
-    expect(service.loaded()).toBe(false);
+    // The render-gate MUST resolve on failure (set in `finally`) so the card
+    // falls back to the never-synced display instead of a perpetual skeleton.
+    expect(service.loaded()).toBe(true);
   });
 });

@@ -107,11 +107,26 @@ describe('SyncStatusCardComponent', () => {
   });
 
   it('load-failed renders identically to never-synced (no error affordance)', async () => {
-    // The service leaves lastRun null on failure; the card cannot tell the
-    // difference and must show no banner/toast/error string.
-    const { el } = await setup(mockService(null, false, true));
-    // loaded() is false on failure → skeleton (no stale content, no error text).
-    expect(el.querySelector('ion-skeleton-text')).toBeTruthy();
+    // On a failed read the service resolves the render-gate (loaded=true) while
+    // leaving lastRun null, so the card renders the never-synced display — NOT a
+    // perpetual skeleton — and shows no banner/toast/error string.
+    const { el } = await setup(mockService(null, true, true));
+    // No skeleton: the render-gate resolved on failure.
+    expect(el.querySelector('ion-skeleton-text')).toBeFalsy();
+    // Byte-identical to never-synced: "Last synced" title + "Never synced"
+    // helper + sync-outline, no chip.
+    expect(el.querySelector('.sync-card__title')?.textContent?.trim()).toBe(
+      'Last synced',
+    );
+    expect(el.querySelector('.settings-row__helper')?.textContent?.trim()).toBe(
+      'Never synced',
+    );
+    expect(el.querySelector('.sync-card__chip')).toBeFalsy();
+    expect(el.querySelector('ion-icon')?.getAttribute('name')).toBe(
+      'sync-outline',
+    );
+    // No error affordance anywhere.
+    expect(el.textContent).not.toContain('gathered');
     expect(el.textContent?.toLowerCase()).not.toContain('error');
     expect(el.textContent?.toLowerCase()).not.toContain('failed');
     expect(el.textContent?.toLowerCase()).not.toContain('retry');
