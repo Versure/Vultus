@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { HttpsError } from 'firebase-functions/https';
 import type {
   SyncEngine,
@@ -19,9 +19,12 @@ import {
 // store) — never users/** writes, never system/sync. ---
 function createFakeDb(opts: {
   watchlist: { tmdbId: number; type: 'movie' | 'tv' }[];
+  /** When set, `sync-runs/...doc().set()` rejects with this error (best-effort). */
+  failSyncRunWrite?: Error;
 }) {
   const writes: { path: string; data: unknown }[] = [];
   const collectionPaths: string[] = [];
+  let autoIdCounter = 0;
 
   const db = {
     collection: (path: string) => {
@@ -31,6 +34,21 @@ function createFakeDb(opts: {
           Promise.resolve({
             docs: opts.watchlist.map((w) => ({ data: () => w })),
           }),
+        // Auto-id child doc — supports writeSyncRun's `.doc().set()`.
+        doc: () => {
+          const id = `auto-${++autoIdCounter}`;
+          const childPath = `${path}/${id}`;
+          return {
+            id,
+            set: (data: unknown) => {
+              if (path === 'sync-runs' && opts.failSyncRunWrite) {
+                return Promise.reject(opts.failSyncRunWrite);
+              }
+              writes.push({ path: childPath, data });
+              return Promise.resolve();
+            },
+          };
+        },
       };
     },
     doc: (path: string) => ({
@@ -178,6 +196,106 @@ describe('runTriggerSync handler wiring', () => {
     expect(typeof body.syncedAt).toBe('string');
     // The per-title reason never leaks into the response.
     expect(JSON.stringify(body)).not.toContain('boom');
+  });
+
+  it('writes a sync-runs record with kind:manual, userId:<uid>, counts mapped, injected durationMs; { syncedAt } unchanged', async () => {
+    const { db, writes } = createFakeDb({
+      watchlist: [
+        { tmdbId: 1, type: 'movie' },
+        { tmdbId: 2, type: 'movie' },
+        { tmdbId: 3, type: 'movie' },
+      ],
+    });
+    const mixed = createFakeEngine((inputs) =>
+      inputs.map((input, i) =>
+        i === 1
+          ? { ...input, outcome: 'error', transitions: [], reason: 'boom' }
+          : syncedResult(input),
+      ),
+    );
+    const start = Date.parse('2026-06-30T10:00:00.000Z');
+    const end = start + 1234;
+    const clock = vi
+      .fn<() => number>()
+      .mockReturnValueOnce(start)
+      .mockReturnValue(end);
+
+    const body = await runTriggerSync(
+      { db, createEngine: () => mixed.engine, now: clock },
+      'user-1',
+    );
+
+    // { syncedAt } response is UNCHANGED (exactly one ISO string key).
+    expect(Object.keys(body)).toEqual(['syncedAt']);
+    expect(new Date(body.syncedAt).toISOString()).toBe(body.syncedAt);
+
+    const runWrite = writes.find((w) => w.path.startsWith('sync-runs/'));
+    expect(runWrite).toBeDefined();
+    const data = runWrite?.data as {
+      runId: string;
+      kind: string;
+      userId: string | null;
+      startedAt: Date;
+      completedAt: Date;
+      durationMs: number;
+      titlesGathered: number;
+      titlesUpdated: number;
+      errorCount: number;
+      errors: string[];
+    };
+    expect(data.kind).toBe('manual');
+    expect(data.userId).toBe('user-1');
+    expect(data.runId).toBe(runWrite?.path.split('/')[1]); // runId == doc id
+    expect(data.titlesGathered).toBe(3); // inputs.length
+    expect(data.titlesUpdated).toBe(2);
+    expect(data.errorCount).toBe(1);
+    expect(data.durationMs).toBe(end - start); // injected clock
+    expect(data.startedAt.toISOString()).toBe(new Date(start).toISOString());
+    expect(data.completedAt.toISOString()).toBe(new Date(end).toISOString());
+    // The per-title reason never leaks (errors stay credential-free / capped).
+    expect(data.errors).toEqual(['boom']);
+  });
+
+  it('manual path: sync-runs errors are capped at 10', async () => {
+    const titles = Array.from({ length: 14 }, (_, i) => ({
+      tmdbId: i + 1,
+      type: 'movie' as const,
+    }));
+    const { db, writes } = createFakeDb({ watchlist: titles });
+    const allErrors = createFakeEngine((inputs) =>
+      inputs.map((input, i) => ({
+        ...input,
+        outcome: 'error' as const,
+        transitions: [],
+        reason: `reason-${i}`,
+      })),
+    );
+
+    await runTriggerSync(
+      { db, createEngine: () => allErrors.engine },
+      'user-1',
+    );
+
+    const runWrite = writes.find((w) => w.path.startsWith('sync-runs/'));
+    const data = runWrite?.data as { errorCount: number; errors: string[] };
+    expect(data.errorCount).toBe(14);
+    expect(data.errors).toHaveLength(10);
+  });
+
+  it('BEST-EFFORT: a failing sync-runs write is non-fatal — runTriggerSync still resolves { syncedAt }', async () => {
+    const { db } = createFakeDb({
+      watchlist: [{ tmdbId: 603, type: 'movie' }],
+      failSyncRunWrite: new Error('sync-runs write boom'),
+    });
+    const factory = createFakeEngine((inputs) => inputs.map(syncedResult));
+
+    const body = await runTriggerSync(
+      { db, createEngine: () => factory.engine },
+      'user-1',
+    );
+
+    expect(typeof body.syncedAt).toBe('string');
+    expect(new Date(body.syncedAt).toISOString()).toBe(body.syncedAt);
   });
 
   it('REGRESSION: syncTitles and dispatchNotifications remain exported', () => {

@@ -1,0 +1,38 @@
+<!--
+  "Last synced" card (spec 0049) — a read-only sibling of the Region /
+  Notifications cards. Reuses the page's .settings-card / .settings-row /
+  .settings-row__icon / .settings-row__body / .settings-row__helper classes (the
+  page-level SCSS owns them) so the three cards align in the stack. This SCSS
+  only adds the sync-specific title row + error chip.
+
+  Non-interactive: no click handler, no focusable control.
+-->
+@if (loading()) {
+  <div class="settings-card" aria-hidden="true">
+    <ion-skeleton-text
+      [animated]="true"
+      class="sync-card__skeleton"
+    ></ion-skeleton-text>
+  </div>
+} @else {
+  <div class="settings-card">
+    <div class="settings-row">
+      <div
+        class="settings-row__icon"
+        [class.sync-card__icon--error]="hasErrors()"
+        aria-hidden="true"
+      >
+        <ion-icon [name]="iconName()"></ion-icon>
+      </div>
+      <div class="settings-row__body">
+        <div class="sync-card__title-row">
+          <span class="sync-card__title">Last synced</span>
+          @if (errorChipLabel(); as chip) {
+            <span class="sync-card__chip">{{ chip }}</span>
+          }
+        </div>
+        <p class="settings-row__helper">{{ valueLine() }}</p>
+      </div>
+    </div>
+  </div>
+}

@@ -24,6 +24,8 @@ Per-document read/write shapes for the Firestore wire boundary:
 | `NotificationWriteData`       | write     |                                                                    |
 | `TitleCacheReadData`          | read      |                                                                    |
 | `TitleCacheWriteData`         | write     |                                                                    |
+| `SyncRunReadData`             | read      | `startedAt`/`completedAt` as `FirestoreTimestampLike`              |
+| `SyncRunWriteData`            | write     | `startedAt`/`completedAt` as `Date`                                |
 | `RegionAvailabilityReadData`  | read      |                                                                    |
 | `RegionAvailabilityWriteData` | write     |                                                                    |
 
@@ -36,6 +38,7 @@ Pure functions mapping domain types to/from their Firestore wire shapes:
 - `userToData` / `dataToUser`
 - `notificationToData` / `dataToNotification`
 - `titleCacheToData` / `dataToTitleCache`
+- `syncRunToData` / `dataToSyncRun` — `SyncRun` ↔ `SyncRunWriteData`/`SyncRunReadData`; only `startedAt`/`completedAt` cross the Timestamp boundary, all other fields pass through (spec 0049).
 - `availabilityToData` / `dataToAvailability`
 
 ### Paths (`./lib/paths`)
@@ -44,7 +47,7 @@ Path-builder functions for every PLAN §4 Firestore path:
 
 `userPath`, `watchlistPath`, `watchlistItemPath`, `episodesPath`, `episodePath`,
 `notificationsPath`, `notificationPath`, `titleCachePath`, `titleCacheDocPath`,
-`availabilityPath`, `availabilityDocPath`.
+`availabilityPath`, `availabilityDocPath`, `syncRunsCollection`, `syncRunDocPath`.
 
 ## Usage
 

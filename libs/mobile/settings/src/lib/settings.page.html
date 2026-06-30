@@ -85,6 +85,13 @@
           </div>
         </div>
       </div>
+
+      <!--
+        Read-only "Last synced" status card (spec 0049). Sits below the
+        user-changeable controls; self-loads its own sync-runs query in its
+        ngOnInit. Non-interactive (no control).
+      -->
+      <lib-sync-status-card></lib-sync-status-card>
     </div>
   </div>
   } @else {

@@ -120,6 +120,32 @@ export interface TitleCacheWriteData {
   lastSyncedAt: Date;
 }
 
+// --- SyncRun: startedAt + completedAt; everything else passes through ---
+export interface SyncRunReadData {
+  runId: string;
+  kind: 'cron' | 'manual';
+  userId: string | null;
+  startedAt: FirestoreTimestampLike;
+  completedAt: FirestoreTimestampLike;
+  durationMs: number;
+  titlesGathered: number;
+  titlesUpdated: number;
+  errorCount: number;
+  errors: string[];
+}
+export interface SyncRunWriteData {
+  runId: string;
+  kind: 'cron' | 'manual';
+  userId: string | null;
+  startedAt: Date;
+  completedAt: Date;
+  durationMs: number;
+  titlesGathered: number;
+  titlesUpdated: number;
+  errorCount: number;
+  errors: string[];
+}
+
 // --- RegionAvailability: lastSyncedAt; providers + previousSnapshot pass through ---
 export interface RegionAvailabilityReadData {
   providers: WatchProvider[];

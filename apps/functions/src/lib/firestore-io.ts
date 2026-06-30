@@ -11,7 +11,12 @@
  */
 import type { Firestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
-import { COLLECTIONS } from '@vultus/shared/firestore-schema';
+import {
+  COLLECTIONS,
+  syncRunsCollection,
+  syncRunToData,
+} from '@vultus/shared/firestore-schema';
+import type { SyncRun } from '@vultus/shared/domain';
 import type { GatheredTitle } from './gather';
 
 /** Top-level rate-limit / idempotency doc path (`system/sync`). */
@@ -59,4 +64,15 @@ export async function writeSyncState(
 /** Verify a Firebase Auth ID token via the Admin SDK. Rejects on invalid. */
 export async function verifyIdToken(token: string): Promise<unknown> {
   return getAuth().verifyIdToken(token);
+}
+
+/** Write one completed sync run to `sync-runs/{runId}` (auto-id == runId). */
+export async function writeSyncRun(
+  db: Firestore,
+  run: Omit<SyncRun, 'runId'>,
+): Promise<string> {
+  const ref = db.collection(syncRunsCollection()).doc(); // auto-id
+  const runId = ref.id;
+  await ref.set(syncRunToData({ ...run, runId }));
+  return runId;
 }

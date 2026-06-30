@@ -1,6 +1,7 @@
 import { Injectable, signal } from '@angular/core';
-import { REGIONS, type Region } from '@vultus/shared/domain';
+import { REGIONS, type Region, type SyncRun } from '@vultus/shared/domain';
 import { SettingsService } from './settings.service';
+import { SyncStatusService } from './sync-status.service';
 
 /**
  * Mock settings service for the `mock` build profile (spec 0018).
@@ -40,6 +41,44 @@ class MockSettingsServiceImpl {
   }
 }
 
+/**
+ * Mock sync-status service for the `mock` build profile (spec 0049).
+ *
+ * Structurally mirrors `SyncStatusService`'s public surface (`lastRun`,
+ * `loaded`, `loadFailed` signals + `load()`) with NO Firebase. Seeded with a
+ * plausible recent SUCCESS run (~2h ago, 12 gathered / 3 updated, no errors) so
+ * `mobile:serve-mock` renders the success state. Flip `SEEDED_RUN` to `null` to
+ * eyeball never-synced, or bump `errorCount` to eyeball the with-errors chip.
+ */
+const SEEDED_RUN: SyncRun | null = {
+  runId: 'mock-run-1',
+  kind: 'cron',
+  userId: null,
+  startedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+  completedAt: new Date(Date.now() - 2 * 60 * 60 * 1000 + 45_000).toISOString(),
+  durationMs: 45_000,
+  titlesGathered: 12,
+  titlesUpdated: 3,
+  errorCount: 0,
+  errors: [],
+};
+
+@Injectable()
+class MockSyncStatusServiceImpl {
+  private readonly _lastRun = signal<SyncRun | null>(SEEDED_RUN);
+  private readonly _loaded = signal<boolean>(true);
+  private readonly _loadFailed = signal<boolean>(false);
+
+  readonly lastRun = this._lastRun.asReadonly();
+  readonly loaded = this._loaded.asReadonly();
+  readonly loadFailed = this._loadFailed.asReadonly();
+
+  load(): Promise<void> {
+    return Promise.resolve();
+  }
+}
+
 export const SETTINGS_PROVIDERS = [
   { provide: SettingsService, useClass: MockSettingsServiceImpl },
+  { provide: SyncStatusService, useClass: MockSyncStatusServiceImpl },
 ] as const;

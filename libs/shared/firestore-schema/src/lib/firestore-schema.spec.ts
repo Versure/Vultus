@@ -4,6 +4,7 @@ import type {
   EpisodeDoc,
   NotificationDoc,
   RegionAvailability,
+  SyncRun,
   TitleCacheEntry,
   User,
   WatchlistItem,
@@ -15,11 +16,13 @@ import {
   dataToAvailability,
   dataToEpisode,
   dataToNotification,
+  dataToSyncRun,
   dataToTitleCache,
   dataToUser,
   dataToWatchlistItem,
   episodeToData,
   notificationToData,
+  syncRunToData,
   titleCacheToData,
   userToData,
   watchlistItemToData,
@@ -31,6 +34,8 @@ import {
   episodesPath,
   notificationPath,
   notificationsPath,
+  syncRunDocPath,
+  syncRunsCollection,
   titleCacheDocPath,
   titleCachePath,
   userPath,
@@ -327,6 +332,42 @@ describe('converters — round-trip identity', () => {
       dataToAvailability(simulateStored(availabilityToData(a)) as never),
     ).toEqual(a);
   });
+
+  it('SyncRun: cron run, userId null, empty errors', () => {
+    const run: SyncRun = {
+      runId: 'run-1',
+      kind: 'cron',
+      userId: null,
+      startedAt: '2026-06-30T01:00:00.000Z',
+      completedAt: '2026-06-30T01:02:30.000Z',
+      durationMs: 150000,
+      titlesGathered: 12,
+      titlesUpdated: 3,
+      errorCount: 0,
+      errors: [],
+    };
+    expect(dataToSyncRun(simulateStored(syncRunToData(run)) as never)).toEqual(
+      run,
+    );
+  });
+
+  it('SyncRun: manual run, userId string, populated errors', () => {
+    const run: SyncRun = {
+      runId: 'run-2',
+      kind: 'manual',
+      userId: 'uid-abc',
+      startedAt: '2026-06-30T10:15:00.000Z',
+      completedAt: '2026-06-30T10:15:08.000Z',
+      durationMs: 8000,
+      titlesGathered: 5,
+      titlesUpdated: 4,
+      errorCount: 2,
+      errors: ['TMDB 429 for 603', 'Trakt timeout for 1399'],
+    };
+    expect(dataToSyncRun(simulateStored(syncRunToData(run)) as never)).toEqual(
+      run,
+    );
+  });
 });
 
 describe('converters — directional spot-checks', () => {
@@ -351,6 +392,21 @@ describe('converters — directional spot-checks', () => {
     };
     expect(episodeToData(ep).airDate).toBeInstanceOf(Date);
     expect(episodeToData(ep).watchedAt).toBeInstanceOf(Date);
+
+    const run: SyncRun = {
+      runId: 'run-3',
+      kind: 'cron',
+      userId: null,
+      startedAt: '2026-06-30T01:00:00.000Z',
+      completedAt: '2026-06-30T01:02:30.000Z',
+      durationMs: 150000,
+      titlesGathered: 0,
+      titlesUpdated: 0,
+      errorCount: 0,
+      errors: [],
+    };
+    expect(syncRunToData(run).startedAt).toBeInstanceOf(Date);
+    expect(syncRunToData(run).completedAt).toBeInstanceOf(Date);
   });
 
   it('read emits ISO string', () => {
@@ -384,6 +440,8 @@ describe('path builders — equality', () => {
     expect(availabilityDocPath(603, 'NL')).toBe(
       'title-cache/603/availability/NL',
     );
+    expect(syncRunsCollection()).toBe('sync-runs');
+    expect(syncRunDocPath('abc')).toBe('sync-runs/abc');
   });
 
   it('document paths have even segment counts; collection paths odd', () => {
@@ -395,6 +453,7 @@ describe('path builders — equality', () => {
       notificationsPath('u1'),
       titleCachePath(),
       availabilityPath(603),
+      syncRunsCollection(),
     ];
     const documentPaths = [
       userPath('u1'),
@@ -403,6 +462,7 @@ describe('path builders — equality', () => {
       notificationPath('u1', 'n2'),
       titleCacheDocPath(603),
       availabilityDocPath(603, 'NL'),
+      syncRunDocPath('abc'),
     ];
 
     for (const p of collectionPaths) {
