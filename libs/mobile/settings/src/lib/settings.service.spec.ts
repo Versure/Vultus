@@ -41,11 +41,19 @@ function existingDoc(data: {
     episodeAired: boolean;
     movieAvailable: boolean;
     cameToPlatform: boolean;
+    deliveryHour?: number | null;
   };
 }): SnapLike {
   return {
     exists: () => true,
-    data: () => ({ ...data, fcmTokens: [] }),
+    data: () => ({
+      ...data,
+      notificationPrefs: {
+        deliveryHour: null,
+        ...data.notificationPrefs,
+      },
+      fcmTokens: [],
+    }),
   };
 }
 
@@ -108,11 +116,13 @@ describe('SettingsService', () => {
         episodeAired: true,
         movieAvailable: true,
         cameToPlatform: true,
+        deliveryHour: null,
       },
       fcmTokens: [],
     });
     expect(service.region()).toBe('NL');
     expect(service.notificationsEnabled()).toBe(true);
+    expect(service.deliveryHour()).toBe(null);
     expect(service.loaded()).toBe(true);
   });
 
@@ -201,6 +211,7 @@ describe('SettingsService', () => {
         episodeAired: false,
         movieAvailable: false,
         cameToPlatform: false,
+        deliveryHour: null,
       },
     });
     expect(Object.keys(payload as object)).not.toContain('fcmTokens');
@@ -218,18 +229,140 @@ describe('SettingsService', () => {
         episodeAired: true,
         movieAvailable: true,
         cameToPlatform: true,
+        deliveryHour: null,
       },
     });
     expect(Object.keys(payload as object)).not.toContain('fcmTokens');
     expect(service.notificationsEnabled()).toBe(true);
   });
 
-  it('null-uid guard: no Firestore access on load/setRegion/setNotificationsEnabled', async () => {
+  it('setNotificationsEnabled preserves the current deliveryHour (spec 0051)', async () => {
+    // Load an existing doc carrying a delivery hour, then toggle notifications.
+    getDocMock.mockResolvedValue(
+      existingDoc({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+          deliveryHour: 14,
+        },
+      }),
+    );
+    const service = createService(UID);
+    await service.load();
+    expect(service.deliveryHour()).toBe(14);
+
+    await service.setNotificationsEnabled(false);
+
+    const [, payload] = updateDocMock.mock.calls[0];
+    expect(payload).toEqual({
+      notificationPrefs: {
+        episodeAired: false,
+        movieAvailable: false,
+        cameToPlatform: false,
+        deliveryHour: 14,
+      },
+    });
+    // The delivery hour signal is untouched by the notifications toggle.
+    expect(service.deliveryHour()).toBe(14);
+  });
+
+  it('setDeliveryHour writes the whole prefs, preserving the three booleans', async () => {
+    // Load a doc whose booleans are NOT all-true so we can prove they survive.
+    getDocMock.mockResolvedValue(
+      existingDoc({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: false,
+          movieAvailable: true,
+          cameToPlatform: false,
+          deliveryHour: null,
+        },
+      }),
+    );
+    const service = createService(UID);
+    await service.load();
+
+    await service.setDeliveryHour(8);
+
+    expect(updateDocMock).toHaveBeenCalledTimes(1);
+    const [ref, payload] = updateDocMock.mock.calls[0];
+    expect(ref).toEqual({ path: USER_DOC });
+    expect(payload).toEqual({
+      notificationPrefs: {
+        episodeAired: false,
+        movieAvailable: true,
+        cameToPlatform: false,
+        deliveryHour: 8,
+      },
+    });
+    expect(Object.keys(payload as object)).not.toContain('fcmTokens');
+    expect(service.deliveryHour()).toBe(8);
+  });
+
+  it('setDeliveryHour(null) clears the delivery hour to "Any time"', async () => {
+    getDocMock.mockResolvedValue(
+      existingDoc({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+          deliveryHour: 9,
+        },
+      }),
+    );
+    const service = createService(UID);
+    await service.load();
+
+    await service.setDeliveryHour(null);
+
+    const [, payload] = updateDocMock.mock.calls[0];
+    expect(payload).toEqual({
+      notificationPrefs: {
+        episodeAired: true,
+        movieAvailable: true,
+        cameToPlatform: true,
+        deliveryHour: null,
+      },
+    });
+    expect(service.deliveryHour()).toBe(null);
+  });
+
+  it('load() reads deliveryHour into the signal from the user doc', async () => {
+    getDocMock.mockResolvedValue(
+      existingDoc({
+        region: 'DE',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+          deliveryHour: 21,
+        },
+      }),
+    );
+    const service = createService(UID);
+
+    await service.load();
+
+    expect(service.deliveryHour()).toBe(21);
+  });
+
+  it('deliveryHours exposes the 24 UTC hours 0..23', () => {
+    const service = createService(UID);
+    expect(service.deliveryHours.length).toBe(24);
+    expect(service.deliveryHours[0]).toBe(0);
+    expect(service.deliveryHours[23]).toBe(23);
+  });
+
+  it('null-uid guard: no Firestore access on load/setRegion/setNotificationsEnabled/setDeliveryHour', async () => {
     const service = createService(null);
 
     await service.load();
     await service.setRegion('DE');
     await service.setNotificationsEnabled(false);
+    await service.setDeliveryHour(8);
 
     expect(getDocMock).not.toHaveBeenCalled();
     expect(setDocMock).not.toHaveBeenCalled();

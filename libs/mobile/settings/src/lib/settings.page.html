@@ -87,6 +87,41 @@
       </div>
 
       <!--
+        Notification time (delivery hour) row — `ion-select` carries the real
+        behaviour (spec 0051). Disabled while the global Notifications toggle is
+        off, since there are no pushes to schedule.
+      -->
+      <div class="settings-card">
+        <div class="settings-row">
+          <div class="settings-row__icon" aria-hidden="true">
+            <ion-icon name="time-outline"></ion-icon>
+          </div>
+          <div class="settings-row__body">
+            <ion-select
+              class="settings-row__select"
+              label="Notification time"
+              labelPlacement="start"
+              interface="popover"
+              [value]="service.deliveryHour()"
+              [disabled]="!service.notificationsEnabled()"
+              (ionChange)="onDeliveryHourChange($event)"
+            >
+              <ion-select-option [value]="null">Any time</ion-select-option>
+              @for (hour of service.deliveryHours; track hour) {
+              <ion-select-option [value]="hour"
+                >{{ formatHour(hour) }}</ion-select-option
+              >
+              }
+            </ion-select>
+            <p class="settings-row__helper">
+              Pushes are only sent during this hour (UTC). Notifications still
+              appear in your inbox.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!--
         Read-only "Last synced" status card (spec 0049). Sits below the
         user-changeable controls; self-loads its own sync-runs query in its
         ngOnInit. Non-interactive (no control).

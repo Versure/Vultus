@@ -69,3 +69,18 @@ export function decideKinds(input: {
 
   return kinds;
 }
+
+/**
+ * True when an FCM push is allowed now for this delivery-hour preference.
+ * null = any time. Compares the user's chosen UTC hour to `now`'s UTC hour.
+ *
+ * `== null` (not `=== null`) is intentional: it catches both `null` and
+ * `undefined`, so legacy docs whose `deliveryHour` is absent are treated as
+ * "any time".
+ */
+export function isWithinDeliveryWindow(
+  deliveryHour: number | null,
+  now: Date,
+): boolean {
+  return deliveryHour == null || now.getUTCHours() === deliveryHour;
+}

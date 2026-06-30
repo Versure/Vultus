@@ -9,21 +9,28 @@ import { SyncStatusService } from './sync-status.service';
  * Build-time file replacement swaps `settings.providers.ts` for this file so
  * the Settings page renders with seeded data and no Firebase. It does NOT
  * extend `SettingsService` (that injects `Firestore` / `AUTH_UID`); it
- * structurally mirrors the public surface — `regions`, `region`,
- * `notificationsEnabled`, `loaded` signals and `load` / `setRegion` /
- * `setNotificationsEnabled` — with `loaded` pre-resolved (no spinner) and
- * sensible defaults for visual testing.
+ * structurally mirrors the public surface — `regions`, `deliveryHours`,
+ * `region`, `notificationsEnabled`, `deliveryHour`, `loaded` signals and
+ * `load` / `setRegion` / `setNotificationsEnabled` / `setDeliveryHour` — with
+ * `loaded` pre-resolved (no spinner) and sensible defaults for visual testing.
  */
 @Injectable()
 class MockSettingsServiceImpl {
   readonly regions: readonly Region[] = REGIONS;
+  readonly deliveryHours: readonly number[] = Array.from(
+    { length: 24 },
+    (_v, i) => i,
+  );
 
   private readonly _region = signal<Region | null>('NL');
   private readonly _notificationsEnabled = signal<boolean>(true);
+  // Seeded to "Any time" (null) so `mobile:serve-mock` renders the default.
+  private readonly _deliveryHour = signal<number | null>(null);
   private readonly _loaded = signal<boolean>(true);
 
   readonly region = this._region.asReadonly();
   readonly notificationsEnabled = this._notificationsEnabled.asReadonly();
+  readonly deliveryHour = this._deliveryHour.asReadonly();
   readonly loaded = this._loaded.asReadonly();
 
   load(): Promise<void> {
@@ -37,6 +44,11 @@ class MockSettingsServiceImpl {
 
   setNotificationsEnabled(enabled: boolean): Promise<void> {
     this._notificationsEnabled.set(enabled);
+    return Promise.resolve();
+  }
+
+  setDeliveryHour(hour: number | null): Promise<void> {
+    this._deliveryHour.set(hour);
     return Promise.resolve();
   }
 }

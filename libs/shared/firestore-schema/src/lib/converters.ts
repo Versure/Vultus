@@ -48,7 +48,13 @@ export function userToData(user: User): UserWriteData {
 export function dataToUser(data: UserReadData): User {
   return {
     region: data.region,
-    notificationPrefs: data.notificationPrefs,
+    notificationPrefs: {
+      episodeAired: data.notificationPrefs.episodeAired,
+      movieAvailable: data.notificationPrefs.movieAvailable,
+      cameToPlatform: data.notificationPrefs.cameToPlatform,
+      // Legacy docs (pre-0051) lack deliveryHour; coalesce missing → null.
+      deliveryHour: data.notificationPrefs.deliveryHour ?? null,
+    },
     fcmTokens: (data.fcmTokens ?? []).map(dataToFcmToken),
   };
 }

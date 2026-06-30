@@ -20,6 +20,7 @@ import {
   globeOutline,
   notificationsOutline,
   personCircleOutline,
+  timeOutline,
 } from 'ionicons/icons';
 import { SETTINGS_PROVIDERS } from './settings.providers';
 import { SettingsService } from './settings.service';
@@ -55,6 +56,7 @@ export class SettingsPage implements OnInit {
       notificationsOutline,
       filmOutline,
       personCircleOutline,
+      timeOutline,
     });
   }
 
@@ -74,5 +76,16 @@ export class SettingsPage implements OnInit {
     void this.service.setNotificationsEnabled(
       (event.detail as { checked: boolean }).checked,
     );
+  }
+
+  protected onDeliveryHourChange(event: CustomEvent): void {
+    void this.service.setDeliveryHour(
+      (event.detail as { value: number | null }).value,
+    );
+  }
+
+  /** Zero-pads an hour to `HH:00 UTC` (DecimalPipe is not imported here). */
+  protected formatHour(hour: number): string {
+    return `${String(hour).padStart(2, '0')}:00 UTC`;
   }
 }

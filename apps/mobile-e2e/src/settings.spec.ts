@@ -42,7 +42,9 @@ const REGIONS = ['NL', 'DE', 'GB', 'US', 'FR', 'BE', 'ES', 'IT', 'CA', 'AU'];
 async function gotoSettings(page: Page): Promise<void> {
   await page.locator('ion-tab-button[tab="settings"]').click();
   await page.waitForURL(/\/tabs\/settings$/);
-  await expect(page.locator('ion-select.settings-row__select')).toBeVisible();
+  await expect(
+    page.locator('ion-select.settings-row__select[label="Region"]'),
+  ).toBeVisible();
 }
 
 /**
@@ -54,7 +56,7 @@ async function gotoSettings(page: Page): Promise<void> {
  */
 async function selectedRegion(page: Page): Promise<string> {
   return page
-    .locator('ion-select.settings-row__select')
+    .locator('ion-select.settings-row__select[label="Region"]')
     .evaluate((el) => (el as unknown as { value: string }).value);
 }
 
@@ -70,7 +72,7 @@ async function selectedRegion(page: Page): Promise<string> {
  *   3. wait for the popover to dismiss (selection committed).
  */
 async function pickRegion(page: Page, region: string): Promise<void> {
-  await page.locator('ion-select.settings-row__select').click();
+  await page.locator('ion-select.settings-row__select[label="Region"]').click();
 
   // The popover renders `ion-select-popover` with one option row per region.
   const option = page

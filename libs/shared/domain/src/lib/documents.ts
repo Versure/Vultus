@@ -17,6 +17,10 @@ export interface NotificationPrefs {
   episodeAired: boolean;
   movieAvailable: boolean;
   cameToPlatform: boolean;
+  // Quiet-hours delivery preference (spec 0051). `null` = any time / no
+  // preference; a number 0–23 restricts delivery to that UTC hour. Required
+  // field: legacy docs lacking it map to `null` via the converter's `?? null`.
+  deliveryHour: number | null;
 }
 
 export interface User {

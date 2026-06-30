@@ -23,6 +23,7 @@ import {
   classifyFlatrateTransition,
   decideKinds,
   hasFlatrate,
+  isWithinDeliveryWindow,
   type FlatrateTransition,
 } from './transitions';
 
@@ -118,6 +119,19 @@ export function createNotificationDispatcher(
       isKindEnabled(kind, user.notificationPrefs),
     );
 
+    // Delivery-window gate (spec 0051): the FCM push is suppressed outside the
+    // user's chosen UTC hour, but the inbox doc is ALWAYS written (decision 3).
+    // Evaluated once per user against the single dispatch timestamp.
+    const withinWindow = isWithinDeliveryWindow(
+      user.notificationPrefs.deliveryHour,
+      new Date(timestamp),
+    );
+    if (!withinWindow) {
+      console.debug(
+        'Skipping FCM for uid ' + user.uid + ': outside delivery window',
+      );
+    }
+
     for (const kind of enabledKinds) {
       const doc: NotificationDoc = {
         titleId: user.titleId,
@@ -145,12 +159,14 @@ export function createNotificationDispatcher(
         tmdbId: String(change.tmdbId),
       };
 
-      for (const fcmToken of user.fcmTokens) {
-        const result = await fcm.send(fcmToken.token, data);
-        counters.fcmSent += 1;
-        if (result.unregistered) {
-          await watchlist.removeFcmToken(user.uid, fcmToken.token);
-          counters.staleTokensPruned += 1;
+      if (withinWindow) {
+        for (const fcmToken of user.fcmTokens) {
+          const result = await fcm.send(fcmToken.token, data);
+          counters.fcmSent += 1;
+          if (result.unregistered) {
+            await watchlist.removeFcmToken(user.uid, fcmToken.token);
+            counters.staleTokensPruned += 1;
+          }
         }
       }
     }
