@@ -2,7 +2,7 @@
 number: 0045
 slug: android-display-cutout
 title: Draw under the camera notch on Android (display-cutout mode)
-status: approved
+status: done
 slices: []
 scopes: [scope:mobile]
 created: 2026-06-30
