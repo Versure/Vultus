@@ -769,6 +769,166 @@ describe('TitleDetailService', () => {
     expect(getDocMock).not.toHaveBeenCalled();
     expect(updateDocMock).not.toHaveBeenCalled();
   });
+
+  it('auto-status: planned + last episode watched in one action → converges to completed (decision-3: via watching first)', async () => {
+    // All episodes end up watched, but status starts as 'planned'.
+    // Decision-3: planned→watching fires first, then watching+all→completed. Final: completed.
+    getDocsMock.mockResolvedValue(
+      docsSnap([
+        { id: 's01e01', season: 1, episode: 1, title: 'a', watched: true },
+      ]),
+    );
+    getDocMock.mockResolvedValue(watchlistSnap('planned'));
+    const service = createService(UID);
+    await service.setEpisodeWatched(2, 's01e01', true);
+    const statusCalls = updateDocMock.mock.calls.filter(
+      (c) => c[0].path === watchlistItemPath(UID, '2'),
+    );
+    // Both writes happen in a single autoUpdateStatus pass: watching, then completed.
+    expect(statusCalls.length).toBe(2);
+    expect(statusCalls[0][1]).toEqual({ status: 'watching' });
+    expect(statusCalls[1][1]).toEqual({ status: 'completed' });
+  });
+
+  it('auto-status: planned + only one of multiple episodes marked → watching (NOT completed)', async () => {
+    getDocsMock.mockResolvedValue(
+      docsSnap([
+        { id: 's01e01', season: 1, episode: 1, title: 'a', watched: true },
+        { id: 's01e02', season: 1, episode: 2, title: 'b', watched: false },
+      ]),
+    );
+    getDocMock.mockResolvedValue(watchlistSnap('planned'));
+    const service = createService(UID);
+    await service.setEpisodeWatched(2, 's01e01', true);
+    const statusCalls = updateDocMock.mock.calls.filter(
+      (c) => c[0].path === watchlistItemPath(UID, '2'),
+    );
+    // Only watching, not completed.
+    expect(statusCalls.length).toBe(1);
+    expect(statusCalls[0][1]).toEqual({ status: 'watching' });
+  });
+
+  it('auto-status: completed already + episode re-marked → NO redundant completed write', async () => {
+    getDocsMock.mockResolvedValue(
+      docsSnap([
+        { id: 's01e01', season: 1, episode: 1, title: 'a', watched: true },
+        { id: 's01e02', season: 1, episode: 2, title: 'b', watched: true },
+      ]),
+    );
+    getDocMock.mockResolvedValue(watchlistSnap('completed'));
+    const service = createService(UID);
+    await service.setEpisodeWatched(2, 's01e01', true);
+    const statusCalls = updateDocMock.mock.calls.filter(
+      (c) => c[0].path === watchlistItemPath(UID, '2'),
+    );
+    expect(statusCalls.length).toBe(0);
+  });
+
+  it('auto-status: empty subcollection → NO completed write (total=0 guard)', async () => {
+    getDocsMock.mockResolvedValue(docsSnap([]));
+    getDocMock.mockResolvedValue(watchlistSnap('watching'));
+    const service = createService(UID);
+    await service.setEpisodeWatched(2, 's01e01', true);
+    const statusCalls = updateDocMock.mock.calls.filter(
+      (c) => c[0].path === watchlistItemPath(UID, '2'),
+    );
+    expect(statusCalls.length).toBe(0);
+  });
+
+  describe('revertIfNewEpisodes', () => {
+    it('completed TV + ≥1 unwatched episode → writes watching', async () => {
+      getDocMock.mockResolvedValue(watchlistSnap('completed'));
+      getDocsMock.mockResolvedValue(
+        docsSnap([
+          { id: 's01e01', season: 1, episode: 1, title: 'a', watched: true },
+          { id: 's01e02', season: 1, episode: 2, title: 'b', watched: false },
+        ]),
+      );
+      const service = createService(UID);
+      await service.revertIfNewEpisodes(2, 'tv');
+      expect(updateDocMock).toHaveBeenCalledWith(
+        { path: watchlistItemPath(UID, '2') },
+        { status: 'watching' },
+      );
+    });
+
+    it('completed TV + all episodes watched → NO write', async () => {
+      getDocMock.mockResolvedValue(watchlistSnap('completed'));
+      getDocsMock.mockResolvedValue(
+        docsSnap([
+          { id: 's01e01', season: 1, episode: 1, title: 'a', watched: true },
+        ]),
+      );
+      const service = createService(UID);
+      await service.revertIfNewEpisodes(2, 'tv');
+      expect(updateDocMock).not.toHaveBeenCalled();
+    });
+
+    it('watching status → NO write (only reverts from completed)', async () => {
+      getDocMock.mockResolvedValue(watchlistSnap('watching'));
+      getDocsMock.mockResolvedValue(
+        docsSnap([
+          { id: 's01e01', season: 1, episode: 1, title: 'a', watched: false },
+        ]),
+      );
+      const service = createService(UID);
+      await service.revertIfNewEpisodes(2, 'tv');
+      expect(updateDocMock).not.toHaveBeenCalled();
+    });
+
+    it('planned status → NO write', async () => {
+      getDocMock.mockResolvedValue(watchlistSnap('planned'));
+      getDocsMock.mockResolvedValue(
+        docsSnap([
+          { id: 's01e01', season: 1, episode: 1, title: 'a', watched: false },
+        ]),
+      );
+      const service = createService(UID);
+      await service.revertIfNewEpisodes(2, 'tv');
+      expect(updateDocMock).not.toHaveBeenCalled();
+    });
+
+    it('movie type → no-op (no getDocs, no updateDoc)', async () => {
+      const service = createService(UID);
+      await service.revertIfNewEpisodes(2, 'movie');
+      expect(getDocMock).not.toHaveBeenCalled();
+      expect(getDocsMock).not.toHaveBeenCalled();
+      expect(updateDocMock).not.toHaveBeenCalled();
+    });
+
+    it('null uid → no-op', async () => {
+      const service = createService(null);
+      await service.revertIfNewEpisodes(2, 'tv');
+      expect(getDocMock).not.toHaveBeenCalled();
+      expect(updateDocMock).not.toHaveBeenCalled();
+    });
+
+    it('completed TV + empty subcollection → NO write', async () => {
+      getDocMock.mockResolvedValue(watchlistSnap('completed'));
+      getDocsMock.mockResolvedValue(docsSnap([]));
+      const service = createService(UID);
+      await service.revertIfNewEpisodes(2, 'tv');
+      expect(updateDocMock).not.toHaveBeenCalled();
+    });
+
+    it('no write targets anything but the watchlist doc (never episodes, never title-cache)', async () => {
+      getDocMock.mockResolvedValue(watchlistSnap('completed'));
+      getDocsMock.mockResolvedValue(
+        docsSnap([
+          { id: 's01e01', season: 1, episode: 1, title: 'a', watched: false },
+        ]),
+      );
+      const service = createService(UID);
+      await service.revertIfNewEpisodes(2, 'tv');
+      for (const [ref] of updateDocMock.mock.calls) {
+        expect(ref.path).toMatch(
+          new RegExp(`^${userPath(UID)}/watchlist/\\d+$`),
+        );
+        expect(ref.path).not.toContain('episodes');
+        expect(ref.path).not.toContain('title-cache');
+      }
+    });
+  });
 });
 
 /** Episode read-data builder for episodes$ (collectionData) tests. */

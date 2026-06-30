@@ -381,10 +381,50 @@ export class TitleDetailService {
   }
 
   /**
+   * Page-init auto-revert for TV (spec 0050, decision 4): if a `'completed'` TV
+   * show's episodes subcollection contains at least one `watched: false` episode
+   * (e.g. new episodes added by the spec-0047 sync), silently revert the status
+   * to `'watching'`. No toast / no user-facing message — the tracked$ badge
+   * updates reactively. No-op on movies, null uid, non-`'completed'` status, or
+   * an empty subcollection. One-shot reads (the watchlist doc + episodes).
+   */
+  async revertIfNewEpisodes(tmdbId: number, type: TitleType): Promise<void> {
+    if (type !== 'tv') {
+      return;
+    }
+    const uid = this.uid();
+    if (!uid) {
+      return;
+    }
+    const status = await this.currentStatus(uid, tmdbId);
+    if (status !== 'completed') {
+      return;
+    }
+    const snap = await getDocs(
+      collection(this.firestore, episodesPath(uid, String(tmdbId))),
+    );
+    if (snap.docs.length === 0) {
+      return;
+    }
+    const hasUnwatched = snap.docs.some((d) => {
+      const ep = dataToEpisode(d.data() as EpisodeReadData);
+      return !ep.watched;
+    });
+    if (hasUnwatched) {
+      await this.updateStatus(tmdbId, 'watching');
+    }
+  }
+
+  /**
    * Re-derive the watchlist status from the episodes' current watched-state
-   * after an episode/season write (spec 0034). NEVER touches a `dropped` title.
+   * after an episode/season write (spec 0034, refined by spec 0050). NEVER
+   * touches a `dropped` title. The advance order matters (spec 0050 decision 3):
+   * `planned → watching` is evaluated FIRST, so `completed` is only ever reached
+   * from an effective `'watching'` status, never directly from `'planned'`.
    * - first episode watched while `planned` → `watching` (and remember WE did it)
-   * - all episodes watched (total > 0) → `completed`
+   * - all episodes watched (total > 0) WHILE effective status is `'watching'` →
+   *   `completed` (a `planned` title marked all-at-once converges in one pass:
+   *   `planned → watching → completed`)
    * - back to zero watched, and WE auto-set `watching` earlier → `planned`
    * One-shot reads (episodes + the watchlist doc); no-op on null uid.
    */
@@ -393,7 +433,7 @@ export class TitleDetailService {
     if (!uid) {
       return;
     }
-    const status = await this.currentStatus(uid, tmdbId);
+    let status = await this.currentStatus(uid, tmdbId);
     if (status === null || status === 'dropped') {
       return;
     }
@@ -410,15 +450,18 @@ export class TitleDetailService {
       }
     }
 
-    if (total > 0 && watchedCount === total) {
-      await this.updateStatus(tmdbId, 'completed');
-      return;
-    }
+    // Step 1: planned → watching (evaluate FIRST so completed comes via watching).
     if (watchedCount >= 1 && status === 'planned') {
       this.autoSetWatching.set(tmdbId, true);
       await this.updateStatus(tmdbId, 'watching');
+      status = 'watching'; // effective status for the next check
+    }
+    // Step 2: watching + all watched → completed (only reachable from watching).
+    if (total > 0 && watchedCount === total && status === 'watching') {
+      await this.updateStatus(tmdbId, 'completed');
       return;
     }
+    // Step 3: un-watch to zero → planned, but only if WE auto-set watching.
     if (watchedCount === 0 && this.autoSetWatching.get(tmdbId) === true) {
       this.autoSetWatching.delete(tmdbId);
       await this.updateStatus(tmdbId, 'planned');
