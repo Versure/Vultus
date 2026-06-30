@@ -12,6 +12,7 @@ import {
   IonIcon,
   IonRefresher,
   IonRefresherContent,
+  IonSearchbar,
   IonSpinner,
   IonTitle,
   IonToolbar,
@@ -23,6 +24,7 @@ import {
   notificationsOutline,
   personCircleOutline,
   refreshOutline,
+  swapVerticalOutline,
   trashOutline,
 } from 'ionicons/icons';
 import { AUTH_UID } from '@vultus/shared/domain/tokens';
@@ -42,18 +44,24 @@ import {
   BehaviorSubject,
   type Observable,
   catchError,
+  combineLatest,
+  debounceTime,
   map,
   of,
   shareReplay,
   startWith,
   switchMap,
+  tap,
 } from 'rxjs';
 import {
   STATUS_DISPLAY_ORDER,
   STATUS_LABELS,
   type StatusGroup,
+  type WatchlistSort,
   WatchlistService,
+  getAvailableProviders,
   groupByStatus,
+  sortItems,
 } from './watchlist.service';
 
 const TMDB_POSTER_BASE = 'https://image.tmdb.org/t/p/w185';
@@ -73,6 +81,7 @@ const TMDB_POSTER_BASE = 'https://image.tmdb.org/t/p/w185';
     IonRefresher,
     IonRefresherContent,
     IonSpinner,
+    IonSearchbar,
     IonAlert,
     IonActionSheet,
     VultusSkeletonCard,
@@ -99,9 +108,135 @@ export class WatchlistPage {
   /** Selected type filter — undefined = All, 'movie' = Movies, 'tv' = TV. */
   selectedType: TitleType | undefined = undefined;
 
+  /** Selected status-filter chip — null = All (default, show every group). */
+  selectedStatus: WatchStatus | null = null;
+
+  /** Selected sort mode (component-local, in-session only). Default newest-added. */
+  selectedSort: WatchlistSort = 'addedDesc';
+
+  /** Sort action-sheet open state. */
+  sortSheetOpen = false;
+
+  /**
+   * Selected provider names (multi-select, OR logic). Empty = show all
+   * (default). Component-local; never persisted.
+   */
+  selectedProviders = new Set<string>();
+
+  /**
+   * Latest snapshot of tmdbId → full provider-name list, filled in
+   * asynchronously as each card's `availability$` resolves (built from the SAME
+   * memoized `providerCache` streams — no new Firestore reads). Kept in sync by
+   * `availabilityMap$` for synchronous reads (tests / non-stream callers); the
+   * reactive pipeline consumes `availabilityMap$` directly.
+   */
+  availabilityMap = new Map<number, string[]>();
+
   // Drives re-subscription when the type filter changes.
   private readonly typeFilter$ = new BehaviorSubject<TitleType | undefined>(
     undefined,
+  );
+
+  // Debounced free-text search term (case-insensitive title substring).
+  private readonly searchTerm$ = new BehaviorSubject<string>('');
+
+  // Drives recomputation when status / provider / sort selections change.
+  private readonly filters$ = new BehaviorSubject<void>(undefined);
+
+  /** The user's region (for provider availability lookups). */
+  readonly region$: Observable<Region | null> = this.watchlistService
+    .userRegion$(this.uid())
+    .pipe(shareReplay({ bufferSize: 1, refCount: false }));
+
+  /**
+   * Type + text-search filtered items (no status/provider/sort applied yet),
+   * shared so both the provider-chip derivation and the final `vm$` pipeline
+   * read the same set. The provider chips and the `availabilityMap` are built
+   * from the cards in THIS set, so the chips reflect exactly what type+search
+   * leaves visible (composition order: type → search → [chips] → status →
+   * provider → sort).
+   */
+  private readonly typeSearchFiltered$: Observable<WatchlistItem[]> =
+    this.typeFilter$.pipe(
+      switchMap((type) =>
+        combineLatest([
+          this.watchlistService.watchlist$(this.uid(), type),
+          this.searchTerm$.pipe(debounceTime(200), startWith('')),
+        ]).pipe(
+          map(([items, term]) => {
+            const q = term.trim().toLowerCase();
+            return q
+              ? items.filter((i) => i.title.toLowerCase().includes(q))
+              : items;
+          }),
+        ),
+      ),
+      shareReplay({ bufferSize: 1, refCount: true }),
+    );
+
+  /**
+   * Live `availabilityMap` keyed by tmdbId, derived by combining the
+   * per-displayed-item `Observable<string[]>` streams (from the memoized
+   * `providerCache`) for the current type+search set. Each emission rebuilds
+   * the map; emits the same Map reference the page reads synchronously.
+   * Region-aware (re-derives when the user region resolves/changes).
+   */
+  private readonly availabilityMap$: Observable<Map<number, string[]>> =
+    combineLatest([this.typeSearchFiltered$, this.region$]).pipe(
+      switchMap(([items, region]) => {
+        if (items.length === 0) {
+          return of(new Map<number, string[]>());
+        }
+        return combineLatest(
+          items.map((item) =>
+            this.providerNames$(item, region).pipe(
+              map((names) => [item.tmdbId, names] as const),
+            ),
+          ),
+        ).pipe(map((entries) => new Map<number, string[]>(entries)));
+      }),
+      tap((map) => {
+        this.availabilityMap = map;
+      }),
+      // A watchlist-stream error is rendered by `vm$` (its own catchError);
+      // this auxiliary chip/availability stream just degrades to an empty map
+      // so the error never propagates uncaught from this parallel subscriber.
+      catchError(() => of(new Map<number, string[]>())),
+      shareReplay({ bufferSize: 1, refCount: true }),
+    );
+
+  /**
+   * Sorted, A→Z provider names available across the (type+search-filtered)
+   * cards — drives the provider-chip row. `[]` → the row is hidden.
+   */
+  readonly availableProviders$: Observable<string[]> = combineLatest([
+    this.typeSearchFiltered$,
+    this.availabilityMap$,
+  ]).pipe(
+    map(([items, map]) => getAvailableProviders(items, map)),
+    // Error → no chips (vm$ owns the error UI); never propagate uncaught.
+    catchError(() => of<string[]>([])),
+    shareReplay({ bufferSize: 1, refCount: true }),
+  );
+
+  /**
+   * Status-filter chip data: the non-empty groups of the
+   * type+search+provider-filtered set (BEFORE status narrowing), in
+   * `STATUS_DISPLAY_ORDER`, each with its count. The "All" chip is rendered
+   * unconditionally by the template; per-status chips render from this list.
+   * Counts therefore match what selecting the chip shows.
+   */
+  readonly statusChips$: Observable<StatusGroup[]> = combineLatest([
+    this.typeSearchFiltered$,
+    this.availabilityMap$,
+    this.filters$,
+  ]).pipe(
+    map(([items, availabilityMap]) =>
+      groupByStatus(this.applyProviderFilter(items, availabilityMap)),
+    ),
+    // Error → no chips (vm$ owns the error UI); never propagate uncaught.
+    catchError(() => of<StatusGroup[]>([])),
+    shareReplay({ bufferSize: 1, refCount: true }),
   );
 
   /**
@@ -112,21 +247,38 @@ export class WatchlistPage {
    * template renders the error state with a retry. Modelled as a stream (not a
    * mutated `loading` flag) so nothing changes component state during change
    * detection.
+   *
+   * Composition order (binding): type → search → [provider chips derived] →
+   * status → provider → sort. Status-chip counts reflect the
+   * type+search+provider-filtered set (i.e. what `groupByStatus` sees), so a
+   * chip's count matches what selecting it shows. Sort is applied PER group.
    */
   readonly vm$: Observable<{ groups: StatusGroup[] | null; error: boolean }> =
-    this.typeFilter$.pipe(
-      switchMap((type) =>
-        this.watchlistService.watchlist$(this.uid(), type).pipe(
-          map((items) => ({ groups: groupByStatus(items), error: false })),
-          catchError(() => of({ groups: null, error: true })),
-        ),
-      ),
+    combineLatest([
+      this.typeSearchFiltered$,
+      this.availabilityMap$,
+      this.filters$,
+    ]).pipe(
+      map(([items, availabilityMap]) => {
+        // Reconcile a stale selection against what's actually available so a
+        // provider that disappeared from the map can't strand a hidden filter.
+        const providerFiltered = this.applyProviderFilter(
+          items,
+          availabilityMap,
+        );
+        let groups = groupByStatus(providerFiltered);
+        if (this.selectedStatus !== null) {
+          groups = groups.filter((g) => g.status === this.selectedStatus);
+        }
+        groups = groups.map((g) => ({
+          ...g,
+          items: sortItems(g.items, this.selectedSort),
+        }));
+        return { groups, error: false };
+      }),
+      catchError(() => of({ groups: null, error: true })),
       startWith({ groups: null, error: false }),
     );
-
-  /** The user's region (for provider-badge availability lookups). */
-  readonly region$: Observable<Region | null> =
-    this.watchlistService.userRegion$(this.uid());
 
   /**
    * Unread-notification count for the header bell badge (spec 0042, decision 3).
@@ -162,6 +314,7 @@ export class WatchlistPage {
       notificationsOutline,
       personCircleOutline,
       refreshOutline,
+      swapVerticalOutline,
       trashOutline,
     });
   }
@@ -209,6 +362,93 @@ export class WatchlistPage {
   openStatusSheet(item: WatchlistItem): void {
     this.actionSheetItem = item;
     this.actionSheetOpen = true;
+  }
+
+  /** Sort action-sheet buttons: the six modes + Cancel. */
+  get sortSheetButtons() {
+    const options: { sort: WatchlistSort; text: string }[] = [
+      { sort: 'titleAsc', text: 'Title A → Z' },
+      { sort: 'titleDesc', text: 'Title Z → A' },
+      { sort: 'addedDesc', text: 'Date added (newest first)' },
+      { sort: 'addedAsc', text: 'Date added (oldest first)' },
+      { sort: 'releaseDesc', text: 'Release date (newest first)' },
+      { sort: 'releaseAsc', text: 'Release date (oldest first)' },
+    ];
+    return [
+      ...options.map((o) => ({
+        text: o.text,
+        handler: () => {
+          this.onSortSelected(o.sort);
+        },
+      })),
+      { text: 'Cancel', role: 'cancel' },
+    ];
+  }
+
+  /** Opens the sort action sheet (public — bound + tested). */
+  openSortSheet(): void {
+    this.sortSheetOpen = true;
+  }
+
+  /** Applies the chosen sort mode and re-runs the pipeline. */
+  onSortSelected(sort: WatchlistSort): void {
+    this.selectedSort = sort;
+    this.filters$.next();
+  }
+
+  /** Status-chip click — null = All; narrows the list to one group otherwise. */
+  onStatusChipClick(status: WatchStatus | null): void {
+    this.selectedStatus = status;
+    this.filters$.next();
+  }
+
+  /** Pushes a new search term into the debounced search stream. */
+  onSearchInput(term: string): void {
+    this.searchTerm$.next(term ?? '');
+  }
+
+  /** Toggles a provider in the multi-select filter and re-runs the pipeline. */
+  toggleProvider(name: string): void {
+    if (this.selectedProviders.has(name)) {
+      this.selectedProviders.delete(name);
+    } else {
+      this.selectedProviders.add(name);
+    }
+    this.filters$.next();
+  }
+
+  /** True when a provider chip is currently selected (template binding). */
+  isProviderSelected(name: string): boolean {
+    return this.selectedProviders.has(name);
+  }
+
+  /**
+   * Keeps an item when no provider is selected, OR when its providers (looked
+   * up by tmdbId in the availability map) intersect the selected set (OR logic).
+   * Reconciles `selectedProviders` against the currently-available names first
+   * so a provider that vanished from the map can't strand a hidden filter.
+   */
+  private applyProviderFilter(
+    items: WatchlistItem[],
+    availabilityMap: Map<number, string[]>,
+  ): WatchlistItem[] {
+    if (this.selectedProviders.size === 0) {
+      return items;
+    }
+    const available = getAvailableProviders(items, availabilityMap);
+    const reconciled = new Set(
+      [...this.selectedProviders].filter((p) => available.includes(p)),
+    );
+    if (reconciled.size !== this.selectedProviders.size) {
+      this.selectedProviders = reconciled;
+    }
+    if (reconciled.size === 0) {
+      return items;
+    }
+    return items.filter((item) => {
+      const names = availabilityMap.get(item.tmdbId) ?? [];
+      return names.some((n) => reconciled.has(n));
+    });
   }
 
   /** Plain-button filter click — updates selectedType and re-subscribes the stream. */
@@ -292,23 +532,40 @@ export class WatchlistPage {
    * an unbounded Listen-channel loop. Caching one shared instance per key keeps
    * the reference (and the underlying listener) stable across CD.
    */
-  private readonly providerCache = new Map<string, Observable<string | null>>();
+  private readonly providerCache = new Map<string, Observable<string[]>>();
 
-  /** First provider name for an item, in the user's region (badge). */
-  getProviderName$(
+  /**
+   * FULL provider-name list for an item, in the user's region — the single
+   * memoized source behind both the per-card badge (first name) and the
+   * `availabilityMap` (all names). `availability$` is called once per
+   * `tmdbId|region` and `shareReplay`'d, so no second Firestore Listen channel
+   * is opened (decision 12).
+   */
+  providerNames$(
     item: WatchlistItem,
     region: Region | null,
-  ): Observable<string | null> {
+  ): Observable<string[]> {
     const key = `${item.tmdbId}|${region ?? ''}`;
     let stream = this.providerCache.get(key);
     if (!stream) {
       stream = this.watchlistService.availability$(item.tmdbId, region).pipe(
-        map((a) => a?.providers[0]?.name ?? null),
+        map((a) => a?.providers.map((p) => p.name) ?? []),
         shareReplay({ bufferSize: 1, refCount: false }),
       );
       this.providerCache.set(key, stream);
     }
     return stream;
+  }
+
+  /** First provider name for an item, in the user's region (badge). Derived
+   *  from the same widened memoized cache (`names[0] ?? null`). */
+  getProviderName$(
+    item: WatchlistItem,
+    region: Region | null,
+  ): Observable<string | null> {
+    return this.providerNames$(item, region).pipe(
+      map((names) => names[0] ?? null),
+    );
   }
 
   /** Full poster URL or null when no posterPath is cached. */

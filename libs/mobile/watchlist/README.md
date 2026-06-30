@@ -7,6 +7,14 @@ poster cards with a type filter, per-item status changes, and removal. A
 **toolbar refresh button** (spec 0025) triggers a manual, client-side
 rate-limited sync of the user's tracked titles.
 
+Spec 0046 adds four **client-side** view controls over the already-subscribed
+`watchlist$` stream (no new Firestore query/index): a **sort** action sheet, a
+**status-filter** chip row, a **text-search** bar, and a **provider-filter** chip
+row. All filter/sort state is component-local and **in-session only** (resets on
+restart). Composition order is **type → text search → [derive provider chips] →
+status → provider → sort**; sort reorders within each status group while the
+group order stays Watching → Planned → Completed → Dropped.
+
 ## Public surface (barrel `@vultus/mobile/watchlist`)
 
 - **`WatchlistPage`** — a standalone Ionic page component (selector
@@ -73,10 +81,46 @@ states, rendered with the shared atoms from **`@vultus/shared/ui-kit`** (spec
   registered in this page via `addIcons`).
 - **populated** → the status-grouped sections.
 
-The slice-local grouping/filtering helpers (`groupByStatus`, `filterByType`,
+The slice-local grouping/filtering/sort helpers (`groupByStatus`, `filterByType`,
+`sortItems`, `getAvailableProviders`, the `WatchlistSort` type,
 `STATUS_DISPLAY_ORDER`, `STATUS_LABELS`, `StatusGroup`) live in
 `watchlist.service.ts` and are **not** exported from the barrel — they are
-slice-internal.
+slice-internal (a single consumer, `WatchlistPage`, imports them intra-slice; no
+3+-slice reuse, so they stay slice-local per PLAN §3). The barrel
+(`@vultus/mobile/watchlist`) exposes only `WatchlistPage` and `WatchlistService`.
+
+## Sort / filter / search controls (spec 0046)
+
+All four are component-local, in-session, and operate client-side over the
+already-subscribed `watchlist$` stream — **no new Firestore read/write/index**.
+The provider filter reuses the **same memoized per-card `availability$`
+subscription** (`providerCache`, widened from `Observable<string | null>` to
+`Observable<string[]>`); the per-card badge still shows the first name via
+`names[0] ?? null`, so no second Listen channel is opened (decision 12).
+
+- **Sort** — a toolbar `swap-vertical-outline` button (`openSortSheet()`) opens an
+  `IonActionSheet` with six modes (`WatchlistSort`: `titleAsc` / `titleDesc` /
+  `addedDesc` (default, newest-added) / `addedAsc` / `releaseDesc` / `releaseAsc`).
+  `onSortSelected(sort)` applies it via the pure `sortItems(items, sort)` helper,
+  reordering **within** each group; release-date sorts push null/absent
+  `releaseDate` items to the **end** in both directions.
+- **Status filter** — a chip row (`onStatusChipClick(status | null)`): an "All" chip
+  (default) plus one chip per **non-empty** post-filter group, each with its count.
+  Selecting a status narrows to that one group; counts match the visible cards.
+- **Text search** — an `IonSearchbar` (`onSearchInput(term)`), case-insensitive
+  substring match on `title`, debounced **200ms** via RxJS `debounceTime` (the
+  Ionic `debounce` is set to `0` to avoid double-debounce). Empty/cleared term
+  restores the full list.
+- **Provider filter** — a chip row derived from the live `availabilityMap`
+  (`getAvailableProviders(...)`). Multi-select **OR** logic (`toggleProvider(name)`);
+  the row is **hidden** when no availability data is loaded. A stale selection is
+  reconciled against the currently-available names so a vanished provider can't
+  strand a hidden filter.
+
+The auxiliary chip/availability streams (`statusChips$`, `availableProviders$`,
+`availabilityMap$`) each `catchError` to an empty value so a watchlist-stream
+error surfaces only through `vm$`'s error state, never as an uncaught error from a
+parallel subscriber.
 
 `SyncStateService` (`providedIn: 'root'`, slice-internal — **not** barrel-
 exported) owns the **manual-sync cooldown** behind the toolbar refresh button

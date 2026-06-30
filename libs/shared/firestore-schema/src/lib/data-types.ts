@@ -58,6 +58,7 @@ export interface WatchlistItemReadData {
   status: WatchStatus;
   posterPath?: string | null;
   voteAverage?: number | null;
+  releaseDate?: string | null; // plain ISO date string; NOT a Timestamp
 }
 export interface WatchlistItemWriteData {
   type: TitleType;
@@ -68,6 +69,7 @@ export interface WatchlistItemWriteData {
   status: WatchStatus;
   posterPath?: string | null;
   voteAverage?: number | null;
+  releaseDate?: string | null; // plain ISO date string; NOT a Timestamp
 }
 
 // --- EpisodeDoc: airDate + nullable watchedAt + nullable title (spec 0034) ---

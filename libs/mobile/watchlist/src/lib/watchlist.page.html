@@ -9,6 +9,13 @@
     <ion-buttons slot="end">
       <ion-button
         fill="clear"
+        aria-label="Sort watchlist"
+        (click)="openSortSheet()"
+      >
+        <ion-icon name="swap-vertical-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+      <ion-button
+        fill="clear"
         [disabled]="!syncState.canSync() || syncState.syncing()"
         [attr.aria-label]="
           syncState.syncing()
@@ -74,7 +81,49 @@
     </button>
   </div>
 
-  @if ((vm$ | async); as vm) { @if (vm.error) {
+  <!-- Status filter chips: "All" + one per non-empty (post-filter) group. -->
+  <div class="status-filter">
+    <button
+      class="filter-pill"
+      [class.active]="selectedStatus === null"
+      (click)="onStatusChipClick(null)"
+    >
+      All
+    </button>
+    @for (group of (statusChips$ | async); track group.status) {
+    <button
+      class="filter-pill status-pill status-{{ group.status }}"
+      [class.active]="selectedStatus === group.status"
+      (click)="onStatusChipClick(group.status)"
+    >
+      {{ group.label }} {{ group.count }}
+    </button>
+    }
+  </div>
+
+  <!-- Text search (RxJS-debounced 200ms in the component; no ion debounce). -->
+  <ion-searchbar
+    class="watchlist-search"
+    placeholder="Search your watchlist"
+    [debounce]="0"
+    (ionInput)="onSearchInput($event.detail.value ?? '')"
+  ></ion-searchbar>
+
+  <!-- Provider filter chips: multi-select OR; hidden when no availability. -->
+  @if ((availableProviders$ | async); as providers) { @if (providers.length > 0)
+  {
+  <div class="provider-filter">
+    @for (name of providers; track name) {
+    <button
+      class="filter-pill"
+      [class.active]="isProviderSelected(name)"
+      (click)="toggleProvider(name)"
+    >
+      {{ name }}
+    </button>
+    }
+  </div>
+  } } @if ((vm$ | async); as vm) { @if (vm.error) {
   <vultus-error-state
     message="Couldn't load your watchlist."
     (retry)="onRetry()"
@@ -161,6 +210,13 @@
     header="Set status"
     [buttons]="actionSheetButtons"
     (didDismiss)="actionSheetOpen = false"
+  ></ion-action-sheet>
+
+  <ion-action-sheet
+    [isOpen]="sortSheetOpen"
+    header="Sort by"
+    [buttons]="sortSheetButtons"
+    (didDismiss)="sortSheetOpen = false"
   ></ion-action-sheet>
 
   <ion-alert

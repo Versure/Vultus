@@ -8,15 +8,16 @@ import {
 import { AUTH_UID } from '@vultus/shared/domain/tokens';
 import { type WatchlistItem } from '@vultus/shared/domain';
 import { NEVER, of, throwError } from 'rxjs';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SyncStateService } from './watchlist.sync-state.service';
 
 // Mock the data-access service module so the page test never pulls in the real
 // `@angular/fire/firestore` import chain (rxfire ships ESM-in-CJS and breaks the
-// jsdom transform). The page also imports `groupByStatus`/`STATUS_*` from this
-// module, so the factory re-provides pure stand-ins (no Firebase) alongside a
-// bare service class used purely as the DI token. The factory is hoisted, so it
-// must be fully self-contained (no outer references).
+// jsdom transform). The page also imports `groupByStatus` / `filterByType` /
+// `sortItems` / `getAvailableProviders` / `STATUS_*` from this module, so the
+// factory re-provides faithful pure stand-ins (no Firebase) alongside a bare
+// service class used purely as the DI token. The factory is hoisted, so it must
+// be fully self-contained (no outer references).
 vi.mock('./watchlist.service', () => {
   const order = ['watching', 'planned', 'completed', 'dropped'] as const;
   const labels: Record<string, string> = {
@@ -25,13 +26,21 @@ vi.mock('./watchlist.service', () => {
     completed: 'Completed',
     dropped: 'Dropped',
   };
+  interface Item {
+    type: string;
+    status: string;
+    title: string;
+    tmdbId: number;
+    addedAt: string;
+    releaseDate?: string | null;
+  }
   return {
     WatchlistService: class WatchlistService {},
     STATUS_DISPLAY_ORDER: [...order],
     STATUS_LABELS: labels,
     filterByType: (items: { type: string }[], type?: 'movie' | 'tv') =>
       type ? items.filter((i) => i.type === type) : items,
-    groupByStatus: (items: { status: string }[]) =>
+    groupByStatus: (items: Item[]) =>
       order
         .map((status) => {
           const groupItems = items.filter((i) => i.status === status);
@@ -43,6 +52,51 @@ vi.mock('./watchlist.service', () => {
           };
         })
         .filter((g) => g.count > 0),
+    // Faithful pure stand-in mirroring the real helper's binding: stable,
+    // non-mutating, null/absent releaseDate sorts to the END in both directions.
+    sortItems: (items: Item[], sort: string) => {
+      const copy = items.slice();
+      const cmpStr = (a: string, b: string) =>
+        a.localeCompare(b, undefined, { sensitivity: 'base' });
+      switch (sort) {
+        case 'titleAsc':
+          return copy.sort((a, b) => cmpStr(a.title, b.title));
+        case 'titleDesc':
+          return copy.sort((a, b) => cmpStr(b.title, a.title));
+        case 'addedAsc':
+          return copy.sort((a, b) => a.addedAt.localeCompare(b.addedAt));
+        case 'addedDesc':
+          return copy.sort((a, b) => b.addedAt.localeCompare(a.addedAt));
+        case 'releaseDesc':
+        case 'releaseAsc': {
+          const desc = sort === 'releaseDesc';
+          return copy.sort((a, b) => {
+            const ra = a.releaseDate ?? null;
+            const rb = b.releaseDate ?? null;
+            if (ra === null && rb === null) return 0;
+            if (ra === null) return 1; // nulls last
+            if (rb === null) return -1;
+            return desc ? rb.localeCompare(ra) : ra.localeCompare(rb);
+          });
+        }
+        default:
+          return copy;
+      }
+    },
+    getAvailableProviders: (
+      items: Item[],
+      availabilityMap: Map<number, string[]>,
+    ) => {
+      const seen = new Set<string>();
+      for (const item of items) {
+        for (const name of availabilityMap.get(item.tmdbId) ?? []) {
+          seen.add(name);
+        }
+      }
+      return [...seen].sort((a, b) =>
+        a.localeCompare(b, undefined, { sensitivity: 'base' }),
+      );
+    },
   };
 });
 
@@ -61,6 +115,11 @@ function item(over: Partial<WatchlistItem>): WatchlistItem {
   };
 }
 
+/** Availability doc shape the page maps via `a?.providers.map(p => p.name)`. */
+function availability(names: string[]) {
+  return { providers: names.map((name) => ({ name })) };
+}
+
 interface MockService {
   watchlist$: ReturnType<typeof vi.fn>;
   updateStatus: ReturnType<typeof vi.fn>;
@@ -73,15 +132,27 @@ interface MockService {
 // The page calls watchlist$(uid, type) and applies groupByStatus itself, but the
 // type filter lives in the service (filterByType). Replicate that here so the
 // segment-switch test exercises real filtering.
-function mockService(items: WatchlistItem[], unreadCount = 0): MockService {
+//
+// `providersByTmdbId` lets a test supply per-title availability so the provider
+// chip row / provider filter / per-card badge can be exercised without opening a
+// real Firestore listener.
+function mockService(
+  items: WatchlistItem[],
+  unreadCount = 0,
+  providersByTmdbId: Record<number, string[]> = {},
+  region: string | null = null,
+): MockService {
   return {
     watchlist$: vi.fn((_uid: string | null, type?: 'movie' | 'tv') =>
       of(filterByType(items, type)),
     ),
     updateStatus: vi.fn(),
     removeTitle: vi.fn(),
-    userRegion$: vi.fn(() => of(null)),
-    availability$: vi.fn(() => of(null)),
+    userRegion$: vi.fn(() => of(region)),
+    availability$: vi.fn((tmdbId: number) => {
+      const names = providersByTmdbId[tmdbId];
+      return of(names ? availability(names) : null);
+    }),
     unreadNotificationCount$: of(unreadCount),
   };
 }
@@ -140,7 +211,7 @@ async function setup(
 /** The refresh button is the first ion-button in the toolbar's slot="end". */
 function refreshButton(el: HTMLElement): HTMLElement {
   const btn = el.querySelector<HTMLElement>(
-    'ion-buttons[slot="end"] ion-button',
+    'ion-buttons[slot="end"] ion-button[aria-label="Refresh watchlist"], ion-buttons[slot="end"] ion-button[aria-label="Syncing…"], ion-buttons[slot="end"] ion-button[aria-label="Synced just now"]',
   );
   if (!btn) {
     throw new Error('refresh button not found');
@@ -159,6 +230,45 @@ function bellButton(el: HTMLElement): HTMLElement {
   return btn;
 }
 
+/** The sort button (aria-label="Sort watchlist"). */
+function sortButton(el: HTMLElement): HTMLElement {
+  const btn = el.querySelector<HTMLElement>(
+    'ion-buttons[slot="end"] ion-button[aria-label="Sort watchlist"]',
+  );
+  if (!btn) {
+    throw new Error('sort button not found');
+  }
+  return btn;
+}
+
+/** All status-filter chip buttons (the "All" chip + per-status chips). */
+function statusChips(el: HTMLElement): HTMLElement[] {
+  return Array.from(
+    el.querySelectorAll<HTMLElement>('.status-filter .filter-pill'),
+  );
+}
+
+/** Provider-filter chip labels (empty when the row is hidden). */
+function providerChips(el: HTMLElement): string[] {
+  return Array.from(
+    el.querySelectorAll<HTMLElement>('.provider-filter .filter-pill'),
+  ).map((b) => b.textContent?.trim() ?? '');
+}
+
+/** Card titles, in DOM order, across all rendered status sections. */
+function cardTitles(el: HTMLElement): string[] {
+  return Array.from(el.querySelectorAll<HTMLElement>('.card-title')).map(
+    (p) => p.textContent?.trim() ?? '',
+  );
+}
+
+/** Rendered status section labels in DOM order. */
+function sectionLabels(el: HTMLElement): string[] {
+  return Array.from(el.querySelectorAll<HTMLElement>('.section-title')).map(
+    (s) => s.textContent?.trim() ?? '',
+  );
+}
+
 /**
  * IonButton's `disabled` is a property bound via Angular, not an attribute that
  * reflects to the host in jsdom — read the property (falling back to the attr).
@@ -168,6 +278,16 @@ function isDisabled(btn: HTMLElement): boolean {
     (btn as { disabled?: boolean }).disabled === true ||
     btn.hasAttribute('disabled')
   );
+}
+
+/** Re-run change detection + microtasks so async-pipe streams settle. */
+async function settle(fixture: {
+  detectChanges: () => void;
+  whenStable: () => Promise<unknown>;
+}): Promise<void> {
+  fixture.detectChanges();
+  await fixture.whenStable();
+  fixture.detectChanges();
 }
 
 describe('WatchlistPage', () => {
@@ -190,18 +310,14 @@ describe('WatchlistPage', () => {
     component.onTypeChange(
       new CustomEvent('ionChange', { detail: { value: 'movie' } }),
     );
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await settle(fixture);
     expect(el.textContent).toContain('Movie A');
     expect(el.textContent).not.toContain('Show B');
 
     component.onTypeChange(
       new CustomEvent('ionChange', { detail: { value: 'tv' } }),
     );
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await settle(fixture);
     expect(el.textContent).not.toContain('Movie A');
     expect(el.textContent).toContain('Show B');
   });
@@ -324,6 +440,313 @@ describe('WatchlistPage', () => {
     expect(headers[1]).toContain('Planned');
     expect(headers[2]).toContain('Completed');
     expect(headers[0]).toContain('1 Items');
+  });
+
+  // ── Status filter chips ──────────────────────────────────────────────────
+
+  describe('status filter chips', () => {
+    it('renders the "All" chip active on first render with one chip per non-empty group', async () => {
+      const service = mockService([
+        item({ tmdbId: 1, status: 'watching', title: 'W1' }),
+        item({ tmdbId: 2, status: 'watching', title: 'W2' }),
+        item({ tmdbId: 3, status: 'planned', title: 'P1' }),
+        item({ tmdbId: 4, status: 'completed', title: 'C1' }),
+        // No 'dropped' item → no dropped chip.
+      ]);
+      const { el } = await setup(service);
+      const chips = statusChips(el).map((c) => c.textContent?.trim() ?? '');
+
+      // "All" + Watching + Planned + Completed (NO Dropped).
+      expect(chips[0]).toBe('All');
+      expect(chips).toEqual(['All', 'Watching 2', 'Planned 1', 'Completed 1']);
+      expect(chips.some((c) => c.startsWith('Dropped'))).toBe(false);
+
+      // "All" chip is active by default.
+      const allChip = statusChips(el)[0];
+      expect(allChip.classList.contains('active')).toBe(true);
+    });
+
+    it('clicking a status chip narrows the displayed groups to that one status', async () => {
+      const service = mockService([
+        item({ tmdbId: 1, status: 'watching', title: 'W1' }),
+        item({ tmdbId: 2, status: 'planned', title: 'P1' }),
+        item({ tmdbId: 3, status: 'completed', title: 'C1' }),
+      ]);
+      const { fixture, el } = await setup(service);
+
+      fixture.componentInstance.onStatusChipClick('planned');
+      await settle(fixture);
+
+      expect(sectionLabels(el)).toEqual(['Planned']);
+      expect(cardTitles(el)).toEqual(['P1']);
+      expect(el.textContent).not.toContain('W1');
+      expect(el.textContent).not.toContain('C1');
+    });
+
+    it('clicking "All" restores every group', async () => {
+      const service = mockService([
+        item({ tmdbId: 1, status: 'watching', title: 'W1' }),
+        item({ tmdbId: 2, status: 'planned', title: 'P1' }),
+      ]);
+      const { fixture, el } = await setup(service);
+
+      fixture.componentInstance.onStatusChipClick('watching');
+      await settle(fixture);
+      expect(sectionLabels(el)).toEqual(['Watching']);
+
+      fixture.componentInstance.onStatusChipClick(null);
+      await settle(fixture);
+      expect(sectionLabels(el)).toEqual(['Watching', 'Planned']);
+    });
+
+    it('chip counts match the visible cards', async () => {
+      const service = mockService([
+        item({ tmdbId: 1, status: 'watching', title: 'W1' }),
+        item({ tmdbId: 2, status: 'watching', title: 'W2' }),
+        item({ tmdbId: 3, status: 'watching', title: 'W3' }),
+        item({ tmdbId: 4, status: 'planned', title: 'P1' }),
+      ]);
+      const { el } = await setup(service);
+      const chips = statusChips(el).map((c) => c.textContent?.trim() ?? '');
+      expect(chips).toContain('Watching 3');
+      expect(chips).toContain('Planned 1');
+    });
+  });
+
+  // ── Text search ──────────────────────────────────────────────────────────
+
+  describe('text search', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('filters cards case-insensitively after the 200ms debounce', async () => {
+      const service = mockService([
+        item({ tmdbId: 1, status: 'watching', title: 'The Matrix' }),
+        item({ tmdbId: 2, status: 'watching', title: 'Inception' }),
+      ]);
+      const { fixture, el } = await setup(service);
+
+      // Both render before any search.
+      expect(cardTitles(el)).toEqual(['The Matrix', 'Inception']);
+
+      // Case-insensitive term — not applied until the debounce elapses.
+      fixture.componentInstance.onSearchInput('MATRIX');
+      vi.advanceTimersByTime(199);
+      await settle(fixture);
+      expect(cardTitles(el)).toEqual(['The Matrix', 'Inception']);
+
+      vi.advanceTimersByTime(1);
+      await settle(fixture);
+      expect(cardTitles(el)).toEqual(['The Matrix']);
+      expect(el.textContent).not.toContain('Inception');
+    });
+
+    it('an empty term restores the full list', async () => {
+      const service = mockService([
+        item({ tmdbId: 1, status: 'watching', title: 'The Matrix' }),
+        item({ tmdbId: 2, status: 'watching', title: 'Inception' }),
+      ]);
+      const { fixture, el } = await setup(service);
+
+      fixture.componentInstance.onSearchInput('matrix');
+      vi.advanceTimersByTime(200);
+      await settle(fixture);
+      expect(cardTitles(el)).toEqual(['The Matrix']);
+
+      // Clearing → same path as an empty onSearchInput('').
+      fixture.componentInstance.onSearchInput('');
+      vi.advanceTimersByTime(200);
+      await settle(fixture);
+      expect(cardTitles(el)).toEqual(['The Matrix', 'Inception']);
+    });
+  });
+
+  // ── Provider filter chips ──────────────────────────────────────────────────
+
+  describe('provider filter chips', () => {
+    it('renders the provider chip row from the availability map', async () => {
+      const service = mockService(
+        [
+          item({ tmdbId: 1, status: 'watching', title: 'A' }),
+          item({ tmdbId: 2, status: 'watching', title: 'B' }),
+        ],
+        0,
+        { 1: ['Netflix'], 2: ['Max'] },
+      );
+      const { el } = await setup(service);
+      // A→Z sorted union of provider names.
+      expect(providerChips(el)).toEqual(['Max', 'Netflix']);
+    });
+
+    it('toggleProvider with two providers shows items matching either (OR)', async () => {
+      const service = mockService(
+        [
+          item({ tmdbId: 1, status: 'watching', title: 'A' }),
+          item({ tmdbId: 2, status: 'watching', title: 'B' }),
+          item({ tmdbId: 3, status: 'watching', title: 'C' }),
+        ],
+        0,
+        { 1: ['Netflix'], 2: ['Max'], 3: ['Disney+'] },
+      );
+      const { fixture, el } = await setup(service);
+
+      fixture.componentInstance.toggleProvider('Netflix');
+      await settle(fixture);
+      expect(cardTitles(el)).toEqual(['A']);
+
+      fixture.componentInstance.toggleProvider('Max');
+      await settle(fixture);
+      // OR logic — both A (Netflix) and B (Max), but not C (Disney+).
+      expect(cardTitles(el).sort()).toEqual(['A', 'B']);
+    });
+
+    it('deselecting all providers restores the full list', async () => {
+      const service = mockService(
+        [
+          item({ tmdbId: 1, status: 'watching', title: 'A' }),
+          item({ tmdbId: 2, status: 'watching', title: 'B' }),
+        ],
+        0,
+        { 1: ['Netflix'], 2: ['Max'] },
+      );
+      const { fixture, el } = await setup(service);
+
+      fixture.componentInstance.toggleProvider('Netflix');
+      await settle(fixture);
+      expect(cardTitles(el)).toEqual(['A']);
+
+      fixture.componentInstance.toggleProvider('Netflix');
+      await settle(fixture);
+      expect(cardTitles(el).sort()).toEqual(['A', 'B']);
+    });
+
+    it('hides the provider chip row when no availability data is loaded', async () => {
+      // availability$ returns null for every tmdbId → getAvailableProviders → [].
+      const service = mockService([
+        item({ tmdbId: 1, status: 'watching', title: 'A' }),
+      ]);
+      const { el } = await setup(service);
+      expect(el.querySelector('.provider-filter')).toBeFalsy();
+      expect(providerChips(el)).toEqual([]);
+    });
+  });
+
+  // ── Sort ───────────────────────────────────────────────────────────────────
+
+  describe('sort', () => {
+    it('openSortSheet opens the sort action sheet', async () => {
+      const service = mockService([item({ tmdbId: 1, status: 'watching' })]);
+      const { fixture, el } = await setup(service);
+      const component = fixture.componentInstance;
+
+      expect(component.sortSheetOpen).toBe(false);
+      sortButton(el).click();
+      expect(component.sortSheetOpen).toBe(true);
+    });
+
+    it('defaults to addedDesc (date-added newest first)', async () => {
+      const service = mockService([
+        item({
+          tmdbId: 1,
+          status: 'watching',
+          title: 'Old',
+          addedAt: '2026-01-01T00:00:00.000Z',
+        }),
+        item({
+          tmdbId: 2,
+          status: 'watching',
+          title: 'New',
+          addedAt: '2026-06-01T00:00:00.000Z',
+        }),
+      ]);
+      const { fixture, el } = await setup(service);
+      expect(fixture.componentInstance.selectedSort).toBe('addedDesc');
+      // Newest (New) first.
+      expect(cardTitles(el)).toEqual(['New', 'Old']);
+    });
+
+    it('onSortSelected("titleAsc") reorders within each group, groups stay in display order', async () => {
+      const service = mockService([
+        item({ tmdbId: 1, status: 'completed', title: 'Zelda' }),
+        item({ tmdbId: 2, status: 'completed', title: 'Alpha' }),
+        item({ tmdbId: 3, status: 'watching', title: 'Mango' }),
+        item({ tmdbId: 4, status: 'watching', title: 'Banana' }),
+      ]);
+      const { fixture, el } = await setup(service);
+
+      fixture.componentInstance.onSortSelected('titleAsc');
+      await settle(fixture);
+
+      // Group order stays Watching → Completed; items sorted A→Z within each.
+      expect(sectionLabels(el)).toEqual(['Watching', 'Completed']);
+      expect(cardTitles(el)).toEqual(['Banana', 'Mango', 'Alpha', 'Zelda']);
+    });
+
+    it('release-date sorts push null-releaseDate items to the end', async () => {
+      const service = mockService([
+        item({
+          tmdbId: 1,
+          status: 'watching',
+          title: 'NoDate',
+          releaseDate: null,
+        }),
+        item({
+          tmdbId: 2,
+          status: 'watching',
+          title: 'Older',
+          releaseDate: '2010-01-01',
+        }),
+        item({
+          tmdbId: 3,
+          status: 'watching',
+          title: 'Newer',
+          releaseDate: '2024-01-01',
+        }),
+      ]);
+      const { fixture, el } = await setup(service);
+
+      fixture.componentInstance.onSortSelected('releaseDesc');
+      await settle(fixture);
+      expect(cardTitles(el)).toEqual(['Newer', 'Older', 'NoDate']);
+
+      fixture.componentInstance.onSortSelected('releaseAsc');
+      await settle(fixture);
+      // Nulls still last even ascending.
+      expect(cardTitles(el)).toEqual(['Older', 'Newer', 'NoDate']);
+    });
+  });
+
+  // ── Provider badge (regression — widened cache mock shape) ──────────────────
+
+  describe('per-card provider badge (widened cache)', () => {
+    it('shows the first provider name on a planned card from the string[] stream', async () => {
+      // The cache is now Observable<string[]>; the badge maps names[0] ?? null.
+      const service = mockService(
+        [item({ tmdbId: 1, status: 'planned', title: 'P1' })],
+        0,
+        { 1: ['Netflix', 'Max'] },
+        'US',
+      );
+      const { el } = await setup(service);
+      const badge = el.querySelector<HTMLElement>('.availability-badge');
+      expect(badge?.textContent?.trim()).toBe('Netflix');
+    });
+
+    it('shows the first provider name on a non-planned card', async () => {
+      const service = mockService(
+        [item({ tmdbId: 7, status: 'watching', title: 'W1' })],
+        0,
+        { 7: ['Disney+'] },
+        'US',
+      );
+      const { el } = await setup(service);
+      const badge = el.querySelector<HTMLElement>('.provider-badge');
+      expect(badge?.textContent?.trim()).toBe('Disney+');
+    });
   });
 
   describe('toolbar refresh button (spec 0025)', () => {

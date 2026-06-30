@@ -46,6 +46,7 @@ describe('createTmdbSearchClient', () => {
       posterUrl: 'https://image.tmdb.org/t/p/w185/poster.jpg',
       posterPath: '/poster.jpg',
       voteAverage: 7.5,
+      releaseDate: '2023-05-10',
     });
     expect(results[1]).toMatchObject({
       tmdbId: 2,
@@ -55,7 +56,38 @@ describe('createTmdbSearchClient', () => {
       posterUrl: null,
       posterPath: null,
       voteAverage: null,
+      releaseDate: '2022-01-01',
     });
+  });
+
+  it('maps releaseDate from release_date (movie) / first_air_date (tv)', async () => {
+    const fetch = makeFetch({ results: [movieResult, tvResult] });
+    const client = createTmdbSearchClient(config, fetch);
+    const results = await client.searchMulti('test');
+    expect(results[0].releaseDate).toBe('2023-05-10');
+    expect(results[1].releaseDate).toBe('2022-01-01');
+  });
+
+  it('returns null releaseDate when the raw date is absent', async () => {
+    const fetch = makeFetch({
+      results: [{ id: 5, media_type: 'movie', title: 'No Date' }],
+    });
+    const client = createTmdbSearchClient(config, fetch);
+    const [r] = await client.searchMulti('q');
+    expect(r.releaseDate).toBeNull();
+  });
+
+  it('coerces an empty-string releaseDate to null', async () => {
+    const fetch = makeFetch({
+      results: [
+        { id: 6, media_type: 'movie', title: 'Empty Date', release_date: '' },
+        { id: 7, media_type: 'tv', name: 'Empty Air', first_air_date: '' },
+      ],
+    });
+    const client = createTmdbSearchClient(config, fetch);
+    const results = await client.searchMulti('q');
+    expect(results[0].releaseDate).toBeNull();
+    expect(results[1].releaseDate).toBeNull();
   });
 
   it('returns null poster when poster_path is null', async () => {
