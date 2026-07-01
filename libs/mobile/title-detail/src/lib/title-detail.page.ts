@@ -378,6 +378,18 @@ export class TitleDetailPage {
     void this.service.add(detail);
   }
 
+  /**
+   * Adds the currently-resolved detail to the watchlist directly as 'completed'
+   * (spec 0056 — one-step "Mark as Watched" from the untracked action-area). For
+   * a TV title this also bulk-marks any already-existing episode docs watched
+   * (handled by the service); a brand-new show with no episode docs is added as
+   * 'completed' and the spec-0050 auto-revert corrects it once sync populates
+   * unwatched episodes.
+   */
+  markAsWatched(detail: TitleDetail): void {
+    void this.service.add(detail, 'completed');
+  }
+
   /** Whether the where-to-watch card has any provider rows. */
   hasProviders(p: GroupedProviders): boolean {
     return p.flatrate.length > 0 || p.rent.length > 0 || p.buy.length > 0;

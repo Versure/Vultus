@@ -185,6 +185,42 @@ ion-content {
   --color: var(--ion-color-primary-contrast);
 }
 
+// "Mark as Watched" — the untracked action-area's second, outlined-primary
+// affordance (spec 0056). Mirrors the outlined treatment of .status-control /
+// .movie-watched-control (NOT a second filled CTA — the design keeps a single
+// filled primary CTA, spec 0016 FIX-1). Same 56px height as the sibling
+// .add-cta so the two align in the .action-area flex row.
+.mark-watched-cta {
+  flex: 1;
+  height: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--vultus-space-sm);
+  border: 2px solid var(--ion-color-primary);
+  border-radius: var(--vultus-radius-md);
+  background: transparent;
+  color: var(--ion-color-primary);
+  font-family: var(--vultus-font-family);
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    transform 80ms ease;
+
+  &:hover {
+    background: color-mix(in srgb, var(--ion-color-primary) 10%, transparent);
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+
+  ion-icon {
+    font-size: 20px;
+  }
+}
+
 .status-control {
   flex: 1;
   height: 56px;

@@ -96,6 +96,15 @@
         <ion-icon name="add-circle-outline" slot="start"></ion-icon>
         Add to Watchlist
       </ion-button>
+      <button
+        type="button"
+        class="mark-watched-cta"
+        data-test="mark-watched-btn"
+        (click)="markAsWatched(detail)"
+      >
+        <ion-icon name="checkmark-circle"></ion-icon>
+        Mark as Watched
+      </button>
       } @else {
       <button
         type="button"

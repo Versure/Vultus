@@ -252,10 +252,26 @@ export class TitleDetailService {
   }
 
   /**
-   * Create `users/{uid}/watchlist/{titleId}` as 'planned' with the denormalized
-   * posterPath + voteAverage from `detail` (decision 4). No-op when uid null.
+   * Create `users/{uid}/watchlist/{titleId}` with the denormalized posterPath +
+   * voteAverage from `detail` (decision 4). The target `status` defaults to
+   * `'planned'` (the existing "Add to Watchlist" behavior — every current caller
+   * is unchanged); pass `'completed'` for the one-step "Mark as Watched" add
+   * (spec 0056).
+   *
+   * When `status === 'completed'` AND `detail.type === 'tv'`, ALSO bulk-mark
+   * every already-existing episode doc watched: `getDocs` the whole episodes
+   * subcollection (`episodesPath(uid, id)`, all seasons — no `where` filter) and
+   * `writeBatch`-update each to `{ watched: true, watchedAt }`. This mirrors the
+   * `setSeasonWatched` `getDocs` + `writeBatch` pattern minus the season filter.
+   * It **never `setDoc`s / never creates** episode docs — a no-op when the
+   * subcollection is empty (the brand-new-show case; the spec-0050 auto-revert
+   * handles later sync). For a movie or a `'planned'` add, no episode read or
+   * write happens. No-op entirely when uid null.
    */
-  async add(detail: TitleDetail): Promise<void> {
+  async add(
+    detail: TitleDetail,
+    status: WatchStatus = 'planned',
+  ): Promise<void> {
     const uid = this.uid();
     if (!uid) {
       return;
@@ -266,7 +282,7 @@ export class TitleDetailService {
       traktId: null,
       title: detail.title,
       addedAt: new Date().toISOString(),
-      status: 'planned',
+      status,
       posterPath: detail.posterPath,
       voteAverage: detail.voteAverage,
     };
@@ -274,6 +290,20 @@ export class TitleDetailService {
       doc(this.firestore, watchlistItemPath(uid, String(detail.tmdbId))),
       watchlistItemToData(item),
     );
+    if (status === 'completed' && detail.type === 'tv') {
+      const snap = await getDocs(
+        collection(this.firestore, episodesPath(uid, String(detail.tmdbId))),
+      );
+      if (snap.docs.length === 0) {
+        return;
+      }
+      const batch = writeBatch(this.firestore);
+      const watchedAt = new Date();
+      for (const docSnap of snap.docs) {
+        batch.update(docSnap.ref, { watched: true, watchedAt });
+      }
+      await batch.commit();
+    }
   }
 
   /**
