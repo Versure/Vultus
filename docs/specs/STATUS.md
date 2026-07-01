@@ -13,7 +13,8 @@
 Total specs: 62
 
 - done: 56
-- approved: 6
+- approved: 5
+- implementing: 1
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -78,4 +79,4 @@ Total specs: 62
 | 59 | audit-docs-skill | /audit-docs skill: LLM-judgment documentation drift audit | approved | — | — |
 | 60 | provider-preferences | Let users pick their subscribed providers and flag "on your platform" availability | approved | — | scope:mobile, scope:functions, scope:shared |
 | 61 | plex-provider | Add Plex as a manual, per-title "I'm watching this via Plex" provider | approved | slice:settings, slice:title-detail, slice:watchlist | scope:mobile, scope:shared |
-| 62 | android-webview-cutout-background | Paint the Android WebView background behind the camera cutout via Capacitor's top-level backgroundColor config | approved | — | scope:mobile |
+| 62 | android-webview-cutout-background | Paint the Android WebView background behind the camera cutout via Capacitor's top-level backgroundColor config | implementing | — | scope:mobile |
