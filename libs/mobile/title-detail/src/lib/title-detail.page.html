@@ -18,6 +18,10 @@
 </ion-header>
 
 <ion-content>
+  <ion-refresher slot="fixed" (ionRefresh)="onRefresh($event)">
+    <ion-refresher-content></ion-refresher-content>
+  </ion-refresher>
+
   @if (vm$ | async; as vm) {
   <!-- LOADING -->
   @if (vm.state.kind === 'loading') {

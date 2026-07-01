@@ -9,7 +9,7 @@ import { AUTH_UID } from '@vultus/shared/domain/tokens';
 import { type WatchlistItem } from '@vultus/shared/domain';
 import { NEVER, of, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SyncStateService } from './watchlist.sync-state.service';
+import { SyncStateService } from '@vultus/shared/ui-kit';
 
 // Mock the data-access service module so the page test never pulls in the real
 // `@angular/fire/firestore` import chain (rxfire ships ESM-in-CJS and breaks the

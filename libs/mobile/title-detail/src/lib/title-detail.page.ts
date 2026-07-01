@@ -12,9 +12,12 @@ import {
   IonContent,
   IonHeader,
   IonIcon,
+  IonRefresher,
+  IonRefresherContent,
   IonSkeletonText,
   IonTitle,
   IonToolbar,
+  ToastController,
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
 import {
@@ -52,6 +55,7 @@ import {
   switchMap,
 } from 'rxjs';
 import {
+  SyncStateService,
   VultusEmptyState,
   VultusErrorState,
   VultusSkeletonHero,
@@ -86,6 +90,8 @@ const EMPTY_PROVIDERS: GroupedProviders = { flatrate: [], rent: [], buy: [] };
     IonButtons,
     IonBackButton,
     IonContent,
+    IonRefresher,
+    IonRefresherContent,
     IonButton,
     IonTitle,
     IonIcon,
@@ -102,6 +108,10 @@ const EMPTY_PROVIDERS: GroupedProviders = { flatrate: [], rent: [], buy: [] };
 export class TitleDetailPage {
   private readonly route = inject(ActivatedRoute);
   private readonly service = inject(TitleDetailService);
+
+  /** Shared whole-watchlist sync state (cooldown/in-flight) — see `@vultus/shared/ui-kit`. */
+  readonly syncState = inject(SyncStateService);
+  private readonly toastCtrl = inject(ToastController);
 
   /** Resolved auth uid (Signal); null before the anonymous session resolves. */
   readonly uid = inject(AUTH_UID);
@@ -294,6 +304,43 @@ export class TitleDetailPage {
   /** Re-resolves the title after a recoverable error (bound to error-state retry). */
   onRetry(): void {
     this.retryTrigger$.next();
+  }
+
+  /**
+   * Pull-to-refresh: triggers a whole-watchlist sync via the shared
+   * `SyncStateService` (the page's Firestore streams re-emit reactively when the
+   * sync writes land). The service owns the 5-minute cooldown shared with the
+   * watchlist tab; inside the cooldown this is a silent no-op (no toast). On a
+   * successful sync we surface a "Refreshed" toast, on failure an error toast.
+   * The refresher spinner is always dismissed via `complete()` in `finally`.
+   */
+  async onRefresh(event: CustomEvent): Promise<void> {
+    const complete = () =>
+      (event.detail as { complete: () => void }).complete();
+    if (!this.syncState.canSync()) {
+      complete(); // recently synced — nothing to do, no toast
+      return;
+    }
+    try {
+      await this.syncState.triggerSync();
+      const toast = await this.toastCtrl.create({
+        message: 'Refreshed',
+        duration: 2000,
+        position: 'bottom',
+        color: 'success',
+      });
+      await toast.present();
+    } catch {
+      const toast = await this.toastCtrl.create({
+        message: 'Sync failed — try again later',
+        duration: 3000,
+        position: 'bottom',
+        color: 'danger',
+      });
+      await toast.present();
+    } finally {
+      complete();
+    }
   }
 
   /** Opens the status-change action sheet (public — bound + tested). */
