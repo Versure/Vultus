@@ -2,7 +2,7 @@
 number: 0053
 slug: completed-marks-episodes-watched
 title: Mark all episodes watched when a TV show is manually set to Completed
-status: approved
+status: done
 slices: [slice:title-detail, slice:watchlist]
 scopes: [scope:mobile]
 created: 2026-07-01
@@ -30,7 +30,7 @@ PLAN §3):
   **no** episode write and **no** episode imports at all.
 - `slice:title-detail` — `TitleDetailPage.actionSheetButtons` handler
   (title-detail.page.ts:172) calls `TitleDetailService.updateStatus(tmdbId,
-  status)` (title-detail.service.ts:280), also a bare `updateDoc(..., { status })`.
+status)` (title-detail.service.ts:280), also a bare `updateDoc(..., { status })`.
 
 Intended outcome: when the **new** status being written is `'completed'` **and**
 the item is a **TV** show, batch-mark every currently-**unwatched** episode under
@@ -45,7 +45,7 @@ route, no `scope:shared` change, no Cloud Functions change, no sync-engine chang
 1. **Fix both manual status-change entry points.** Both `WatchlistService.updateStatus`
    and `TitleDetailService.updateStatus` gain the same behavior: when the new
    status is `'completed'` and `type === 'tv'`, batch-write `{ watched: true,
-   watchedAt: <now> }` to every episode doc that is currently `watched !== true`.
+watchedAt: <now> }` to every episode doc that is currently `watched !== true`.
    Each slice implements it **independently** in its own service file — this is a
    small (2-slice) duplication, well short of the 3+-slice extract-to-`shared` rule
    and consistent with the slices already each owning their own copy of
@@ -160,10 +160,10 @@ route, no `scope:shared` change, no Cloud Functions change, no sync-engine chang
 
 ## Affected slices & Sheriff tags
 
-| Slice / lib                 | Tags                                    | Change                                                                 |
-| --------------------------- | --------------------------------------- | ---------------------------------------------------------------------- |
-| `libs/mobile/title-detail`  | `scope:mobile`, `slice:title-detail`    | `updateStatus` gains `type` + `markAllEpisodesWatched` helper; page tracks `currentType`; README; e2e stub |
-| `libs/mobile/watchlist`     | `scope:mobile`, `slice:watchlist`       | `updateStatus` gains `type` + completed-path helper + new `scope:shared` episode imports; page passes `item.type`; README |
+| Slice / lib                | Tags                                 | Change                                                                                                                    |
+| -------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `libs/mobile/title-detail` | `scope:mobile`, `slice:title-detail` | `updateStatus` gains `type` + `markAllEpisodesWatched` helper; page tracks `currentType`; README; e2e stub                |
+| `libs/mobile/watchlist`    | `scope:mobile`, `slice:watchlist`    | `updateStatus` gains `type` + completed-path helper + new `scope:shared` episode imports; page passes `item.type`; README |
 
 **No cross-slice import is introduced.** Each slice imports only its own slice +
 `scope:shared`. Specifically, `libs/mobile/watchlist` adds imports of
@@ -188,7 +188,7 @@ PLAN §4 — no schema addition, no new collection/field, no converter change.
   `episodesPath(uid, String(tmdbId))` + `collection(...)` + `getDocs(...)` — the
   whole subcollection, no `where` filter (every season, since "completed" means
   the entire show). Each doc mapped via `dataToEpisode(d.data() as
-  EpisodeReadData)` to read its current `watched` flag.
+EpisodeReadData)` to read its current `watched` flag.
 - **Write (batched):** for each episode doc with `watched !== true`,
   `batch.update(docSnap.ref, { watched: true, watchedAt: <now> })`. `watchedAt`
   uses the same value convention as `setSeasonWatched`/`setEpisodeWatched`: a JS
@@ -196,7 +196,7 @@ PLAN §4 — no schema addition, no new collection/field, no converter change.
   Timestamp (spec 0034 EpisodeReadData shape). No `setDoc` — episode docs are
   created by the sync engine and must pre-exist (spec 0034 invariant preserved).
 - **Write (status):** unchanged — `updateDoc(watchlistItemPath(uid,
-  String(tmdbId)), { status })`.
+String(tmdbId)), { status })`.
 
 ## Public types / APIs
 

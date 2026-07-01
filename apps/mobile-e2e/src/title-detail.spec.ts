@@ -177,6 +177,56 @@ test.describe('title-detail F4 — watchlist-to-detail-correct-title (spec 0037)
       SEEDED_TITLE,
     );
   });
+
+  // -------------------------------------------------------------------------
+  // Spec 0053 — manually completing a TV show marks every episode watched.
+  // Un-skip blocker: the Firestore emulator cannot run under Claude Code tools
+  // (project memory) — this flow asserts against the live emulator stream, so it
+  // must run in the user's own terminal or the CI emulator gate. Seed data is
+  // already sufficient: the spec-0034 seed provides three unwatched S1 episodes
+  // for tmdbId 2 (apps/mobile-e2e/emulator-data/seeded/docs.json, all
+  // "watched": false); no docs.json change is required to un-skip.
+  // -------------------------------------------------------------------------
+  test.fixme('completed-marks-episodes-watched: setting a TV show Completed marks every episode watched', async ({
+    page,
+  }) => {
+    await bootAndSeed(page);
+
+    // Open the seeded TV title (tmdbId 2, Breaking Bad) detail page.
+    await page.goto('/tabs/title-detail/2');
+    await expect(page).toHaveURL(/\/tabs\/title-detail\/2\?type=tv/);
+
+    // Set the status to "Completed" via the title-detail status action sheet
+    // (actionSheetButtons -> TitleDetailService.updateStatus(2, 'completed',
+    // 'tv')). The completed + tv branch batch-marks every unwatched episode
+    // { watched: true, watchedAt } in the emulator.
+    const statusControl = page.locator('[data-test="status-control"]');
+    await statusControl.click();
+
+    const sheet = page.locator('ion-action-sheet[header="Set status"]');
+    await expect(sheet).toBeVisible();
+    await sheet.locator('button', { hasText: 'Completed' }).first().click();
+
+    // The episodes$ realtime stream re-renders: every episode row shows the
+    // watched state and each season count shows N/N.
+    const episodesSection = page.locator('[data-test="episodes-section"]');
+    await expect(episodesSection).toBeVisible();
+
+    const toggles = episodesSection.locator(
+      '[data-test="episode-watched-toggle"]',
+    );
+    const toggleCount = await toggles.count();
+    for (let i = 0; i < toggleCount; i++) {
+      await expect(toggles.nth(i)).toHaveClass(/is-watched/);
+    }
+
+    // Each season count shows N/N (all watched — e.g. "3/3").
+    const seasonCounts = episodesSection.locator('[data-test="season-count"]');
+    const seasonCountTotal = await seasonCounts.count();
+    for (let i = 0; i < seasonCountTotal; i++) {
+      await expect(seasonCounts.nth(i)).toHaveText(/^(\d+)\/\1$/);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -276,16 +276,68 @@ export class TitleDetailService {
     );
   }
 
-  /** Update the `status` field at the watchlist item path. No-op when uid null. */
-  async updateStatus(tmdbId: number, status: WatchStatus): Promise<void> {
+  /**
+   * Update the `status` field at the watchlist item path. No-op when uid null.
+   *
+   * When the new status is `'completed'` AND the item is a **TV** show (spec
+   * 0053), first batch-mark every currently-unwatched episode watched via
+   * `markAllEpisodesWatched` (declaring a show completed means every episode is
+   * watched — GitHub issue #131). Movies and non-`'completed'` statuses skip the
+   * episode batch entirely (forward-direction-only, decision 6). The helper is a
+   * terminal leaf — it never calls back into `updateStatus`/`autoUpdateStatus`,
+   * so there is no recursion (its emptiness guard also makes an already-watched
+   * show a cheap no-op — decision 7).
+   */
+  async updateStatus(
+    tmdbId: number,
+    status: WatchStatus,
+    type: TitleType,
+  ): Promise<void> {
     const uid = this.uid();
     if (!uid) {
       return;
+    }
+    if (status === 'completed' && type === 'tv') {
+      await this.markAllEpisodesWatched(uid, tmdbId);
     }
     await updateDoc(
       doc(this.firestore, watchlistItemPath(uid, String(tmdbId))),
       { status },
     );
+  }
+
+  /**
+   * Batch-mark every currently-unwatched episode of a TV title as
+   * `{ watched: true, watchedAt: <now> }` (spec 0053). Reads the WHOLE episodes
+   * subcollection one-shot (no `where` filter — "completed" means the entire
+   * show, every season), then `updateDoc`s ONLY the docs where `watched !== true`
+   * via a single `writeBatch`. If there are zero unwatched docs (all already
+   * watched, or an empty / not-yet-synced subcollection) the commit is skipped
+   * entirely — this emptiness check IS the guard against redundant writes and the
+   * recursion safety net (decisions 2/3/7). Terminal: never re-derives status /
+   * calls `autoUpdateStatus` (the caller owns the status write).
+   */
+  private async markAllEpisodesWatched(
+    uid: string,
+    tmdbId: number,
+  ): Promise<void> {
+    const snap = await getDocs(
+      collection(this.firestore, episodesPath(uid, String(tmdbId))),
+    );
+    const batch = writeBatch(this.firestore);
+    const watchedAt = new Date();
+    let unwatchedCount = 0;
+    for (const docSnap of snap.docs) {
+      const ep = dataToEpisode(docSnap.data() as EpisodeReadData);
+      if (ep.watched !== true) {
+        batch.update(docSnap.ref, { watched: true, watchedAt });
+        unwatchedCount += 1;
+      }
+    }
+    if (unwatchedCount === 0) {
+      return;
+    }
+    await batch.commit();
   }
 
   /**
@@ -377,7 +429,11 @@ export class TitleDetailService {
     if (status === 'dropped') {
       return;
     }
-    await this.updateStatus(tmdbId, watched ? 'completed' : 'watching');
+    await this.updateStatus(
+      tmdbId,
+      watched ? 'completed' : 'watching',
+      'movie',
+    );
   }
 
   /**
@@ -411,7 +467,7 @@ export class TitleDetailService {
       return !ep.watched;
     });
     if (hasUnwatched) {
-      await this.updateStatus(tmdbId, 'watching');
+      await this.updateStatus(tmdbId, 'watching', 'tv');
     }
   }
 
@@ -453,18 +509,21 @@ export class TitleDetailService {
     // Step 1: planned → watching (evaluate FIRST so completed comes via watching).
     if (watchedCount >= 1 && status === 'planned') {
       this.autoSetWatching.set(tmdbId, true);
-      await this.updateStatus(tmdbId, 'watching');
+      await this.updateStatus(tmdbId, 'watching', 'tv');
       status = 'watching'; // effective status for the next check
     }
     // Step 2: watching + all watched → completed (only reachable from watching).
+    // The completed path's markAllEpisodesWatched helper finds zero unwatched
+    // docs here (autoUpdateStatus only reaches this after all are watched), so it
+    // skips its batch — no double-write, no recursion (the helper is terminal).
     if (total > 0 && watchedCount === total && status === 'watching') {
-      await this.updateStatus(tmdbId, 'completed');
+      await this.updateStatus(tmdbId, 'completed', 'tv');
       return;
     }
     // Step 3: un-watch to zero → planned, but only if WE auto-set watching.
     if (watchedCount === 0 && this.autoSetWatching.get(tmdbId) === true) {
       this.autoSetWatching.delete(tmdbId);
-      await this.updateStatus(tmdbId, 'planned');
+      await this.updateStatus(tmdbId, 'planned', 'tv');
     }
   }
 

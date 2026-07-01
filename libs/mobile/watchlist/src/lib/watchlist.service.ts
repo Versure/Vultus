@@ -7,10 +7,13 @@ import {
   deleteDoc,
   doc,
   docData,
+  getDocs,
   updateDoc,
+  writeBatch,
 } from '@angular/fire/firestore';
 import { AUTH_UID } from '@vultus/shared/domain/tokens';
 import {
+  type EpisodeDoc,
   type Region,
   type RegionAvailability,
   type TitleType,
@@ -20,14 +23,17 @@ import {
 import {
   availabilityDocPath,
   dataToAvailability,
+  dataToEpisode,
   dataToUser,
   dataToWatchlistItem,
+  episodesPath,
   notificationsPath,
   userPath,
   watchlistItemPath,
   watchlistPath,
 } from '@vultus/shared/firestore-schema';
 import type {
+  EpisodeReadData,
   RegionAvailabilityReadData,
   UserReadData,
   WatchlistItemReadData,
@@ -245,14 +251,73 @@ export class WatchlistService {
     }),
   );
 
-  /** Updates only the `status` field on a watchlist item. Null uid → no-op. */
-  updateStatus(uid: string | null, titleId: string, status: WatchStatus): void {
+  /**
+   * Updates the `status` field on a watchlist item. Null uid → no-op.
+   *
+   * Completed-marks-episodes side effect (spec 0053): when the NEW status is
+   * `'completed'` AND `type === 'tv'`, every currently-unwatched episode under
+   * `users/{uid}/watchlist/{titleId}/episodes` is batch-marked
+   * `{ watched: true, watchedAt: <now> }` before the status write. Movies and
+   * TV shows whose episodes are all already watched / not-yet-synced are cheap
+   * no-ops (the emptiness check IS the guard — no extra status read, decision 7).
+   * Moving status AWAY from `'completed'` never touches episodes (decision 6).
+   *
+   * Returns a `Promise<void>` so tests can await the batch effect; the page
+   * still calls it fire-and-forget (`void`).
+   */
+  async updateStatus(
+    uid: string | null,
+    titleId: string,
+    status: WatchStatus,
+    type: TitleType,
+  ): Promise<void> {
     if (!uid) {
       return;
     }
-    void updateDoc(doc(this.firestore, watchlistItemPath(uid, titleId)), {
+    if (status === 'completed' && type === 'tv') {
+      await this.markAllEpisodesWatched(uid, titleId);
+    }
+    await updateDoc(doc(this.firestore, watchlistItemPath(uid, titleId)), {
       status,
     });
+  }
+
+  /**
+   * Batch-marks every currently-unwatched episode of a TV title watched
+   * (spec 0053). Reads the WHOLE `users/{uid}/watchlist/{titleId}/episodes`
+   * subcollection one-shot (no `where` — every season, since "completed" means
+   * the entire show), then `writeBatch`-updates `{ watched: true, watchedAt:
+   * <now> }` onto ONLY the docs currently `watched !== true`. If there are zero
+   * unwatched docs (all already watched, or an empty / not-yet-synced
+   * subcollection) the commit is skipped entirely. No `setDoc` — episode docs
+   * are created by the sync engine and must pre-exist; this only updates them.
+   *
+   * Slice-local, deliberately independent of the equivalent title-detail helper
+   * (2-slice duplication, short of the 3+-slice extract rule — spec decision 1).
+   */
+  private async markAllEpisodesWatched(
+    uid: string,
+    titleId: string,
+  ): Promise<void> {
+    const snap = await getDocs(
+      collection(this.firestore, episodesPath(uid, titleId)),
+    );
+    const batch = writeBatch(this.firestore);
+    const watchedAt = new Date();
+    let unwatchedCount = 0;
+    for (const docSnap of snap.docs) {
+      const episode: EpisodeDoc = dataToEpisode(
+        docSnap.data() as EpisodeReadData,
+      );
+      if (episode.watched !== true) {
+        batch.update(docSnap.ref, { watched: true, watchedAt });
+        unwatchedCount++;
+      }
+    }
+    if (unwatchedCount === 0) {
+      return;
+    }
+    await batch.commit();
   }
 
   /** Deletes a watchlist item. Null uid → no-op. */

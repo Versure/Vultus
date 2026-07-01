@@ -491,7 +491,8 @@ describe('TitleDetailService', () => {
 
   it('updateStatus / removeTitle target the watchlist item path', async () => {
     const service = createService(UID);
-    await service.updateStatus(27205, 'completed');
+    // Movie completed → bare status write (no episode read/batch).
+    await service.updateStatus(27205, 'completed', 'movie');
     expect(updateDocMock.mock.calls[0][0]).toEqual({
       path: watchlistItemPath(UID, '27205'),
     });
@@ -517,7 +518,7 @@ describe('TitleDetailService', () => {
     expect(tracked).toBeNull();
 
     await service.add(liveDetail());
-    await service.updateStatus(1, 'completed');
+    await service.updateStatus(1, 'completed', 'movie');
     await service.removeTitle(1);
     expect(setDocMock).not.toHaveBeenCalled();
     expect(updateDocMock).not.toHaveBeenCalled();
@@ -530,7 +531,7 @@ describe('TitleDetailService', () => {
   it('no write targets anything but the watchlist item doc', async () => {
     const service = createService(UID);
     await service.add(liveDetail({ tmdbId: 1 }));
-    await service.updateStatus(2, 'dropped');
+    await service.updateStatus(2, 'dropped', 'tv');
     await service.removeTitle(3);
     const writtenPaths = [
       ...setDocMock.mock.calls,
@@ -649,11 +650,21 @@ describe('TitleDetailService', () => {
           { id: 's01e01', season: 1, episode: 1, title: 'a', watched: true },
           { id: 's01e02', season: 1, episode: 2, title: 'b', watched: true },
         ]),
+      )
+      // third getDocs: autoUpdateStatus advances watching→completed, which now
+      // (spec 0053) calls markAllEpisodesWatched — it re-reads ALL episodes
+      // (still all watched) and finds nothing to batch (recursion-safe no-op).
+      .mockResolvedValueOnce(
+        docsSnap([
+          { id: 's01e01', season: 1, episode: 1, title: 'a', watched: true },
+          { id: 's01e02', season: 1, episode: 2, title: 'b', watched: true },
+        ]),
       );
     getDocMock.mockResolvedValue(watchlistSnap('watching'));
     const service = createService(UID);
     await service.setSeasonWatched(2, 1, true);
     expect(whereMock).toHaveBeenCalledWith('season', '==', 1);
+    // Only the season batch commits; the completed-path helper adds no ops.
     expect(batchUpdateMock).toHaveBeenCalledTimes(2);
     expect(batchCommitMock).toHaveBeenCalledTimes(1);
     const payload = batchUpdateMock.mock.calls[0][1] as { watched: boolean };
@@ -833,6 +844,151 @@ describe('TitleDetailService', () => {
       (c) => c[0].path === watchlistItemPath(UID, '2'),
     );
     expect(statusCalls.length).toBe(0);
+  });
+
+  // --- spec 0053: completing a TV show marks all unwatched episodes watched ---
+
+  describe('updateStatus completed → markAllEpisodesWatched (spec 0053)', () => {
+    it('TV + completed + some unwatched → status written AND batch commits {watched:true, watchedAt} for ONLY the unwatched docs', async () => {
+      getDocsMock.mockResolvedValue(
+        docsSnap([
+          { id: 's01e01', season: 1, episode: 1, title: 'a', watched: true },
+          { id: 's01e02', season: 1, episode: 2, title: 'b', watched: false },
+          { id: 's01e03', season: 1, episode: 3, title: 'c', watched: false },
+        ]),
+      );
+      const service = createService(UID);
+      await service.updateStatus(2, 'completed', 'tv');
+
+      // Whole subcollection read, no where() filter.
+      expect(collectionMock).toHaveBeenCalledWith({}, episodesPath(UID, '2'));
+      expect(whereMock).not.toHaveBeenCalled();
+
+      // Only the two unwatched docs are batched (s01e01 already watched → excluded).
+      expect(batchUpdateMock).toHaveBeenCalledTimes(2);
+      const batchedPaths = batchUpdateMock.mock.calls.map(
+        (c) => (c[0] as { path: string }).path,
+      );
+      expect(batchedPaths).toEqual(['ep/s01e02', 'ep/s01e03']);
+      for (const call of batchUpdateMock.mock.calls) {
+        const payload = call[1] as { watched: boolean; watchedAt: unknown };
+        expect(payload.watched).toBe(true);
+        expect(payload.watchedAt).toBeInstanceOf(Date);
+      }
+      expect(batchCommitMock).toHaveBeenCalledTimes(1);
+
+      // Status write still happens.
+      expect(updateDocMock).toHaveBeenCalledWith(
+        { path: watchlistItemPath(UID, '2') },
+        { status: 'completed' },
+      );
+    });
+
+    it('TV + completed + all episodes already watched → status written, NO batch commit', async () => {
+      getDocsMock.mockResolvedValue(
+        docsSnap([
+          { id: 's01e01', season: 1, episode: 1, title: 'a', watched: true },
+          { id: 's01e02', season: 1, episode: 2, title: 'b', watched: true },
+        ]),
+      );
+      const service = createService(UID);
+      await service.updateStatus(2, 'completed', 'tv');
+      expect(batchUpdateMock).not.toHaveBeenCalled();
+      expect(batchCommitMock).not.toHaveBeenCalled();
+      expect(updateDocMock).toHaveBeenCalledWith(
+        { path: watchlistItemPath(UID, '2') },
+        { status: 'completed' },
+      );
+    });
+
+    it('TV + completed + empty subcollection → status written, NO batch commit', async () => {
+      getDocsMock.mockResolvedValue(docsSnap([]));
+      const service = createService(UID);
+      await service.updateStatus(2, 'completed', 'tv');
+      expect(batchUpdateMock).not.toHaveBeenCalled();
+      expect(batchCommitMock).not.toHaveBeenCalled();
+      expect(updateDocMock).toHaveBeenCalledWith(
+        { path: watchlistItemPath(UID, '2') },
+        { status: 'completed' },
+      );
+    });
+
+    it('movie + completed → status written, NO episode read/batch at all', async () => {
+      const service = createService(UID);
+      await service.updateStatus(27205, 'completed', 'movie');
+      expect(getDocsMock).not.toHaveBeenCalled();
+      expect(batchUpdateMock).not.toHaveBeenCalled();
+      expect(batchCommitMock).not.toHaveBeenCalled();
+      expect(updateDocMock).toHaveBeenCalledWith(
+        { path: watchlistItemPath(UID, '27205') },
+        { status: 'completed' },
+      );
+    });
+
+    it('null uid → no-op: no status write, no episode read', async () => {
+      const service = createService(null);
+      await service.updateStatus(2, 'completed', 'tv');
+      expect(getDocsMock).not.toHaveBeenCalled();
+      expect(batchCommitMock).not.toHaveBeenCalled();
+      expect(updateDocMock).not.toHaveBeenCalled();
+    });
+
+    it.each(['watching', 'planned', 'dropped'] as const)(
+      'TV + non-completed status (%s) → status written, NO episode read/batch (forward-direction only)',
+      async (status) => {
+        const service = createService(UID);
+        await service.updateStatus(2, status, 'tv');
+        expect(getDocsMock).not.toHaveBeenCalled();
+        expect(batchUpdateMock).not.toHaveBeenCalled();
+        expect(batchCommitMock).not.toHaveBeenCalled();
+        expect(updateDocMock).toHaveBeenCalledWith(
+          { path: watchlistItemPath(UID, '2') },
+          { status },
+        );
+      },
+    );
+
+    it('regression: setMovieWatched writes completed for a watched movie WITHOUT touching episodes', async () => {
+      getDocMock.mockResolvedValue(watchlistSnap('watching'));
+      const service = createService(UID);
+      await service.setMovieWatched(2, true);
+      // currentStatus getDoc is expected; but NO episodes getDocs / batch.
+      expect(getDocsMock).not.toHaveBeenCalled();
+      expect(batchUpdateMock).not.toHaveBeenCalled();
+      expect(batchCommitMock).not.toHaveBeenCalled();
+      expect(updateDocMock).toHaveBeenCalledWith(
+        { path: watchlistItemPath(UID, '2') },
+        { status: 'completed' },
+      );
+    });
+
+    it('recursion-safety: autoUpdateStatus advancing an already-fully-watched TV show to completed hits markAllEpisodesWatched but finds zero unwatched → writeBatch/commit invoked ZERO times', async () => {
+      // Marking the last episode watched: autoUpdateStatus reads all-watched
+      // episodes, writes 'completed' via updateStatus, which calls the helper —
+      // which re-reads the same all-watched docs and finds nothing to batch.
+      getDocsMock.mockResolvedValue(
+        docsSnap([
+          { id: 's01e01', season: 1, episode: 1, title: 'a', watched: true },
+          { id: 's01e02', season: 1, episode: 2, title: 'b', watched: true },
+        ]),
+      );
+      getDocMock.mockResolvedValue(watchlistSnap('watching'));
+      const service = createService(UID);
+      await service.setEpisodeWatched(2, 's01e02', true);
+
+      // Status advanced to completed exactly once.
+      const statusCalls = updateDocMock.mock.calls.filter(
+        (c) => c[0].path === watchlistItemPath(UID, '2'),
+      );
+      expect(statusCalls.length).toBe(1);
+      expect(statusCalls[0][1]).toEqual({ status: 'completed' });
+
+      // The completed path's helper found zero unwatched → no batch write/commit.
+      // (Proof there is no double-batch-write and no recursion/loop.) The helper
+      // may allocate a writeBatch() but never adds an op or commits it.
+      expect(batchUpdateMock).not.toHaveBeenCalled();
+      expect(batchCommitMock).not.toHaveBeenCalled();
+    });
   });
 
   describe('revertIfNewEpisodes', () => {

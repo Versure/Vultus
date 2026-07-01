@@ -410,12 +410,13 @@ describe('TitleDetailPage', () => {
     cmp.openStatusSheet();
     expect(cmp.actionSheetOpen).toBe(true);
 
-    // Selecting a status row invokes updateStatus.
+    // Selecting a status row invokes updateStatus (spec 0053: with the resolved
+    // type — this tracked item is a movie).
     const watchingBtn = cmp.actionSheetButtons.find(
       (b) => b.text === 'Watching',
     );
     void watchingBtn?.handler?.();
-    expect(svc.updateStatus).toHaveBeenCalledWith(27205, 'watching');
+    expect(svc.updateStatus).toHaveBeenCalledWith(27205, 'watching', 'movie');
   });
 
   it('tracked → remove opens the alert and confirming calls removeTitle', async () => {
@@ -643,7 +644,8 @@ describe('TitleDetailPage', () => {
       (b) => b.text === 'Watching',
     );
     void watchingBtn?.handler?.();
-    expect(svc.updateStatus).toHaveBeenCalledWith(27205, 'watching');
+    // Title B (27205) resolves as a movie in this mock → type threaded is 'movie'.
+    expect(svc.updateStatus).toHaveBeenCalledWith(27205, 'watching', 'movie');
 
     // Remove handler must also use B's id.
     const removeBtn = cmp.alertButtons.find((b) => b.text === 'Remove');
@@ -852,6 +854,55 @@ describe('TitleDetailPage', () => {
 
       // Still only called once (dedupe by tmdbId).
       expect(svc.revertIfNewEpisodes).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // --- spec 0053: completed status threads the resolved type ---
+
+  describe('updateStatus type threading (spec 0053)', () => {
+    it('selecting "Completed" on a loaded TV detail invokes updateStatus(id, "completed", "tv")', async () => {
+      const { fixture, svc } = await setup({
+        detail: { kind: 'loaded', source: 'cache', detail: tvDetail },
+        tracked: {
+          type: 'tv',
+          tmdbId: 1396,
+          traktId: null,
+          title: 'Breaking Bad',
+          addedAt: '2026-01-01T00:00:00Z',
+          status: 'watching',
+        },
+      });
+      const cmp = fixture.componentInstance;
+      const completedBtn = cmp.actionSheetButtons.find(
+        (b) => b.text === 'Completed',
+      );
+      void completedBtn?.handler?.();
+      // tmdbId comes from the route param (27205 by default), type from detail$.
+      expect(svc.updateStatus).toHaveBeenCalledWith(27205, 'completed', 'tv');
+    });
+
+    it('currentType synced from detail$: a loaded movie detail → handler passes "movie"', async () => {
+      const { fixture, svc } = await setup({
+        detail: { kind: 'loaded', source: 'cache', detail: movieDetail },
+        tracked: {
+          type: 'movie',
+          tmdbId: 27205,
+          traktId: null,
+          title: 'Inception',
+          addedAt: '2026-01-01T00:00:00Z',
+          status: 'watching',
+        },
+      });
+      const cmp = fixture.componentInstance;
+      const completedBtn = cmp.actionSheetButtons.find(
+        (b) => b.text === 'Completed',
+      );
+      void completedBtn?.handler?.();
+      expect(svc.updateStatus).toHaveBeenCalledWith(
+        27205,
+        'completed',
+        'movie',
+      );
     });
   });
 

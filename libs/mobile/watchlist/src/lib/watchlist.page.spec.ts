@@ -425,7 +425,7 @@ describe('WatchlistPage', () => {
     expect(el.textContent).not.toContain('Your watchlist is empty');
   });
 
-  it('openStatusSheet opens the action sheet; selecting a status calls updateStatus', async () => {
+  it('openStatusSheet opens the action sheet; selecting a status calls updateStatus with the item type', async () => {
     const service = mockService([item({ tmdbId: 1, type: 'movie' })]);
     const { fixture, el } = await setup(service);
     const component = fixture.componentInstance;
@@ -442,6 +442,25 @@ describe('WatchlistPage', () => {
       'uid-123',
       '1',
       'completed',
+      'movie',
+    );
+  });
+
+  it('selecting "Completed" for a TV item passes item.type ("tv") to updateStatus (spec 0053)', async () => {
+    const service = mockService([item({ tmdbId: 2, type: 'tv' })]);
+    const { fixture } = await setup(service);
+    const component = fixture.componentInstance;
+
+    component.openStatusSheet(
+      item({ tmdbId: 2, type: 'tv', status: 'watching' }),
+    );
+    component.onStatusSelected('completed');
+
+    expect(service.updateStatus).toHaveBeenCalledWith(
+      'uid-123',
+      '2',
+      'completed',
+      'tv',
     );
   });
 
