@@ -2,7 +2,7 @@
 number: 0055
 slug: android-cutout-runtime-theme
 title: Instrument the Android running-window theme to diagnose the still-visible camera-cutout letterbox, then apply the data-indicated fix
-status: approved
+status: implementing
 slices: []
 scopes: [scope:mobile]
 created: 2026-07-01
@@ -260,7 +260,7 @@ Apply the **one** candidate the captured data supports; do not stack blind chang
 **In all candidates:** once the corrective change (if any) is applied and confirmed,
 **remove every `VultusCutoutDiag` diagnostic block** from `MainActivity.java`,
 returning it to the 0039 shape plus only the intended Step-2 change (which for
-Candidates B and C is *no code change* — just a reported finding).
+Candidates B and C is _no code change_ — just a reported finding).
 
 **Rejected approach** (do not implement): shipping a speculative
 manifest/`styles.xml` edit **without** first capturing the runtime theme/inset data.
@@ -310,13 +310,13 @@ changed in this step).
 - **`npx cap sync android` is not required** (no `capacitor.config.ts` change;
   `MainActivity.java` is a committed native source compiled directly by Gradle). If
   run, confirm it does **not** clobber the hand-edited `MainActivity.java` (`cap
-  sync` regenerates only plugin/config glue).
+sync` regenerates only plugin/config glue).
 - **Human/device gate (cannot run in-session):** a human builds + installs on a
   **real notched Android device** (device-level use-cutout setting enabled),
   reproduces the letterbox, captures `VultusCutoutDiag` Logcat output
   (`adb logcat -s VultusCutoutDiag`), and posts the theme + `layoutInDisplayCutoutMode`
-  + display-cutout inset/bounds values (and a bars-hidden sanity note) to the
-  issue/PR. **This is the required input for Step 2.**
+  - display-cutout inset/bounds values (and a bars-hidden sanity note) to the
+    issue/PR. **This is the required input for Step 2.**
 
 ### 2. [sequential] Apply the data-indicated candidate fix + remove diagnostics — GATED on Step 1's Logcat
 
@@ -348,7 +348,7 @@ a reported finding — but still require the diagnostics removal.
   no diagnostic logging remains. Recorded on the PR.
 - Gate: `nx affected -t typecheck lint test build --base=main` will likely show **no
   affected TS project** (no workspace TS file changed); that is expected. **`nx
-  affected` does not compile Java or package Android resources**, so a green
+affected` does not compile Java or package Android resources**, so a green
   `nx affected` does **not** prove the Java compiles or the theme change took effect
   — do not report the native build as done off it (see Test plan).
 
@@ -372,7 +372,7 @@ of 0039/0045.
   Existing flows are untouched and nothing is un-skipped. Stated explicitly so the
   omission is intentional.
 - **Automated gate (workspace):** `nx affected -t typecheck lint test build
-  --base=main` will likely show **no affected TS project**; **expected and
+--base=main` will likely show **no affected TS project**; **expected and
   acceptable**. **`nx affected` compiles neither Java nor Android resources**, so a
   green run does **not** prove `MainActivity.java` compiles or the theme change took
   effect — do not report the native build as done off it.
@@ -392,7 +392,7 @@ of 0039/0045.
      with transient swipe-reveal — a regression note, not a verification goal.
 - **Human device capture — Step 2 (the corrective gate; cannot run in-session; same
   device requirement). Flagged human / post-merge.** After the data-indicated change
-  + diagnostics removal, re-build + install:
+  - diagnostics removal, re-build + install:
   1. **Candidate A:** the app's dark surface draws all the way to the top edge,
      filling **behind** the camera notch — **no black letterbox band**; the
      `IonHeader`/toolbar content is **not obscured** (inset below the notch); 0039
