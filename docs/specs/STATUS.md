@@ -12,9 +12,8 @@
 
 Total specs: 62
 
-- done: 58
+- done: 59
 - approved: 3
-- implementing: 1
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -77,6 +76,6 @@ Total specs: 62
 | 57 | leaving-platform-notifications | Notify when a tracked title loses flatrate availability in the user's region | approved | slice:dispatch-notifications, slice:notifications, slice:settings | scope:functions, scope:mobile, scope:shared |
 | 58 | doc-integrity-guards | Deterministic documentation integrity: spec-status ledger + CI drift guards | done | — | — |
 | 59 | audit-docs-skill | /audit-docs skill: LLM-judgment documentation drift audit | done | — | — |
-| 60 | provider-preferences | Let users pick their subscribed providers and flag "on your platform" availability | implementing | — | scope:mobile, scope:functions, scope:shared |
+| 60 | provider-preferences | Let users pick their subscribed providers and flag "on your platform" availability | done | slice:settings, slice:watchlist, slice:title-detail, slice:sync-titles | scope:mobile, scope:functions, scope:shared |
 | 61 | plex-provider | Add Plex as a manual, per-title "I'm watching this via Plex" provider | approved | slice:settings, slice:title-detail, slice:watchlist | scope:mobile, scope:shared |
 | 62 | android-webview-cutout-background | Paint the Android WebView background behind the camera cutout via Capacitor's top-level backgroundColor config | done | — | scope:mobile |

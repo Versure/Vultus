@@ -2,7 +2,7 @@
 number: 0060
 slug: provider-preferences
 title: Let users pick their subscribed providers and flag "on your platform" availability
-status: implementing
+status: done
 slices: [slice:settings, slice:watchlist, slice:title-detail, slice:sync-titles]
 scopes: [scope:mobile, scope:functions, scope:shared]
 created: 2026-07-01
