@@ -1,8 +1,12 @@
-import { signal } from '@angular/core';
+import { type WritableSignal, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
-import { provideIonicAngular } from '@ionic/angular/standalone';
+import {
+  ToastController,
+  provideIonicAngular,
+} from '@ionic/angular/standalone';
 import { AUTH_UID } from '@vultus/shared/domain/tokens';
+import { SyncStateService } from '@vultus/shared/ui-kit';
 import { BehaviorSubject, NEVER, type Observable, concat, of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GroupedProviders, TitleDetail } from './tmdb-detail.client';
@@ -141,6 +145,35 @@ function makeService(o: SvcOpts = {}) {
   };
 }
 
+interface MockSyncState {
+  canSync: WritableSignal<boolean>;
+  syncing: WritableSignal<boolean>;
+  triggerSync: ReturnType<typeof vi.fn>;
+}
+
+function mockSyncState(over: Partial<MockSyncState> = {}): MockSyncState {
+  return {
+    canSync: over.canSync ?? signal(true),
+    syncing: over.syncing ?? signal(false),
+    triggerSync: over.triggerSync ?? vi.fn(() => Promise.resolve(undefined)),
+  };
+}
+
+function mockToastCtrl() {
+  const present = vi.fn(() => Promise.resolve(undefined));
+  const create = vi.fn(() => Promise.resolve({ present }));
+  return { create, present };
+}
+
+/** A pull-to-refresh `ionRefresh` CustomEvent with a spied `detail.complete`. */
+function fakeRefreshEvent() {
+  const complete = vi.fn();
+  return {
+    event: { detail: { complete } } as unknown as CustomEvent,
+    complete,
+  };
+}
+
 /**
  * Mutable paramMap — allows simulating Ionic page reuse by pushing a new value
  * on the same component instance. Starts with titleId='27205' (Inception).
@@ -157,6 +190,8 @@ async function setup(
   o: SvcOpts = {},
   initialTitleId = '27205',
   initialType?: string,
+  syncState: MockSyncState = mockSyncState(),
+  toast = mockToastCtrl(),
 ) {
   paramMap$ = new BehaviorSubject(
     convertToParamMap({ titleId: initialTitleId }),
@@ -173,6 +208,8 @@ async function setup(
       provideIonicAngular(),
       { provide: TitleDetailService, useValue: svc },
       { provide: AUTH_UID, useValue: signal<string | null>('user-123') },
+      { provide: SyncStateService, useValue: syncState },
+      { provide: ToastController, useValue: toast },
       {
         provide: ActivatedRoute,
         useValue: {
@@ -188,7 +225,7 @@ async function setup(
   const fixture = TestBed.createComponent(TitleDetailPage);
   await fixture.whenStable();
   fixture.detectChanges();
-  return { fixture, svc };
+  return { fixture, svc, syncState, toast };
 }
 
 describe('TitleDetailPage', () => {
@@ -451,6 +488,8 @@ describe('TitleDetailPage', () => {
         provideIonicAngular(),
         { provide: TitleDetailService, useValue: svc },
         { provide: AUTH_UID, useValue: signal<string | null>('user-123') },
+        { provide: SyncStateService, useValue: mockSyncState() },
+        { provide: ToastController, useValue: mockToastCtrl() },
         {
           provide: ActivatedRoute,
           useValue: {
@@ -489,6 +528,8 @@ describe('TitleDetailPage', () => {
         provideIonicAngular(),
         { provide: TitleDetailService, useValue: svc },
         { provide: AUTH_UID, useValue: signal<string | null>('user-123') },
+        { provide: SyncStateService, useValue: mockSyncState() },
+        { provide: ToastController, useValue: mockToastCtrl() },
         {
           provide: ActivatedRoute,
           useValue: {
@@ -518,6 +559,8 @@ describe('TitleDetailPage', () => {
         provideIonicAngular(),
         { provide: TitleDetailService, useValue: svc },
         { provide: AUTH_UID, useValue: signal<string | null>('user-123') },
+        { provide: SyncStateService, useValue: mockSyncState() },
+        { provide: ToastController, useValue: mockToastCtrl() },
         {
           provide: ActivatedRoute,
           useValue: {
@@ -572,6 +615,8 @@ describe('TitleDetailPage', () => {
         provideIonicAngular(),
         { provide: TitleDetailService, useValue: svc },
         { provide: AUTH_UID, useValue: signal<string | null>('user-123') },
+        { provide: SyncStateService, useValue: mockSyncState() },
+        { provide: ToastController, useValue: mockToastCtrl() },
         {
           provide: ActivatedRoute,
           useValue: {
@@ -780,6 +825,8 @@ describe('TitleDetailPage', () => {
           provideIonicAngular(),
           { provide: TitleDetailService, useValue: svc },
           { provide: AUTH_UID, useValue: signal<string | null>('user-123') },
+          { provide: SyncStateService, useValue: mockSyncState() },
+          { provide: ToastController, useValue: mockToastCtrl() },
           {
             provide: ActivatedRoute,
             useValue: {
@@ -805,6 +852,79 @@ describe('TitleDetailPage', () => {
 
       // Still only called once (dedupe by tmdbId).
       expect(svc.revertIfNewEpisodes).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // --- spec 0052: pull-to-refresh ---
+
+  describe('pull-to-refresh (spec 0052)', () => {
+    it('renders an ion-refresher with slot="fixed" and not disabled', async () => {
+      const { fixture } = await setup();
+      const el = fixture.nativeElement as HTMLElement;
+      const refresher = el.querySelector('ion-refresher');
+      expect(refresher).toBeTruthy();
+      expect(refresher?.getAttribute('slot')).toBe('fixed');
+      // No `disabled` attribute — the refresher is always pullable; the
+      // cooldown is enforced inside onRefresh, not by disabling the control.
+      expect(refresher?.hasAttribute('disabled')).toBe(false);
+      expect(refresher?.querySelector('ion-refresher-content')).toBeTruthy();
+    });
+
+    it('canSync true → triggers sync + success toast, then completes', async () => {
+      const syncState = mockSyncState({
+        canSync: signal(true),
+        triggerSync: vi.fn(() => Promise.resolve(undefined)),
+      });
+      const toast = mockToastCtrl();
+      const { fixture } = await setup({}, '27205', undefined, syncState, toast);
+      const { event, complete } = fakeRefreshEvent();
+
+      await fixture.componentInstance.onRefresh(event);
+
+      expect(syncState.triggerSync).toHaveBeenCalledTimes(1);
+      expect(toast.create).toHaveBeenCalledWith({
+        message: 'Refreshed',
+        duration: 2000,
+        position: 'bottom',
+        color: 'success',
+      });
+      expect(toast.present).toHaveBeenCalledTimes(1);
+      expect(complete).toHaveBeenCalledTimes(1);
+    });
+
+    it('canSync false → no-op: no sync, no toast, but still completes', async () => {
+      const syncState = mockSyncState({ canSync: signal(false) });
+      const toast = mockToastCtrl();
+      const { fixture } = await setup({}, '27205', undefined, syncState, toast);
+      const { event, complete } = fakeRefreshEvent();
+
+      await fixture.componentInstance.onRefresh(event);
+
+      expect(syncState.triggerSync).not.toHaveBeenCalled();
+      expect(toast.create).not.toHaveBeenCalled();
+      expect(toast.present).not.toHaveBeenCalled();
+      expect(complete).toHaveBeenCalledTimes(1);
+    });
+
+    it('triggerSync rejects → error toast, then completes', async () => {
+      const syncState = mockSyncState({
+        canSync: signal(true),
+        triggerSync: vi.fn(() => Promise.reject(new Error('boom'))),
+      });
+      const toast = mockToastCtrl();
+      const { fixture } = await setup({}, '27205', undefined, syncState, toast);
+      const { event, complete } = fakeRefreshEvent();
+
+      await fixture.componentInstance.onRefresh(event);
+
+      expect(toast.create).toHaveBeenCalledWith({
+        message: 'Sync failed — try again later',
+        duration: 3000,
+        position: 'bottom',
+        color: 'danger',
+      });
+      expect(toast.present).toHaveBeenCalledTimes(1);
+      expect(complete).toHaveBeenCalledTimes(1);
     });
   });
 });

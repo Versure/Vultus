@@ -28,7 +28,6 @@ import {
   trashOutline,
 } from 'ionicons/icons';
 import { AUTH_UID } from '@vultus/shared/domain/tokens';
-import { SyncStateService } from './watchlist.sync-state.service';
 import {
   type Region,
   type TitleType,
@@ -36,6 +35,7 @@ import {
   type WatchlistItem,
 } from '@vultus/shared/domain';
 import {
+  SyncStateService,
   VultusEmptyState,
   VultusErrorState,
   VultusSkeletonCard,
