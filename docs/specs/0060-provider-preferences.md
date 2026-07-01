@@ -37,8 +37,31 @@ This spec adds that missing dimension:
 2. A **"My Providers" multi-select** in Settings, persisting the user's chosen
    TMDB provider ids to a new `myProviderIds: number[]` field on `users/{uid}`.
 3. **Availability framing** on the watchlist card and the title-detail
-   "Where to Watch" card that partitions a title's **flatrate** providers into
-   "on a provider you have" (highlighted) vs "available elsewhere" (muted).
+   "Where to Watch" card. On the **compact watchlist card** this partitions a
+   title's **flatrate** providers into "on a provider you have" (highlighted) vs
+   "available elsewhere" (muted). On the **roomier title-detail card** it splits
+   **all** providers (flatrate + rent + buy) into "On Your Providers" (the user's
+   selected flatrate providers) vs "Also Available On" (everything else) — see
+   the corrected decision 4 and the supersession note below.
+
+> **Supersession note (2026-07-01, title-detail two-group split).** The
+> title-detail section of this spec was originally drafted with the section's
+> tokens **extrapolated** from a sibling screen because three `edit_screens`
+> pushes to the then-current "Movie Detail - Vultus" screen timed out and never
+> rendered. That gap is now **closed**: the Stitch project was cleaned up (four
+> duplicate/divergent detail pages consolidated) into one canonical screen,
+> **"Movie Detail - Personal Tracking - Vultus"** (`562019f29ce2412d90c757a7e45a98bf`,
+> same project `projects/13590348714018893783`), which **renders the "Where to
+> Watch" card in full context**, including the two-group split. Its real markup
+> revealed the layout is richer than the extrapolation and, crucially, that "Also
+> Available On" spans rent/buy too (not flatrate-only). This spec's title-detail
+> UI contract, decision 4, the title-detail service/data-model section, T8, the
+> test plan, and the DoD are **revised to match that verified render**, which
+> **supersedes** the earlier extrapolated decision — a real in-context render is
+> stronger evidence than an extrapolation from a sibling screen. The old screen
+> `208cb8d7a679490b8d13672c6943d6d3` ("Movie Detail - Vultus") and the intermediate
+> `dfc2c7b98a9f46d2bff9b7722fd192b7` ("Movie Detail - Watch Providers - Vultus")
+> are **superseded/stale — do NOT pull them.**
 
 This is the **first of two related specs.** Spec 0061 (GitHub #140, not yet
 drafted) will add Plex as a manual, non-detectable "provider" layered on the
@@ -60,16 +83,31 @@ migration (decision 1).
    `notificationPrefs` / `fcmTokens`. Legacy docs read `?? []`. On a **region
    change**, provider ids not present in the new region's catalog are dropped —
    see Data model for the chosen UX.
-4. **Availability framing = inline highlighted pill** on the compact watchlist
-   card; **explicit two-group split** ("On Your Providers" / "Also Available On")
-   inside the flatrate group on the roomier title-detail card. Rent/buy are
-   unaffected (subscription-coverage framing does not apply to pay-per-title).
+4. **Availability framing** differs by surface:
+   - **Compact watchlist card = inline highlighted pill**, computed from
+     **flatrate providers only** (subscription-coverage per-item framing does not
+     apply to pay-per-title on the compact card — a title is "on a provider you
+     have" only via a flatrate subscription). Unchanged by the title-detail
+     correction below.
+   - **Roomier title-detail card = explicit two-group split** ("On Your
+     Providers" / "Also Available On") spanning **all** provider types. Per the
+     verified canonical screen `562019f29ce2412d90c757a7e45a98bf` (supersession
+     note above), **"On Your Providers" = the user's selected FLATRATE providers**
+     (only flatrate can be "yours" — subscription is a flatrate concept), and
+     **"Also Available On" = every OTHER provider regardless of type** (non-mine
+     flatrate + all rent + all buy), each row showing its own type caption
+     ("Subscription" / "Rent/Buy" etc.). This is simpler than three separate
+     groups and matches the render exactly. **This corrected structure supersedes
+     the earlier "rent/buy are unaffected, separate untouched groups" wording**,
+     which was an extrapolation before the screen rendered.
 5. **Settings "My Providers"** is a new Stitch-designed card (screen
    `cebdfd02c7d44023b0e0019dd4907d48`) between the Region and Notification cards.
 6. **One e2e flow** covering the "on your provider" and "also on" pills, seeded
    against the emulator + TMDB fixtures.
 7. **Out of scope:** Plex (spec 0061); any change to the spec-0054 watchlist
-   "Provider" filter chips; rent/buy provider-ownership framing.
+   "Provider" filter chips; rent/buy provider-**ownership** framing (rent/buy
+   providers can never be "yours" — they appear only under title-detail's "Also
+   Available On" with their own type caption, never under "On Your Providers").
 
 ## Scope
 
@@ -96,8 +134,10 @@ In scope:
 - **Watchlist card availability pill** (`libs/mobile/watchlist`): partition
   flatrate providers into mine / elsewhere; highlighted "On {provider}" vs muted
   "Also on {provider}" vs the existing no-chip treatment.
-- **Title-detail "Where to Watch" flatrate two-group split**
-  (`libs/mobile/title-detail`): "On Your Providers" vs "Also Available On".
+- **Title-detail "Where to Watch" two-group split**
+  (`libs/mobile/title-detail`): "On Your Providers" (selected flatrate providers)
+  vs "Also Available On" (every other provider — non-mine flatrate + all rent +
+  all buy — each with its own type caption).
 - One new e2e flow (`apps/mobile-e2e`) + unit + component tests per Test plan.
 
 Out of scope (explicitly):
@@ -107,7 +147,10 @@ Out of scope (explicitly):
 - **The spec-0054 watchlist "Provider" filter chips** — they already filter by
   provider name from availability; "my providers" prioritization/sorting of that
   list is a future nice-to-have, not required here.
-- **Rent/buy provider-ownership framing** — subscription (flatrate) only.
+- **Rent/buy provider-ownership framing** — only flatrate providers can be
+  "yours" (a subscription concept). Rent/buy providers are shown in title-detail's
+  "Also Available On" group with their type caption, but are never flagged as
+  owned/covered. The compact watchlist pill is flatrate-only.
 - **Onboarding / prompting the user to pick providers** — the section is passive
   in Settings; no first-launch nudge.
 - **`title-cache` / sync-engine changes** — availability data is consumed as-is;
@@ -124,7 +167,7 @@ Out of scope (explicitly):
 | functions (app, edit)          | `apps/functions`                       | `scope:functions`                   | new `getWatchProviders` callable + `runGetWatchProviders` core (injected deps); the `provider-catalog` read/refresh store; specs; README |
 | mobile-settings (edit)         | `libs/mobile/settings`                 | `scope:mobile`, `slice:settings`    | "My Providers" multi-select: service signals/setters + catalog load via `GET_WATCH_PROVIDERS`; region-change prune; page + template; mock mirror; README; specs |
 | mobile-watchlist (edit)        | `libs/mobile/watchlist`                | `scope:mobile`, `slice:watchlist`   | read `myProviderIds`; partition flatrate providers; mine / elsewhere pill; specs; README                       |
-| mobile-title-detail (edit)     | `libs/mobile/title-detail`             | `scope:mobile`, `slice:title-detail`| read `myProviderIds`; two-group flatrate split in "Where to Watch"; specs; README                              |
+| mobile-title-detail (edit)     | `libs/mobile/title-detail`             | `scope:mobile`, `slice:title-detail`| read `myProviderIds`; two-group split ("On Your Providers" = selected flatrate / "Also Available On" = all other providers) in "Where to Watch"; specs; README |
 | mobile (shell, edit)           | `apps/mobile`                          | `scope:mobile`                      | provide `GET_WATCH_PROVIDERS` thunk (httpsCallable) at app root                                               |
 | mobile-e2e (edit)              | `apps/mobile-e2e`                      | untagged                            | new provider-preferences flow spec; seed `provider-catalog/{region}` + `myProviderIds`                        |
 
@@ -159,7 +202,7 @@ written by the callable via the Admin SDK — same trust model as `title-cache`)
 | PLAN §4 path                                | Access                            | By                                                                              |
 | ------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------- |
 | `users/{uid}.myProviderIds`                 | **read**, **create**, **update**  | settings slice (read on load; default `[]` on eager create; write on toggle / region-change prune) |
-| `users/{uid}.myProviderIds`                 | **read**                          | watchlist + title-detail slices (partition flatrate providers)                  |
+| `users/{uid}.myProviderIds`                 | **read**                          | watchlist (partition flatrate providers only) + title-detail (partition ALL providers; only the `mine` bucket is flatrate-gated) |
 | `provider-catalog/{region}`                 | **read**                          | mobile via the `getWatchProviders` callable output (NOT read directly by the client) |
 | `provider-catalog/{region}`                 | **read + create/update**          | `getWatchProviders` callable (Admin SDK — cache-read; refetch + rewrite when missing/stale) |
 | `title-cache/{tmdbId}/availability/{region}`| **read** (unchanged shape)        | watchlist + title-detail slices (the `RegionAvailability.providers` array being partitioned) |
@@ -483,10 +526,22 @@ change toast via `ToastController`.
   `users/{uid}.myProviderIds`, default `[]`) alongside the existing `region$()`.
 - `TitleDetailPage`: fold `myProviderIds` into `vm$` (a third combined source, or
   extend the existing `providers$`/`tracked$` `combineLatest`). Add a pure helper
-  to partition `vm.providers.flatrate` into `{ mine: WatchProvider[]; elsewhere:
-  WatchProvider[] }` by `providerId ∈ myProviderIds`. The template renders the two
-  labeled subgroups inside the existing flatrate block (see UI section). Rent/buy
-  blocks are unchanged.
+  `partitionProviders(providers, myProviderIds): { mine: WatchProvider[]; elsewhere: WatchProvider[] }`
+  that partitions **all** providers (flatrate + rent + buy) into:
+  - `mine` — **flatrate** providers whose `providerId ∈ myProviderIds` (only
+    flatrate can be "yours"; a rent/buy provider is never `mine` even if its id is
+    in `myProviderIds`);
+  - `elsewhere` — **every other** provider (non-mine flatrate + all rent + all
+    buy).
+  Each `WatchProvider` carries its `type` (`flatrate`/`rent`/`buy`), which the
+  template renders as the per-row type caption (e.g. "Subscription" for flatrate,
+  "Rent/Buy" for rent/buy — see the UI section for the caption mapping). The
+  template renders the two labeled subgroups (see UI section). **The verified
+  canonical screen (`562019f29ce2412d90c757a7e45a98bf`) shows this consolidated
+  two-group layout replacing the old separate flatrate/rent/buy blocks** — the
+  detail card is now one "Where to Watch" card with the two subgroups (plus the
+  spec-0061 Personal Tracking / Plex subgroup below them, out of scope here). Do
+  **not** keep three separate flatrate/rent/buy sections.
 
 ## UI / Stitch screen refs
 
@@ -512,6 +567,15 @@ id → `get_screen` (metadata + URLs) → fetch `htmlCode.downloadUrl` via a pla
 `Invoke-WebRequest` (**NOT** WebFetch, which strips CSS) for the markup, and
 `screenshot.downloadUrl` for the visual compare. A failed MCP call is a **retry**,
 not a fallback to token-only (project memory `stitch-mcp-reachable.md`).
+
+The three canonical screens are: (A) Settings "My Providers"
+`cebdfd02c7d44023b0e0019dd4907d48`; (B) Advanced Watchlist
+`19f0eae3d6d24eaa90b3aa73ff44a59b`; (C) **"Movie Detail - Personal Tracking -
+Vultus" `562019f29ce2412d90c757a7e45a98bf`** for the title-detail "Where to
+Watch" card. **Superseded/stale — do NOT pull:** the old title-detail screens
+`208cb8d7a679490b8d13672c6943d6d3` ("Movie Detail - Vultus") and
+`dfc2c7b98a9f46d2bff9b7722fd192b7` ("Movie Detail - Watch Providers - Vultus"),
+which the Stitch project cleanup consolidated into (C).
 
 ### (A) Settings — "My Providers" card (Stitch "Settings - My Providers - Vultus", screen id `cebdfd02c7d44023b0e0019dd4907d48`)
 
@@ -573,43 +637,92 @@ classes before touching `watchlist.page.html`.
   pill is non-interactive (presentational). No new hover/focus states beyond the
   card's existing ones.
 
-### (C) Title-detail "Where to Watch" — flatrate two-group split — **UNVERIFIED IN STITCH (blocking-adjacent, needs human eyeball)**
+### (C) Title-detail "Where to Watch" — two-group split (Stitch "Movie Detail - Personal Tracking - Vultus", screen id `562019f29ce2412d90c757a7e45a98bf`)
 
-Target: the flatrate block in `title-detail.page.html` (lines ~164–173). Split
-the flatrate group into two labeled subgroups (rent/buy untouched):
+**VERIFIED via a real in-context render.** This canonical screen renders the "Where
+to Watch" card in full context, including the two-group split. **Pull this screen
+fresh** (raw HTML per the recipe — `htmlCode.downloadUrl` via `Invoke-WebRequest`,
+plus `screenshot.downloadUrl`) before touching `title-detail.page.html`. **Do NOT
+pull** the superseded `208cb8d7a679490b8d13672c6943d6d3` or
+`dfc2c7b98a9f46d2bff9b7722fd192b7` (see fetch recipe).
 
-| Subgroup             | Label                                                                 | Per-row treatment                                                                                                    |
-| -------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| **On Your Providers**| uppercase `text-primary` label with a leading filled `check_circle` icon | provider name in `text-on-surface` (bold, as today) + a small **"Yours"** tag: `bg-primary/10 text-primary rounded-full px-2 py-0.5 text-[10px]` |
-| **Also Available On**| uppercase `text-on-surface-variant` label, no icon                    | provider name in **muted** `text-on-surface-variant` (NOT bold `text-on-surface`); no tag                            |
+Target: the "Where to Watch" block in `title-detail.page.html` (the old separate
+flatrate/rent/buy provider blocks, ~lines 164–173). Replace it with a single card
+containing two labeled subgroups. Semantics (from the verified markup): **"On Your
+Providers" = the user's selected FLATRATE providers**; **"Also Available On" =
+every other provider** (non-mine flatrate + all rent + all buy), each row showing
+its own type caption. (The spec-0061 "Personal Tracking" / Plex subgroup renders
+**below** these two, separated by the same divider — it exists in the canonical
+screen but is **owned by spec 0061**; do not build or duplicate its contract here,
+just leave room for it after the two groups so divider/ordering are understood.)
 
-A `border-t border-outline-variant/10` with `mt-md pt-md` separates the two
-subgroups. If a subgroup is empty (all mine, or none mine), render only the
-non-empty one (no empty header). The subgroup order is **On Your Providers first**,
-then **Also Available On**.
+**Card + subgroup structure (checkable contract vs the fetched markup):**
 
-> **UNVERIFIED IN STITCH — record as a known gap.** Three attempts to push this
-> exact change to the "Movie Detail - Vultus" screen
-> (`projects/13590348714018893783/screens/208cb8d7a679490b8d13672c6943d6d3`) via
-> the Stitch `edit_screens` tool **timed out and did not apply** (the screen is
-> unusually tall, 3830px — a likely cause). The tokens above are **extrapolated**
-> from the sibling "Advanced Watchlist" edit that DID succeed and applied
-> consistently, but this specific screen was **never rendered/screenshotted** by
-> Stitch. Per CLAUDE.md the fidelity contract normally requires a rendered Stitch
-> screen; this one is missing that confirmation. **The implementer MUST flag the
-> title-detail grouping UNVERIFIED in the PR and get a human visual sanity check
-> (or a follow-up Stitch pass) before merge** — do not report it "done" off a
-> green build. See Risks + Test plan.
+| Element              | Spec                                                                                                                                                                                | Token intent                                                        |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| **Card**             | `glass-panel` surface, `--vultus-radius-xl`, `--vultus-space-lg` padding. Header row: a `stream` (Ionic equivalent) glyph + title "Where to Watch" in **`headline-sm`, `text-primary`**, `flex items-center gap-2`, with bottom margin below it before the groups. | `--ion-color-primary`                                               |
+| **Subgroup spacing** | Groups stacked with `space-y-6` (`--vultus-space-lg`); within a group, label + rows stacked `space-y-3` (`--vultus-space-sm`). A `border-t border-outline-variant/10` hairline with `mt-md pt-md` separates each group from the next (incl. from the 0061 group below). | `--vultus-outline-variant` (~10% alpha), `--vultus-space-lg`, `--vultus-space-sm`, `--vultus-space-md` |
+| **"On Your Providers" label** | Uppercase, `label-sm`, `tracking-wider`, **`text-primary`**, with a leading **filled** `check_circle` glyph at 16px (`font-variation-settings: 'FILL' 1`). `flex items-center gap-1.5`. | `--ion-color-primary`                                               |
+| **"Also Available On" label** | Uppercase, `label-sm`, `tracking-wider`, **`text-on-surface-variant`**, **no icon**.                                                                                                | `--vultus-on-surface-variant`                                       |
+
+**Provider row (both subgroups — checkable contract):** each provider is a row,
+NOT a bare name. From the verified markup each row is a
+`flex items-center justify-between p-3 rounded-lg` on a `bg-surface-container`
+fill:
+
+| Row part             | "On Your Providers" row                                                                                          | "Also Available On" row                                                                                    | Token intent                                    |
+| -------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| **Logo tile**        | 40×40 (`w-10 h-10`), `--vultus-radius-md`, provider logo (TMDB `logoPath`), `flex-shrink-0`.                     | same 40×40 logo tile.                                                                                       | —                                               |
+| **Primary line**     | provider name in **`text-on-surface` bold** (`body-md`) + a small **"Yours"** tag next to it (`rounded-full px-2 py-0.5`, ~10px bold, `bg-primary/10 text-primary`). | provider name in **muted `text-on-surface-variant`** (`body-md`, NOT bold); **no** "Yours" tag.            | `--vultus-on-surface`, `--ion-color-primary` (tag) / `--vultus-on-surface-variant` |
+| **Secondary caption**| **type caption "Subscription"** below the name (`label-sm`, `text-on-surface-variant`). All "mine" rows are flatrate → "Subscription". | **type caption for the provider's actual type** below the name (`label-sm`, `text-on-surface-variant`): flatrate → "Subscription", rent/buy → "Rent/Buy". | `--vultus-on-surface-variant`                   |
+| **Trailing icon**    | an `open_in_new` glyph, `text-on-surface-variant`.                                                               | same `open_in_new` glyph.                                                                                   | `--vultus-on-surface-variant`                   |
+
+> **`open_in_new` is a DECORATIVE hover affordance in the mock, NOT a functional
+> requirement.** This app's model has **no per-provider external deep-link URL**,
+> and the issue never asked for external navigation. **Do NOT add external
+> navigation, an `href`, or any click handler that opens a provider** — reproduce
+> the visual (the trailing glyph + its hover color shift) only if it's trivially
+> faithful, or omit the glyph entirely; either is acceptable, but **do not scope-
+> creep a real deep-link feature.** The row is presentational.
+
+**Interactive-state contract (tick each vs the fetched markup + screenshot):**
+
+| Element        | default                                              | hover                                                                                       | focus                       | active/press | disabled |
+| -------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------- | --------------------------- | ------------ | -------- |
+| Provider row   | `bg-surface-container` fill                          | `bg-surface-container-high` fill (subtle raise); trailing `open_in_new` glyph shifts to `text-primary` (`group-hover`). **Transition-colors** on both. | (row is presentational — no functional focus target since there's no action; if rendered as a non-interactive element, no focus ring) | none (no press action — the row does not navigate) | n/a |
+
+The hover state is the mock's `hover:bg-surface-container-high` +
+`group-hover:text-primary` on the trailing icon; wire it via
+`--vultus-surface-container` (default) → `--vultus-surface-container-high` (hover,
+= `--vultus-surface-variant #222a3d`) with a color transition. Because there's no
+real action, the hover is a light affordance only — do not make the row a button.
+
+**Empty-subgroup rule:** if a subgroup has no providers (all mine, or none mine),
+render only the non-empty one (no empty header/divider). Order is **On Your
+Providers first**, then **Also Available On** (then the 0061 group). If **both**
+provider subgroups are empty (no providers at all), keep the existing
+empty/"not available" copy the page already shows.
+
+- Type roles: header title = `headline-sm`; group labels = `label-sm` (uppercase);
+  provider name = `body-md`; type caption + "Yours" tag = `label-sm` / ~10px.
+- **Font loading:** Inter is loaded app-wide (spec 0010) — confirm rows render in
+  Inter; no new web-font.
 
 ### Visual verification (CLAUDE.md)
 
-Serve `pnpm nx run mobile:serve-mock` and screenshot: (1) the Settings "My
-Providers" card (selected + unselected chips, footer count) against screen
-`cebdfd02c7d44023b0e0019dd4907d48`; (2) a watchlist with a "mine" and an
-"elsewhere" item against `19f0eae3d6d24eaa90b3aa73ff44a59b`; (3) a title-detail
-"Where to Watch" showing both subgroups — **flag (3) unverified for a human**
-(no Stitch screenshot exists). A green build does NOT prove fidelity; if
-`mobile:serve-mock` can't run under tooling, flag all three unverified for a human.
+Serve `pnpm nx run mobile:serve-mock` and screenshot-compare all three against
+their canonical Stitch screens: (1) the Settings "My Providers" card (selected +
+unselected chips, footer count) against `cebdfd02c7d44023b0e0019dd4907d48`; (2) a
+watchlist with a "mine" and an "elsewhere" item against
+`19f0eae3d6d24eaa90b3aa73ff44a59b`; (3) a title-detail "Where to Watch" card
+showing both subgroups (with a "Yours" tag on a mine row, a "Subscription"/
+"Rent/Buy" caption per row, and the hover raise) against
+`562019f29ce2412d90c757a7e45a98bf`. All three now have a rendered Stitch reference
+— (3) is **no longer a known gap**; it gets the same standard screenshot-compare
+treatment as (1) and (2). A green build does NOT prove fidelity; if
+`mobile:serve-mock` can't run under tooling, flag the affected screen(s) unverified
+for a human eyeball (the standard CLAUDE.md fallback), not a title-detail-specific
+exception.
 
 ## Implementation task graph
 
@@ -754,19 +867,35 @@ The e2e (T9) depends on the whole chain and seeds against it.
   `libs/mobile/watchlist/src/lib/watchlist.page.spec.ts`,
   `libs/mobile/watchlist/README.md`.
 
-**T8 — Title-detail: flatrate two-group split + tests [parallel, after T1/T2]** (frontend-engineer)
+**T8 — Title-detail: two-group split (all providers) + tests [parallel, after T1/T2]** (frontend-engineer)
 
 - `title-detail.service.ts`: add `myProviderIds$()` (read `users/{uid}.myProviderIds`).
 - `title-detail.page.ts`: fold `myProviderIds` into `vm$`; add the pure
-  `partitionFlatrate(flatrate, myProviderIds): { mine; elsewhere }` helper.
-- `title-detail.page.html`: split the flatrate block into "On Your Providers" /
-  "Also Available On" subgroups (rent/buy unchanged).
-- `title-detail.page.scss`: the subgroup labels + "Yours" tag using tokens only.
+  `partitionProviders(providers, myProviderIds): { mine; elsewhere }` helper —
+  `mine` = **flatrate** providers whose `providerId ∈ myProviderIds`; `elsewhere`
+  = every other provider (non-mine flatrate + all rent + all buy). Each provider
+  keeps its `type` for the per-row caption.
+- `title-detail.page.html`: replace the old separate flatrate/rent/buy blocks with
+  the single "Where to Watch" card containing the two subgroups ("On Your
+  Providers" / "Also Available On"), each row rendering logo + name (+ "Yours" tag
+  on mine rows) + type caption ("Subscription" / "Rent/Buy") + the decorative
+  `open_in_new`-equivalent trailing glyph. Leave room below for the spec-0061
+  Personal Tracking group (do NOT build it). **No external navigation on the row.**
+- `title-detail.page.scss`: the card, subgroup labels, "Yours" tag, per-row
+  layout, and the `surface-container` → `surface-container-high` hover raise using
+  `--vultus-*` / `--ion-*` vars only.
 - Update `libs/mobile/title-detail/README.md`.
-- Extend `title-detail.page.spec.ts` / partition unit test: mine-only → only the
-  "On Your Providers" subgroup; none-mine → only "Also Available On"; mixed → both
-  in order; empty flatrate → neither (existing empty-providers copy unchanged).
-- **Flag UNVERIFIED IN STITCH in the PR** (screen `208cb8d…` edit never applied).
+- Extend `title-detail.page.spec.ts` / partition unit test: flatrate-mine present
+  → "On Your Providers" subgroup lists it with a "Yours" tag + "Subscription"
+  caption; non-mine flatrate + rent + buy → all under "Also Available On" with
+  correct type captions; a rent/buy provider whose id happens to be in
+  `myProviderIds` still lands under "Also Available On" (never `mine`); mine-only →
+  only "On Your Providers"; none-mine → only "Also Available On"; no providers at
+  all → neither subgroup (existing empty copy unchanged); order is mine-group first.
+- **Visual-verify against Stitch `562019f29ce2412d90c757a7e45a98bf`** (fetch raw
+  HTML + screenshot-compare via `mobile:serve-mock`); flag unverified for a human
+  only if `mobile:serve-mock` can't run (standard fallback — this screen is
+  verified in Stitch, no title-detail-specific gap).
 - Files: `libs/mobile/title-detail/src/lib/title-detail.service.ts`,
   `libs/mobile/title-detail/src/lib/title-detail.page.ts`,
   `libs/mobile/title-detail/src/lib/title-detail.page.html`,
@@ -860,10 +989,16 @@ emulator cannot run under Claude Code tools here — the e2e gate runs in CI).
 
 **Component (title-detail — `title-detail.page.spec.ts`, mocked service):**
 
-- Flatrate all-mine → only "On Your Providers" subgroup (with "Yours" tags);
-  none-mine → only "Also Available On"; mixed → both, mine first; empty flatrate →
-  neither subgroup, existing empty/rent/buy behaviour unchanged.
-- Pure `partitionFlatrate` unit tests for the same four cases.
+- A flatrate provider ∈ `myProviderIds` → the "On Your Providers" subgroup lists
+  it (bold name + "Yours" tag + "Subscription" caption); non-mine flatrate + rent
+  + buy providers → all under "Also Available On" with correct type captions
+  (flatrate → "Subscription", rent/buy → "Rent/Buy"); mine-only → only "On Your
+  Providers"; none-mine → only "Also Available On"; mixed → both, mine first; no
+  providers → neither subgroup (existing empty copy unchanged). The decorative
+  trailing glyph triggers **no navigation** (no click handler / href).
+- Pure `partitionProviders` unit tests: flatrate-mine → `mine`; non-mine flatrate,
+  rent, buy → `elsewhere`; a rent/buy provider whose id is in `myProviderIds`
+  stays in `elsewhere` (only flatrate can be `mine`); empty input → both empty.
 
 **e2e (rubric): REQUIRED — one new flow.** This is a `scope:mobile` feature
 introducing a new primary user-facing control (the Settings "My Providers"
@@ -914,7 +1049,9 @@ Tailored from PLAN §5. Affected: `shared-domain`, `shared-firestore-schema`,
 - [ ] `pnpm nx test mobile-settings` — provider chips + toggle + region-prune +
       catalog-load service tests; existing settings tests stay green.
 - [ ] `pnpm nx test mobile-watchlist` — mine/elsewhere/none partition pill.
-- [ ] `pnpm nx test mobile-title-detail` — flatrate two-group split + partition.
+- [ ] `pnpm nx test mobile-title-detail` — two-group split (all providers) +
+      `partitionProviders` (flatrate-mine → mine; non-mine flatrate/rent/buy →
+      elsewhere; rent/buy id-in-`myProviderIds` stays elsewhere).
 - [ ] `pnpm nx build mobile` and `pnpm nx build functions` pass, and
       `pnpm nx run functions:deploy-preflight` passes (a **new exported callable**
       is a deploy-surface change — verify gen2 discovery loads `main.js`).
@@ -926,16 +1063,20 @@ Tailored from PLAN §5. Affected: `shared-domain`, `shared-firestore-schema`,
 - [ ] **`firestore.rules`:** a `provider-catalog/{region}` rule (authenticated
       read, client write denied) is added, mirroring `title-cache`. No
       `firestore.indexes.json` change (single-doc reads).
-- [ ] **Stitch screens re-fetched + recorded in the PR:** Settings
-      `cebdfd02c7d44023b0e0019dd4907d48` (the NEW fork), Advanced Watchlist
-      `19f0eae3d6d24eaa90b3aa73ff44a59b` (both fetched raw + screenshot-compared);
-      title-detail `208cb8d7a679490b8d13672c6943d6d3` **explicitly recorded as
-      UNVERIFIED IN STITCH** (edit never applied) and **flagged for a human visual
-      check**. A failed MCP call is a retry, not token-only.
+- [ ] **Stitch screens re-fetched + recorded in the PR (all three verified):**
+      Settings `cebdfd02c7d44023b0e0019dd4907d48` (the NEW fork), Advanced
+      Watchlist `19f0eae3d6d24eaa90b3aa73ff44a59b`, and title-detail
+      **`562019f29ce2412d90c757a7e45a98bf`** ("Movie Detail - Personal Tracking -
+      Vultus", the canonical consolidated screen) — all fetched raw +
+      screenshot-compared. Do **not** pull the superseded `208cb8d7a679490b8d13672c6943d6d3`
+      or `dfc2c7b98a9f46d2bff9b7722fd192b7`. A failed MCP call is a retry, not
+      token-only.
 - [ ] **UI fidelity verified** (`mobile:serve-mock` / screenshots) for the Settings
-      card and the watchlist pills, **or explicitly flagged unverified for a
-      human** — a green build does not prove fidelity (CLAUDE.md). The title-detail
-      split is **flagged unverified** regardless (no Stitch screenshot exists).
+      card, the watchlist pills, **and** the title-detail two-group split, **or
+      explicitly flagged unverified for a human** if `mobile:serve-mock` can't run
+      — a green build does not prove fidelity (CLAUDE.md). All three screens have a
+      rendered Stitch reference; the title-detail split gets the **standard**
+      screenshot-compare treatment (no title-detail-specific unverified exception).
 - [ ] No hard-coded hex in any new template/SCSS — only `--vultus-*` / `--ion-*`
       vars.
 - [ ] READMEs updated: `shared/domain`, `shared/firestore-schema`,
@@ -948,21 +1089,32 @@ Tailored from PLAN §5. Affected: `shared-domain`, `shared-firestore-schema`,
       failed catalog load; (e) no secret read/written on the mobile side; the
       callable reads only `TMDB_READ_TOKEN` via `.value()`; (f) the partition logic
       is duplicated per slice, not extracted (2-slice rule).
-- [ ] PR description records: verification commands, the three screen ids +
-      visual-verification results (incl. the title-detail unverified flag), the
-      boundary confirmations, and that the e2e flow is included.
+- [ ] PR description records: verification commands, the three canonical screen
+      ids (`cebdfd02…`, `19f0eae3…`, `562019f2…`) + their visual-verification
+      results, the boundary confirmations, and that the e2e flow is included.
 
 ## Risks
 
-- **Title-detail "Where to Watch" split is UNVERIFIED IN STITCH.** The
-  `edit_screens` push to `208cb8d7a679490b8d13672c6943d6d3` timed out three times
-  (the screen is 3830px tall) and never applied, so no rendered/screenshotted
-  Stitch reference exists for the two-group split. The tokens are extrapolated
-  from the sibling Advanced Watchlist edit that DID apply. CLAUDE.md's fidelity
-  rule normally requires a rendered screen; this one is a **known gap**. Mitigation:
-  the implementer flags it unverified and a human eyeballs it (or a follow-up
-  Stitch pass renders it) before merge. Not a blocker to *implement* (the tokens
-  are consistent and pinned), but a blocker to *report done off a green build*.
+- **Title-detail "Where to Watch" split — previously unverified, now RESOLVED.**
+  Earlier drafts flagged this section unverified because three `edit_screens`
+  pushes to the old "Movie Detail - Vultus" screen (`208cb8d7a679490b8d13672c6943d6d3`)
+  timed out and never rendered, leaving the tokens extrapolated from a sibling
+  screen. The Stitch project has since been cleaned up (four duplicate/divergent
+  detail pages consolidated) into the canonical **"Movie Detail - Personal
+  Tracking - Vultus"** (`562019f29ce2412d90c757a7e45a98bf`), which **renders the
+  card in full context**. The section is now pinned from that real render (it
+  revealed the richer per-row structure and that "Also Available On" spans rent/buy
+  — see the supersession note in Context). **No residual verification gap** — the
+  title-detail screen gets the same standard screenshot-compare as the others. The
+  old `208cb8d…` and intermediate `dfc2c7b9…` screens are superseded/stale and
+  must not be pulled.
+- **`open_in_new` in the mock is decorative, not a feature.** The canonical
+  screen's provider rows show a trailing `open_in_new` glyph and a hover raise.
+  There is **no per-provider deep-link URL in this app's model** and the issue
+  never requested external navigation, so the glyph is a presentational affordance
+  only. Risk: an implementer scope-creeps a "open provider" link. Mitigation: the
+  UI section (C) explicitly forbids adding navigation/`href`/click handlers; the
+  component test asserts no navigation is triggered.
 - **TMDB watch-provider accuracy (PLAN §9).** The whole feature rests on TMDB's
   JustWatch-powered availability, which has known accuracy gaps for licensed
   content — a title wrongly reported (or not reported) on a provider will
