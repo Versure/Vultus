@@ -1,5 +1,5 @@
 import { AsyncPipe } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { Component, DestroyRef, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import {
   IonActionSheet,
@@ -20,13 +20,26 @@ import {
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
 import {
+  arrowDownOutline,
+  arrowUpOutline,
   filmOutline,
   notificationsOutline,
+  optionsOutline,
   personCircleOutline,
   refreshOutline,
-  swapVerticalOutline,
   trashOutline,
 } from 'ionicons/icons';
+/**
+ * Minimal shape of the `ionBackButton` custom event detail (Ionic dispatches it
+ * on `document`). Declared locally to avoid a deep `@ionic/core` type import —
+ * the slice only needs `register(priority, handler)`.
+ */
+interface IonBackButtonDetail {
+  register(
+    priority: number,
+    handler: (processNextHandler: () => void) => void,
+  ): void;
+}
 import { AUTH_UID } from '@vultus/shared/domain/tokens';
 import {
   type Region,
@@ -65,6 +78,25 @@ import {
 } from './watchlist.service';
 
 const TMDB_POSTER_BASE = 'https://image.tmdb.org/t/p/w185';
+
+/**
+ * A "Sort & Filter" sort chip — one visible chip per (default, toggled) pair of
+ * the six existing `WatchlistSort` modes (decision 3). "release" is the Stitch
+ * "Rating" chip relabelled "Release date" (Public types / APIs — the watchlist
+ * doc has no rating field, so it maps to the existing releaseDesc/releaseAsc
+ * pair rather than adding a sort mode).
+ */
+type SortChip = 'added' | 'name' | 'release';
+
+/** The four fixed status chips rendered unconditionally (no "Dropped" chip). */
+type StatusChipStatus = 'watching' | 'planned' | 'completed';
+
+/** A rendered status filter chip — All (`status: null`) + the three fixed ones. */
+interface StatusFilterChip {
+  status: StatusChipStatus | null;
+  label: string;
+  count: number;
+}
 
 @Component({
   selector: 'lib-watchlist',
@@ -114,8 +146,33 @@ export class WatchlistPage {
   /** Selected sort mode (component-local, in-session only). Default newest-added. */
   selectedSort: WatchlistSort = 'addedDesc';
 
-  /** Sort action-sheet open state. */
-  sortSheetOpen = false;
+  /** Combined "Sort & Filter" bottom-sheet open state (component-local). */
+  filterSheetOpen = false;
+
+  /**
+   * The fixed order the four status chips render in — All + the three real
+   * statuses (no "Dropped" chip; the Advanced Watchlist design has none).
+   */
+  private readonly STATUS_CHIP_ORDER: StatusChipStatus[] = [
+    'watching',
+    'planned',
+    'completed',
+  ];
+
+  /**
+   * Maps a sheet Sort By chip to its (default, toggled) pair of the existing six
+   * `WatchlistSort` modes (decision 3). Tapping an inactive chip selects its
+   * `default`; tapping the already-active chip flips to `toggled`. Pure
+   * presentation over `sortItems` — no new sort logic.
+   */
+  private readonly SORT_CHIP_MAP: Record<
+    SortChip,
+    { default: WatchlistSort; toggled: WatchlistSort }
+  > = {
+    added: { default: 'addedDesc', toggled: 'addedAsc' },
+    name: { default: 'titleAsc', toggled: 'titleDesc' },
+    release: { default: 'releaseDesc', toggled: 'releaseAsc' },
+  };
 
   /**
    * Selected provider names (multi-select, OR logic). Empty = show all
@@ -220,22 +277,42 @@ export class WatchlistPage {
   );
 
   /**
-   * Status-filter chip data: the non-empty groups of the
-   * type+search+provider-filtered set (BEFORE status narrowing), in
-   * `STATUS_DISPLAY_ORDER`, each with its count. The "All" chip is rendered
-   * unconditionally by the template; per-status chips render from this list.
-   * Counts therefore match what selecting the chip shows.
+   * Status-filter chip data: the FIXED FOUR chips (All / Watching / Planned /
+   * Completed) rendered unconditionally, each with a live count — INCLUDING zero
+   * (decision 2). Counts are derived from the SAME type+search+provider-filtered
+   * set `groupByStatus` sees (before status narrowing), so a chip's count equals
+   * the number of cards selecting it shows; "All" is the sum. No "Dropped" chip
+   * (the design has none); dropped items still group under "All". No new
+   * Firestore read — this is client-side over the already-subscribed stream.
    */
-  readonly statusChips$: Observable<StatusGroup[]> = combineLatest([
+  readonly statusChips$: Observable<StatusFilterChip[]> = combineLatest([
     this.typeSearchFiltered$,
     this.availabilityMap$,
     this.filters$,
   ]).pipe(
-    map(([items, availabilityMap]) =>
-      groupByStatus(this.applyProviderFilter(items, availabilityMap)),
-    ),
+    map(([items, availabilityMap]) => {
+      const filtered = this.applyProviderFilter(items, availabilityMap);
+      const groups = groupByStatus(filtered);
+      const countOf = (status: StatusChipStatus): number =>
+        groups.find((g) => g.status === status)?.count ?? 0;
+      const statusChips: StatusFilterChip[] = this.STATUS_CHIP_ORDER.map(
+        (status) => ({
+          status,
+          label: STATUS_LABELS[status],
+          count: countOf(status),
+        }),
+      );
+      // "All" count = the full type+search+provider-filtered set (includes any
+      // dropped items, which are reachable under "All" though they have no chip).
+      const all: StatusFilterChip = {
+        status: null,
+        label: 'All',
+        count: filtered.length,
+      };
+      return [all, ...statusChips];
+    }),
     // Error → no chips (vm$ owns the error UI); never propagate uncaught.
-    catchError(() => of<StatusGroup[]>([])),
+    catchError(() => of<StatusFilterChip[]>([])),
     shareReplay({ bufferSize: 1, refCount: true }),
   );
 
@@ -308,14 +385,51 @@ export class WatchlistPage {
     },
   ];
 
+  private readonly destroyRef = inject(DestroyRef);
+
+  /**
+   * Bound `ionBackButton` handler. While the combined sheet is open the Android
+   * hardware back button closes the SHEET (high priority) instead of navigating;
+   * otherwise it defers to Ionic's default routing. Registered on `document` (the
+   * standalone-friendly path — no `@ionic/angular` `Platform` needed) and torn
+   * down via `DestroyRef`.
+   */
+  private readonly onIonBackButton = (
+    ev: CustomEvent<IonBackButtonDetail>,
+  ): void => {
+    if (this.filterSheetOpen) {
+      // Priority 150 (> Ionic's default 100 route handler) so the sheet wins.
+      ev.detail.register(150, (processNextHandler) => {
+        if (this.filterSheetOpen) {
+          this.closeFilterSheet();
+        } else {
+          processNextHandler();
+        }
+      });
+    }
+  };
+
   constructor() {
     addIcons({
+      arrowDownOutline,
+      arrowUpOutline,
       filmOutline,
       notificationsOutline,
+      optionsOutline,
       personCircleOutline,
       refreshOutline,
-      swapVerticalOutline,
       trashOutline,
+    });
+
+    document.addEventListener(
+      'ionBackButton',
+      this.onIonBackButton as EventListener,
+    );
+    this.destroyRef.onDestroy(() => {
+      document.removeEventListener(
+        'ionBackButton',
+        this.onIonBackButton as EventListener,
+      );
     });
   }
 
@@ -364,36 +478,66 @@ export class WatchlistPage {
     this.actionSheetOpen = true;
   }
 
-  /** Sort action-sheet buttons: the six modes + Cancel. */
-  get sortSheetButtons() {
-    const options: { sort: WatchlistSort; text: string }[] = [
-      { sort: 'titleAsc', text: 'Title A → Z' },
-      { sort: 'titleDesc', text: 'Title Z → A' },
-      { sort: 'addedDesc', text: 'Date added (newest first)' },
-      { sort: 'addedAsc', text: 'Date added (oldest first)' },
-      { sort: 'releaseDesc', text: 'Release date (newest first)' },
-      { sort: 'releaseAsc', text: 'Release date (oldest first)' },
-    ];
-    return [
-      ...options.map((o) => ({
-        text: o.text,
-        handler: () => {
-          this.onSortSelected(o.sort);
-        },
-      })),
-      { text: 'Cancel', role: 'cancel' },
-    ];
+  /** Opens the combined "Sort & Filter" bottom sheet (bound to the `tune` button). */
+  openFilterSheet(): void {
+    this.filterSheetOpen = true;
   }
 
-  /** Opens the sort action sheet (public — bound + tested). */
-  openSortSheet(): void {
-    this.sortSheetOpen = true;
+  /**
+   * Closes the combined "Sort & Filter" bottom sheet. Bound to the "Done"
+   * button, a backdrop tap, and the Android hardware back handler.
+   */
+  closeFilterSheet(): void {
+    this.filterSheetOpen = false;
   }
 
-  /** Applies the chosen sort mode and re-runs the pipeline. */
+  /**
+   * Applies the chosen sort mode and re-runs the pipeline. The underlying setter
+   * behind both the sheet's Sort By chips (`onSortChipClick`) and the tests.
+   */
   onSortSelected(sort: WatchlistSort): void {
     this.selectedSort = sort;
     this.filters$.next();
+  }
+
+  /**
+   * Sheet Sort By chip tap (decision 3, tap-to-toggle direction): if the chip's
+   * DEFAULT mode is already the active sort, flip to its TOGGLED mode; otherwise
+   * apply its default. A pure mapping over the existing six `WatchlistSort` modes
+   * — no new sort logic. Exposed for the component test to call directly.
+   */
+  onSortChipClick(chip: SortChip): void {
+    const pair = this.SORT_CHIP_MAP[chip];
+    const next =
+      this.selectedSort === pair.default ? pair.toggled : pair.default;
+    this.onSortSelected(next);
+  }
+
+  /** True when either mode of the given sort chip is the active sort (chip highlighted). */
+  isSortChipActive(chip: SortChip): boolean {
+    const pair = this.SORT_CHIP_MAP[chip];
+    return (
+      this.selectedSort === pair.default || this.selectedSort === pair.toggled
+    );
+  }
+
+  /**
+   * The direction affordance for the active sort chip: `'down'` for a descending
+   * sort (Z→A / newest-first), `'up'` for ascending (A→Z / oldest-first), `null`
+   * when the chip is inactive. Drives the arrow icon next to the active chip's
+   * label (decision 3). Note: the Stitch markup did NOT express a direction
+   * affordance — this arrow is added per the spec and flagged for human review.
+   */
+  sortChipDirection(chip: SortChip): 'up' | 'down' | null {
+    if (!this.isSortChipActive(chip)) {
+      return null;
+    }
+    const descending: WatchlistSort[] = [
+      'addedDesc',
+      'titleDesc',
+      'releaseDesc',
+    ];
+    return descending.includes(this.selectedSort) ? 'down' : 'up';
   }
 
   /** Status-chip click — null = All; narrows the list to one group otherwise. */
@@ -486,7 +630,14 @@ export class WatchlistPage {
     if (!item) {
       return;
     }
-    this.watchlistService.updateStatus(this.uid(), this.titleId(item), status);
+    // Fire-and-forget: the action sheet closes immediately; the completed-path
+    // episode batch (spec 0053) runs asynchronously in the service.
+    void this.watchlistService.updateStatus(
+      this.uid(),
+      this.titleId(item),
+      status,
+      item.type,
+    );
   }
 
   /** Removes the alert's target item from the watchlist. */

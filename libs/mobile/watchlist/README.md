@@ -8,18 +8,31 @@ poster cards with a type filter, per-item status changes, and removal. A
 rate-limited sync of the user's tracked titles.
 
 Spec 0046 adds four **client-side** view controls over the already-subscribed
-`watchlist$` stream (no new Firestore query/index): a **sort** action sheet, a
-**status-filter** chip row, a **text-search** bar, and a **provider-filter** chip
-row. All filter/sort state is component-local and **in-session only** (resets on
+`watchlist$` stream (no new Firestore query/index): sort, a **status-filter**
+chip row, a **text-search** bar, and a **provider-filter** multi-select. All
+filter/sort state is component-local and **in-session only** (resets on
 restart). Composition order is **type → text search → [derive provider chips] →
 status → provider → sort**; sort reorders within each status group while the
 group order stays Watching → Planned → Completed → Dropped.
 
+Spec 0054 **restyles/reorganizes** these controls to the "Advanced Watchlist"
+Stitch design (presentation only — no logic, sort-mode, or Firestore change).
+Top-to-bottom the tab now shows a **status-filter chip row** (the fixed four
+All / Watching / Planned / Completed, each with a live count badge including 0),
+then an **underline type-tab row** (All / Movies / TV Shows), then a **search
+bar** with a single `tune` trigger at its right edge. The `tune` button opens one
+combined **"Sort & Filter" bottom sheet** holding the sort chips and the provider
+filter. The old toolbar sort button and the sort action-sheet are gone; the
+inline provider-chip row moved into the sheet. See "Sort / filter / search
+controls" below for the current control set.
+
 ## Public surface (barrel `@vultus/mobile/watchlist`)
 
 - **`WatchlistPage`** — a standalone Ionic page component (selector
-  `lib-watchlist`) rendering the Watchlist tab: type segment (All / Movies / TV
-  Shows), status-grouped sections (Watching → Planned → Completed → Dropped),
+  `lib-watchlist`) rendering the Watchlist tab: status-filter chip row (fixed
+  four with live counts), underline type tabs (All / Movies / TV Shows), a search
+  bar with a `tune` trigger opening the combined "Sort & Filter" bottom sheet,
+  status-grouped sections (Watching → Planned → Completed → Dropped),
   poster cards with type/vote/provider badges, a long-press/secondary status
   action sheet, a delete-confirm alert, pull-to-refresh, a header
   **notifications bell** with an **unread badge** (see below), and shared
@@ -33,8 +46,26 @@ group order stays Watching → Planned → Completed → Dropped.
   - `watchlist$(uid, type?)` — realtime `users/{uid}/watchlist`, mapped to
     domain `WatchlistItem`s, optionally filtered by `TitleType`. Null uid →
     `of([])`.
-  - `updateStatus(uid, titleId, status)` — updates only the `status` field on a
-    watchlist item. Null uid → no-op.
+  - `updateStatus(uid, titleId, status, type)` — updates the `status` field on a
+    watchlist item and returns `Promise<void>`. Null uid → no-op.
+    **Completed-marks-episodes side effect (spec 0053):** when the new `status`
+    is `'completed'` **and** `type === 'tv'`, every currently-unwatched episode
+    under `users/{uid}/watchlist/{titleId}/episodes` is batch-marked
+    `{ watched: true, watchedAt: <now> }` before the status write — so manually
+    completing a TV show from the watchlist tab marks all its episodes watched
+    (issue #131). Only the transition **to** `'completed'` triggers this; moving
+    a status **away** from `'completed'` leaves episodes untouched (forward
+    direction only). Movies short-circuit to a bare status write, and TV shows
+    whose episodes are all already watched or not-yet-synced are cheap no-ops
+    (the batch is skipped when there are zero unwatched docs — no extra status
+    read, and re-selecting "Completed" on an already-completed show is a no-op).
+    Episode docs are created by the sync engine and are only **updated** here
+    (never created). The `type` is the slice-local decision input for TV-vs-movie
+    and is passed from the caller's `WatchlistItem.type` — the private
+    `markAllEpisodesWatched` helper is deliberately duplicated with the
+    title-detail slice's copy (2-slice, short of the 3+-slice extract rule). The
+    page calls it fire-and-forget (`void`), so the action sheet closes
+    immediately and does not block on the batch.
   - `removeTitle(uid, titleId)` — deletes a watchlist item. Null uid → no-op.
   - `userRegion$(uid)` — the user's persisted region from `users/{uid}`. Null
     uid / missing doc → `null`.
@@ -89,33 +120,63 @@ slice-internal (a single consumer, `WatchlistPage`, imports them intra-slice; no
 3+-slice reuse, so they stay slice-local per PLAN §3). The barrel
 (`@vultus/mobile/watchlist`) exposes only `WatchlistPage` and `WatchlistService`.
 
-## Sort / filter / search controls (spec 0046)
+## Sort / filter / search controls (spec 0046, restyled by spec 0054)
 
-All four are component-local, in-session, and operate client-side over the
+All are component-local, in-session, and operate client-side over the
 already-subscribed `watchlist$` stream — **no new Firestore read/write/index**.
 The provider filter reuses the **same memoized per-card `availability$`
 subscription** (`providerCache`, widened from `Observable<string | null>` to
 `Observable<string[]>`); the per-card badge still shows the first name via
 `names[0] ?? null`, so no second Listen channel is opened (decision 12).
 
-- **Sort** — a toolbar `swap-vertical-outline` button (`openSortSheet()`) opens an
-  `IonActionSheet` with six modes (`WatchlistSort`: `titleAsc` / `titleDesc` /
-  `addedDesc` (default, newest-added) / `addedAsc` / `releaseDesc` / `releaseAsc`).
-  `onSortSelected(sort)` applies it via the pure `sortItems(items, sort)` helper,
-  reordering **within** each group; release-date sorts push null/absent
-  `releaseDate` items to the **end** in both directions.
-- **Status filter** — a chip row (`onStatusChipClick(status | null)`): an "All" chip
-  (default) plus one chip per **non-empty** post-filter group, each with its count.
-  Selecting a status narrows to that one group; counts match the visible cards.
-- **Text search** — an `IonSearchbar` (`onSearchInput(term)`), case-insensitive
-  substring match on `title`, debounced **200ms** via RxJS `debounceTime` (the
-  Ionic `debounce` is set to `0` to avoid double-debounce). Empty/cleared term
-  restores the full list.
-- **Provider filter** — a chip row derived from the live `availabilityMap`
-  (`getAvailableProviders(...)`). Multi-select **OR** logic (`toggleProvider(name)`);
-  the row is **hidden** when no availability data is loaded. A stale selection is
-  reconciled against the currently-available names so a vanished provider can't
-  strand a hidden filter.
+The controls render top-to-bottom as: **status-filter chip row → underline
+type-tab row → search bar (with `tune` trigger)**, above the grouped list. The
+`tune` trigger opens the combined **"Sort & Filter" bottom sheet** (an overlay
+`div` toggled by `filterSheetOpen`) that holds the sort chips and the provider
+filter.
+
+- **Status filter** — a chip row (`onStatusChipClick(status | null)`) rendering the
+  **fixed four** chips (All / Watching / Planned / Completed) **unconditionally**,
+  each with a live count badge — **including 0** (spec 0054). No "Dropped" chip
+  (the design has none; dropped items still group under "All"). The "All" chip is
+  active by default; each count reflects the same type+search+provider-filtered
+  set `groupByStatus` sees, so selecting a chip shows exactly that many cards.
+  Driven by `statusChips$` (now a `{ status, label, count }[]` of the four fixed
+  chips).
+- **Type tabs** — three **underline tabs** (All / Movies / TV Shows), plain
+  `<button>`s (not `ion-segment`, not pills), same `onFilterClick(type)` behavior
+  (All = `undefined`, Movies = `'movie'`, TV Shows = `'tv'`). Active tab shows the
+  primary color + a 2px primary underline.
+- **Text search** — an `IonSearchbar` (`onSearchInput(term)`, placeholder
+  "Search watchlist..."), case-insensitive substring match on `title`, debounced
+  **200ms** via RxJS `debounceTime` (the Ionic `debounce` is `0` to avoid
+  double-debounce). Empty/cleared term restores the full list. A `tune`
+  (`options-outline`) button at the right edge (`aria-label="Sort and filter"`,
+  `openFilterSheet()`) opens the combined sheet.
+- **Sort & Filter sheet** — one combined bottom sheet (`filterSheetOpen`;
+  `openFilterSheet()` / `closeFilterSheet()`). Closes via "Done", a backdrop tap,
+  or the **Android hardware back button** (a document-level `ionBackButton`
+  handler registered at priority 150 dismisses the sheet before any route
+  navigation). It contains:
+  - **Sort By** — three chips (**Date Added / Name / Release date**) mapping onto
+    the existing six `WatchlistSort` modes with **tap-to-toggle direction**
+    (`onSortChipClick('added' | 'name' | 'release')`): an inactive chip applies
+    its default direction, tapping the active chip flips it. Mapping: Date Added
+    → `addedDesc`/`addedAsc` (default `addedDesc`, newest-added), Name →
+    `titleAsc`/`titleDesc`, Release date → `releaseDesc`/`releaseAsc`. The active
+    chip shows an up/down arrow direction affordance (`sortChipDirection`). The
+    **"Release date"** chip is the Stitch **"Rating"** chip relabelled — the
+    watchlist doc has no rating field and there is no rating sort mode, so it maps
+    to the existing release-date pair rather than adding a mode (spec 0054 Public
+    types / APIs). `onSortSelected(sort)` applies it via the pure
+    `sortItems(items, sort)` helper, reordering **within** each group;
+    release-date sorts push null/absent `releaseDate` items to the **end**.
+  - **Provider** — a multi-select chip row derived from the live `availabilityMap`
+    (`getAvailableProviders(...)`), **OR** logic (`toggleProvider(name)` /
+    `isProviderSelected(name)`). When no availability is loaded the section shows a
+    muted "No providers available yet" line (the sheet stays usable). A stale
+    selection is reconciled against the currently-available names so a vanished
+    provider can't strand a hidden filter.
 
 The auxiliary chip/availability streams (`statusChips$`, `availableProviders$`,
 `availabilityMap$`) each `catchError` to an empty value so a watchlist-stream
@@ -146,9 +207,14 @@ See `@vultus/shared/ui-kit`'s README for the canonical service docs.
 ## Data access
 
 - **Reads:** `users/{uid}/watchlist` (realtime list), `users/{uid}` (region),
-  `title-cache/{tmdbId}/availability/{region}` (provider badges).
-- **Writes:** only `users/{uid}/watchlist/{titleId}` — status update and delete.
-  Never writes to `users/{uid}`, `title-cache`, or any other path.
+  `title-cache/{tmdbId}/availability/{region}` (provider badges), and — on the
+  `completed` + `tv` path only — a one-shot read of the whole
+  `users/{uid}/watchlist/{titleId}/episodes` subcollection (spec 0053).
+- **Writes:** `users/{uid}/watchlist/{titleId}` — status update and delete — plus,
+  on the `completed` + `tv` path, a batched `{ watched, watchedAt }` update onto
+  the currently-unwatched docs of `users/{uid}/watchlist/{titleId}/episodes`
+  (own-user episode docs, an already-permitted write shape). Never writes to
+  `users/{uid}`, `title-cache`, or any other path.
 
 The watchlist doc id is `String(tmdbId)` (e.g. `1399`), matching spec 0013's write binding.
 

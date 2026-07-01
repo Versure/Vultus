@@ -55,6 +55,17 @@ no-op (no sync, no toast) — the refresher spinner is always dismissed via
   walking back to zero watched → `planned` **only if this slice auto-set
   `watching`** (a manually chosen status is never clobbered). A `dropped` title is
   never auto-changed.
+- **Manually completing a TV show marks all episodes watched** (spec 0053, issue
+  #131): when the user sets a **TV** show's status to `'completed'` via the
+  title-detail status action sheet, every currently-**unwatched** episode under
+  `users/{uid}/watchlist/{titleId}/episodes` is batch-written
+  `{ watched: true, watchedAt: <now> }` **before** the status write — declaring a
+  show completed means every episode is watched. Only docs where `watched !== true`
+  are batched; if there are none (all already watched, or an empty/not-yet-synced
+  subcollection) the batch commit is **skipped**. Movies write status only (no
+  episode subcollection). Moving status **away** from `'completed'` never touches
+  episodes (forward-direction only). The existing episode checkmarks re-render
+  reactively off the `episodes$` stream.
 - **Auto-revert on page init** (spec 0050, decision 4): when `TitleDetailPage`
   loads a `'completed'` TV show whose episodes subcollection contains at least one
   `watched: false` episode (e.g. new episodes added by the spec-0047 sync), the
@@ -65,8 +76,16 @@ no-op (no sync, no toast) — the refresher spinner is always dismissed via
   design is derived from the in-repo design system (`docs/design/vultus-design-system.md`)
   and is **flagged for human visual verification**.
 
-### New service methods (spec 0034)
+### Service methods
 
+- `updateStatus(tmdbId, status, type): Promise<void>` — writes the watchlist
+  item's `status`. **(spec 0053)** the signature carries the item's `type`: when
+  `status === 'completed'` **and** `type === 'tv'`, it first batch-marks every
+  unwatched episode watched (see above) before the status write; movies and
+  non-`'completed'` statuses write status only. Internal callers pass the known
+  type (`setMovieWatched` → `'movie'`; `autoUpdateStatus` / `revertIfNewEpisodes`
+  → `'tv'`). The TV-completed helper is a terminal leaf (never re-derives status),
+  so there is no recursion.
 - `episodes$(tmdbId, type): Observable<SeasonGroup[]>` — realtime, season-grouped
   episodes; `of([])` for non-tv / null uid / empty subcollection.
 - `setEpisodeWatched(tmdbId, episodeId, watched): Promise<void>` — `updateDoc` the
@@ -148,8 +167,10 @@ retry trigger (`onRetry()`).
   with denormalized `posterPath` + `voteAverage`), `updateStatus`, `removeTitle`,
   plus the auto-status re-derivation after an episode/season write.
 - **Writes** `users/{uid}/watchlist/{titleId}/episodes/{episodeId}`: only the
-  `{ watched, watchedAt }` fields, via **`updateDoc` (never `setDoc`)** — episode
-  docs are created by the sync engine and must pre-exist. Never `title-cache`,
+  `{ watched, watchedAt }` fields, via **`updateDoc` / `writeBatch` (never
+  `setDoc`)** — episode docs are created by the sync engine and must pre-exist.
+  This includes the spec-0053 completed-path batch (`updateStatus` on a TV show
+  set to `'completed'` marks all unwatched episodes watched). Never `title-cache`,
   never `users/{uid}`.
 
 ### Slice-local by design (NOT shared)
