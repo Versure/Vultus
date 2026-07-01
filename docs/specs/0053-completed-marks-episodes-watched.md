@@ -2,7 +2,7 @@
 number: 0053
 slug: completed-marks-episodes-watched
 title: Mark all episodes watched when a TV show is manually set to Completed
-status: implementing
+status: done
 slices: [slice:title-detail, slice:watchlist]
 scopes: [scope:mobile]
 created: 2026-07-01
