@@ -486,7 +486,14 @@ export class WatchlistPage {
     if (!item) {
       return;
     }
-    this.watchlistService.updateStatus(this.uid(), this.titleId(item), status);
+    // Fire-and-forget: the action sheet closes immediately; the completed-path
+    // episode batch (spec 0053) runs asynchronously in the service.
+    void this.watchlistService.updateStatus(
+      this.uid(),
+      this.titleId(item),
+      status,
+      item.type,
+    );
   }
 
   /** Removes the alert's target item from the watchlist. */
