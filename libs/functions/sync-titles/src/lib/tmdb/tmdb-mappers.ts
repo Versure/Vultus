@@ -2,6 +2,7 @@
 
 import {
   REGIONS,
+  type CatalogProvider,
   type Episode,
   type Region,
   type TitleMetadata,
@@ -14,6 +15,7 @@ import type {
   TmdbProviderEntry,
   TmdbSeasonResponse,
   TmdbTvResponse,
+  TmdbWatchProviderListEntry,
   TmdbWatchProvidersResponse,
 } from './tmdb-dtos';
 
@@ -83,6 +85,28 @@ export function mapWatchProviders(
     out[code as Region] = mapCountryProviders(country);
   }
   return out;
+}
+
+// Merges the movie + tv region-wide watch-provider catalog lists into a single,
+// deterministic CatalogProvider[] (spec 0060): concat both sides, map each entry
+// (`logoPath: logo_path ?? null`), dedupe by providerId (first occurrence wins),
+// and sort by name (stable, case-insensitive) so the UI has a stable order.
+export function mergeCatalogProviders(
+  movie: TmdbWatchProviderListEntry[],
+  tv: TmdbWatchProviderListEntry[],
+): CatalogProvider[] {
+  const byId = new Map<number, CatalogProvider>();
+  for (const entry of [...movie, ...tv]) {
+    if (byId.has(entry.provider_id)) continue; // first occurrence wins
+    byId.set(entry.provider_id, {
+      providerId: entry.provider_id,
+      name: entry.provider_name,
+      logoPath: entry.logo_path ?? null,
+    });
+  }
+  return [...byId.values()].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: 'accent' }),
+  );
 }
 
 // Episodes with a null/empty/missing air_date are skipped (Episode.airDate is a

@@ -1,7 +1,8 @@
 import { signal, type WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Firestore } from '@angular/fire/firestore';
-import { AUTH_UID } from '@vultus/shared/domain/tokens';
+import { AUTH_UID, GET_WATCH_PROVIDERS } from '@vultus/shared/domain/tokens';
+import type { CatalogProvider, Region } from '@vultus/shared/domain';
 import { userPath } from '@vultus/shared/firestore-schema';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SettingsService } from './settings.service';
@@ -43,6 +44,7 @@ function existingDoc(data: {
     cameToPlatform: boolean;
     deliveryHour?: number | null;
   };
+  myProviderIds?: number[];
 }): SnapLike {
   return {
     exists: () => true,
@@ -53,11 +55,21 @@ function existingDoc(data: {
         ...data.notificationPrefs,
       },
       fcmTokens: [],
+      // Omitting `myProviderIds` simulates a legacy (pre-0060) doc; when
+      // present it round-trips via the converter's `?? []` coalesce.
+      ...(data.myProviderIds !== undefined
+        ? { myProviderIds: data.myProviderIds }
+        : {}),
     }),
   };
 }
 
 const missingDoc: SnapLike = { exists: () => false, data: () => undefined };
+
+// A stub catalog thunk the tests can drive per-case. Reset in `beforeEach`.
+let getWatchProvidersMock: ReturnType<
+  typeof vi.fn<(region: Region) => Promise<CatalogProvider[]>>
+>;
 
 function createService(uid: string | null): SettingsService {
   return createServiceWithUidSignal(uid).service;
@@ -80,6 +92,7 @@ function createServiceWithUidSignal(uid: string | null): {
       SettingsService,
       { provide: Firestore, useValue: {} },
       { provide: AUTH_UID, useValue: uidSignal },
+      { provide: GET_WATCH_PROVIDERS, useValue: getWatchProvidersMock },
     ],
   });
   return { service: TestBed.inject(SettingsService), uidSignal };
@@ -99,6 +112,9 @@ describe('SettingsService', () => {
     getDocMock.mockReset();
     setDocMock.mockReset();
     updateDocMock.mockReset();
+    // Default: the catalog thunk resolves to an empty catalog. Individual
+    // tests override with `.mockResolvedValueOnce` / `.mockRejectedValueOnce`.
+    getWatchProvidersMock = vi.fn(() => Promise.resolve<CatalogProvider[]>([]));
   });
 
   it('read-creates-doc-with-defaults', async () => {
@@ -119,6 +135,7 @@ describe('SettingsService', () => {
         deliveryHour: null,
       },
       fcmTokens: [],
+      myProviderIds: [],
     });
     expect(service.region()).toBe('NL');
     expect(service.notificationsEnabled()).toBe(true);
@@ -417,6 +434,258 @@ describe('SettingsService', () => {
     // Flushing the effect must NOT trigger a second read (the !_loaded guard).
     await flushEffectsAndMicrotasks();
     expect(getDocMock).toHaveBeenCalledTimes(1);
+  });
+
+  // ── My Providers (spec 0060) ─────────────────────────────────────────────
+
+  const NETFLIX: CatalogProvider = {
+    providerId: 8,
+    name: 'Netflix',
+    logoPath: '/n.jpg',
+  };
+  const DISNEY: CatalogProvider = {
+    providerId: 337,
+    name: 'Disney Plus',
+    logoPath: '/d.jpg',
+  };
+  const MAX: CatalogProvider = {
+    providerId: 1899,
+    name: 'Max',
+    logoPath: null,
+  };
+
+  it('load() reads myProviderIds into the signal', async () => {
+    getDocMock.mockResolvedValue(
+      existingDoc({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+        },
+        myProviderIds: [8, 337],
+      }),
+    );
+    const service = createService(UID);
+
+    await service.load();
+
+    expect(service.myProviderIds()).toEqual([8, 337]);
+  });
+
+  it('load() defaults myProviderIds to [] for a legacy doc missing the field', async () => {
+    getDocMock.mockResolvedValue(
+      existingDoc({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+        },
+        // no myProviderIds → converter coalesces to []
+      }),
+    );
+    const service = createService(UID);
+
+    await service.load();
+
+    expect(service.myProviderIds()).toEqual([]);
+  });
+
+  it('eager-create writes myProviderIds: [] in the default User literal', async () => {
+    getDocMock.mockResolvedValue(missingDoc);
+    const service = createService(UID);
+
+    await service.load();
+
+    const [, payload] = setDocMock.mock.calls[0];
+    expect((payload as { myProviderIds: number[] }).myProviderIds).toEqual([]);
+    expect(service.myProviderIds()).toEqual([]);
+  });
+
+  it('toggleProvider adds an absent id and persists the whole array', async () => {
+    getDocMock.mockResolvedValue(
+      existingDoc({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+        },
+        myProviderIds: [8],
+      }),
+    );
+    const service = createService(UID);
+    await service.load();
+
+    await service.toggleProvider(337);
+
+    expect(updateDocMock).toHaveBeenCalledTimes(1);
+    const [ref, payload] = updateDocMock.mock.calls[0];
+    expect(ref).toEqual({ path: USER_DOC });
+    expect(payload).toEqual({ myProviderIds: [8, 337] });
+    expect(service.myProviderIds()).toEqual([8, 337]);
+  });
+
+  it('toggleProvider removes a present id and persists the whole array', async () => {
+    getDocMock.mockResolvedValue(
+      existingDoc({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+        },
+        myProviderIds: [8, 337],
+      }),
+    );
+    const service = createService(UID);
+    await service.load();
+
+    await service.toggleProvider(8);
+
+    const [, payload] = updateDocMock.mock.calls[0];
+    expect(payload).toEqual({ myProviderIds: [337] });
+    expect(service.myProviderIds()).toEqual([337]);
+  });
+
+  it('toggleProvider null-uid guard: no write', async () => {
+    const service = createService(null);
+
+    await service.toggleProvider(8);
+
+    expect(updateDocMock).not.toHaveBeenCalled();
+  });
+
+  it('loadProviderCatalog calls the thunk once per region and populates the signal', async () => {
+    getDocMock.mockResolvedValue(
+      existingDoc({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+        },
+        myProviderIds: [],
+      }),
+    );
+    getWatchProvidersMock.mockResolvedValue([NETFLIX, DISNEY]);
+    const service = createService(UID);
+    await service.load();
+
+    await service.loadProviderCatalog();
+    // Second call for the SAME region is a no-op (already loaded).
+    await service.loadProviderCatalog();
+
+    expect(getWatchProvidersMock).toHaveBeenCalledTimes(1);
+    expect(getWatchProvidersMock).toHaveBeenCalledWith('NL');
+    expect(service.providerCatalog()).toEqual([NETFLIX, DISNEY]);
+    expect(service.catalogLoading()).toBe(false);
+  });
+
+  it('loadProviderCatalog no-ops when no region resolved yet', async () => {
+    const service = createService(UID); // never loaded → region null
+
+    await service.loadProviderCatalog();
+
+    expect(getWatchProvidersMock).not.toHaveBeenCalled();
+  });
+
+  it('setRegion prunes myProviderIds to the new catalog and reports the dropped count', async () => {
+    getDocMock.mockResolvedValue(
+      existingDoc({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+        },
+        myProviderIds: [8, 337, 1899],
+      }),
+    );
+    const service = createService(UID);
+    await service.load();
+    updateDocMock.mockClear();
+
+    // New region (DE) catalog only carries Netflix (8) + Max (1899); Disney
+    // (337) is dropped.
+    getWatchProvidersMock.mockResolvedValue([NETFLIX, MAX]);
+
+    await service.setRegion('DE');
+
+    // Two sequential writes: region, then pruned myProviderIds.
+    expect(updateDocMock).toHaveBeenCalledTimes(2);
+    expect(updateDocMock.mock.calls[0][1]).toEqual({ region: 'DE' });
+    expect(updateDocMock.mock.calls[1][1]).toEqual({
+      myProviderIds: [8, 1899],
+    });
+    expect(service.myProviderIds()).toEqual([8, 1899]);
+    expect(service.lastPrunedCount()).toBe(1);
+  });
+
+  it('setRegion with nothing to prune writes only the region and reports 0 dropped', async () => {
+    getDocMock.mockResolvedValue(
+      existingDoc({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+        },
+        myProviderIds: [8],
+      }),
+    );
+    const service = createService(UID);
+    await service.load();
+    updateDocMock.mockClear();
+
+    getWatchProvidersMock.mockResolvedValue([NETFLIX, DISNEY]);
+
+    await service.setRegion('DE');
+
+    // Only the region write; no prune write (nothing dropped).
+    expect(updateDocMock).toHaveBeenCalledTimes(1);
+    expect(updateDocMock.mock.calls[0][1]).toEqual({ region: 'DE' });
+    expect(service.myProviderIds()).toEqual([8]);
+    expect(service.lastPrunedCount()).toBe(0);
+  });
+
+  it('setRegion skips the prune (preserves data) when the new catalog fails to load', async () => {
+    getDocMock.mockResolvedValue(
+      existingDoc({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+        },
+        myProviderIds: [8, 337, 1899],
+      }),
+    );
+    const service = createService(UID);
+    await service.load();
+    updateDocMock.mockClear();
+
+    getWatchProvidersMock.mockRejectedValue(new Error('offline'));
+
+    await service.setRegion('DE');
+
+    // The region write persisted; the prune is SKIPPED (no second write), the
+    // provider list is untouched, and nothing is reported dropped.
+    expect(updateDocMock).toHaveBeenCalledTimes(1);
+    expect(updateDocMock.mock.calls[0][1]).toEqual({ region: 'DE' });
+    expect(service.myProviderIds()).toEqual([8, 337, 1899]);
+    expect(service.lastPrunedCount()).toBe(0);
+    expect(service.region()).toBe('DE');
+  });
+
+  it('setRegion null-uid guard: no write and no catalog load', async () => {
+    const service = createService(null);
+
+    await service.setRegion('DE');
+
+    expect(updateDocMock).not.toHaveBeenCalled();
+    expect(getWatchProvidersMock).not.toHaveBeenCalled();
   });
 
   it('reactive load: does not auto-load while in a failed state (only retryLoad re-enters)', async () => {

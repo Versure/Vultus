@@ -6,8 +6,13 @@ import {
   setDoc,
   updateDoc,
 } from '@angular/fire/firestore';
-import { AUTH_UID } from '@vultus/shared/domain/tokens';
-import { REGIONS, type Region, type User } from '@vultus/shared/domain';
+import { AUTH_UID, GET_WATCH_PROVIDERS } from '@vultus/shared/domain/tokens';
+import {
+  REGIONS,
+  type CatalogProvider,
+  type Region,
+  type User,
+} from '@vultus/shared/domain';
 import {
   dataToUser,
   userPath,
@@ -29,11 +34,18 @@ import {
  * AngularFire `Firestore` (third-party) directly — Sheriff does not police it.
  * It never writes outside `users/{uid}` and never mutates `fcmTokens` beyond
  * the `[]` default written on eager create (FCM is deferred to PLAN §6 item 21).
+ *
+ * "My Providers" (spec 0060): the region's TMDB watch-provider catalog is
+ * fetched via the `scope:shared` `GET_WATCH_PROVIDERS` token (a thunk the shell
+ * provides over the `getWatchProviders` callable) — this slice never imports
+ * `@angular/fire/functions` or `apps/functions`. The user's chosen provider ids
+ * persist in `users/{uid}.myProviderIds` (an open `number[]`; default `[]`).
  */
 @Injectable()
 export class SettingsService {
   private readonly uid = inject(AUTH_UID);
   private readonly firestore = inject(Firestore);
+  private readonly getWatchProviders = inject(GET_WATCH_PROVIDERS);
 
   /** The selectable regions (the shared REGIONS const). */
   readonly regions: readonly Region[] = REGIONS;
@@ -59,6 +71,18 @@ export class SettingsService {
   private readonly _loaded = signal<boolean>(false);
   private readonly _loadFailed = signal<boolean>(false);
 
+  // "My Providers" (spec 0060) state.
+  private readonly _providerCatalog = signal<CatalogProvider[]>([]);
+  private readonly _myProviderIds = signal<number[]>([]);
+  private readonly _catalogLoading = signal<boolean>(false);
+  // Number of ids dropped by the most recent region-change prune. The page
+  // reacts to this to raise a toast; reset to 0 on any prune that drops nothing
+  // (and never surfaced when the prune is skipped on a catalog-load failure).
+  private readonly _lastPrunedCount = signal<number>(0);
+  // The region whose catalog is currently loaded into `_providerCatalog`, so
+  // `loadProviderCatalog()` can no-op when it's already loaded for this region.
+  private loadedCatalogRegion: Region | null = null;
+
   /** Current persisted region; null until the user doc resolves. */
   readonly region = this._region.asReadonly();
   /** Global notifications projection (true when all notificationPrefs are true). */
@@ -73,6 +97,19 @@ export class SettingsService {
    * skeleton; checked BEFORE `loaded` in the template.
    */
   readonly loadFailed = this._loadFailed.asReadonly();
+
+  /** The current region's TMDB watch-provider catalog (loaded lazily). */
+  readonly providerCatalog = this._providerCatalog.asReadonly();
+  /** The user's selected provider ids (persisted; default []). */
+  readonly myProviderIds = this._myProviderIds.asReadonly();
+  /** True while the catalog is being fetched (drives a skeleton/spinner). */
+  readonly catalogLoading = this._catalogLoading.asReadonly();
+  /**
+   * Count of provider ids dropped by the last region-change prune (spec 0060).
+   * The page reacts to a >0 value to raise a "removed" toast; 0 means nothing
+   * was dropped (or the prune was skipped on a failed catalog load).
+   */
+  readonly lastPrunedCount = this._lastPrunedCount.asReadonly();
 
   constructor() {
     // Reactively load once a uid resolves. ngOnInit's load() is the fast path
@@ -117,6 +154,7 @@ export class SettingsService {
             deliveryHour: null,
           },
           fcmTokens: [],
+          myProviderIds: [],
         };
         await setDoc(ref, userToData(user));
       }
@@ -127,6 +165,7 @@ export class SettingsService {
         projectNotifications(user.notificationPrefs),
       );
       this._deliveryHour.set(user.notificationPrefs.deliveryHour);
+      this._myProviderIds.set(user.myProviderIds);
       this._loaded.set(true);
     } catch (error) {
       // Surface the failure as an error state. `_loaded` stays false; the
@@ -142,7 +181,24 @@ export class SettingsService {
     void this.load();
   }
 
-  /** Persists the region only; leaves all other fields untouched. */
+  /**
+   * Persists the region, then reconciles "My Providers" to the new region's
+   * catalog (spec 0060). This is TWO sequential `users/{uid}` writes — first the
+   * region, then (once the new catalog loads) the pruned `myProviderIds` — never
+   * batched, so the "skip prune on load failure" guard can leave a valid,
+   * already-persisted region with an untouched provider list.
+   *
+   * After the region write:
+   * - load the NEW region's catalog (forces a refetch — the loaded region
+   *   changed);
+   * - drop any `myProviderIds` not present in that catalog and persist the
+   *   pruned array;
+   * - expose the dropped count via `lastPrunedCount` (>0 iff ≥1 id was dropped)
+   *   so the page can toast it.
+   *
+   * GUARD: if the new catalog fails to load, SKIP the prune entirely — never
+   * destroy the provider list on a failed read. `lastPrunedCount` stays 0.
+   */
   async setRegion(region: Region): Promise<void> {
     const uid = this.uid();
     if (uid === null) {
@@ -150,6 +206,80 @@ export class SettingsService {
     }
     await updateDoc(doc(this.firestore, userPath(uid)), { region });
     this._region.set(region);
+
+    // Reconcile the provider selection against the new region's catalog. On any
+    // failure to load, bail before pruning (data-preservation guard).
+    try {
+      await this.loadProviderCatalog();
+    } catch (error) {
+      console.error(
+        '[SettingsService] region-change catalog load failed; skipping prune:',
+        error,
+      );
+      this._lastPrunedCount.set(0);
+      return;
+    }
+
+    const catalogIds = new Set(
+      this._providerCatalog().map((p) => p.providerId),
+    );
+    const current = this._myProviderIds();
+    const pruned = current.filter((id) => catalogIds.has(id));
+    const droppedCount = current.length - pruned.length;
+
+    if (droppedCount > 0) {
+      await updateDoc(doc(this.firestore, userPath(uid)), {
+        myProviderIds: pruned,
+      });
+      this._myProviderIds.set(pruned);
+    }
+    this._lastPrunedCount.set(droppedCount);
+  }
+
+  /**
+   * Loads the current region's provider catalog via `GET_WATCH_PROVIDERS`
+   * (spec 0060). No-op if the catalog is already loaded for the current region.
+   * No-op (and does not touch `catalogLoading`) when there is no resolved region
+   * yet. Propagates the thunk's rejection to the caller (so `setRegion` can skip
+   * the prune) but always clears `catalogLoading`.
+   */
+  async loadProviderCatalog(): Promise<void> {
+    const region = this._region();
+    if (region === null) {
+      return;
+    }
+    if (this.loadedCatalogRegion === region) {
+      return;
+    }
+
+    this._catalogLoading.set(true);
+    try {
+      const providers = await this.getWatchProviders(region);
+      this._providerCatalog.set(providers);
+      this.loadedCatalogRegion = region;
+    } finally {
+      this._catalogLoading.set(false);
+    }
+  }
+
+  /**
+   * Toggles one provider id in `myProviderIds` (add if absent, remove if
+   * present) and persists the WHOLE resulting `number[]` via
+   * `updateDoc(..., { myProviderIds })` (spec 0060). Null-uid guarded.
+   */
+  async toggleProvider(providerId: number): Promise<void> {
+    const uid = this.uid();
+    if (uid === null) {
+      return;
+    }
+    const current = this._myProviderIds();
+    const next = current.includes(providerId)
+      ? current.filter((id) => id !== providerId)
+      : [...current, providerId];
+    await updateDoc(doc(this.firestore, userPath(uid)), {
+      myProviderIds: next,
+    });
+    this._myProviderIds.set(next);
   }
 
   /**

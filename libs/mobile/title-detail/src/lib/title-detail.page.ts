@@ -28,6 +28,7 @@ import {
   documentTextOutline,
   filmOutline,
   listOutline,
+  openOutline,
   peopleOutline,
   personCircleOutline,
   squareOutline,
@@ -40,6 +41,7 @@ import { AUTH_UID } from '@vultus/shared/domain/tokens';
 import {
   type Region,
   type TitleType,
+  type WatchProvider,
   type WatchStatus,
   type WatchlistItem,
 } from '@vultus/shared/domain';
@@ -70,14 +72,53 @@ import {
   TitleDetailService,
 } from './title-detail.service';
 
+/**
+ * The "Where to Watch" two-group split (spec 0060, canonical Stitch screen
+ * `562019f29ce2412d90c757a7e45a98bf`): `mine` = the user's selected FLATRATE
+ * providers; `elsewhere` = every other provider (non-mine flatrate + all rent +
+ * all buy). Each entry keeps its `type` so the row can render the type caption.
+ */
+export interface ProviderSplit {
+  mine: WatchProvider[];
+  elsewhere: WatchProvider[];
+}
+
+/**
+ * Pure partition for the Where-to-Watch two-group split (spec 0060, decision 4).
+ * `mine` holds ONLY **flatrate** providers whose `providerId ∈ myProviderIds`
+ * ("yours" is a subscription concept — a rent/buy provider is never `mine` even
+ * if its id happens to be in `myProviderIds`). `elsewhere` holds every other
+ * provider: non-mine flatrate + ALL rent + ALL buy. Order is preserved from the
+ * (already type-grouped) input; no I/O — the priority unit-test surface.
+ */
+export function partitionProviders(
+  providers: WatchProvider[],
+  myProviderIds: number[],
+): ProviderSplit {
+  const owned = new Set(myProviderIds);
+  const mine: WatchProvider[] = [];
+  const elsewhere: WatchProvider[] = [];
+  for (const p of providers) {
+    if (p.type === 'flatrate' && owned.has(p.providerId)) {
+      mine.push(p);
+    } else {
+      elsewhere.push(p);
+    }
+  }
+  return { mine, elsewhere };
+}
+
 interface DetailVm {
   state: DetailViewState;
   region: Region | null;
   providers: GroupedProviders;
+  /** All providers partitioned into the "mine" / "elsewhere" subgroups. */
+  split: ProviderSplit;
   tracked: WatchlistItem | null;
 }
 
 const EMPTY_PROVIDERS: GroupedProviders = { flatrate: [], rent: [], buy: [] };
+const EMPTY_SPLIT: ProviderSplit = { mine: [], elsewhere: [] };
 
 @Component({
   selector: 'lib-title-detail',
@@ -228,6 +269,18 @@ export class TitleDetailPage {
       shareReplay({ bufferSize: 1, refCount: true }),
     );
 
+  /**
+   * The user's selected provider ids (spec 0060), for the Where-to-Watch split.
+   * Seeded `[]` so the loaded page renders immediately (before the `users/{uid}`
+   * docData first emits) — matching the region$/tracked$ startWith pattern.
+   */
+  private readonly myProviderIds$ = this.service
+    .myProviderIds$()
+    .pipe(
+      startWith<number[]>([]),
+      shareReplay({ bufferSize: 1, refCount: true }),
+    );
+
   readonly vm$: Observable<DetailVm> = combineLatest([
     this.detail$,
     this.region$,
@@ -238,6 +291,7 @@ export class TitleDetailPage {
           state,
           region,
           providers: EMPTY_PROVIDERS,
+          split: EMPTY_SPLIT,
           tracked: null,
         });
       }
@@ -252,8 +306,19 @@ export class TitleDetailPage {
       const tracked$ = this.service
         .tracked$(state.detail.tmdbId)
         .pipe(startWith<WatchlistItem | null>(null));
-      return combineLatest([providers$, tracked$]).pipe(
-        map(([providers, tracked]) => ({ state, region, providers, tracked })),
+      return combineLatest([providers$, tracked$, this.myProviderIds$]).pipe(
+        map(([providers, tracked, myProviderIds]) => ({
+          state,
+          region,
+          providers,
+          // All provider types (flatrate → rent → buy) partitioned into the
+          // two subgroups; only the `mine` bucket is flatrate-gated.
+          split: partitionProviders(
+            [...providers.flatrate, ...providers.rent, ...providers.buy],
+            myProviderIds,
+          ),
+          tracked,
+        })),
       );
     }),
   );
@@ -294,6 +359,7 @@ export class TitleDetailPage {
       chevronDownOutline,
       checkmarkCircle,
       squareOutline,
+      openOutline,
     });
     // Keep currentTmdbId in sync so imperative handlers always act on the
     // title currently on screen (not the first navigation's id).
@@ -395,13 +461,28 @@ export class TitleDetailPage {
     return p.flatrate.length > 0 || p.rent.length > 0 || p.buy.length > 0;
   }
 
-  /** Type label for a watchlist provider type. */
+  /**
+   * Per-row type caption for the Where-to-Watch subgroups (spec 0060, canonical
+   * Stitch screen): flatrate → "Subscription"; rent/buy → "Rent/Buy". "On Your
+   * Providers" rows are always flatrate → always "Subscription".
+   */
   providerTypeLabel(type: 'flatrate' | 'rent' | 'buy'): string {
-    return type === 'flatrate'
-      ? 'Subscription'
-      : type === 'rent'
-        ? 'Rent'
-        : 'Buy';
+    return type === 'flatrate' ? 'Subscription' : 'Rent/Buy';
+  }
+
+  /**
+   * Uppercased initials for the text logo tile. The per-title `WatchProvider`
+   * carries no logo path (unlike the catalog's `CatalogProvider`), so the 40×40
+   * tile shows the provider's first two initials — matching the text-only tile
+   * approach the slice already used for provider rows.
+   */
+  providerInitials(name: string): string {
+    return name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0]?.toUpperCase() ?? '')
+      .join('');
   }
 
   /** Human badge for the title type. */

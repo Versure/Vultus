@@ -406,6 +406,52 @@ describe('TitleDetailService', () => {
     expect(none).toBeNull();
   });
 
+  it('myProviderIds$ emits the user provider ids, [] for a legacy doc missing the field, [] when absent (spec 0060)', async () => {
+    // Populated field.
+    docDataMock.mockReturnValue(
+      of({
+        region: 'NL',
+        notificationPrefs: {},
+        fcmTokens: [],
+        myProviderIds: [8, 337],
+      }),
+    );
+    const service = createService(UID);
+    const ids = await new Promise((resolve) =>
+      service.myProviderIds$().subscribe(resolve),
+    );
+    expect(docMock).toHaveBeenCalledWith({}, userPath(UID));
+    expect(ids).toEqual([8, 337]);
+
+    // Legacy doc missing myProviderIds → [] via dataToUser (?? []).
+    docDataMock.mockReturnValue(
+      of({ region: 'NL', notificationPrefs: {}, fcmTokens: [] }),
+    );
+    TestBed.resetTestingModule();
+    const legacy = createService(UID);
+    const legacyIds = await new Promise((resolve) =>
+      legacy.myProviderIds$().subscribe(resolve),
+    );
+    expect(legacyIds).toEqual([]);
+
+    // Absent doc → [].
+    docDataMock.mockReturnValue(of(undefined));
+    TestBed.resetTestingModule();
+    const none = createService(UID);
+    const noneIds = await new Promise((resolve) =>
+      none.myProviderIds$().subscribe(resolve),
+    );
+    expect(noneIds).toEqual([]);
+  });
+
+  it('null-uid guard: myProviderIds$ → [] (spec 0060)', async () => {
+    const service = createService(null);
+    const ids = await new Promise((resolve) =>
+      service.myProviderIds$().subscribe(resolve),
+    );
+    expect(ids).toEqual([]);
+  });
+
   it('null region → providers not fetched, empty groups', async () => {
     const service = createService(UID);
     const groups = await new Promise((resolve) =>

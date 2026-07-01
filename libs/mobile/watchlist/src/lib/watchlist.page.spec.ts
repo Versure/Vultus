@@ -100,8 +100,9 @@ vi.mock('./watchlist.service', () => {
   };
 });
 
-import { WatchlistPage } from './watchlist.page';
+import { WatchlistPage, partitionAvailabilityPill } from './watchlist.page';
 import { WatchlistService, filterByType } from './watchlist.service';
+import type { RegionAvailability } from '@vultus/shared/domain';
 
 function item(over: Partial<WatchlistItem>): WatchlistItem {
   return {
@@ -115,9 +116,29 @@ function item(over: Partial<WatchlistItem>): WatchlistItem {
   };
 }
 
-/** Availability doc shape the page maps via `a?.providers.map(p => p.name)`. */
-function availability(names: string[]) {
-  return { providers: names.map((name) => ({ name })) };
+/** A single provider in an availability doc — full `WatchProvider` shape (spec
+ *  0060 needs `providerId` + `type`, not just `name`). */
+interface ProviderShape {
+  providerId: number;
+  name: string;
+  type: 'flatrate' | 'rent' | 'buy';
+}
+
+/**
+ * Availability-doc factory. Accepts either a plain `string[]` (back-compat: each
+ * becomes a `flatrate` provider with a synthetic id, for the chip/filter tests
+ * that only read `.name`) or full `ProviderShape[]` (spec 0060 pill tests, which
+ * need `providerId`/`type`). The page maps `a?.providers.map(p => p.name)` for
+ * chips and reads `providerId`/`type` for the availability pill.
+ */
+function availability(providers: (string | ProviderShape)[]) {
+  return {
+    providers: providers.map((p, i) =>
+      typeof p === 'string'
+        ? { providerId: 1000 + i, name: p, type: 'flatrate' as const }
+        : p,
+    ),
+  };
 }
 
 interface MockService {
@@ -125,6 +146,7 @@ interface MockService {
   updateStatus: ReturnType<typeof vi.fn>;
   removeTitle: ReturnType<typeof vi.fn>;
   userRegion$: ReturnType<typeof vi.fn>;
+  myProviderIds$: ReturnType<typeof vi.fn>;
   availability$: ReturnType<typeof vi.fn>;
   unreadNotificationCount$: ReturnType<typeof of>;
 }
@@ -139,8 +161,9 @@ interface MockService {
 function mockService(
   items: WatchlistItem[],
   unreadCount = 0,
-  providersByTmdbId: Record<number, string[]> = {},
+  providersByTmdbId: Record<number, (string | ProviderShape)[]> = {},
   region: string | null = null,
+  myProviderIds: number[] = [],
 ): MockService {
   return {
     watchlist$: vi.fn((_uid: string | null, type?: 'movie' | 'tv') =>
@@ -149,9 +172,10 @@ function mockService(
     updateStatus: vi.fn(),
     removeTitle: vi.fn(),
     userRegion$: vi.fn(() => of(region)),
+    myProviderIds$: vi.fn(() => of(myProviderIds)),
     availability$: vi.fn((tmdbId: number) => {
-      const names = providersByTmdbId[tmdbId];
-      return of(names ? availability(names) : null);
+      const providers = providersByTmdbId[tmdbId];
+      return of(providers ? availability(providers) : null);
     }),
     unreadNotificationCount$: of(unreadCount),
   };
@@ -955,32 +979,98 @@ describe('WatchlistPage', () => {
     });
   });
 
-  // ── Provider badge (regression — widened cache mock shape) ──────────────────
+  // ── Availability pill (spec 0060 — mine / elsewhere / none partition) ───────
 
-  describe('per-card provider badge (widened cache)', () => {
-    it('shows the first provider name on a planned card from the string[] stream', async () => {
-      // The cache is now Observable<string[]>; the badge maps names[0] ?? null.
+  describe('availability pill (spec 0060)', () => {
+    it('shows the "mine" pill ("On {name}" + check icon, primary styling) when a flatrate provider is in myProviderIds', async () => {
       const service = mockService(
-        [item({ tmdbId: 1, status: 'planned', title: 'P1' })],
+        [item({ tmdbId: 1, status: 'watching', title: 'W1' })],
         0,
-        { 1: ['Netflix', 'Max'] },
+        {
+          1: [
+            { providerId: 8, name: 'Netflix', type: 'flatrate' },
+            { providerId: 337, name: 'Disney+', type: 'flatrate' },
+          ],
+        },
         'US',
+        [8], // user subscribes to Netflix
       );
       const { el } = await setup(service);
-      const badge = el.querySelector<HTMLElement>('.availability-badge');
-      expect(badge?.textContent?.trim()).toBe('Netflix');
+      const pill = el.querySelector<HTMLElement>('.availability-pill');
+      expect(pill).toBeTruthy();
+      expect(pill?.classList.contains('is-mine')).toBe(true);
+      expect(pill?.textContent?.replace(/\s+/g, ' ').trim()).toBe('On Netflix');
+      // The leading check-circle icon renders only for the mine variant.
+      expect(
+        pill?.querySelector('ion-icon[name="checkmark-circle"]'),
+      ).toBeTruthy();
     });
 
-    it('shows the first provider name on a non-planned card', async () => {
+    it('picks the FIRST matching provider when several are in myProviderIds', async () => {
       const service = mockService(
-        [item({ tmdbId: 7, status: 'watching', title: 'W1' })],
+        [item({ tmdbId: 1, status: 'watching', title: 'W1' })],
         0,
-        { 7: ['Disney+'] },
+        {
+          1: [
+            { providerId: 8, name: 'Netflix', type: 'flatrate' },
+            { providerId: 337, name: 'Disney+', type: 'flatrate' },
+          ],
+        },
         'US',
+        [337, 8], // both owned; first flatrate in the list (Netflix) wins
       );
       const { el } = await setup(service);
-      const badge = el.querySelector<HTMLElement>('.provider-badge');
-      expect(badge?.textContent?.trim()).toBe('Disney+');
+      const pill = el.querySelector<HTMLElement>('.availability-pill');
+      expect(pill?.textContent?.replace(/\s+/g, ' ').trim()).toBe('On Netflix');
+    });
+
+    it('shows the "elsewhere" pill ("Also on {name}", muted, no icon) when a flatrate provider exists but none is owned', async () => {
+      const service = mockService(
+        [item({ tmdbId: 7, status: 'planned', title: 'P1' })],
+        0,
+        { 7: [{ providerId: 15, name: 'Hulu', type: 'flatrate' }] },
+        'US',
+        [8], // owns Netflix, not Hulu
+      );
+      const { el } = await setup(service);
+      const pill = el.querySelector<HTMLElement>('.availability-pill');
+      expect(pill).toBeTruthy();
+      expect(pill?.classList.contains('is-mine')).toBe(false);
+      expect(pill?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+        'Also on Hulu',
+      );
+      expect(
+        pill?.querySelector('ion-icon[name="checkmark-circle"]'),
+      ).toBeFalsy();
+    });
+
+    it('renders NO pill when there is no flatrate availability (rent/buy only)', async () => {
+      const service = mockService(
+        [item({ tmdbId: 3, status: 'watching', title: 'W1' })],
+        0,
+        {
+          3: [
+            { providerId: 2, name: 'Apple TV', type: 'rent' },
+            { providerId: 3, name: 'Google Play', type: 'buy' },
+          ],
+        },
+        'US',
+        [2, 3], // even though the ids are "owned", rent/buy is never mine
+      );
+      const { el } = await setup(service);
+      expect(el.querySelector('.availability-pill')).toBeFalsy();
+    });
+
+    it('renders NO pill when the title has no availability at all', async () => {
+      const service = mockService(
+        [item({ tmdbId: 5, status: 'watching', title: 'W1' })],
+        0,
+        {},
+        'US',
+        [8],
+      );
+      const { el } = await setup(service);
+      expect(el.querySelector('.availability-pill')).toBeFalsy();
     });
   });
 
@@ -1139,6 +1229,84 @@ describe('WatchlistPage', () => {
       expect(c.badgeLabel(9)).toBe('9');
       expect(c.badgeLabel(10)).toBe('9+');
       expect(c.badgeLabel(99)).toBe('9+');
+    });
+  });
+});
+
+// ── Pure partition logic (spec 0060) ─────────────────────────────────────────
+
+describe('partitionAvailabilityPill', () => {
+  function avail(
+    providers: {
+      providerId: number;
+      name: string;
+      type: 'flatrate' | 'rent' | 'buy';
+    }[],
+  ): RegionAvailability {
+    return { providers } as RegionAvailability;
+  }
+
+  it('returns null when availability is null', () => {
+    expect(partitionAvailabilityPill(null, [8])).toBeNull();
+  });
+
+  it('returns null when there are no flatrate providers (rent/buy only)', () => {
+    const a = avail([
+      { providerId: 2, name: 'Apple TV', type: 'rent' },
+      { providerId: 3, name: 'Google Play', type: 'buy' },
+    ]);
+    // Ids owned, but rent/buy is never a compact-card pill.
+    expect(partitionAvailabilityPill(a, [2, 3])).toBeNull();
+  });
+
+  it('returns "mine" (first owned flatrate name) when a flatrate provider is owned', () => {
+    const a = avail([
+      { providerId: 337, name: 'Disney+', type: 'flatrate' },
+      { providerId: 8, name: 'Netflix', type: 'flatrate' },
+    ]);
+    expect(partitionAvailabilityPill(a, [8])).toEqual({
+      kind: 'mine',
+      name: 'Netflix',
+    });
+  });
+
+  it('returns "mine" for the FIRST owned flatrate provider in list order', () => {
+    const a = avail([
+      { providerId: 337, name: 'Disney+', type: 'flatrate' },
+      { providerId: 8, name: 'Netflix', type: 'flatrate' },
+    ]);
+    // Both owned → the first flatrate in list order (Disney+) wins.
+    expect(partitionAvailabilityPill(a, [8, 337])).toEqual({
+      kind: 'mine',
+      name: 'Disney+',
+    });
+  });
+
+  it('ignores an owned rent/buy id and falls through to elsewhere on the flatrate', () => {
+    const a = avail([
+      { providerId: 15, name: 'Hulu', type: 'flatrate' },
+      { providerId: 2, name: 'Apple TV', type: 'rent' },
+    ]);
+    // Apple TV (rent) id is owned but can't be "mine"; no owned flatrate → elsewhere.
+    expect(partitionAvailabilityPill(a, [2])).toEqual({
+      kind: 'elsewhere',
+      name: 'Hulu',
+    });
+  });
+
+  it('returns "elsewhere" (first flatrate name) when a flatrate exists but none is owned', () => {
+    const a = avail([{ providerId: 15, name: 'Hulu', type: 'flatrate' }]);
+    expect(partitionAvailabilityPill(a, [8])).toEqual({
+      kind: 'elsewhere',
+      name: 'Hulu',
+    });
+  });
+
+  it('returns "elsewhere" with an empty myProviderIds', () => {
+    const a = avail([{ providerId: 15, name: 'Hulu', type: 'flatrate' }]);
+    expect(partitionAvailabilityPill(a, [])).toEqual({
+      kind: 'elsewhere',
+      name: 'Hulu',
     });
   });
 });

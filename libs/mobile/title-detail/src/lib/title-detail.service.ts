@@ -204,6 +204,24 @@ export class TitleDetailService {
   }
 
   /**
+   * The user's selected provider ids from `users/{uid}.myProviderIds` (spec
+   * 0060), for the "On Your Providers" split in Where-to-Watch. Reads the same
+   * `users/{uid}` doc `region$` reads, via `dataToUser` (default `[]` — a legacy
+   * doc pre-0060 lacks the field → `[]`). Null uid / missing doc → `[]`.
+   */
+  myProviderIds$(): Observable<number[]> {
+    const uid = this.uid();
+    if (!uid) {
+      return of<number[]>([]);
+    }
+    return (
+      docData(doc(this.firestore, userPath(uid))) as Observable<
+        UserReadData | undefined
+      >
+    ).pipe(map((data) => (data ? dataToUser(data).myProviderIds : [])));
+  }
+
+  /**
    * Grouped providers for a title in the resolved region. From the cached
    * `availability/{region}` doc when the title is cached, else from the live
    * client. Null region → never fetched (caller renders the null-region prompt).

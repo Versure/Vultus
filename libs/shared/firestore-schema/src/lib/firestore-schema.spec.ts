@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import type {
+  CatalogProvider,
   EpisodeDoc,
   NotificationDoc,
+  ProviderCatalogDoc,
   RegionAvailability,
   SyncRun,
   TitleCacheEntry,
@@ -16,12 +18,14 @@ import {
   dataToAvailability,
   dataToEpisode,
   dataToNotification,
+  dataToProviderCatalog,
   dataToSyncRun,
   dataToTitleCache,
   dataToUser,
   dataToWatchlistItem,
   episodeToData,
   notificationToData,
+  providerCatalogToData,
   syncRunToData,
   titleCacheToData,
   userToData,
@@ -34,6 +38,8 @@ import {
   episodesPath,
   notificationPath,
   notificationsPath,
+  providerCatalogDocPath,
+  providerCatalogPath,
   syncRunDocPath,
   syncRunsCollection,
   titleCacheDocPath,
@@ -87,6 +93,7 @@ describe('converters — round-trip identity', () => {
           createdAt: '2026-06-18T12:00:00.000Z',
         },
       ],
+      myProviderIds: [8, 337],
     };
     expect(dataToUser(simulateStored(userToData(user)) as never)).toEqual(user);
   });
@@ -101,6 +108,7 @@ describe('converters — round-trip identity', () => {
         deliveryHour: 8,
       },
       fcmTokens: [],
+      myProviderIds: [8],
     };
     const result = dataToUser(simulateStored(userToData(user)) as never);
     expect(result).toEqual(user);
@@ -117,6 +125,7 @@ describe('converters — round-trip identity', () => {
         deliveryHour: null,
       },
       fcmTokens: [],
+      myProviderIds: [],
     };
     const result = dataToUser(simulateStored(userToData(user)) as never);
     expect(result).toEqual(user);
@@ -134,6 +143,7 @@ describe('converters — round-trip identity', () => {
         deliveryHour: 14,
       },
       fcmTokens: [],
+      myProviderIds: [8],
     };
     const stored = simulateStored(userToData(user)) as Record<string, unknown>;
     // Delete deliveryHour to simulate a pre-0051 stored doc.
@@ -142,6 +152,60 @@ describe('converters — round-trip identity', () => {
     ];
     const result = dataToUser(stored as never);
     expect(result.notificationPrefs.deliveryHour).toBeNull();
+  });
+
+  it('User: myProviderIds populated round-trips', () => {
+    const user: User = {
+      region: 'NL',
+      notificationPrefs: {
+        episodeAired: true,
+        movieAvailable: true,
+        cameToPlatform: true,
+        deliveryHour: null,
+      },
+      fcmTokens: [],
+      myProviderIds: [8, 337, 119],
+    };
+    const result = dataToUser(simulateStored(userToData(user)) as never);
+    expect(result).toEqual(user);
+    expect(result.myProviderIds).toEqual([8, 337, 119]);
+  });
+
+  it('User: myProviderIds empty array round-trips', () => {
+    const user: User = {
+      region: 'DE',
+      notificationPrefs: {
+        episodeAired: false,
+        movieAvailable: false,
+        cameToPlatform: false,
+        deliveryHour: null,
+      },
+      fcmTokens: [],
+      myProviderIds: [],
+    };
+    const result = dataToUser(simulateStored(userToData(user)) as never);
+    expect(result).toEqual(user);
+    expect(result.myProviderIds).toEqual([]);
+  });
+
+  it('User: backward-compat — legacy doc missing myProviderIds maps to []', () => {
+    // Simulates a doc written before spec 0060 (no myProviderIds field stored).
+    const user: User = {
+      region: 'GB',
+      notificationPrefs: {
+        episodeAired: true,
+        movieAvailable: false,
+        cameToPlatform: true,
+        deliveryHour: null,
+      },
+      fcmTokens: [],
+      myProviderIds: [8],
+    };
+    const stored = simulateStored(userToData(user)) as Record<string, unknown>;
+    // Delete myProviderIds to simulate a pre-0060 stored doc.
+    delete stored['myProviderIds'];
+    const result = dataToUser(stored as never);
+    expect(result.myProviderIds).toEqual([]);
   });
 
   it('WatchlistItem: addedAt round-trips; traktId null survives', () => {
@@ -387,6 +451,45 @@ describe('converters — round-trip identity', () => {
     ).toEqual(a);
   });
 
+  it('ProviderCatalogDoc: lastSyncedAt ISO↔Timestamp; providers pass through', () => {
+    const doc: ProviderCatalogDoc = {
+      providers: [
+        { providerId: 8, name: 'Netflix', logoPath: '/netflix.jpg' },
+        { providerId: 337, name: 'Disney Plus', logoPath: null },
+      ],
+      lastSyncedAt: '2026-06-25T00:00:00.000Z',
+    };
+    const result = dataToProviderCatalog(
+      simulateStored(providerCatalogToData(doc)) as never,
+    );
+    expect(result).toEqual(doc);
+  });
+
+  it('ProviderCatalogDoc: empty providers array round-trips', () => {
+    const doc: ProviderCatalogDoc = {
+      providers: [],
+      lastSyncedAt: '2026-06-25T00:00:00.000Z',
+    };
+    const result = dataToProviderCatalog(
+      simulateStored(providerCatalogToData(doc)) as never,
+    );
+    expect(result).toEqual(doc);
+    expect(result.providers).toEqual([]);
+  });
+
+  it('ProviderCatalogDoc: write emits Date on lastSyncedAt; providers unchanged', () => {
+    const providers: CatalogProvider[] = [
+      { providerId: 8, name: 'Netflix', logoPath: '/netflix.jpg' },
+    ];
+    const doc: ProviderCatalogDoc = {
+      providers,
+      lastSyncedAt: '2026-06-25T00:00:00.000Z',
+    };
+    const write = providerCatalogToData(doc);
+    expect(write.lastSyncedAt).toBeInstanceOf(Date);
+    expect(write.providers).toBe(providers);
+  });
+
   it('SyncRun: cron run, userId null, empty errors', () => {
     const run: SyncRun = {
       runId: 'run-1',
@@ -496,6 +599,8 @@ describe('path builders — equality', () => {
     );
     expect(syncRunsCollection()).toBe('sync-runs');
     expect(syncRunDocPath('abc')).toBe('sync-runs/abc');
+    expect(providerCatalogPath()).toBe('provider-catalog');
+    expect(providerCatalogDocPath('NL')).toBe('provider-catalog/NL');
   });
 
   it('document paths have even segment counts; collection paths odd', () => {
@@ -508,6 +613,7 @@ describe('path builders — equality', () => {
       titleCachePath(),
       availabilityPath(603),
       syncRunsCollection(),
+      providerCatalogPath(),
     ];
     const documentPaths = [
       userPath('u1'),
@@ -517,6 +623,7 @@ describe('path builders — equality', () => {
       titleCacheDocPath(603),
       availabilityDocPath(603, 'NL'),
       syncRunDocPath('abc'),
+      providerCatalogDocPath('NL'),
     ];
 
     for (const p of collectionPaths) {

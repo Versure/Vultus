@@ -4,11 +4,12 @@ The **pushed per-title detail page** for Vultus (PLAN §6 item 19, spec 0016). I
 is **not** a tab — it is reached from the watchlist or a search result and
 lazy-routed at **`tabs/title-detail/:titleId`** (where `:titleId === String(tmdbId)`).
 It shows the title's metadata (poster, title, year, rating, synopsis), the
-streaming providers that carry it in the user's region (text-only, grouped), the
-watchlist action area (add / change status / remove), and — for **TV** titles —
-a season-grouped **Episodes** section; for **movies** a **Mark as watched**
-toggle (spec 0034). While a title is **untracked**, the action area offers a
-one-step **"Mark as Watched"** add alongside "Add to Watchlist" (spec 0056).
+streaming providers that carry it in the user's region — split into **"On Your
+Providers"** vs **"Also Available On"** (spec 0060, see below) — the watchlist
+action area (add / change status / remove), and — for **TV** titles — a
+season-grouped **Episodes** section; for **movies** a **Mark as watched** toggle
+(spec 0034). While a title is **untracked**, the action area offers a one-step
+**"Mark as Watched"** add alongside "Add to Watchlist" (spec 0056).
 
 ## Barrel exports (`@vultus/mobile/title-detail`)
 
@@ -25,6 +26,47 @@ one-step **"Mark as Watched"** add alongside "Add to Watchlist" (spec 0056).
 across the barrel. `SeasonGroup` / `EpisodeRow` are exported only because the
 component test (and any future consumer) needs the shapes; they remain
 slice-local data.
+
+## "Where to Watch" — two-group split (spec 0060)
+
+The "Where to Watch" card partitions **all** of the title's providers (flatrate +
+rent + buy) for the resolved region into **two labelled subgroups**, driven by the
+user's selected provider ids (`users/{uid}.myProviderIds`, read via
+`TitleDetailService.myProviderIds$()`, default `[]`):
+
+- **"On Your Providers"** — the user's selected **flatrate** providers only
+  (`providerId ∈ myProviderIds`). "Yours" is a subscription concept, so a rent/buy
+  provider is **never** in this group even if its id happens to be selected. Each
+  row shows a bold provider name, a "Yours" tag, and a "Subscription" caption.
+- **"Also Available On"** — **every other** provider: non-selected flatrate + **all**
+  rent + **all** buy. Rows show a muted (non-bold) provider name and a per-type
+  caption (flatrate → "Subscription", rent/buy → "Rent/Buy").
+
+The split is computed by the exported **pure** helper
+`partitionProviders(providers: WatchProvider[], myProviderIds: number[]):
+{ mine; elsewhere }` (the per-row `type` is preserved for the caption). This logic
+is **deliberately duplicated** vs the watchlist slice's own flatrate-only pill
+partition — two slices with different presentations, short of the 3+-slice extract
+rule (CLAUDE.md / PLAN §3); do not extract a shared helper.
+
+**Rendering rules:** only non-empty subgroups render (no empty header/divider);
+order is **"On Your Providers"** first, then **"Also Available On"**, with a
+hairline divider between them when both are present (also the seam where the
+spec-0061 "Personal Tracking" / Plex group will sit — not built here). When there
+are **no** providers at all, the existing "Not available to stream in your region"
+copy is shown unchanged; the null-region prompt is likewise unchanged.
+
+The 40×40 logo tile shows the provider's **initials** (the per-title
+`WatchProvider` carries no logo path — unlike the catalog's `CatalogProvider`).
+The trailing `open-outline` glyph is a **decorative hover affordance only**: this
+app has **no per-provider deep-link URL**, so the row is presentational — no
+`href`, no click handler, no navigation (the row raises `surface-container` →
+`surface-container-high` and the glyph shifts to primary on hover).
+
+Visual contract from the canonical Stitch screen **"Movie Detail - Personal
+Tracking - Vultus"** (`562019f29ce2412d90c757a7e45a98bf`, project
+`13590348714018893783`). All colours consume `--vultus-*` / `--ion-*` tokens
+(`theme.scss`); no hard-coded hex.
 
 ## Pull-to-refresh (spec 0052)
 

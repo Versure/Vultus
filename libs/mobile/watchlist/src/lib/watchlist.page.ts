@@ -22,6 +22,7 @@ import { addIcons } from 'ionicons';
 import {
   arrowDownOutline,
   arrowUpOutline,
+  checkmarkCircle,
   filmOutline,
   notificationsOutline,
   optionsOutline,
@@ -43,6 +44,7 @@ interface IonBackButtonDetail {
 import { AUTH_UID } from '@vultus/shared/domain/tokens';
 import {
   type Region,
+  type RegionAvailability,
   type TitleType,
   type WatchStatus,
   type WatchlistItem,
@@ -96,6 +98,48 @@ interface StatusFilterChip {
   status: StatusChipStatus | null;
   label: string;
   count: number;
+}
+
+/**
+ * The partitioned availability pill for a card (spec 0060, UI section B).
+ * - `mine` — ≥1 flatrate provider whose id ∈ the user's `myProviderIds`
+ *   (highlighted "On {name}" pill + check icon + logo ring); `name` is the FIRST
+ *   such provider's name.
+ * - `elsewhere` — no mine, but ≥1 flatrate provider (muted "Also on {name}" pill,
+ *   no icon); `name` is the FIRST flatrate provider's name.
+ * - `null` (not this type) — no flatrate provider at all → the page renders no
+ *   pill (the existing no-chip treatment). Modelled as a nullable stream value.
+ */
+export type AvailabilityPill =
+  | { kind: 'mine'; name: string }
+  | { kind: 'elsewhere'; name: string };
+
+/**
+ * Pure partition of a title's availability into the compact-card pill view
+ * (spec 0060). Filters to FLATRATE providers only (subscription coverage is a
+ * flatrate concept — decision 4), then:
+ *   - if any flatrate provider's id ∈ `myProviderIds` → `mine` (first such name);
+ *   - else if any flatrate provider exists → `elsewhere` (first flatrate name);
+ *   - else `null` (no flatrate availability → no pill).
+ * Rent/buy-only availability yields `null` (they are never a compact-card pill).
+ * Slice-local and deliberately duplicated with the title-detail slice's split
+ * (2-slice, short of the 3+-slice extract rule — spec §"Affected slices").
+ */
+export function partitionAvailabilityPill(
+  availability: RegionAvailability | null,
+  myProviderIds: readonly number[],
+): AvailabilityPill | null {
+  const flatrate = (availability?.providers ?? []).filter(
+    (p) => p.type === 'flatrate',
+  );
+  if (flatrate.length === 0) {
+    return null;
+  }
+  const mine = flatrate.find((p) => myProviderIds.includes(p.providerId));
+  if (mine) {
+    return { kind: 'mine', name: mine.name };
+  }
+  return { kind: 'elsewhere', name: flatrate[0].name };
 }
 
 @Component({
@@ -203,6 +247,16 @@ export class WatchlistPage {
   /** The user's region (for provider availability lookups). */
   readonly region$: Observable<Region | null> = this.watchlistService
     .userRegion$(this.uid())
+    .pipe(shareReplay({ bufferSize: 1, refCount: false }));
+
+  /**
+   * The user's selected provider ids (`users/{uid}.myProviderIds`, spec 0060),
+   * default `[]`. Shared (`shareReplay`) so every card's availability-pill stream
+   * reads the same value without re-reading the user doc. Reads the same single
+   * memoized `users/{uid}` listener the region stream uses (no second listener).
+   */
+  readonly myProviderIds$: Observable<number[]> = this.watchlistService
+    .myProviderIds$(this.uid())
     .pipe(shareReplay({ bufferSize: 1, refCount: false }));
 
   /**
@@ -413,6 +467,7 @@ export class WatchlistPage {
     addIcons({
       arrowDownOutline,
       arrowUpOutline,
+      checkmarkCircle,
       filmOutline,
       notificationsOutline,
       optionsOutline,
@@ -676,21 +731,22 @@ export class WatchlistPage {
   }
 
   /**
-   * Memoized provider-name streams, keyed by `tmdbId|region`. The template binds
-   * `getProviderName$(...) | async`, which Angular re-invokes on every change
-   * detection pass — returning a fresh Observable each time would make the async
-   * pipe resubscribe (and open a new Firestore `docData` listener) every cycle,
-   * an unbounded Listen-channel loop. Caching one shared instance per key keeps
-   * the reference (and the underlying listener) stable across CD.
+   * Memoized provider-name streams, keyed by `tmdbId|region`. These feed the
+   * `availabilityMap` / provider-filter chip row (which need only names).
+   * Memoized because a fresh Observable per change-detection pass would make an
+   * `| async` binding resubscribe (and open a new Firestore `docData` listener)
+   * every cycle, an unbounded Listen-channel loop. Caching one shared instance
+   * per key keeps the reference (and the underlying listener) stable across CD.
    */
   private readonly providerCache = new Map<string, Observable<string[]>>();
 
   /**
-   * FULL provider-name list for an item, in the user's region — the single
-   * memoized source behind both the per-card badge (first name) and the
-   * `availabilityMap` (all names). `availability$` is called once per
-   * `tmdbId|region` and `shareReplay`'d, so no second Firestore Listen channel
-   * is opened (decision 12).
+   * FULL provider-name list for an item, in the user's region — the memoized
+   * source behind the `availabilityMap` (all names) and the provider-filter
+   * chips. `availability$` is subscribed once per `tmdbId|region` and
+   * `shareReplay`'d, so no extra Firestore Listen channel is opened (decision
+   * 12). The per-card availability PILL (spec 0060) uses a sibling cache
+   * (`availabilityCache`) because it needs each provider's `type` + `providerId`.
    */
   providerNames$(
     item: WatchlistItem,
@@ -708,14 +764,55 @@ export class WatchlistPage {
     return stream;
   }
 
-  /** First provider name for an item, in the user's region (badge). Derived
-   *  from the same widened memoized cache (`names[0] ?? null`). */
-  getProviderName$(
+  /**
+   * Memoized FULL-availability streams keyed by `tmdbId|region`, feeding the
+   * partitioned availability pill (spec 0060). Separate from `providerCache`
+   * (which yields only `string[]` names for the chip/filter row): the pill needs
+   * each provider's `type` + `providerId` to filter flatrate and match
+   * `myProviderIds`. Memoized for the same reason as `providerCache` — the
+   * template binds `availabilityPill$(...) | async`, which Angular re-invokes
+   * every change-detection pass; returning a fresh Observable each time would
+   * resubscribe (opening a new Firestore listener) every cycle. One shared
+   * `shareReplay` instance per key keeps the reference (and listener) stable.
+   */
+  private readonly availabilityCache = new Map<
+    string,
+    Observable<RegionAvailability | null>
+  >();
+
+  private availability$(
     item: WatchlistItem,
     region: Region | null,
-  ): Observable<string | null> {
-    return this.providerNames$(item, region).pipe(
-      map((names) => names[0] ?? null),
+  ): Observable<RegionAvailability | null> {
+    const key = `${item.tmdbId}|${region ?? ''}`;
+    let stream = this.availabilityCache.get(key);
+    if (!stream) {
+      stream = this.watchlistService
+        .availability$(item.tmdbId, region)
+        .pipe(shareReplay({ bufferSize: 1, refCount: false }));
+      this.availabilityCache.set(key, stream);
+    }
+    return stream;
+  }
+
+  /**
+   * The partitioned availability pill for a card (spec 0060, UI section B):
+   * `{ kind: 'mine' }` / `{ kind: 'elsewhere' }` / `null`. Combines the memoized
+   * per-`tmdbId|region` availability with the user's `myProviderIds` via the pure
+   * `partitionAvailabilityPill`. Replaces the old flat `getProviderName$` badge.
+   * Memoized inputs → no fresh listener per change-detection cycle.
+   */
+  availabilityPill$(
+    item: WatchlistItem,
+    region: Region | null,
+  ): Observable<AvailabilityPill | null> {
+    return combineLatest([
+      this.availability$(item, region),
+      this.myProviderIds$,
+    ]).pipe(
+      map(([availability, myProviderIds]) =>
+        partitionAvailabilityPill(availability, myProviderIds),
+      ),
     );
   }
 
