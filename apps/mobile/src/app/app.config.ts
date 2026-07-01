@@ -21,7 +21,12 @@ import {
   httpsCallable,
   provideFunctions,
 } from '@angular/fire/functions';
-import { AUTH_UID, TRIGGER_SYNC } from '@vultus/shared/domain/tokens';
+import {
+  AUTH_UID,
+  GET_WATCH_PROVIDERS,
+  TRIGGER_SYNC,
+} from '@vultus/shared/domain/tokens';
+import type { CatalogProvider, Region } from '@vultus/shared/domain';
 import { TMDB_SEARCH_CONFIG } from '@vultus/mobile/search';
 import { TMDB_DETAIL_CONFIG } from '@vultus/mobile/title-detail';
 import { appRoutes } from './app.routes';
@@ -107,6 +112,24 @@ export const appConfig: ApplicationConfig = {
           'triggerSync',
         );
         return () => callable().then((r) => r.data);
+      },
+    },
+    // Provide the getWatchProviders thunk as a scope:shared token so the
+    // settings slice can fetch the region's provider catalog without importing
+    // @angular/fire/functions or apps/mobile (mirrors TRIGGER_SYNC — spec 0060).
+    // The callable's request/response are typed inline (structurally) rather
+    // than importing GetWatchProvidersRequest/Response from apps/functions —
+    // the shell is scope:mobile and cannot import a scope:functions project.
+    {
+      provide: GET_WATCH_PROVIDERS,
+      useFactory: () => {
+        const fns = inject(Functions);
+        const callable = httpsCallable<
+          { region: Region },
+          { providers: CatalogProvider[] }
+        >(fns, 'getWatchProviders');
+        return (region: Region) =>
+          callable({ region }).then((r) => r.data.providers);
       },
     },
     // TMDB search config (spec 0013) — provided at root from `environment.tmdb`

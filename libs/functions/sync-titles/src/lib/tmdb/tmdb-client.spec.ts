@@ -260,6 +260,103 @@ describe('getSeasonEpisodes', () => {
   });
 });
 
+describe('getRegionWatchProviders (spec 0060)', () => {
+  const movieBody = {
+    results: [
+      { provider_id: 8, provider_name: 'Netflix', logo_path: '/n.jpg' },
+      { provider_id: 337, provider_name: 'Disney Plus', logo_path: '/d.jpg' },
+    ],
+  };
+  const tvBody = {
+    results: [
+      // Netflix also appears on the tv side (dedupe target).
+      { provider_id: 8, provider_name: 'Netflix', logo_path: '/n.jpg' },
+      { provider_id: 9, provider_name: 'Amazon Prime Video', logo_path: null },
+    ],
+  };
+
+  it('merges both endpoints, deduped and sorted by name', async () => {
+    const fetchMock = sequenceFetch([
+      { status: 200, body: movieBody },
+      { status: 200, body: tvBody },
+    ]);
+    const result = await client(fetchMock).getRegionWatchProviders('NL');
+    expect(result).toEqual([
+      { providerId: 9, name: 'Amazon Prime Video', logoPath: null },
+      { providerId: 337, name: 'Disney Plus', logoPath: '/d.jpg' },
+      { providerId: 8, name: 'Netflix', logoPath: '/n.jpg' },
+    ]);
+  });
+
+  it('passes watch_region on both movie and tv endpoints', async () => {
+    const fetchMock = sequenceFetch([
+      { status: 200, body: { results: [] } },
+      { status: 200, body: { results: [] } },
+    ]);
+    await client(fetchMock).getRegionWatchProviders('DE');
+    const urls = (
+      fetchMock as unknown as ReturnType<typeof vi.fn>
+    ).mock.calls.map((c) => c[0] as string);
+    expect(urls).toEqual([
+      expect.stringContaining('/watch/providers/movie?watch_region=DE'),
+      expect.stringContaining('/watch/providers/tv?watch_region=DE'),
+    ]);
+  });
+
+  it('when the movie endpoint 404s, returns the tv side only', async () => {
+    const fetchMock = sequenceFetch([
+      { status: 404 },
+      { status: 200, body: tvBody },
+    ]);
+    const result = await client(fetchMock).getRegionWatchProviders('NL');
+    expect(result).toEqual([
+      { providerId: 9, name: 'Amazon Prime Video', logoPath: null },
+      { providerId: 8, name: 'Netflix', logoPath: '/n.jpg' },
+    ]);
+  });
+
+  it('when the tv endpoint 404s, returns the movie side only', async () => {
+    const fetchMock = sequenceFetch([
+      { status: 200, body: movieBody },
+      { status: 404 },
+    ]);
+    const result = await client(fetchMock).getRegionWatchProviders('NL');
+    expect(result).toEqual([
+      { providerId: 337, name: 'Disney Plus', logoPath: '/d.jpg' },
+      { providerId: 8, name: 'Netflix', logoPath: '/n.jpg' },
+    ]);
+  });
+
+  it('returns null only when BOTH endpoints 404', async () => {
+    const fetchMock = sequenceFetch([{ status: 404 }, { status: 404 }]);
+    expect(await client(fetchMock).getRegionWatchProviders('NL')).toBeNull();
+  });
+
+  it('returns [] when both endpoints return empty catalogs', async () => {
+    const fetchMock = sequenceFetch([
+      { status: 200, body: { results: [] } },
+      { status: 200, body: {} }, // missing results → []
+    ]);
+    expect(await client(fetchMock).getRegionWatchProviders('NL')).toEqual([]);
+  });
+
+  it('keeps the token in the header, never in the url', async () => {
+    const fetchMock = sequenceFetch([
+      { status: 200, body: { results: [] } },
+      { status: 200, body: { results: [] } },
+    ]);
+    await client(fetchMock).getRegionWatchProviders('NL');
+    for (const call of (fetchMock as unknown as ReturnType<typeof vi.fn>).mock
+      .calls) {
+      const url = call[0] as string;
+      const init = call[1] as RequestInit;
+      const headers = init.headers as Record<string, string>;
+      expect(url).not.toContain(TOKEN);
+      expect(headers['Authorization']).toBe(`Bearer ${TOKEN}`);
+    }
+  });
+});
+
 describe('error handling', () => {
   it('throws TmdbError with status 401', async () => {
     const fetchMock = sequenceFetch([{ status: 401 }]);

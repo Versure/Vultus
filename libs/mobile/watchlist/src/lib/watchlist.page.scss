@@ -592,43 +592,45 @@ ion-content {
   color: #4edea3;
 }
 
-// Availability badge for planned items — Stitch: bg-primary/10 text-primary
-// text-[10px] font-label-md (600 weight), rounded-full
-.availability-badge {
+// -----------------------------------------------------------------------------
+// Availability pill (spec 0060, UI section B) — a SINGLE partitioned pill per
+// card. Presentational / non-interactive (the card is the tap target). Text is
+// `label-sm` (matching the card's meta scale). All tokens via `--vultus-*` /
+// `--ion-*` vars — no hand-set hex.
+//   elsewhere (default) = surface-variant ~40% alpha fill, on-surface-variant
+//                         text, NO icon → "Also on {name}".
+//   mine (.is-mine)     = primary ~10% alpha fill, primary text + leading
+//                         check-circle icon → "On {name}".
+// (`surface-variant #2d3449` = the `--vultus-surface-container-highest` ramp
+// step per docs/design/vultus-design-system.md.)
+// -----------------------------------------------------------------------------
+.availability-pill {
+  align-self: flex-start;
   display: inline-flex;
   align-items: center;
+  gap: var(--vultus-space-xs);
   padding: 2px 8px;
-  border-radius: 9999px;
-  background: rgba(78, 222, 163, 0.1);
-  color: #4edea3;
+  border-radius: var(--vultus-radius-pill);
   font-family: var(--vultus-font-family);
-  font-size: 0.625rem;
-  font-weight: 600;
+  font-size: var(--vultus-text-label-sm-size);
+  font-weight: var(--vultus-text-label-sm-weight);
+  line-height: var(--vultus-text-label-sm-line);
   letter-spacing: 0.02em;
-  align-self: flex-start;
-}
+  background: color-mix(
+    in srgb,
+    var(--vultus-surface-container-highest) 40%,
+    transparent
+  );
+  color: var(--vultus-on-surface-variant);
 
-// Provider badge (non-planned statuses)
-.provider-badge {
-  align-self: flex-start;
-  padding: 2px 8px;
-  border-radius: 9999px;
-  font-family: var(--vultus-font-family);
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  --pc: #4edea3;
-  background: color-mix(in srgb, var(--pc) 15%, transparent);
-  color: var(--pc);
+  &.is-mine {
+    background: color-mix(in srgb, var(--ion-color-primary) 10%, transparent);
+    color: var(--ion-color-primary);
+  }
 
-  &.status-watching {
-    --pc: var(--vultus-status-watching);
-  }
-  &.status-completed {
-    --pc: var(--vultus-status-completed);
-  }
-  &.status-dropped {
-    --pc: var(--vultus-status-dropped);
+  .availability-pill__icon {
+    font-size: 0.875rem;
+    flex-shrink: 0;
   }
 }
 

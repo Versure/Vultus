@@ -68,6 +68,7 @@ export class OnboardingService {
               deliveryHour: null,
             },
             fcmTokens: [],
+            myProviderIds: [],
           }),
           { merge: true },
         );

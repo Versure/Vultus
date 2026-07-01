@@ -1,7 +1,11 @@
 import { signal, type WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideIonicAngular } from '@ionic/angular/standalone';
-import { REGIONS, type Region } from '@vultus/shared/domain';
+import {
+  REGIONS,
+  type CatalogProvider,
+  type Region,
+} from '@vultus/shared/domain';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock the data-access service module so the page component test never pulls in
@@ -16,12 +20,24 @@ interface MockSettingsService {
   deliveryHour: WritableSignal<number | null>;
   loaded: WritableSignal<boolean>;
   loadFailed: WritableSignal<boolean>;
+  providerCatalog: WritableSignal<CatalogProvider[]>;
+  myProviderIds: WritableSignal<number[]>;
+  catalogLoading: WritableSignal<boolean>;
+  lastPrunedCount: WritableSignal<number>;
   load: ReturnType<typeof vi.fn>;
   setRegion: ReturnType<typeof vi.fn>;
   setNotificationsEnabled: ReturnType<typeof vi.fn>;
   setDeliveryHour: ReturnType<typeof vi.fn>;
   retryLoad: ReturnType<typeof vi.fn>;
+  loadProviderCatalog: ReturnType<typeof vi.fn>;
+  toggleProvider: ReturnType<typeof vi.fn>;
 }
+
+const CATALOG: CatalogProvider[] = [
+  { providerId: 8, name: 'Netflix', logoPath: '/n.jpg' },
+  { providerId: 337, name: 'Disney Plus', logoPath: '/d.jpg' },
+  { providerId: 1899, name: 'Max', logoPath: null },
+];
 
 vi.mock('./settings.service', () => ({
   // A bare class is enough to act as the DI token; the instance is supplied via
@@ -60,11 +76,17 @@ function mockService(loaded: boolean, loadFailed = false): MockSettingsService {
     deliveryHour: signal<number | null>(null),
     loaded: signal<boolean>(loaded),
     loadFailed: signal<boolean>(loadFailed),
+    providerCatalog: signal<CatalogProvider[]>(CATALOG),
+    myProviderIds: signal<number[]>([8]),
+    catalogLoading: signal<boolean>(false),
+    lastPrunedCount: signal<number>(0),
     load: vi.fn().mockResolvedValue(undefined),
     setRegion: vi.fn().mockResolvedValue(undefined),
     setNotificationsEnabled: vi.fn().mockResolvedValue(undefined),
     setDeliveryHour: vi.fn().mockResolvedValue(undefined),
     retryLoad: vi.fn(),
+    loadProviderCatalog: vi.fn().mockResolvedValue(undefined),
+    toggleProvider: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -192,6 +214,66 @@ describe('SettingsPage', () => {
       new CustomEvent('ionChange', { detail: { checked: false } }),
     );
     expect(service.setNotificationsEnabled).toHaveBeenCalledWith(false);
+  });
+
+  // ── My Providers card (spec 0060) ────────────────────────────────────────
+
+  it('calls loadProviderCatalog() on init', async () => {
+    const { service } = await setup(true);
+    expect(service.loadProviderCatalog).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders a chip per provider in the catalog', async () => {
+    const { el } = await setup(true);
+    const chips = el.querySelectorAll('.provider-chip');
+    expect(chips.length).toBe(CATALOG.length);
+  });
+
+  it('marks the selected chip (id in myProviderIds) with aria-pressed and the selected class', async () => {
+    const { el } = await setup(true); // myProviderIds seeded [8] = Netflix
+    const chips = Array.from(el.querySelectorAll('.provider-chip'));
+    // Netflix (id 8) is the first catalog entry and is selected.
+    const netflix = chips[0];
+    const disney = chips[1];
+    expect(netflix.getAttribute('aria-pressed')).toBe('true');
+    expect(netflix.classList.contains('provider-chip--selected')).toBe(true);
+    expect(netflix.querySelector('.provider-chip__badge')).toBeTruthy();
+    expect(disney.getAttribute('aria-pressed')).toBe('false');
+    expect(disney.classList.contains('provider-chip--selected')).toBe(false);
+    expect(disney.querySelector('.provider-chip__badge')).toBeFalsy();
+  });
+
+  it('tapping a chip calls onProviderToggle → toggleProvider with the provider id', async () => {
+    const { el, service } = await setup(true);
+    const disney = el.querySelectorAll('.provider-chip')[1] as HTMLElement;
+    disney.click();
+    expect(service.toggleProvider).toHaveBeenCalledWith(337);
+  });
+
+  it('renders the footer count "N of M selected · Region: {region}"', async () => {
+    const { el } = await setup(true);
+    const footer = el.querySelector('.provider-footer');
+    expect(footer?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+      '1 of 3 selected · Region: NL',
+    );
+  });
+
+  it('shows a spinner (not chips) while the catalog is loading', async () => {
+    const service = mockService(true);
+    service.catalogLoading.set(true);
+    const { el } = await setupWithService(service);
+    expect(el.querySelector('.providers-loading ion-spinner')).toBeTruthy();
+    expect(el.querySelector('.provider-chip')).toBeFalsy();
+  });
+
+  it('falls back to a letter tile when a provider has no logo path', async () => {
+    const { el } = await setup(true);
+    // Max (id 1899, logoPath null) is the third chip.
+    const max = el.querySelectorAll('.provider-chip')[2] as HTMLElement;
+    expect(
+      max.querySelector('.provider-chip__logo-fallback')?.textContent,
+    ).toBe('M');
+    expect(max.querySelector('img')).toBeFalsy();
   });
 
   it('render-gates: shows a skeleton (no form) before load resolves', async () => {

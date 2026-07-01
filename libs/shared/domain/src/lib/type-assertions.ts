@@ -110,6 +110,7 @@ const _user = {
   fcmTokens: [
     { token: 'abc', deviceId: 'dev-1', createdAt: '2026-06-18T10:00:00.000Z' },
   ],
+  myProviderIds: [],
 } satisfies User;
 
 const _watchlistItem = {

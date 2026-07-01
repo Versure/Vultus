@@ -9,6 +9,15 @@ export interface WatchProvider {
   type: WatchProviderType; // 'flatrate' | 'rent' | 'buy'
 }
 
+/** One provider in a region's TMDB watch-provider catalog (spec 0060). Narrower
+ *  than WatchProvider: a region catalog has no per-title flatrate/rent/buy type,
+ *  and carries the TMDB logo path. */
+export interface CatalogProvider {
+  providerId: number; // TMDB provider id
+  name: string; // TMDB provider_name
+  logoPath: string | null; // TMDB logo_path, e.g. '/abc.jpg'; null when unknown
+}
+
 // Title-type discriminated union: narrows on `type`. Episode-bearing data lives
 // on the Show (tv) branch / TV documents only.
 export interface Movie {

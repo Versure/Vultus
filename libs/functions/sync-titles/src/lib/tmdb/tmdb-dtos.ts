@@ -40,6 +40,20 @@ export interface TmdbWatchProvidersResponse {
   results?: Record<string, TmdbProviderCountry>;
 }
 
+// One entry in a region-wide watch-provider CATALOG list (GET
+// /watch/providers/{movie,tv}?watch_region=…, spec 0060). Only the three fields
+// the catalog mapper reads are modeled; TMDB also returns `display_priority`
+// (and a `display_priorities` map) which are deliberately left unmodeled.
+export interface TmdbWatchProviderListEntry {
+  provider_id: number;
+  provider_name: string;
+  logo_path?: string | null;
+}
+
+export interface TmdbWatchProviderListResponse {
+  results?: TmdbWatchProviderListEntry[];
+}
+
 export interface TmdbEpisodeEntry {
   season_number?: number;
   episode_number: number;

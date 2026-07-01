@@ -9,6 +9,7 @@ import {
 import {
   episodesPath,
   notificationsPath,
+  userPath,
   watchlistItemPath,
   watchlistPath,
 } from '@vultus/shared/firestore-schema';
@@ -425,6 +426,65 @@ describe('WatchlistService', () => {
       service.userRegion$(UID).subscribe(resolve),
     );
     expect(region).toBe('DE');
+  });
+
+  it('myProviderIds$ emits the persisted array when the doc has it', async () => {
+    docDataMock.mockReturnValue(
+      of({
+        region: 'NL',
+        notificationPrefs: {},
+        fcmTokens: [],
+        myProviderIds: [8, 337],
+      }),
+    );
+    const service = createService(UID);
+    const ids = await new Promise<number[]>((resolve) =>
+      service.myProviderIds$(UID).subscribe(resolve),
+    );
+    expect(docMock).toHaveBeenCalledWith({}, userPath(UID));
+    expect(ids).toEqual([8, 337]);
+  });
+
+  it('myProviderIds$ defaults to [] for a legacy user doc missing the field', async () => {
+    docDataMock.mockReturnValue(
+      of({ region: 'NL', notificationPrefs: {}, fcmTokens: [] }),
+    );
+    const service = createService(UID);
+    const ids = await new Promise<number[]>((resolve) =>
+      service.myProviderIds$(UID).subscribe(resolve),
+    );
+    expect(ids).toEqual([]);
+  });
+
+  it('myProviderIds$ → [] with a null uid without touching Firestore', async () => {
+    const service = createService(null);
+    const ids = await new Promise<number[]>((resolve) =>
+      service.myProviderIds$(null).subscribe(resolve),
+    );
+    expect(ids).toEqual([]);
+    expect(docDataMock).not.toHaveBeenCalled();
+  });
+
+  it('userRegion$ and myProviderIds$ share ONE users/{uid} listener (no duplicate docData)', async () => {
+    docDataMock.mockReturnValue(
+      of({
+        region: 'DE',
+        notificationPrefs: {},
+        fcmTokens: [],
+        myProviderIds: [8],
+      }),
+    );
+    const service = createService(UID);
+    await new Promise((resolve) => service.userRegion$(UID).subscribe(resolve));
+    await new Promise((resolve) =>
+      service.myProviderIds$(UID).subscribe(resolve),
+    );
+    // Only one docData subscription is opened on users/{uid} across both reads.
+    const userDocCalls = docMock.mock.calls.filter(
+      ([, path]) => path === userPath(UID),
+    );
+    expect(userDocCalls).toHaveLength(1);
+    expect(docDataMock).toHaveBeenCalledTimes(1);
   });
 
   it('availability$ maps RegionAvailability when doc exists, null when absent', async () => {

@@ -17,12 +17,13 @@ lives in `apps/functions` (spec 0009).
 Imported from `@vultus/functions/sync-titles`:
 
 - `createTmdbClient(config: TmdbClientConfig): TmdbClient` — factory returning a
-  client with five methods:
+  client with six methods:
   - `getMovie(tmdbId)` → `Promise<TitleMetadata | null>`
   - `getTvShow(tmdbId)` → `Promise<TitleMetadata | null>`
   - `getTvSeasonCount(tmdbId)` → `Promise<number | null>` — total season count for a TV show (TMDB 404 → null); added for the episode-sync consumer (spec 0047)
   - `getWatchProviders(tmdbId, type)` → `Promise<RegionProviders | null>`
   - `getSeasonEpisodes(tmdbId, seasonNumber)` → `Promise<Episode[] | null>` — each returned `Episode` now carries `title: string | null` (spec 0047)
+  - `getRegionWatchProviders(region)` → `Promise<CatalogProvider[] | null>` — the region-wide watch-provider **catalog** (spec 0060). Fetches `GET /watch/providers/movie` and `GET /watch/providers/tv` with `watch_region={region}`, then merges the two lists into one `CatalogProvider[]` (deduped by `providerId`, first occurrence wins; sorted by `name`, case-insensitive) via the pure `mergeCatalogProviders` mapper. `logoPath` is `logo_path ?? null`. Per-side 404 → that side treated as `[]`; **only** when **both** endpoints 404 → `null` (mirrors the other methods' 404 → null contract). An empty catalog → `[]`. This is a region catalog (not per-title flatrate/rent/buy), so `CatalogProvider` has no `type` field. Consumed by the `getWatchProviders` callable (spec 0060), NOT the daily sync.
 - `createTraktClient(config: TraktClientConfig): TraktClient` — factory returning
   a client with two methods:
   - `getCalendar(startDate, days)` → `Promise<TraktCalendarEntry[]>` — every show

@@ -63,6 +63,17 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ---- Global provider catalog — authenticated read, NEVER client-write ----
+    // `provider-catalog/{region}` (spec 0060) is a shared, cross-user TMDB
+    // watch-provider catalog cache, written only by the `getWatchProviders`
+    // Cloud Function via the Admin SDK (which bypasses these rules — same
+    // reasoning as `title-cache`). Any authenticated user (incl. anonymous) may
+    // READ it; clients may NEVER write here.
+    match /provider-catalog/{region} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
     // ---- Default: deny all -------------------------------------------------
     // Anything not explicitly allowed above is denied. Keep this LAST.
     match /{document=**} {

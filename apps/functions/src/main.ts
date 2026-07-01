@@ -31,7 +31,16 @@ import type {
   SyncEngine,
   SyncResult,
   SyncTitleInput,
+  TmdbClient,
 } from '@vultus/functions/sync-titles';
+import { REGIONS } from '@vultus/shared/domain';
+import type { CatalogProvider, Region } from '@vultus/shared/domain';
+import {
+  providerCatalogDocPath,
+  providerCatalogToData,
+  dataToProviderCatalog,
+} from '@vultus/shared/firestore-schema';
+import type { ProviderCatalogReadData } from '@vultus/shared/firestore-schema';
 import { createEpisodeSyncEngine } from '@vultus/functions/sync-episodes';
 import type { EpisodeSyncEngine } from '@vultus/functions/sync-episodes';
 import {
@@ -440,6 +449,156 @@ export const triggerSync = onCall<unknown, Promise<TriggerSyncResponse>>(
       return await runTriggerSync({ db, createEngine }, request.auth?.uid);
     } catch (err) {
       logger.error('[triggerSync] unhandled error', err);
+      throw err;
+    }
+  },
+);
+
+/** The `getWatchProviders` callable request (spec 0060). */
+export interface GetWatchProvidersRequest {
+  region: Region;
+}
+
+/** The `getWatchProviders` callable response (spec 0060). */
+export interface GetWatchProvidersResponse {
+  providers: CatalogProvider[];
+}
+
+/** Dependencies injected into `runGetWatchProviders`, so tests drive it with
+ *  fakes (fake `db`, fake TMDB client, injected clock). */
+export interface RunGetWatchProvidersDeps {
+  db: Firestore;
+  /** Builds the credentialed TMDB client (injected so tests use a fake). */
+  createTmdb: () => TmdbClient;
+  /** Clock in epoch ms; injected for deterministic staleness tests. */
+  now?: () => number;
+  /** Cache staleness window; defaults to 7 days in ms. */
+  stalenessMs?: number;
+}
+
+/** Default provider-catalog staleness window: 7 days (spec 0060, decision 2). */
+export const PROVIDER_CATALOG_STALENESS_MS = 7 * 24 * 60 * 60 * 1000;
+
+function isRegion(value: unknown): value is Region {
+  return (
+    typeof value === 'string' && (REGIONS as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * Core `getWatchProviders` flow, SDK-agnostic via injected deps (spec 0060).
+ *
+ * Validates the caller (`uid` present) and the client-supplied region (must be a
+ * member of `REGIONS`), then reads `provider-catalog/{region}`:
+ * - fresh cache (age ≤ stalenessMs) → return its providers, DO NOT call TMDB;
+ * - else fetch the region catalog from TMDB:
+ *   - `null` (both TMDB endpoints 404/unexpected): a stale cached doc, if any, is
+ *     returned instead of throwing (stale beats none); otherwise `unavailable`;
+ *   - success: best-effort write the fresh `{ providers, lastSyncedAt }` doc (a
+ *     write failure is logged but still returns the freshly-fetched providers),
+ *     then return the fresh providers.
+ *
+ * Reads + writes ONLY `provider-catalog/{region}` (Admin SDK bypasses rules).
+ */
+export async function runGetWatchProviders(
+  deps: RunGetWatchProvidersDeps,
+  uid: string | undefined,
+  input: unknown,
+): Promise<GetWatchProvidersResponse> {
+  if (!uid) {
+    throw new HttpsError('unauthenticated', 'Sign-in required');
+  }
+
+  const region: unknown =
+    input && typeof input === 'object'
+      ? (input as { region?: unknown }).region
+      : undefined;
+  if (!isRegion(region)) {
+    throw new HttpsError('invalid-argument', 'Unknown region');
+  }
+
+  const now = deps.now?.() ?? Date.now();
+  const stalenessMs = deps.stalenessMs ?? PROVIDER_CATALOG_STALENESS_MS;
+  const docPath = providerCatalogDocPath(region);
+
+  // Read the cached catalog (if any). A read failure here is a real error the
+  // client should see — it is not the best-effort WRITE path below.
+  const snap = await deps.db.doc(docPath).get();
+  const cached = snap.exists
+    ? dataToProviderCatalog(snap.data() as ProviderCatalogReadData)
+    : null;
+
+  if (cached) {
+    const ageMs = now - Date.parse(cached.lastSyncedAt);
+    if (ageMs <= stalenessMs) {
+      return { providers: cached.providers };
+    }
+  }
+
+  // Cache missing or stale → refetch from TMDB.
+  const fetched = await deps.createTmdb().getRegionWatchProviders(region);
+
+  if (fetched === null) {
+    // Both TMDB endpoints 404/unexpected. A stale cached catalog beats none.
+    if (cached) {
+      logger.warn(
+        '[getWatchProviders] TMDB returned null; serving stale cache',
+        { region },
+      );
+      return { providers: cached.providers };
+    }
+    throw new HttpsError('unavailable', 'Provider catalog unavailable');
+  }
+
+  // Best-effort cache write: a failure logs and still returns the fresh fetch.
+  try {
+    await deps.db.doc(docPath).set(
+      providerCatalogToData({
+        providers: fetched,
+        lastSyncedAt: new Date(now).toISOString(),
+      }),
+    );
+  } catch (err) {
+    logger.error('[getWatchProviders] failed to write provider-catalog', err);
+  }
+
+  return { providers: fetched };
+}
+
+/**
+ * The deployable `getWatchProviders` callable (spec 0060). Verified Firebase Auth
+ * context is supplied by the callable framework; we only assert an identity is
+ * present (`request.auth.uid`). Binds `TMDB_READ_TOKEN` so the runtime injects it
+ * (read via `.value()` ONLY inside the handler, never at module load / logged) and
+ * reuses the SAME `cors` array as `triggerSync`.
+ */
+export const getWatchProviders = onCall<
+  unknown,
+  Promise<GetWatchProvidersResponse>
+>(
+  {
+    secrets: [TMDB_READ_TOKEN],
+    cors: [
+      'https://vultus-cab62.web.app',
+      'https://vultus-cab62.firebaseapp.com',
+      'http://localhost', // Capacitor Android WebView (production native app)
+      'http://localhost:4200', // Angular dev server (serve-prod-debug)
+    ],
+  },
+  async (request) => {
+    try {
+      const db = ensureAdmin();
+      return await runGetWatchProviders(
+        {
+          db,
+          createTmdb: () =>
+            createTmdbClient({ readAccessToken: TMDB_READ_TOKEN.value() }),
+        },
+        request.auth?.uid,
+        request.data,
+      );
+    } catch (err) {
+      logger.error('[getWatchProviders] unhandled error', err);
       throw err;
     }
   },
