@@ -1,0 +1,22 @@
+{
+  "name": "doc-integrity-test",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "tools/doc-integrity-test/src",
+  "projectType": "library",
+  "tags": [],
+  "implicitDependencies": [],
+  "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
+      "inputs": [
+        "default",
+        "{workspaceRoot}/docs/PLAN.md",
+        "{workspaceRoot}/docs/specs/**/*.md",
+        "{workspaceRoot}/libs/**/README.md",
+        "{workspaceRoot}/libs/shared/ui-kit/src/lib/theme.scss",
+        "{workspaceRoot}/tools/scripts/gen-spec-status.mjs"
+      ]
+    }
+  }
+}
