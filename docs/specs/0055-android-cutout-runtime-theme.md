@@ -314,9 +314,9 @@ sync` regenerates only plugin/config glue).
 - **Human/device gate (cannot run in-session):** a human builds + installs on a
   **real notched Android device** (device-level use-cutout setting enabled),
   reproduces the letterbox, captures `VultusCutoutDiag` Logcat output
-  (`adb logcat -s VultusCutoutDiag`), and posts the theme + `layoutInDisplayCutoutMode`
-  - display-cutout inset/bounds values (and a bars-hidden sanity note) to the
-    issue/PR. **This is the required input for Step 2.**
+  (`adb logcat -s VultusCutoutDiag`), and posts the theme, `layoutInDisplayCutoutMode`,
+  and display-cutout inset/bounds values (and a bars-hidden sanity note) to the
+  issue/PR. **This is the required input for Step 2.**
 
 ### 2. [sequential] Apply the data-indicated candidate fix + remove diagnostics — GATED on Step 1's Logcat
 
@@ -392,7 +392,7 @@ of 0039/0045.
      with transient swipe-reveal — a regression note, not a verification goal.
 - **Human device capture — Step 2 (the corrective gate; cannot run in-session; same
   device requirement). Flagged human / post-merge.** After the data-indicated change
-  - diagnostics removal, re-build + install:
+  and diagnostics removal, re-build + install:
   1. **Candidate A:** the app's dark surface draws all the way to the top edge,
      filling **behind** the camera notch — **no black letterbox band**; the
      `IonHeader`/toolbar content is **not obscured** (inset below the notch); 0039
