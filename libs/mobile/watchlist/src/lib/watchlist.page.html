@@ -9,13 +9,6 @@
     <ion-buttons slot="end">
       <ion-button
         fill="clear"
-        aria-label="Sort watchlist"
-        (click)="openSortSheet()"
-      >
-        <ion-icon name="swap-vertical-outline" slot="icon-only"></ion-icon>
-      </ion-button>
-      <ion-button
-        fill="clear"
         [disabled]="!syncState.canSync() || syncState.syncing()"
         [attr.aria-label]="
           syncState.syncing()
@@ -56,24 +49,43 @@
     <ion-refresher-content></ion-refresher-content>
   </ion-refresher>
 
-  <!-- Type filter: flex row of auto-sized pills, no container bg -->
-  <div class="type-filter">
+  <!-- 1. Status filter chips: the fixed four (All / Watching / Planned /
+       Completed) with a live count each (incl. 0); no "Dropped" chip. -->
+  <div class="status-filter">
+    @for (chip of (statusChips$ | async); track chip.status) {
     <button
-      class="filter-pill"
+      type="button"
+      class="status-chip-btn"
+      [class.active]="selectedStatus === chip.status"
+      (click)="onStatusChipClick(chip.status)"
+    >
+      {{ chip.label }}
+      <span class="status-chip-count">{{ chip.count }}</span>
+    </button>
+    }
+  </div>
+
+  <!-- 2. Type tabs: underline tabs (All / Movies / TV Shows). -->
+  <div class="type-tabs">
+    <button
+      type="button"
+      class="type-tab"
       [class.active]="selectedType === undefined"
       (click)="onFilterClick(undefined)"
     >
       All
     </button>
     <button
-      class="filter-pill"
+      type="button"
+      class="type-tab"
       [class.active]="selectedType === 'movie'"
       (click)="onFilterClick('movie')"
     >
       Movies
     </button>
     <button
-      class="filter-pill"
+      type="button"
+      class="type-tab"
       [class.active]="selectedType === 'tv'"
       (click)="onFilterClick('tv')"
     >
@@ -81,49 +93,26 @@
     </button>
   </div>
 
-  <!-- Status filter chips: "All" + one per non-empty (post-filter) group. -->
-  <div class="status-filter">
+  <!-- 3. Search bar with the `tune` trigger opening the combined sheet.
+       RxJS-debounced 200ms in the component; no ion debounce. -->
+  <div class="search-row">
+    <ion-searchbar
+      class="watchlist-search"
+      placeholder="Search watchlist..."
+      [debounce]="0"
+      (ionInput)="onSearchInput($event.detail.value ?? '')"
+    ></ion-searchbar>
     <button
-      class="filter-pill"
-      [class.active]="selectedStatus === null"
-      (click)="onStatusChipClick(null)"
+      type="button"
+      class="filter-trigger"
+      aria-label="Sort and filter"
+      (click)="openFilterSheet()"
     >
-      All
+      <ion-icon name="options-outline"></ion-icon>
     </button>
-    @for (group of (statusChips$ | async); track group.status) {
-    <button
-      class="filter-pill status-pill status-{{ group.status }}"
-      [class.active]="selectedStatus === group.status"
-      (click)="onStatusChipClick(group.status)"
-    >
-      {{ group.label }} {{ group.count }}
-    </button>
-    }
   </div>
 
-  <!-- Text search (RxJS-debounced 200ms in the component; no ion debounce). -->
-  <ion-searchbar
-    class="watchlist-search"
-    placeholder="Search your watchlist"
-    [debounce]="0"
-    (ionInput)="onSearchInput($event.detail.value ?? '')"
-  ></ion-searchbar>
-
-  <!-- Provider filter chips: multi-select OR; hidden when no availability. -->
-  @if ((availableProviders$ | async); as providers) { @if (providers.length > 0)
-  {
-  <div class="provider-filter">
-    @for (name of providers; track name) {
-    <button
-      class="filter-pill"
-      [class.active]="isProviderSelected(name)"
-      (click)="toggleProvider(name)"
-    >
-      {{ name }}
-    </button>
-    }
-  </div>
-  } } @if ((vm$ | async); as vm) { @if (vm.error) {
+  @if ((vm$ | async); as vm) { @if (vm.error) {
   <vultus-error-state
     message="Couldn't load your watchlist."
     (retry)="onRetry()"
@@ -212,12 +201,106 @@
     (didDismiss)="actionSheetOpen = false"
   ></ion-action-sheet>
 
-  <ion-action-sheet
-    [isOpen]="sortSheetOpen"
-    header="Sort by"
-    [buttons]="sortSheetButtons"
-    (didDismiss)="sortSheetOpen = false"
-  ></ion-action-sheet>
+  <!-- Combined "Sort & Filter" bottom sheet (overlay div; open/close driven by
+       `filterSheetOpen`). Backdrop tap + "Done" + Android back all close it. -->
+  <div class="filter-sheet" [class.open]="filterSheetOpen">
+    <div
+      class="filter-sheet-backdrop"
+      aria-hidden="true"
+      (click)="closeFilterSheet()"
+    ></div>
+    <div
+      class="filter-sheet-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Sort and filter"
+    >
+      <div class="filter-sheet-handle" aria-hidden="true"></div>
+      <div class="filter-sheet-header">
+        <h3 class="filter-sheet-title">Sort &amp; Filter</h3>
+        <button
+          type="button"
+          class="filter-sheet-done"
+          (click)="closeFilterSheet()"
+        >
+          Done
+        </button>
+      </div>
+
+      <div class="filter-sheet-body">
+        <!-- Sort By: exactly one active; tap active again to flip direction. -->
+        <section class="filter-section">
+          <p class="filter-section-heading">Sort By</p>
+          <div class="filter-chip-row">
+            <button
+              type="button"
+              class="filter-chip"
+              [class.active]="isSortChipActive('added')"
+              (click)="onSortChipClick('added')"
+            >
+              Date Added @if (sortChipDirection('added'); as dir) {
+              <ion-icon
+                class="sort-dir"
+                [name]="dir === 'down' ? 'arrow-down-outline' : 'arrow-up-outline'"
+                aria-hidden="true"
+              ></ion-icon>
+              }
+            </button>
+            <button
+              type="button"
+              class="filter-chip"
+              [class.active]="isSortChipActive('name')"
+              (click)="onSortChipClick('name')"
+            >
+              Name @if (sortChipDirection('name'); as dir) {
+              <ion-icon
+                class="sort-dir"
+                [name]="dir === 'down' ? 'arrow-down-outline' : 'arrow-up-outline'"
+                aria-hidden="true"
+              ></ion-icon>
+              }
+            </button>
+            <button
+              type="button"
+              class="filter-chip"
+              [class.active]="isSortChipActive('release')"
+              (click)="onSortChipClick('release')"
+            >
+              Release date @if (sortChipDirection('release'); as dir) {
+              <ion-icon
+                class="sort-dir"
+                [name]="dir === 'down' ? 'arrow-down-outline' : 'arrow-up-outline'"
+                aria-hidden="true"
+              ></ion-icon>
+              }
+            </button>
+          </div>
+        </section>
+
+        <!-- Provider: multi-select OR; empty availability → muted "none" line. -->
+        <section class="filter-section">
+          <p class="filter-section-heading">Provider</p>
+          @if ((availableProviders$ | async); as providers) { @if
+          (providers.length > 0) {
+          <div class="filter-chip-row provider-filter">
+            @for (name of providers; track name) {
+            <button
+              type="button"
+              class="filter-chip"
+              [class.active]="isProviderSelected(name)"
+              (click)="toggleProvider(name)"
+            >
+              {{ name }}
+            </button>
+            }
+          </div>
+          } @else {
+          <p class="filter-empty">No providers available yet</p>
+          } }
+        </section>
+      </div>
+    </div>
+  </div>
 
   <ion-alert
     cssClass="vultus-alert"

@@ -2,7 +2,7 @@
 number: 0054
 slug: advanced-watchlist-filters
 title: Restyle the watchlist filter/search controls to the Advanced Watchlist Stitch design
-status: approved
+status: done
 slices: [slice:watchlist]
 scopes: [scope:mobile]
 created: 2026-07-01
@@ -125,8 +125,8 @@ Out of scope:
 
 ## Affected slices & Sheriff tags
 
-| Path                        | Scope / slice tag                 | Change                                                                 |
-| --------------------------- | --------------------------------- | ---------------------------------------------------------------------- |
+| Path                        | Scope / slice tag                 | Change                                                                      |
+| --------------------------- | --------------------------------- | --------------------------------------------------------------------------- |
 | `libs/mobile/watchlist/src` | `scope:mobile`, `slice:watchlist` | template + styles + presentation wiring in `watchlist.page.*`, test, README |
 
 **No cross-slice import, no new shared surface.** All changes stay inside
@@ -162,7 +162,7 @@ existing surfaces are reused as-is:
 
 - `WatchlistSort` (`watchlist.service.ts`): the six existing modes remain
   `'titleAsc' | 'titleDesc' | 'addedDesc' | 'addedAsc' | 'releaseDesc' |
-  'releaseAsc'`. **Do not add a mode.** The three sheet sort chips map onto them:
+'releaseAsc'`. **Do not add a mode.** The three sheet sort chips map onto them:
 
   | Sheet sort chip | Default direction (first tap) | Toggled direction (tap active again) |
   | --------------- | ----------------------------- | ------------------------------------ |
@@ -312,7 +312,7 @@ loaded as a web-font by the shell — no font-loading change.
 ### Type tab row (underline tabs — restyle, per-state contract)
 
 - **Structure:** a horizontally-scrollable row (`flex gap-md mb-lg overflow-x-auto
-  scrollbar-hide pb-1` per the fetched HTML), three tabs **All → Movies → TV
+scrollbar-hide pb-1` per the fetched HTML), three tabs **All → Movies → TV
   Shows**. This is the design's **underline-tab** pattern — **NOT** pills and
   **NOT** an `ion-segment` container. Render as plain `<button>`s in a flex row
   (the current `.type-filter` uses `.filter-pill` buttons — reuse the buttons,
@@ -555,7 +555,7 @@ tests). All Firebase access **mocked** (no emulator, no network, no secrets).
   `ion-segment`); `onTypeChange`/`onFilterClick` still filter Movies/TV/All
   (preserved from 0014/0046).
 - **Combined sheet open/close:** the `tune` button (`aria-label="Sort and
-  filter"`) calls `openFilterSheet()` → `filterSheetOpen === true`; the sheet
+filter"`) calls `openFilterSheet()` → `filterSheetOpen === true`; the sheet
   renders a Sort By row and a Provider row; `closeFilterSheet()` (Done / backdrop)
   → `filterSheetOpen === false`.
 - **Sort chip tap-to-toggle (decision 3):** starting at default (`addedDesc`),
@@ -615,8 +615,8 @@ e2e is not required (decision 4).
 - [ ] `libs/mobile/watchlist/README.md` updated to the restyled controls + the
       combined sheet — no stale text; exports unchanged.
 - [ ] **`libs/shared/**`, `sheriff.config.ts`, `firestore.rules`,
-      `firestore.indexes.json`, `ci.yml`, `playwright.config.ts`,
-      `watchlist.service.ts`, `watchlist.service.spec.ts` are NOT modified** —
+    `firestore.indexes.json`, `ci.yml`, `playwright.config.ts`,
+    `watchlist.service.ts`, `watchlist.service.spec.ts` are NOT modified\*\* —
       recorded in the PR (presentation-only restyle; no schema/logic/read change).
 - [ ] **Guardrail verifications (review-checked):** (a) **no new Firestore
       read/write** — status counts are client-side from the existing stream, the
@@ -661,7 +661,7 @@ e2e is not required (decision 4).
   Dropped. **Resolution:** dropped items remain grouped/sorted under **"All"** as
   today (the grouped list still renders a Dropped section when non-empty); only the
   **filter chip** for Dropped is omitted, matching the design. There is no way to
-  filter *to* Dropped from the chips — acceptable per the design; flag if the
+  filter _to_ Dropped from the chips — acceptable per the design; flag if the
   reviewer wants a Dropped chip added (that would be a design deviation).
 
 - **Status counts including zero vs. spec 0046's "non-empty only" chips.** Spec

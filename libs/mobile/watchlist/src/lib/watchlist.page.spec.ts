@@ -230,28 +230,42 @@ function bellButton(el: HTMLElement): HTMLElement {
   return btn;
 }
 
-/** The sort button (aria-label="Sort watchlist"). */
-function sortButton(el: HTMLElement): HTMLElement {
+/** The combined sort/filter trigger button (aria-label="Sort and filter"). */
+function filterTrigger(el: HTMLElement): HTMLElement {
   const btn = el.querySelector<HTMLElement>(
-    'ion-buttons[slot="end"] ion-button[aria-label="Sort watchlist"]',
+    '.search-row .filter-trigger[aria-label="Sort and filter"]',
   );
   if (!btn) {
-    throw new Error('sort button not found');
+    throw new Error('filter trigger not found');
   }
   return btn;
 }
 
-/** All status-filter chip buttons (the "All" chip + per-status chips). */
+/** All status-filter chip buttons (the fixed four: All + three statuses). */
 function statusChips(el: HTMLElement): HTMLElement[] {
   return Array.from(
-    el.querySelectorAll<HTMLElement>('.status-filter .filter-pill'),
+    el.querySelectorAll<HTMLElement>('.status-filter .status-chip-btn'),
   );
 }
 
-/** Provider-filter chip labels (empty when the row is hidden). */
+/** Status-chip label + count as a normalized "Label N" string, in DOM order. */
+function statusChipTexts(el: HTMLElement): string[] {
+  return statusChips(el).map((c) =>
+    (c.textContent ?? '').replace(/\s+/g, ' ').trim(),
+  );
+}
+
+/** Type-tab buttons in the underline type-tab row. */
+function typeTabs(el: HTMLElement): HTMLElement[] {
+  return Array.from(el.querySelectorAll<HTMLElement>('.type-tabs .type-tab'));
+}
+
+/** Provider chip labels inside the sheet (empty when no chips render). */
 function providerChips(el: HTMLElement): string[] {
   return Array.from(
-    el.querySelectorAll<HTMLElement>('.provider-filter .filter-pill'),
+    el.querySelectorAll<HTMLElement>(
+      '.filter-sheet .provider-filter .filter-chip',
+    ),
   ).map((b) => b.textContent?.trim() ?? '');
 }
 
@@ -288,6 +302,24 @@ async function settle(fixture: {
   fixture.detectChanges();
   await fixture.whenStable();
   fixture.detectChanges();
+}
+
+/**
+ * Opens the combined sheet by clicking its `tune` trigger, then settles. Uses
+ * the trigger's `(click)="openFilterSheet()"` binding — an Angular-driven event
+ * tick that commits the `filterSheetOpen` styling binding cleanly (a bare
+ * `component.openFilterSheet()` + manual detectChanges races the dev-mode
+ * checkNoChanges verification pass on `[class.open]`). The direct-method
+ * contract is still asserted separately by the tune-trigger open/close test.
+ */
+async function openSheet(fixture: {
+  nativeElement: HTMLElement;
+  detectChanges: () => void;
+  whenStable: () => Promise<unknown>;
+}): Promise<void> {
+  await settle(fixture);
+  filterTrigger(fixture.nativeElement).click();
+  await settle(fixture);
 }
 
 describe('WatchlistPage', () => {
@@ -461,28 +493,89 @@ describe('WatchlistPage', () => {
     expect(headers[0]).toContain('1 Items');
   });
 
+  // ── Layout order ───────────────────────────────────────────────────────────
+
+  describe('layout order', () => {
+    it('renders status chips before type tabs, before the search bar', async () => {
+      const service = mockService([
+        item({ tmdbId: 1, status: 'watching', title: 'W1' }),
+      ]);
+      const { el } = await setup(service);
+
+      // Collect the three rows in DOM order and assert their class sequence.
+      const rows = Array.from(
+        el.querySelectorAll('.status-filter, .type-tabs, .search-row'),
+      ).map((n) =>
+        n.classList.contains('status-filter')
+          ? 'status'
+          : n.classList.contains('type-tabs')
+            ? 'type'
+            : 'search',
+      );
+      expect(rows).toEqual(['status', 'type', 'search']);
+    });
+
+    it('has no standalone inline provider-filter row and no toolbar sort button', async () => {
+      const service = mockService([
+        item({ tmdbId: 1, status: 'watching', title: 'W1' }),
+      ]);
+      const { el } = await setup(service);
+
+      // The provider filter lives ONLY inside the sheet now.
+      expect(el.querySelector('ion-content > .provider-filter')).toBeFalsy();
+      // The old toolbar sort button is gone.
+      expect(
+        el.querySelector(
+          'ion-buttons[slot="end"] ion-button[aria-label="Sort watchlist"]',
+        ),
+      ).toBeFalsy();
+      // The removed sort action-sheet had header="Sort by"; only the status
+      // action-sheet ("Set status") remains.
+      const sheets = Array.from(el.querySelectorAll('ion-action-sheet'));
+      expect(sheets).toHaveLength(1);
+    });
+  });
+
   // ── Status filter chips ──────────────────────────────────────────────────
 
   describe('status filter chips', () => {
-    it('renders the "All" chip active on first render with one chip per non-empty group', async () => {
+    it('renders the fixed four chips (All / Watching / Planned / Completed) with live counts, All active', async () => {
       const service = mockService([
         item({ tmdbId: 1, status: 'watching', title: 'W1' }),
         item({ tmdbId: 2, status: 'watching', title: 'W2' }),
-        item({ tmdbId: 3, status: 'planned', title: 'P1' }),
-        item({ tmdbId: 4, status: 'completed', title: 'C1' }),
-        // No 'dropped' item → no dropped chip.
+        item({ tmdbId: 3, status: 'watching', title: 'W3' }),
+        item({ tmdbId: 4, status: 'planned', title: 'P1' }),
+        item({ tmdbId: 5, status: 'planned', title: 'P2' }),
+        // No 'completed' item → Completed chip still renders with count 0.
+        // No 'dropped' item and no dropped chip in any case.
       ]);
       const { el } = await setup(service);
-      const chips = statusChips(el).map((c) => c.textContent?.trim() ?? '');
+      const chips = statusChipTexts(el);
 
-      // "All" + Watching + Planned + Completed (NO Dropped).
-      expect(chips[0]).toBe('All');
-      expect(chips).toEqual(['All', 'Watching 2', 'Planned 1', 'Completed 1']);
+      // Exactly four chips, in fixed order; Completed shows 0 (rendered, not hidden).
+      expect(chips).toEqual([
+        'All 5',
+        'Watching 3',
+        'Planned 2',
+        'Completed 0',
+      ]);
       expect(chips.some((c) => c.startsWith('Dropped'))).toBe(false);
+      // "All" count = the sum of the visible cards.
+      expect(chips[0]).toBe('All 5');
 
       // "All" chip is active by default.
-      const allChip = statusChips(el)[0];
-      expect(allChip.classList.contains('active')).toBe(true);
+      expect(statusChips(el)[0].classList.contains('active')).toBe(true);
+    });
+
+    it('renders all four chips with count 0 for an empty watchlist', async () => {
+      const service = mockService([]);
+      const { el } = await setup(service);
+      expect(statusChipTexts(el)).toEqual([
+        'All 0',
+        'Watching 0',
+        'Planned 0',
+        'Completed 0',
+      ]);
     });
 
     it('clicking a status chip narrows the displayed groups to that one status', async () => {
@@ -526,9 +619,58 @@ describe('WatchlistPage', () => {
         item({ tmdbId: 4, status: 'planned', title: 'P1' }),
       ]);
       const { el } = await setup(service);
-      const chips = statusChips(el).map((c) => c.textContent?.trim() ?? '');
+      const chips = statusChipTexts(el);
       expect(chips).toContain('Watching 3');
       expect(chips).toContain('Planned 1');
+      expect(chips).toContain('Completed 0');
+      expect(chips[0]).toBe('All 4');
+    });
+  });
+
+  // ── Type tabs (underline restyle; behavior preserved) ────────────────────────
+
+  describe('type tabs (underline)', () => {
+    it('renders three plain-button underline tabs, not an ion-segment', async () => {
+      const service = mockService([
+        item({ tmdbId: 1, status: 'watching', title: 'W1' }),
+      ]);
+      const { el } = await setup(service);
+
+      // No ion-segment container anywhere on the page.
+      expect(el.querySelector('ion-segment')).toBeFalsy();
+
+      const tabs = typeTabs(el);
+      expect(tabs).toHaveLength(3);
+      expect(tabs.map((t) => t.textContent?.trim())).toEqual([
+        'All',
+        'Movies',
+        'TV Shows',
+      ]);
+      // All tabs are plain <button>s.
+      expect(tabs.every((t) => t.tagName.toLowerCase() === 'button')).toBe(
+        true,
+      );
+      // "All" active on first render.
+      expect(tabs[0].classList.contains('active')).toBe(true);
+    });
+
+    it('clicking a type tab still filters (onFilterClick preserved)', async () => {
+      const service = mockService([
+        item({ tmdbId: 1, type: 'movie', title: 'Movie A' }),
+        item({ tmdbId: 2, type: 'tv', title: 'Show B' }),
+      ]);
+      const { fixture, el } = await setup(service);
+
+      typeTabs(el)[1].click(); // Movies
+      await settle(fixture);
+      expect(fixture.componentInstance.selectedType).toBe('movie');
+      expect(cardTitles(el)).toEqual(['Movie A']);
+      expect(typeTabs(el)[1].classList.contains('active')).toBe(true);
+
+      typeTabs(el)[2].click(); // TV Shows
+      await settle(fixture);
+      expect(fixture.componentInstance.selectedType).toBe('tv');
+      expect(cardTitles(el)).toEqual(['Show B']);
     });
   });
 
@@ -584,10 +726,61 @@ describe('WatchlistPage', () => {
     });
   });
 
-  // ── Provider filter chips ──────────────────────────────────────────────────
+  // ── Combined "Sort & Filter" sheet (open/close) ──────────────────────────────
 
-  describe('provider filter chips', () => {
-    it('renders the provider chip row from the availability map', async () => {
+  describe('combined sort/filter sheet', () => {
+    it('tune trigger opens the sheet; Done closes it', async () => {
+      const service = mockService([item({ tmdbId: 1, status: 'watching' })]);
+      const { fixture, el } = await setup(service);
+      const component = fixture.componentInstance;
+
+      expect(component.filterSheetOpen).toBe(false);
+      filterTrigger(el).click();
+      await settle(fixture);
+      expect(component.filterSheetOpen).toBe(true);
+
+      // The sheet shows a Sort By section and a Provider section.
+      const headings = Array.from(
+        el.querySelectorAll('.filter-sheet .filter-section-heading'),
+      ).map((h) => h.textContent?.trim());
+      expect(headings).toEqual(['Sort By', 'Provider']);
+
+      // "Done" closes the sheet.
+      const done = el.querySelector<HTMLElement>('.filter-sheet-done');
+      done?.click();
+      await settle(fixture);
+      expect(component.filterSheetOpen).toBe(false);
+    });
+
+    it('backdrop tap closes the sheet', async () => {
+      const service = mockService([item({ tmdbId: 1, status: 'watching' })]);
+      const { fixture, el } = await setup(service);
+
+      await openSheet(fixture);
+      const backdrop = el.querySelector<HTMLElement>('.filter-sheet-backdrop');
+      backdrop?.click();
+      await settle(fixture);
+      expect(fixture.componentInstance.filterSheetOpen).toBe(false);
+    });
+
+    it('shows the three Sort By chips (Date Added / Name / Release date)', async () => {
+      const service = mockService([item({ tmdbId: 1, status: 'watching' })]);
+      const { fixture, el } = await setup(service);
+      await openSheet(fixture);
+
+      const sortChips = Array.from(
+        el.querySelectorAll<HTMLElement>(
+          '.filter-sheet .filter-section:first-child .filter-chip',
+        ),
+      ).map((c) => c.textContent?.trim() ?? '');
+      expect(sortChips).toEqual(['Date Added', 'Name', 'Release date']);
+    });
+  });
+
+  // ── Provider filter chips (inside the sheet) ─────────────────────────────────
+
+  describe('provider filter chips (in sheet)', () => {
+    it('renders the provider chips from the availability map', async () => {
       const service = mockService(
         [
           item({ tmdbId: 1, status: 'watching', title: 'A' }),
@@ -596,7 +789,8 @@ describe('WatchlistPage', () => {
         0,
         { 1: ['Netflix'], 2: ['Max'] },
       );
-      const { el } = await setup(service);
+      const { fixture, el } = await setup(service);
+      await openSheet(fixture);
       // A→Z sorted union of provider names.
       expect(providerChips(el)).toEqual(['Max', 'Netflix']);
     });
@@ -643,28 +837,50 @@ describe('WatchlistPage', () => {
       expect(cardTitles(el).sort()).toEqual(['A', 'B']);
     });
 
-    it('hides the provider chip row when no availability data is loaded', async () => {
+    it('shows a muted "none" line and no chips when no availability is loaded', async () => {
       // availability$ returns null for every tmdbId → getAvailableProviders → [].
       const service = mockService([
         item({ tmdbId: 1, status: 'watching', title: 'A' }),
       ]);
-      const { el } = await setup(service);
-      expect(el.querySelector('.provider-filter')).toBeFalsy();
+      const { fixture, el } = await setup(service);
+      await openSheet(fixture);
+
       expect(providerChips(el)).toEqual([]);
+      // The Provider section still renders (with the muted empty line) and the
+      // sheet remains usable (Sort By section present).
+      const empty = el.querySelector('.filter-sheet .filter-empty');
+      expect(empty?.textContent?.trim()).toBe('No providers available yet');
     });
   });
 
-  // ── Sort ───────────────────────────────────────────────────────────────────
+  // ── Sort (tap-to-toggle direction) ───────────────────────────────────────────
 
   describe('sort', () => {
-    it('openSortSheet opens the sort action sheet', async () => {
+    it('onSortChipClick maps the three chips to all six WatchlistSort modes (tap-to-toggle)', async () => {
       const service = mockService([item({ tmdbId: 1, status: 'watching' })]);
-      const { fixture, el } = await setup(service);
-      const component = fixture.componentInstance;
+      const { fixture } = await setup(service);
+      const c = fixture.componentInstance;
 
-      expect(component.sortSheetOpen).toBe(false);
-      sortButton(el).click();
-      expect(component.sortSheetOpen).toBe(true);
+      // Default is addedDesc.
+      expect(c.selectedSort).toBe('addedDesc');
+      // Active chip tapped again flips direction.
+      c.onSortChipClick('added');
+      expect(c.selectedSort).toBe('addedAsc');
+      // Tapping again flips back.
+      c.onSortChipClick('added');
+      expect(c.selectedSort).toBe('addedDesc');
+
+      // Name: default titleAsc, toggle titleDesc.
+      c.onSortChipClick('name');
+      expect(c.selectedSort).toBe('titleAsc');
+      c.onSortChipClick('name');
+      expect(c.selectedSort).toBe('titleDesc');
+
+      // Release date: default releaseDesc, toggle releaseAsc.
+      c.onSortChipClick('release');
+      expect(c.selectedSort).toBe('releaseDesc');
+      c.onSortChipClick('release');
+      expect(c.selectedSort).toBe('releaseAsc');
     });
 
     it('defaults to addedDesc (date-added newest first)', async () => {
