@@ -151,7 +151,7 @@ movie-tracker/
 │       └── dispatch-notifications/       # Slice: Firestore trigger, FCM, dispatch
 ├── docs/
 │   ├── PLAN.md                           # This document
-│   └── decisions/                        # ADR-style design notes per non-trivial task
+│   └── specs/                            # Spec-file workflow unit of work (see §5)
 ├── .github/
 │   └── workflows/                        # CI + scheduled sync trigger
 ├── firebase.json
@@ -271,23 +271,9 @@ _Severance_, we sync it once. This is also what makes the daily sync cheap.
     locally before pushing.
   - Secrets convention: `.env.local` (gitignored), GitHub Actions secrets
     for CI, Firebase config for deployed functions. Never commit secrets.
-  - Branch convention: `feat/<issue-number>-<slug>`, `fix/<issue-number>-<slug>`.
-  - PR convention: title references issue, description has design note for
-    non-trivial work, includes screenshot for UI changes.
+  - Branch convention: `spec/NNNN-slug` (spec PRs), `feat/NNNN-slug` (feature
+    PRs).
   - Spec-first rule (see below).
-
-- **`.github/ISSUE_TEMPLATE/`** — three templates:
-  - `feature.md` — what user-facing capability, acceptance criteria, slice
-    it belongs to.
-  - `bug.md` — repro steps, expected, actual.
-  - `chore.md` — refactors, deps, infra.
-
-- **`.github/PULL_REQUEST_TEMPLATE.md`** — checklist:
-  - Linked issue
-  - Design note (link or inline) for non-trivial PRs
-  - All CI checks passing
-  - Screenshot/recording for UI changes
-  - Updated docs if behavior changed
 
 - **`.github/workflows/ci.yml`** — runs on every PR:
   - `nx affected -t typecheck`
@@ -300,43 +286,29 @@ _Severance_, we sync it once. This is also what makes the daily sync cheap.
 - **`.github/workflows/daily-sync.yml`** — cron-triggered, calls the HTTP
   Cloud Function with the shared secret.
 
-### Task management — issue-driven
+### Task management — spec-driven
 
-Every task is a GitHub issue. The issue is the unit of work; the PR closes
-the issue. Conventions:
-
-- Issue title is imperative and scoped: "Add region picker to settings slice"
-  not "settings stuff."
-- Issue body uses the template: user-facing capability, acceptance criteria,
-  affected slice(s), out-of-scope notes.
-- Labels for slice (`slice:watchlist`), kind (`feat`/`fix`/`chore`), and
-  priority.
-- Issues are sized to fit one Claude Code session. If it doesn't, split it.
-
-### Spec-first per task (for non-trivial work)
-
-For any task larger than a one-file change:
-
-1. Claude Code reads the issue.
-2. Before writing code, it produces a design note as a comment on the issue
-   (or as `docs/decisions/NNNN-<slug>.md` for architecturally significant
-   decisions). The note covers: approach, files to change, new types/APIs,
-   test plan, risks.
-3. You review and approve (or redirect) the design note.
-4. Only then does Claude Code start coding on a feature branch.
+There are no GitHub issues. A spec file (`docs/specs/NNNN-slug.md`), reviewed
+and merged as a PR, is the unit of work — this is the same "design note before
+code" control this section originally proposed per-issue, now formalized as
+its own reviewed artifact. See `docs/specs/README.md` for the spec format and
+status lifecycle, and CLAUDE.md's "Development workflow — spec-driven" for the
+skill sequence (`create-spec` → review → `rework-spec` → merge →
+`implement-feature` → review → `rework-feature` → merge → `cleanup-feature`).
 
 This is the single most effective control on agent quality. It catches
 "about to spend 600 lines going the wrong way" before the lines get written.
 
-For trivial tasks (typo fix, dependency bump, one-line bug), spec-first is
+For trivial tasks (typo fix, dependency bump, one-line bug), a full spec is
 overhead — Claude Code can skip straight to the PR.
 
 ### Branching and PR review
 
 - `main` is always deployable.
-- Claude Code works on feature branches and opens PRs.
-- You review every PR. CI must be green. Merge via squash so each issue maps
-  to one commit on `main`.
+- Claude Code works on `spec/NNNN-slug` / `feat/NNNN-slug` branches and opens
+  PRs.
+- You review every PR. CI must be green. Merge via squash so each spec/feature
+  maps to one commit on `main`.
 - After merge, GitHub Action deploys (when we add deploy workflows).
 
 ### Definition of done
@@ -386,8 +358,11 @@ flag any time it would need a secret in a place it shouldn't be.
 
 ## 6. Initial task breakdown
 
-These are the GitHub issues to create on day one. Roughly ordered by
-dependency. Each is sized to ~one Claude Code session.
+**Historical — this v1 breakdown is complete.** It predates the spec-driven
+workflow (§5) and was originally scoped as GitHub issues; all 23 items below
+have since shipped as specs (`docs/specs/0001-*` onward). Kept as a record of
+the original build order, not a live backlog. Roughly ordered by dependency;
+each was sized to ~one Claude Code session.
 
 ### Foundation (must be done first, in order)
 
@@ -406,7 +381,9 @@ dependency. Each is sized to ~one Claude Code session.
 6. **Firestore schema lib** — Collection paths, converters, type-safe query
    helpers. Tests for converters.
 7. **`CLAUDE.md`** — Author standing instructions per §5.
-8. **Issue + PR templates** — Per §5.
+8. ~~Issue + PR templates~~ — superseded before this ran; the spec-driven
+   workflow (§5) replaced issue/PR templates with the spec-file format in
+   `docs/specs/README.md`.
 
 ### Backend slices
 
@@ -452,8 +429,8 @@ notifications/*` and send via FCM. Unit tests.
     notification permission.
 23. **Empty states + loading states** — Across all slices.
 
-This is ~23 issues. Realistically v1 is 30+ issues by the time small fixes
-and adjustments accumulate. That's fine — the workflow scales.
+This was ~23 items; realistically v1 grew to 60+ specs by the time small
+fixes and adjustments accumulated. That's fine — the workflow scales.
 
 ---
 
