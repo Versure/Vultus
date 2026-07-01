@@ -15,14 +15,22 @@ The barrel (`src/index.ts`) re-exports:
   `Region`/`REGIONS`, `WatchStatus`/`WATCH_STATUSES`,
   `NotificationKind`/`NOTIFICATION_KINDS`, `TitleType`.
 - **`./lib/entities`** — non-document domain entities: `Title` (movie/tv
-  discriminated union), `WatchProvider`, `Episode` (fields: `season`, `episode`,
-  `title` (nullable, spec 0047), `airDate`).
+  discriminated union), `WatchProvider`, `CatalogProvider` (one provider in a
+  region's TMDB watch-provider catalog — `providerId`, `name`, `logoPath`;
+  narrower than `WatchProvider`, no per-title `type`, carries the TMDB logo path,
+  spec 0060), `Episode` (fields: `season`, `episode`, `title` (nullable, spec
+  0047), `airDate`).
 - **`./lib/documents`** — Firestore document shapes (PLAN §4):
-  - `User`, `NotificationPrefs` (per-kind opt-in toggles plus `deliveryHour: number | null` — quiet-hours delivery preference, spec 0051; `null` = any time, a number 0–23 = that UTC hour), `FcmToken`
+  - `User` (fields: `region`, `notificationPrefs`, `fcmTokens`, plus
+    `myProviderIds: number[]` — the TMDB provider ids the user subscribes to;
+    open `number[]` so a later manual provider (Plex, spec 0061) can be layered
+    in without a migration; default `[]`, legacy docs missing it coalesce to `[]`
+    via the converter, spec 0060), `NotificationPrefs` (per-kind opt-in toggles plus `deliveryHour: number | null` — quiet-hours delivery preference, spec 0051; `null` = any time, a number 0–23 = that UTC hour), `FcmToken`
   - `WatchlistItem`, `EpisodeDoc` (fields: `season`, `episode`, `title` (nullable, spec 0034), `airDate`, `watched`, `watchedAt`)
   - `NotificationDoc`, `NotificationPayload`
   - `SyncRun` — one completed sync-pipeline run (global `sync-runs/{runId}`); written by Cloud Functions, read by the settings slice (spec 0049)
   - `TitleCacheEntry`, `TitleMetadata`, `RegionAvailability`
+  - `ProviderCatalogDoc` — the global, function-written `provider-catalog/{region}` cache (`providers: CatalogProvider[]`, `lastSyncedAt` ISO 8601); mirrors `title-cache` as a shared, function-written cache (spec 0060)
 - **`./lib/tokens`** — cross-scope dependency-injection tokens. **Not re-exported
   from the main barrel** — import via the dedicated subpath
   `@vultus/shared/domain/tokens` (mobile-only; keeps `@angular/core` out of the
@@ -32,6 +40,11 @@ The barrel (`src/index.ts`) re-exports:
   - `TRIGGER_SYNC` — `() => Promise<{ syncedAt: string }>` thunk provided by the
     shell; slices call this to trigger a manual sync via `triggerSync` callable
     without importing `@angular/fire/functions` or `apps/mobile` (spec 0025).
+  - `GET_WATCH_PROVIDERS` — `(region: Region) => Promise<CatalogProvider[]>`
+    thunk provided by the shell; the settings slice calls this to fetch the
+    region's TMDB watch-provider catalog via the `getWatchProviders` callable
+    without importing `@angular/fire/functions` or `apps/mobile`; mirrors
+    `TRIGGER_SYNC` (spec 0060).
 
 `NotificationPayload` carries the data a notification renders from:
 `tmdbId: number` (the TMDB id of the affected title), `titleId`, `title`,

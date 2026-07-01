@@ -64,6 +64,73 @@
         </div>
       </div>
 
+      <!--
+        My Providers card (spec 0060) — a wrapping row of tappable provider
+        chips over `service.providerCatalog()`, placed between the Region and
+        Notification cards to match the Stitch fork
+        (screen cebdfd02c7d44023b0e0019dd4907d48). Each chip is a `<button>`
+        (aria-pressed) toggling membership in `myProviderIds`; a selected chip
+        gets a primary border + checkmark badge + full opacity, an unselected
+        one an outline-variant border at 60% opacity. NOT an ion-segment/select.
+      -->
+      <div class="settings-card">
+        <div class="settings-row settings-row--header">
+          <div class="settings-row__icon" aria-hidden="true">
+            <ion-icon name="albums-outline"></ion-icon>
+          </div>
+          <div class="settings-row__body">
+            <p class="settings-row__title">My Providers</p>
+            <p class="settings-row__helper settings-row__helper--tight">
+              Subscriptions used to check availability
+            </p>
+          </div>
+        </div>
+
+        @if (service.catalogLoading()) {
+        <div class="providers-loading" aria-live="polite">
+          <ion-spinner name="crescent"></ion-spinner>
+          <span class="providers-loading__label">Loading providers…</span>
+        </div>
+        } @else {
+        <div class="provider-grid" role="group" aria-label="My providers">
+          @for (provider of service.providerCatalog(); track
+          provider.providerId) { @let selected =
+          service.myProviderIds().includes(provider.providerId);
+          <button
+            type="button"
+            class="provider-chip"
+            [class.provider-chip--selected]="selected"
+            [attr.aria-pressed]="selected"
+            [attr.aria-label]="provider.name"
+            (click)="onProviderToggle(provider.providerId)"
+          >
+            <span class="provider-chip__logo">
+              @if (providerLogoUrl(provider); as logoUrl) {
+              <img [src]="logoUrl" [alt]="provider.name" loading="lazy" />
+              } @else {
+              <span class="provider-chip__logo-fallback" aria-hidden="true"
+                >{{ provider.name.charAt(0) }}</span
+              >
+              } @if (selected) {
+              <ion-icon
+                class="provider-chip__badge"
+                name="checkmark-circle"
+                aria-hidden="true"
+              ></ion-icon>
+              }
+            </span>
+            <span class="provider-chip__name">{{ provider.name }}</span>
+          </button>
+          }
+        </div>
+        <p class="provider-footer">
+          {{ service.myProviderIds().length }} of {{
+          service.providerCatalog().length }} selected · Region: {{
+          service.region() }}
+        </p>
+        }
+      </div>
+
       <!-- Notifications row — `ion-toggle` carries the real behaviour. -->
       <div class="settings-card">
         <div class="settings-row">

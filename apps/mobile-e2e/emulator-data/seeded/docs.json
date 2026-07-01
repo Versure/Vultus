@@ -1,5 +1,5 @@
 {
-  "description": "Seeded fixture (spec 0019 flows F4-F8 + spec 0034 episode flows + spec 0042 notifications inbox): the users/{uid} profile doc (region NL), ONE TV watchlist entry (Breaking Bad, tmdbId 2, status planned), its title-cache entry, its 3 season-1 episode docs (spec 0034), and TWO users/{uid}/notifications docs (spec 0042 — one unread, one read; both pointing at tmdbId 2 so a row-tap deep-links to the already-cached title-detail/2 without a TMDB call). {uid} is substituted at seed time with the resolved anon uid (R3). addedAt/airDate/sentAt/readAt use the __timestamp marker so the encoder writes a Firestore timestampValue.",
+  "description": "Seeded fixture (spec 0019 flows F4-F8 + spec 0034 episode flows + spec 0042 notifications inbox + spec 0060 provider-preferences). users/{uid}: region NL, myProviderIds [8] = Netflix (spec 0060). ONE watchlist card by default — the TV entry Breaking Bad (tmdbId 2, status planned); its title-cache/2/availability/NL doc has a FLATRATE Netflix provider (id 8, SELECTED → the card shows the highlighted 'On Netflix' pill). ALSO seeded but WITHOUT a default watchlist entry: title-cache/3 (The Bear) + title-cache/3/availability/NL with a FLATRATE Hulu provider (id 15, NOT in myProviderIds → the 'Also on Hulu' muted pill) — the users/{uid}/watchlist/3 entry that turns The Bear into a second card is added by provider-preferences.spec.ts itself (via writeDocument), NOT here, so the count-1 / remove-to-empty assertions in watchlist-refresh.spec.ts and title-detail.spec.ts stay valid against this shared fixture. Plus the season-1 episode docs (spec 0034), TWO users/{uid}/notifications docs (spec 0042 — one unread, one read; both pointing at tmdbId 2), and a global provider-catalog/NL doc (spec 0060 — Netflix 8, Hulu 15, Disney Plus 337, Amazon Prime Video 119) covering the ids used above. {uid} is substituted at seed time with the resolved anon uid (R3). addedAt/airDate/sentAt/readAt/lastSyncedAt use the __timestamp marker so the encoder writes a Firestore timestampValue.",
   "docs": [
     {
       "path": "users/{uid}",
@@ -10,7 +10,8 @@
           "movieAvailable": true,
           "cameToPlatform": true
         },
-        "fcmTokens": []
+        "fcmTokens": [],
+        "myProviderIds": [8]
       }
     },
     {
@@ -37,6 +38,58 @@
           "posterPath": "/breaking-bad-poster.jpg",
           "releaseDate": null
         },
+        "lastSyncedAt": { "__timestamp": "2026-06-24T10:00:00.000Z" }
+      }
+    },
+    {
+      "path": "title-cache/2/availability/NL",
+      "data": {
+        "providers": [
+          { "providerId": 8, "name": "Netflix", "type": "flatrate" }
+        ],
+        "previousSnapshot": [],
+        "lastSyncedAt": { "__timestamp": "2026-06-24T10:00:00.000Z" }
+      }
+    },
+    {
+      "path": "title-cache/3",
+      "data": {
+        "type": "tv",
+        "traktId": null,
+        "metadata": {
+          "title": "The Bear",
+          "overview": "A young chef from the fine dining world returns to Chicago to run his family sandwich shop.",
+          "posterPath": "/the-bear-poster.jpg",
+          "releaseDate": null
+        },
+        "lastSyncedAt": { "__timestamp": "2026-06-24T10:05:00.000Z" }
+      }
+    },
+    {
+      "path": "title-cache/3/availability/NL",
+      "data": {
+        "providers": [{ "providerId": 15, "name": "Hulu", "type": "flatrate" }],
+        "previousSnapshot": [],
+        "lastSyncedAt": { "__timestamp": "2026-06-24T10:05:00.000Z" }
+      }
+    },
+    {
+      "path": "provider-catalog/NL",
+      "data": {
+        "providers": [
+          { "providerId": 8, "name": "Netflix", "logoPath": "/netflix.jpg" },
+          { "providerId": 15, "name": "Hulu", "logoPath": "/hulu.jpg" },
+          {
+            "providerId": 337,
+            "name": "Disney Plus",
+            "logoPath": "/disney-plus.jpg"
+          },
+          {
+            "providerId": 119,
+            "name": "Amazon Prime Video",
+            "logoPath": "/prime-video.jpg"
+          }
+        ],
         "lastSyncedAt": { "__timestamp": "2026-06-24T10:00:00.000Z" }
       }
     },

@@ -38,7 +38,7 @@ import type {
   UserReadData,
   WatchlistItemReadData,
 } from '@vultus/shared/firestore-schema';
-import { Observable, map, of, switchMap } from 'rxjs';
+import { Observable, map, of, shareReplay, switchMap } from 'rxjs';
 
 /**
  * Display order for status grouping / the status action-sheet. Deliberately
@@ -328,16 +328,55 @@ export class WatchlistService {
     void deleteDoc(doc(this.firestore, watchlistItemPath(uid, titleId)));
   }
 
+  /**
+   * Memoized `users/{uid}` docData streams, keyed by uid. Both `userRegion$` and
+   * `myProviderIds$` derive from this single shared source so only ONE Firestore
+   * Listen channel is opened per user doc — mapping to `region` and
+   * `myProviderIds` are two projections of the same stream, not two listeners.
+   * `shareReplay({ refCount: false })` keeps the underlying subscription (and its
+   * listener) alive and stable across the page's `| async` re-subscriptions.
+   */
+  private readonly userCache = new Map<
+    string,
+    Observable<UserReadData | undefined>
+  >();
+
+  private user$(uid: string): Observable<UserReadData | undefined> {
+    let stream = this.userCache.get(uid);
+    if (!stream) {
+      stream = (
+        docData(doc(this.firestore, userPath(uid))) as Observable<
+          UserReadData | undefined
+        >
+      ).pipe(shareReplay({ bufferSize: 1, refCount: false }));
+      this.userCache.set(uid, stream);
+    }
+    return stream;
+  }
+
   /** The user's persisted region; null uid / missing doc → null. */
   userRegion$(uid: string | null): Observable<Region | null> {
     if (!uid) {
       return of(null);
     }
-    return (
-      docData(doc(this.firestore, userPath(uid))) as Observable<
-        UserReadData | undefined
-      >
-    ).pipe(map((data) => (data ? dataToUser(data).region : null)));
+    return this.user$(uid).pipe(
+      map((data) => (data ? dataToUser(data).region : null)),
+    );
+  }
+
+  /**
+   * The user's selected provider ids (`users/{uid}.myProviderIds`, spec 0060),
+   * default `[]` (via `dataToUser`, which coalesces a legacy doc missing the
+   * field to `[]`). Null uid / missing doc → `[]`. Reads the SAME memoized
+   * `user$` stream as `userRegion$` — no second listener on `users/{uid}`.
+   */
+  myProviderIds$(uid: string | null): Observable<number[]> {
+    if (!uid) {
+      return of<number[]>([]);
+    }
+    return this.user$(uid).pipe(
+      map((data) => (data ? dataToUser(data).myProviderIds : [])),
+    );
   }
 
   /**

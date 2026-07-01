@@ -294,24 +294,65 @@ ion-content {
 }
 
 // -----------------------------------------------------------------------------
-// Provider rows — TEXT ONLY (recon B): name + a derived type label, no logo,
-// no deep-link icon. Grouped by Streaming / Rent / Buy.
+// Where to Watch — two-group split (spec 0060, canonical Stitch screen
+// 562019f29ce2412d90c757a7e45a98bf). One card, two labelled subgroups: "On Your
+// Providers" (selected flatrate) then "Also Available On" (every other
+// provider), separated by a hairline. Each provider is a full row (40×40 text
+// logo tile + name + type caption + a DECORATIVE trailing glyph — no
+// navigation) with a surface-container → surface-container-high hover raise.
+// All colours consume --vultus-* / --ion-* tokens; no hard-coded hex.
 // -----------------------------------------------------------------------------
+
+// Groups stacked with the lg gap (`space-y-6`); rows within a group with the
+// sm gap (`space-y-3`).
+.provider-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vultus-space-lg);
+}
+
 .provider-group {
-  & + & {
-    margin-top: var(--vultus-space-md);
-  }
+  display: flex;
+  flex-direction: column;
+  gap: var(--vultus-space-sm);
+}
+
+// Hairline divider between the two subgroups (`border-t outline-variant/10`,
+// mt-md/pt-md rhythm). Also the seam where the spec-0061 group will sit below.
+.group-divider {
+  border-top: 1px solid
+    color-mix(in srgb, var(--vultus-outline-variant) 10%, transparent);
+  margin-top: var(--vultus-space-md);
+  padding-top: var(--vultus-space-md);
 }
 
 .group-label {
-  margin: 0 0 var(--vultus-space-sm);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px; // matches the mock's gap-1.5
   font-family: var(--vultus-font-family);
-  font-size: var(--vultus-text-label-md-size);
-  font-weight: var(--vultus-text-label-md-weight);
-  line-height: var(--vultus-text-label-md-line);
-  letter-spacing: var(--vultus-text-label-md-spacing);
+  font-size: var(--vultus-text-label-sm-size);
+  font-weight: var(--vultus-text-label-sm-weight);
+  line-height: var(--vultus-text-label-sm-line);
+  letter-spacing: 0.05em; // tracking-wider
   text-transform: uppercase;
-  color: var(--vultus-on-surface-variant);
+
+  // "On Your Providers" — primary, with the leading filled checkmark.
+  &--mine {
+    color: var(--ion-color-primary);
+  }
+
+  // "Also Available On" — muted, no icon.
+  &--elsewhere {
+    color: var(--vultus-on-surface-variant);
+  }
+}
+
+.group-label-icon {
+  font-size: 16px;
+  color: var(--ion-color-primary);
+  flex-shrink: 0;
 }
 
 .provider-row {
@@ -321,17 +362,86 @@ ion-content {
   padding: var(--vultus-space-sm) var(--vultus-space-md);
   border-radius: var(--vultus-radius);
   background: var(--vultus-surface-container);
+  // Presentational hover affordance only — the row has no action (the trailing
+  // glyph is decorative; this app has no per-provider deep-link).
+  transition: background 150ms ease;
 
-  & + & {
-    margin-top: var(--vultus-space-sm);
+  &:hover {
+    background: var(--vultus-surface-container-high);
+
+    .provider-trailing {
+      color: var(--ion-color-primary);
+    }
   }
+}
+
+.provider-lead {
+  display: flex;
+  align-items: center;
+  gap: var(--vultus-space-sm);
+  min-width: 0;
+}
+
+// 40×40 text logo tile — the per-title WatchProvider has no logo path, so the
+// tile shows the provider's initials (rounded, on the raised surface).
+.provider-logo {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--vultus-radius-md);
+  background: var(--vultus-surface-container-highest);
+  color: var(--vultus-on-surface);
+  font-family: var(--vultus-font-family);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.provider-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.provider-name-line {
+  display: flex;
+  align-items: center;
+  gap: var(--vultus-space-sm);
 }
 
 .provider-name {
   font-family: var(--vultus-font-family);
   font-size: var(--vultus-text-body-md-size);
+  line-height: var(--vultus-text-body-md-line);
+
+  // Mine: bold, full-strength text.
+  &--mine {
+    font-weight: 700;
+    color: var(--vultus-on-surface);
+  }
+
+  // Elsewhere: muted, NOT bold.
+  &--elsewhere {
+    font-weight: 400;
+    color: var(--vultus-on-surface-variant);
+  }
+}
+
+// "Yours" tag next to a mine-row provider name.
+.yours-tag {
+  flex-shrink: 0;
+  padding: 1px var(--vultus-space-sm);
+  border-radius: var(--vultus-radius-pill);
+  background: color-mix(in srgb, var(--ion-color-primary) 10%, transparent);
+  color: var(--ion-color-primary);
+  font-family: var(--vultus-font-family);
+  font-size: 10px;
   font-weight: 700;
-  color: var(--vultus-on-surface);
+  line-height: 1.4;
 }
 
 .provider-type {
@@ -340,6 +450,15 @@ ion-content {
   font-weight: var(--vultus-text-label-sm-weight);
   line-height: var(--vultus-text-label-sm-line);
   color: var(--vultus-on-surface-variant);
+}
+
+// Decorative trailing glyph (open_in_new equivalent) — NOT a link/button. Shifts
+// to primary on row hover (see .provider-row:hover above).
+.provider-trailing {
+  flex-shrink: 0;
+  font-size: 20px;
+  color: var(--vultus-on-surface-variant);
+  transition: color 150ms ease;
 }
 
 // -----------------------------------------------------------------------------

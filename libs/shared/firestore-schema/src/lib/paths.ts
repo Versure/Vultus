@@ -13,6 +13,7 @@ export const COLLECTIONS = {
   titleCache: 'title-cache',
   availability: 'availability',
   syncRuns: 'sync-runs',
+  providerCatalog: 'provider-catalog',
 } as const;
 
 // Tiny private joiner — no leading/trailing slash, segments joined by '/'.
@@ -75,6 +76,15 @@ export function availabilityPath(tmdbId: number): string {
 // title-cache/{tmdbId}/availability/{region}   — region is a domain Region
 export function availabilityDocPath(tmdbId: number, region: Region): string {
   return join(availabilityPath(tmdbId), region);
+}
+
+// provider-catalog              (collection)
+export function providerCatalogPath(): string {
+  return COLLECTIONS.providerCatalog;
+}
+// provider-catalog/{region} — document id is the domain Region code (spec 0060)
+export function providerCatalogDocPath(region: Region): string {
+  return join(providerCatalogPath(), region);
 }
 
 // sync-runs                 (collection)

@@ -161,16 +161,25 @@
           <span class="meta-vote">{{ pct }}%</span>
           }
         </p>
-        @if (item.status === 'planned') {
-        <!-- Planned: show availability badge when provider is known (no chip otherwise) -->
-        @if (getProviderName$(item, (region$ | async)) | async; as provider) {
-        <span class="availability-badge">{{ provider }}</span>
-        } } @else { @if (getProviderName$(item, (region$ | async)) | async; as
-        provider) {
-        <span class="provider-badge status-{{ item.status }}"
-          >{{ provider }}</span
-        >
-        }
+        <!-- Availability pill (spec 0060): a SINGLE partitioned pill per card.
+             mine → primary "On {name}" + check icon; elsewhere → muted "Also on
+             {name}" (no icon); null (no flatrate) → no pill (existing treatment). -->
+        @if (availabilityPill$(item, (region$ | async)) | async; as pill) {
+        <span class="availability-pill" [class.is-mine]="pill.kind === 'mine'">
+          @if (pill.kind === 'mine') {
+          <ion-icon
+            class="availability-pill__icon"
+            name="checkmark-circle"
+            aria-hidden="true"
+          ></ion-icon>
+          <span class="availability-pill__text">{{ 'On ' + pill.name }}</span>
+          } @else {
+          <span class="availability-pill__text"
+            >{{ 'Also on ' + pill.name }}</span
+          >
+          }
+        </span>
+        } @if (item.status !== 'planned') {
         <button
           type="button"
           class="status-chip status-{{ item.status }}"

@@ -2,9 +2,8 @@
 number: 0060
 slug: provider-preferences
 title: Let users pick their subscribed providers and flag "on your platform" availability
-status: approved
-slices:
-  [slice:settings, slice:watchlist, slice:title-detail, slice:sync-titles]
+status: done
+slices: [slice:settings, slice:watchlist, slice:title-detail, slice:sync-titles]
 scopes: [scope:mobile, scope:functions, scope:shared]
 created: 2026-07-01
 ---
@@ -159,17 +158,17 @@ Out of scope (explicitly):
 
 ## Affected slices & Sheriff tags
 
-| Project                        | Path                                   | Sheriff tags                        | Change                                                                                                        |
-| ------------------------------ | -------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| shared-domain (edit)           | `libs/shared/domain`                   | `scope:shared`                      | **add** `myProviderIds` to `User`; **add** `CatalogProvider` entity + `ProviderCatalogDoc` document; **add** `GET_WATCH_PROVIDERS` token; update `_user` literal; README |
-| shared-firestore-schema (edit) | `libs/shared/firestore-schema`         | `scope:shared`                      | `dataToUser` / `userToData` carry `myProviderIds` (read `?? []`); new `ProviderCatalog` converter + read/write data types; new `providerCatalogDocPath`; tests; README    |
-| functions-sync-titles (edit)   | `libs/functions/sync-titles`           | `scope:functions`, `slice:sync-titles` | `TmdbClient.getRegionWatchProviders(region)` + DTOs/mapper for the two catalog endpoints; tests; README      |
-| functions (app, edit)          | `apps/functions`                       | `scope:functions`                   | new `getWatchProviders` callable + `runGetWatchProviders` core (injected deps); the `provider-catalog` read/refresh store; specs; README |
-| mobile-settings (edit)         | `libs/mobile/settings`                 | `scope:mobile`, `slice:settings`    | "My Providers" multi-select: service signals/setters + catalog load via `GET_WATCH_PROVIDERS`; region-change prune; page + template; mock mirror; README; specs |
-| mobile-watchlist (edit)        | `libs/mobile/watchlist`                | `scope:mobile`, `slice:watchlist`   | read `myProviderIds`; partition flatrate providers; mine / elsewhere pill; specs; README                       |
-| mobile-title-detail (edit)     | `libs/mobile/title-detail`             | `scope:mobile`, `slice:title-detail`| read `myProviderIds`; two-group split ("On Your Providers" = selected flatrate / "Also Available On" = all other providers) in "Where to Watch"; specs; README |
-| mobile (shell, edit)           | `apps/mobile`                          | `scope:mobile`                      | provide `GET_WATCH_PROVIDERS` thunk (httpsCallable) at app root                                               |
-| mobile-e2e (edit)              | `apps/mobile-e2e`                      | untagged                            | new provider-preferences flow spec; seed `provider-catalog/{region}` + `myProviderIds`                        |
+| Project                        | Path                           | Sheriff tags                           | Change                                                                                                                                                                   |
+| ------------------------------ | ------------------------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| shared-domain (edit)           | `libs/shared/domain`           | `scope:shared`                         | **add** `myProviderIds` to `User`; **add** `CatalogProvider` entity + `ProviderCatalogDoc` document; **add** `GET_WATCH_PROVIDERS` token; update `_user` literal; README |
+| shared-firestore-schema (edit) | `libs/shared/firestore-schema` | `scope:shared`                         | `dataToUser` / `userToData` carry `myProviderIds` (read `?? []`); new `ProviderCatalog` converter + read/write data types; new `providerCatalogDocPath`; tests; README   |
+| functions-sync-titles (edit)   | `libs/functions/sync-titles`   | `scope:functions`, `slice:sync-titles` | `TmdbClient.getRegionWatchProviders(region)` + DTOs/mapper for the two catalog endpoints; tests; README                                                                  |
+| functions (app, edit)          | `apps/functions`               | `scope:functions`                      | new `getWatchProviders` callable + `runGetWatchProviders` core (injected deps); the `provider-catalog` read/refresh store; specs; README                                 |
+| mobile-settings (edit)         | `libs/mobile/settings`         | `scope:mobile`, `slice:settings`       | "My Providers" multi-select: service signals/setters + catalog load via `GET_WATCH_PROVIDERS`; region-change prune; page + template; mock mirror; README; specs          |
+| mobile-watchlist (edit)        | `libs/mobile/watchlist`        | `scope:mobile`, `slice:watchlist`      | read `myProviderIds`; partition flatrate providers; mine / elsewhere pill; specs; README                                                                                 |
+| mobile-title-detail (edit)     | `libs/mobile/title-detail`     | `scope:mobile`, `slice:title-detail`   | read `myProviderIds`; two-group split ("On Your Providers" = selected flatrate / "Also Available On" = all other providers) in "Where to Watch"; specs; README           |
+| mobile (shell, edit)           | `apps/mobile`                  | `scope:mobile`                         | provide `GET_WATCH_PROVIDERS` thunk (httpsCallable) at app root                                                                                                          |
+| mobile-e2e (edit)              | `apps/mobile-e2e`              | untagged                               | new provider-preferences flow spec; seed `provider-catalog/{region}` + `myProviderIds`                                                                                   |
 
 - **Tagging is by PATH GLOB in `sheriff.config.ts`** (specs 0010/0012/0051). All
   projects resolve tags from their paths. **This spec does NOT edit
@@ -199,13 +198,13 @@ PLAN §4 paths. Two changes: an additive field on `users/{uid}`, and a **new
 global collection** `provider-catalog/{region}` (read-only from the client,
 written by the callable via the Admin SDK — same trust model as `title-cache`).
 
-| PLAN §4 path                                | Access                            | By                                                                              |
-| ------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------- |
-| `users/{uid}.myProviderIds`                 | **read**, **create**, **update**  | settings slice (read on load; default `[]` on eager create; write on toggle / region-change prune) |
-| `users/{uid}.myProviderIds`                 | **read**                          | watchlist (partition flatrate providers only) + title-detail (partition ALL providers; only the `mine` bucket is flatrate-gated) |
-| `provider-catalog/{region}`                 | **read**                          | mobile via the `getWatchProviders` callable output (NOT read directly by the client) |
-| `provider-catalog/{region}`                 | **read + create/update**          | `getWatchProviders` callable (Admin SDK — cache-read; refetch + rewrite when missing/stale) |
-| `title-cache/{tmdbId}/availability/{region}`| **read** (unchanged shape)        | watchlist + title-detail slices (the `RegionAvailability.providers` array being partitioned) |
+| PLAN §4 path                                 | Access                           | By                                                                                                                               |
+| -------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `users/{uid}.myProviderIds`                  | **read**, **create**, **update** | settings slice (read on load; default `[]` on eager create; write on toggle / region-change prune)                               |
+| `users/{uid}.myProviderIds`                  | **read**                         | watchlist (partition flatrate providers only) + title-detail (partition ALL providers; only the `mine` bucket is flatrate-gated) |
+| `provider-catalog/{region}`                  | **read**                         | mobile via the `getWatchProviders` callable output (NOT read directly by the client)                                             |
+| `provider-catalog/{region}`                  | **read + create/update**         | `getWatchProviders` callable (Admin SDK — cache-read; refetch + rewrite when missing/stale)                                      |
+| `title-cache/{tmdbId}/availability/{region}` | **read** (unchanged shape)       | watchlist + title-detail slices (the `RegionAvailability.providers` array being partitioned)                                     |
 
 ### `users/{uid}.myProviderIds` (additive)
 
@@ -242,7 +241,7 @@ written by the callable via the Admin SDK — same trust model as `title-cache`)
 - **Path:** `provider-catalog/{region}` — document id is the domain `Region`
   code (`NL`, `DE`, …), mirroring `title-cache/{tmdbId}` as a shared,
   function-written cache (PLAN §4). New `COLLECTIONS.providerCatalog =
-  'provider-catalog'` + `providerCatalogPath()` / `providerCatalogDocPath(region)`
+'provider-catalog'` + `providerCatalogPath()` / `providerCatalogDocPath(region)`
   in `paths.ts`.
 - **Stored shape (`ProviderCatalogDoc`):**
   `{ providers: CatalogProvider[]; lastSyncedAt: string /* ISO */ }`. The
@@ -327,7 +326,7 @@ export const GET_WATCH_PROVIDERS = new InjectionToken<
 - `data-types.ts`: add `myProviderIds` to `UserReadData` (optional on read:
   `myProviderIds?: number[]`) and `UserWriteData` (`myProviderIds: number[]`).
   Add `ProviderCatalogReadData` (`lastSyncedAt: FirestoreTimestampLike`, `providers:
-  CatalogProvider[]`) and `ProviderCatalogWriteData` (`lastSyncedAt: Date`).
+CatalogProvider[]`) and `ProviderCatalogWriteData` (`lastSyncedAt: Date`).
 - `converters.ts`:
   - `userToData`: add `myProviderIds: user.myProviderIds`.
   - `dataToUser`: add `myProviderIds: data.myProviderIds ?? []`.
@@ -399,6 +398,7 @@ export async function runGetWatchProviders(
 ```
 
 Core behaviour:
+
 - `if (!uid) throw new HttpsError('unauthenticated', …)` — same as `runTriggerSync`.
 - Validate `input`: `region` must be a member of `REGIONS` (use a runtime guard
   against the `REGIONS` const array) — else
@@ -510,7 +510,7 @@ change toast via `ToastController`.
   `RegionAvailability` (not just names), filters to **flatrate** providers, and
   combined with `myProviderIds$` yields:
   - `{ kind: 'mine'; name }` when ≥1 flatrate provider's `providerId ∈
-    myProviderIds` (use the FIRST such provider's name);
+myProviderIds` (use the FIRST such provider's name);
   - else `{ kind: 'elsewhere'; name }` when ≥1 flatrate provider exists (first
     provider's name);
   - else `null` (no flatrate availability → keep the existing no-chip / muted
@@ -533,15 +533,15 @@ change toast via `ToastController`.
     in `myProviderIds`);
   - `elsewhere` — **every other** provider (non-mine flatrate + all rent + all
     buy).
-  Each `WatchProvider` carries its `type` (`flatrate`/`rent`/`buy`), which the
-  template renders as the per-row type caption (e.g. "Subscription" for flatrate,
-  "Rent/Buy" for rent/buy — see the UI section for the caption mapping). The
-  template renders the two labeled subgroups (see UI section). **The verified
-  canonical screen (`562019f29ce2412d90c757a7e45a98bf`) shows this consolidated
-  two-group layout replacing the old separate flatrate/rent/buy blocks** — the
-  detail card is now one "Where to Watch" card with the two subgroups (plus the
-  spec-0061 Personal Tracking / Plex subgroup below them, out of scope here). Do
-  **not** keep three separate flatrate/rent/buy sections.
+    Each `WatchProvider` carries its `type` (`flatrate`/`rent`/`buy`), which the
+    template renders as the per-row type caption (e.g. "Subscription" for flatrate,
+    "Rent/Buy" for rent/buy — see the UI section for the caption mapping). The
+    template renders the two labeled subgroups (see UI section). **The verified
+    canonical screen (`562019f29ce2412d90c757a7e45a98bf`) shows this consolidated
+    two-group layout replacing the old separate flatrate/rent/buy blocks** — the
+    detail card is now one "Where to Watch" card with the two subgroups (plus the
+    spec-0061 Personal Tracking / Plex subgroup below them, out of scope here). Do
+    **not** keep three separate flatrate/rent/buy sections.
 
 ## UI / Stitch screen refs
 
@@ -586,14 +586,14 @@ Region card and the Notification Preferences card; everything else is identical.
 
 **Checkable contract (tick each vs the fetched markup + screenshot):**
 
-| Element              | Spec                                                                                                                                                                                | Token / var                                                          |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| **Card**             | A `.settings-card` matching the Region / Notifications siblings: `surface-container` fill, `--vultus-radius-md`, 1px `outline-variant` hairline (20% alpha), 16px padding, 8px gap from the card above. Side inset + inter-card gap **must agree** with all sibling settings cards (same stack). | `--vultus-surface-container`, `--vultus-outline-variant`, `--vultus-space-md`, `--vultus-space-sm` |
-| **Header row**       | Icon tile (`.settings-row__icon`, 40×40, `--vultus-radius`, primary-coloured glyph, ~22px — suggested `tv-outline` or `albums-outline`) + title "My Providers" (`body-lg`/600) + subtitle "Subscriptions used to check availability" (`body-md` `on-surface-variant`). | `--ion-color-primary`, `--vultus-on-surface`, `--vultus-on-surface-variant` |
-| **Provider chip**    | ~**96px wide** tappable chip: provider logo (TMDB `logoPath`, rounded) above the provider name (`label-sm`, centered, `on-surface`). Chips wrap in a flex row, consistent gap (pin from markup, e.g. 8px). All chips the **same width/height** — no drift. | `--vultus-on-surface`                                                |
-| **Chip — selected**  | `border-2` in `--ion-color-primary`; a `check_circle` (`checkmark-circle`) badge overlapping the top-right of the logo, primary-coloured; full opacity.                                                                                                                                       | `--ion-color-primary`                                                |
-| **Chip — unselected**| `border` (1px) in `outline-variant` (~20% alpha); `opacity: 0.6`; no badge.                                                                                                                                                                                                                   | `--vultus-outline-variant`                                           |
-| **Footer line**      | "N of M selected · Region: {region}" — `label-sm` / `on-surface-variant`, left-aligned to the chip grid.                                                                                                                                                                                        | `--vultus-on-surface-variant`                                        |
+| Element               | Spec                                                                                                                                                                                                                                                                                             | Token / var                                                                                        |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| **Card**              | A `.settings-card` matching the Region / Notifications siblings: `surface-container` fill, `--vultus-radius-md`, 1px `outline-variant` hairline (20% alpha), 16px padding, 8px gap from the card above. Side inset + inter-card gap **must agree** with all sibling settings cards (same stack). | `--vultus-surface-container`, `--vultus-outline-variant`, `--vultus-space-md`, `--vultus-space-sm` |
+| **Header row**        | Icon tile (`.settings-row__icon`, 40×40, `--vultus-radius`, primary-coloured glyph, ~22px — suggested `tv-outline` or `albums-outline`) + title "My Providers" (`body-lg`/600) + subtitle "Subscriptions used to check availability" (`body-md` `on-surface-variant`).                           | `--ion-color-primary`, `--vultus-on-surface`, `--vultus-on-surface-variant`                        |
+| **Provider chip**     | ~**96px wide** tappable chip: provider logo (TMDB `logoPath`, rounded) above the provider name (`label-sm`, centered, `on-surface`). Chips wrap in a flex row, consistent gap (pin from markup, e.g. 8px). All chips the **same width/height** — no drift.                                       | `--vultus-on-surface`                                                                              |
+| **Chip — selected**   | `border-2` in `--ion-color-primary`; a `check_circle` (`checkmark-circle`) badge overlapping the top-right of the logo, primary-coloured; full opacity.                                                                                                                                          | `--ion-color-primary`                                                                              |
+| **Chip — unselected** | `border` (1px) in `outline-variant` (~20% alpha); `opacity: 0.6`; no badge.                                                                                                                                                                                                                      | `--vultus-outline-variant`                                                                         |
+| **Footer line**       | "N of M selected · Region: {region}" — `label-sm` / `on-surface-variant`, left-aligned to the chip grid.                                                                                                                                                                                         | `--vultus-on-surface-variant`                                                                      |
 
 **Structure note:** this is a **wrapping row of plain tappable chips**, NOT an
 `ion-segment` or `ion-select` — build it as a `@for` over `service.providerCatalog()`
@@ -601,9 +601,9 @@ of `<button>`-role chips (a11y: `aria-pressed`), each `(click)="onProviderToggle
 
 **Interactive-state contract (tick each):**
 
-| Element      | default                            | focus                       | active/press                                | selected result                                  | loading                        |
-| ------------ | ---------------------------------- | --------------------------- | ------------------------------------------- | ------------------------------------------------ | ------------------------------ |
-| Provider chip| unselected (border, 60% opacity) OR selected (primary border + badge, full opacity) per `myProviderIds` | `:focus-visible` ring       | subtle press feedback (opacity/scale) consistent with other tappables; no lift | toggling calls `toggleProvider`, chip flips selected/unselected with the border+badge+opacity transition | while `catalogLoading()` → skeleton chips (or the section's spinner), NOT an empty card |
+| Element       | default                                                                                                 | focus                 | active/press                                                                   | selected result                                                                                          | loading                                                                                 |
+| ------------- | ------------------------------------------------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Provider chip | unselected (border, 60% opacity) OR selected (primary border + badge, full opacity) per `myProviderIds` | `:focus-visible` ring | subtle press feedback (opacity/scale) consistent with other tappables; no lift | toggling calls `toggleProvider`, chip flips selected/unselected with the border+badge+opacity transition | while `catalogLoading()` → skeleton chips (or the section's spinner), NOT an empty card |
 
 - **Font loading:** Inter is loaded app-wide (spec 0010) — confirm the chips
   render in Inter.
@@ -622,11 +622,11 @@ classes before touching `watchlist.page.html`.
 
 **Checkable contract (tick each vs the fetched markup):**
 
-| State                | Condition                                                    | Pill spec                                                                                                                       | Token intent                                                        |
-| -------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| **Mine**             | ≥1 flatrate provider with `providerId ∈ myProviderIds`      | `bg-primary/10 text-primary` pill + a leading `check_circle` (`checkmark-circle`) icon; text **"On {providerName}"**. If the provider logo badge is shown, it gets a primary **ring**. | `--ion-color-primary` at ~10% alpha fill, primary text/icon         |
-| **Elsewhere**        | no mine, ≥1 flatrate provider                               | `bg-surface-variant/40 text-on-surface-variant` pill; **no** icon; text **"Also on {providerName}"**; no ring on the logo badge.   | `--vultus-surface-variant` ~40% alpha fill, `--vultus-on-surface-variant` text |
-| **None**             | no flatrate provider                                        | keep the **existing** no-chip / muted "not available" treatment already in the page (do NOT add a new element).                    | (existing)                                                          |
+| State         | Condition                                              | Pill spec                                                                                                                                                                              | Token intent                                                                   |
+| ------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| **Mine**      | ≥1 flatrate provider with `providerId ∈ myProviderIds` | `bg-primary/10 text-primary` pill + a leading `check_circle` (`checkmark-circle`) icon; text **"On {providerName}"**. If the provider logo badge is shown, it gets a primary **ring**. | `--ion-color-primary` at ~10% alpha fill, primary text/icon                    |
+| **Elsewhere** | no mine, ≥1 flatrate provider                          | `bg-surface-variant/40 text-on-surface-variant` pill; **no** icon; text **"Also on {providerName}"**; no ring on the logo badge.                                                       | `--vultus-surface-variant` ~40% alpha fill, `--vultus-on-surface-variant` text |
+| **None**      | no flatrate provider                                   | keep the **existing** no-chip / muted "not available" treatment already in the page (do NOT add a new element).                                                                        | (existing)                                                                     |
 
 - Type roles: pill text = `label-sm` (matching the card's existing meta scale);
   provider name is data-driven.
@@ -658,24 +658,24 @@ just leave room for it after the two groups so divider/ordering are understood.)
 
 **Card + subgroup structure (checkable contract vs the fetched markup):**
 
-| Element              | Spec                                                                                                                                                                                | Token intent                                                        |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| **Card**             | `glass-panel` surface, `--vultus-radius-xl`, `--vultus-space-lg` padding. Header row: a `stream` (Ionic equivalent) glyph + title "Where to Watch" in **`headline-sm`, `text-primary`**, `flex items-center gap-2`, with bottom margin below it before the groups. | `--ion-color-primary`                                               |
-| **Subgroup spacing** | Groups stacked with `space-y-6` (`--vultus-space-lg`); within a group, label + rows stacked `space-y-3` (`--vultus-space-sm`). A `border-t border-outline-variant/10` hairline with `mt-md pt-md` separates each group from the next (incl. from the 0061 group below). | `--vultus-outline-variant` (~10% alpha), `--vultus-space-lg`, `--vultus-space-sm`, `--vultus-space-md` |
-| **"On Your Providers" label** | Uppercase, `label-sm`, `tracking-wider`, **`text-primary`**, with a leading **filled** `check_circle` glyph at 16px (`font-variation-settings: 'FILL' 1`). `flex items-center gap-1.5`. | `--ion-color-primary`                                               |
-| **"Also Available On" label** | Uppercase, `label-sm`, `tracking-wider`, **`text-on-surface-variant`**, **no icon**.                                                                                                | `--vultus-on-surface-variant`                                       |
+| Element                       | Spec                                                                                                                                                                                                                                                                    | Token intent                                                                                           |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **Card**                      | `glass-panel` surface, `--vultus-radius-xl`, `--vultus-space-lg` padding. Header row: a `stream` (Ionic equivalent) glyph + title "Where to Watch" in **`headline-sm`, `text-primary`**, `flex items-center gap-2`, with bottom margin below it before the groups.      | `--ion-color-primary`                                                                                  |
+| **Subgroup spacing**          | Groups stacked with `space-y-6` (`--vultus-space-lg`); within a group, label + rows stacked `space-y-3` (`--vultus-space-sm`). A `border-t border-outline-variant/10` hairline with `mt-md pt-md` separates each group from the next (incl. from the 0061 group below). | `--vultus-outline-variant` (~10% alpha), `--vultus-space-lg`, `--vultus-space-sm`, `--vultus-space-md` |
+| **"On Your Providers" label** | Uppercase, `label-sm`, `tracking-wider`, **`text-primary`**, with a leading **filled** `check_circle` glyph at 16px (`font-variation-settings: 'FILL' 1`). `flex items-center gap-1.5`.                                                                                 | `--ion-color-primary`                                                                                  |
+| **"Also Available On" label** | Uppercase, `label-sm`, `tracking-wider`, **`text-on-surface-variant`**, **no icon**.                                                                                                                                                                                    | `--vultus-on-surface-variant`                                                                          |
 
 **Provider row (both subgroups — checkable contract):** each provider is a row,
 NOT a bare name. From the verified markup each row is a
 `flex items-center justify-between p-3 rounded-lg` on a `bg-surface-container`
 fill:
 
-| Row part             | "On Your Providers" row                                                                                          | "Also Available On" row                                                                                    | Token intent                                    |
-| -------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| **Logo tile**        | 40×40 (`w-10 h-10`), `--vultus-radius-md`, provider logo (TMDB `logoPath`), `flex-shrink-0`.                     | same 40×40 logo tile.                                                                                       | —                                               |
-| **Primary line**     | provider name in **`text-on-surface` bold** (`body-md`) + a small **"Yours"** tag next to it (`rounded-full px-2 py-0.5`, ~10px bold, `bg-primary/10 text-primary`). | provider name in **muted `text-on-surface-variant`** (`body-md`, NOT bold); **no** "Yours" tag.            | `--vultus-on-surface`, `--ion-color-primary` (tag) / `--vultus-on-surface-variant` |
-| **Secondary caption**| **type caption "Subscription"** below the name (`label-sm`, `text-on-surface-variant`). All "mine" rows are flatrate → "Subscription". | **type caption for the provider's actual type** below the name (`label-sm`, `text-on-surface-variant`): flatrate → "Subscription", rent/buy → "Rent/Buy". | `--vultus-on-surface-variant`                   |
-| **Trailing icon**    | an `open_in_new` glyph, `text-on-surface-variant`.                                                               | same `open_in_new` glyph.                                                                                   | `--vultus-on-surface-variant`                   |
+| Row part              | "On Your Providers" row                                                                                                                                              | "Also Available On" row                                                                                                                                   | Token intent                                                                       |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| **Logo tile**         | 40×40 (`w-10 h-10`), `--vultus-radius-md`, provider logo (TMDB `logoPath`), `flex-shrink-0`.                                                                         | same 40×40 logo tile.                                                                                                                                     | —                                                                                  |
+| **Primary line**      | provider name in **`text-on-surface` bold** (`body-md`) + a small **"Yours"** tag next to it (`rounded-full px-2 py-0.5`, ~10px bold, `bg-primary/10 text-primary`). | provider name in **muted `text-on-surface-variant`** (`body-md`, NOT bold); **no** "Yours" tag.                                                           | `--vultus-on-surface`, `--ion-color-primary` (tag) / `--vultus-on-surface-variant` |
+| **Secondary caption** | **type caption "Subscription"** below the name (`label-sm`, `text-on-surface-variant`). All "mine" rows are flatrate → "Subscription".                               | **type caption for the provider's actual type** below the name (`label-sm`, `text-on-surface-variant`): flatrate → "Subscription", rent/buy → "Rent/Buy". | `--vultus-on-surface-variant`                                                      |
+| **Trailing icon**     | an `open_in_new` glyph, `text-on-surface-variant`.                                                                                                                   | same `open_in_new` glyph.                                                                                                                                 | `--vultus-on-surface-variant`                                                      |
 
 > **`open_in_new` is a DECORATIVE hover affordance in the mock, NOT a functional
 > requirement.** This app's model has **no per-provider external deep-link URL**,
@@ -687,9 +687,9 @@ fill:
 
 **Interactive-state contract (tick each vs the fetched markup + screenshot):**
 
-| Element        | default                                              | hover                                                                                       | focus                       | active/press | disabled |
-| -------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------- | --------------------------- | ------------ | -------- |
-| Provider row   | `bg-surface-container` fill                          | `bg-surface-container-high` fill (subtle raise); trailing `open_in_new` glyph shifts to `text-primary` (`group-hover`). **Transition-colors** on both. | (row is presentational — no functional focus target since there's no action; if rendered as a non-interactive element, no focus ring) | none (no press action — the row does not navigate) | n/a |
+| Element      | default                     | hover                                                                                                                                                  | focus                                                                                                                                 | active/press                                       | disabled |
+| ------------ | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | -------- |
+| Provider row | `bg-surface-container` fill | `bg-surface-container-high` fill (subtle raise); trailing `open_in_new` glyph shifts to `text-primary` (`group-hover`). **Transition-colors** on both. | (row is presentational — no functional focus target since there's no action; if rendered as a non-interactive element, no focus ring) | none (no press action — the row does not navigate) | n/a      |
 
 The hover state is the mock's `hover:bg-surface-container-high` +
 `group-hover:text-primary` on the trailing icon; wire it via
@@ -731,9 +731,10 @@ against — sequential, first. The TMDB client (T3) and the callable (T4) are th
 backend path; the shell provider (T5) and the three mobile slices (T6 settings,
 T7 watchlist, T8 title-detail) are the frontend path. T4 depends on T3 (imports
 the client) and T2 (the catalog converter/path). T5–T8 depend on T1/T2 (the token
-+ `myProviderIds`); T6 additionally depends on T5 wiring being present at runtime
-for the emulator/prod path (but not for its unit tests, which mock the token).
-The e2e (T9) depends on the whole chain and seeds against it.
+
+- `myProviderIds`); T6 additionally depends on T5 wiring being present at runtime
+  for the emulator/prod path (but not for its unit tests, which mock the token).
+  The e2e (T9) depends on the whole chain and seeds against it.
 
 **T1 — Shared domain: `myProviderIds` + `CatalogProvider` + `ProviderCatalogDoc` + token [sequential]** (backend-engineer / domain)
 
@@ -991,11 +992,11 @@ emulator cannot run under Claude Code tools here — the e2e gate runs in CI).
 
 - A flatrate provider ∈ `myProviderIds` → the "On Your Providers" subgroup lists
   it (bold name + "Yours" tag + "Subscription" caption); non-mine flatrate + rent
-  + buy providers → all under "Also Available On" with correct type captions
-  (flatrate → "Subscription", rent/buy → "Rent/Buy"); mine-only → only "On Your
-  Providers"; none-mine → only "Also Available On"; mixed → both, mine first; no
-  providers → neither subgroup (existing empty copy unchanged). The decorative
-  trailing glyph triggers **no navigation** (no click handler / href).
+  - buy providers → all under "Also Available On" with correct type captions
+    (flatrate → "Subscription", rent/buy → "Rent/Buy"); mine-only → only "On Your
+    Providers"; none-mine → only "Also Available On"; mixed → both, mine first; no
+    providers → neither subgroup (existing empty copy unchanged). The decorative
+    trailing glyph triggers **no navigation** (no click handler / href).
 - Pure `partitionProviders` unit tests: flatrate-mine → `mine`; non-mine flatrate,
   rent, buy → `elsewhere`; a rent/buy provider whose id is in `myProviderIds`
   stays in `elsewhere` (only flatrate can be `mine`); empty input → both empty.

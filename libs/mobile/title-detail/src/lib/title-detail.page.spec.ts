@@ -9,12 +9,14 @@ import { AUTH_UID } from '@vultus/shared/domain/tokens';
 import { SyncStateService } from '@vultus/shared/ui-kit';
 import { BehaviorSubject, NEVER, type Observable, concat, of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { WatchProvider } from '@vultus/shared/domain';
 import type { GroupedProviders, TitleDetail } from './tmdb-detail.client';
 import {
   type DetailViewState,
   type SeasonGroup,
   TitleDetailService,
 } from './title-detail.service';
+import { partitionProviders } from './title-detail.page';
 
 // Keep @angular/fire/firestore (rxfire ESM) out of the graph — the service is
 // mocked via DI, so a hollow module mock is enough.
@@ -108,6 +110,8 @@ interface SvcOpts {
    * value (e.g. [] for the empty state, or season groups).
    */
   episodes?: SeasonGroup[];
+  /** The user's selected provider ids (spec 0060); default []. */
+  myProviderIds?: number[];
 }
 
 function makeService(o: SvcOpts = {}) {
@@ -132,6 +136,7 @@ function makeService(o: SvcOpts = {}) {
   return {
     detail$: vi.fn(() => detail$),
     region$: vi.fn(() => region$),
+    myProviderIds$: vi.fn(() => of<number[]>(o.myProviderIds ?? [])),
     providers$: vi.fn(() => of(o.providers ?? emptyProviders)),
     tracked$: vi.fn(() => tracked$),
     episodes$: vi.fn(() => episodes$),
@@ -349,21 +354,128 @@ describe('TitleDetailPage', () => {
     expect(svc.detail$).toHaveBeenLastCalledWith(27205, undefined);
   });
 
-  it('renders provider groups as text chips, omitting empty groups', async () => {
-    const { fixture } = await setup({
-      providers: {
-        flatrate: [{ providerId: 8, name: 'Netflix', type: 'flatrate' }],
-        rent: [],
-        buy: [{ providerId: 2, name: 'Apple TV', type: 'buy' }],
-      },
+  // --- spec 0060: Where-to-Watch two-group split ---
+
+  describe('Where to Watch two-group split (spec 0060)', () => {
+    it('flatrate-mine present → "On Your Providers" lists it with a "Yours" tag + "Subscription" caption', async () => {
+      const { fixture } = await setup({
+        providers: {
+          flatrate: [{ providerId: 8, name: 'Netflix', type: 'flatrate' }],
+          rent: [],
+          buy: [],
+        },
+        myProviderIds: [8],
+      });
+      const el = fixture.nativeElement as HTMLElement;
+      const mine = el.querySelector('[data-test="group-mine"]');
+      expect(mine).toBeTruthy();
+      expect(mine?.textContent).toContain('On Your Providers');
+      expect(mine?.textContent).toContain('Netflix');
+      expect(mine?.querySelector('[data-test="yours-tag"]')?.textContent).toBe(
+        'Yours',
+      );
+      expect(mine?.textContent).toContain('Subscription');
+      // Only the mine group renders (no elsewhere group, no divider).
+      expect(el.querySelector('[data-test="group-elsewhere"]')).toBeFalsy();
+      expect(el.querySelector('[data-test="group-divider"]')).toBeFalsy();
     });
-    const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector('[data-test="group-flatrate"]')).toBeTruthy();
-    expect(el.querySelector('[data-test="group-rent"]')).toBeFalsy();
-    expect(el.querySelector('[data-test="group-buy"]')).toBeTruthy();
-    expect(el.textContent).toContain('Netflix');
-    expect(el.textContent).toContain('Apple TV');
-    expect(el.querySelector('img.provider-logo')).toBeFalsy();
+
+    it('non-mine flatrate + rent + buy → all under "Also Available On" with correct type captions', async () => {
+      const { fixture } = await setup({
+        providers: {
+          flatrate: [{ providerId: 9, name: 'Prime Video', type: 'flatrate' }],
+          rent: [{ providerId: 10, name: 'Google Play', type: 'rent' }],
+          buy: [{ providerId: 2, name: 'Apple TV', type: 'buy' }],
+        },
+        myProviderIds: [], // none selected
+      });
+      const el = fixture.nativeElement as HTMLElement;
+      const elsewhere = el.querySelector('[data-test="group-elsewhere"]');
+      expect(el.querySelector('[data-test="group-mine"]')).toBeFalsy();
+      expect(elsewhere).toBeTruthy();
+      expect(elsewhere?.textContent).toContain('Also Available On');
+      expect(elsewhere?.textContent).toContain('Prime Video');
+      expect(elsewhere?.textContent).toContain('Google Play');
+      expect(elsewhere?.textContent).toContain('Apple TV');
+      // Flatrate → "Subscription"; rent/buy → "Rent/Buy".
+      expect(elsewhere?.textContent).toContain('Subscription');
+      expect(elsewhere?.textContent).toContain('Rent/Buy');
+      // No "Yours" tag anywhere in the elsewhere group.
+      expect(elsewhere?.querySelector('[data-test="yours-tag"]')).toBeFalsy();
+    });
+
+    it('a rent/buy provider whose id is in myProviderIds still lands under "Also Available On" (never mine)', async () => {
+      const { fixture } = await setup({
+        providers: {
+          flatrate: [],
+          rent: [{ providerId: 8, name: 'Netflix Store', type: 'rent' }],
+          buy: [{ providerId: 8, name: 'Netflix Store', type: 'buy' }],
+        },
+        // id 8 is "selected" but only appears as rent/buy here.
+        myProviderIds: [8],
+      });
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.querySelector('[data-test="group-mine"]')).toBeFalsy();
+      const elsewhere = el.querySelector('[data-test="group-elsewhere"]');
+      expect(elsewhere).toBeTruthy();
+      expect(elsewhere?.textContent).toContain('Netflix Store');
+      expect(el.querySelector('[data-test="yours-tag"]')).toBeFalsy();
+    });
+
+    it('mixed mine + elsewhere → both groups render, mine first, divider between', async () => {
+      const { fixture } = await setup({
+        providers: {
+          flatrate: [
+            { providerId: 8, name: 'Netflix', type: 'flatrate' },
+            { providerId: 9, name: 'Prime Video', type: 'flatrate' },
+          ],
+          rent: [],
+          buy: [],
+        },
+        myProviderIds: [8],
+      });
+      const el = fixture.nativeElement as HTMLElement;
+      const mine = el.querySelector('[data-test="group-mine"]');
+      const elsewhere = el.querySelector('[data-test="group-elsewhere"]');
+      expect(mine).toBeTruthy();
+      expect(elsewhere).toBeTruthy();
+      expect(el.querySelector('[data-test="group-divider"]')).toBeTruthy();
+      // Mine group appears before elsewhere in DOM order.
+      if (mine && elsewhere) {
+        expect(
+          mine.compareDocumentPosition(elsewhere) &
+            Node.DOCUMENT_POSITION_FOLLOWING,
+        ).toBeTruthy();
+      }
+      expect(mine?.textContent).toContain('Netflix');
+      expect(elsewhere?.textContent).toContain('Prime Video');
+    });
+
+    it('the decorative trailing glyph triggers NO navigation (no href, no click handler, presentational)', async () => {
+      const { fixture } = await setup({
+        providers: {
+          flatrate: [{ providerId: 8, name: 'Netflix', type: 'flatrate' }],
+          rent: [],
+          buy: [],
+        },
+        myProviderIds: [8],
+      });
+      const el = fixture.nativeElement as HTMLElement;
+      // No provider row is an anchor or button, and no trailing glyph is a link.
+      const rows = el.querySelectorAll('[data-test="provider-row-mine"]');
+      expect(rows.length).toBe(1);
+      const trailing = el.querySelector('.provider-trailing');
+      expect(trailing).toBeTruthy();
+      expect(trailing?.closest('a')).toBeNull();
+      expect(trailing?.closest('button')).toBeNull();
+      expect(trailing?.hasAttribute('href')).toBe(false);
+      expect(trailing?.getAttribute('routerlink')).toBeNull();
+      // The row itself carries no interactive semantics.
+      const row = rows[0];
+      expect(row.tagName.toLowerCase()).toBe('div');
+      expect(row.getAttribute('role')).toBeNull();
+      expect(row.hasAttribute('href')).toBe(false);
+    });
   });
 
   it('shows the empty-providers copy when all groups are empty', async () => {
@@ -473,6 +585,7 @@ describe('TitleDetailPage', () => {
         return of<DetailViewState>({ kind: 'loaded', source: 'cache', detail });
       }),
       region$: vi.fn(() => of('NL')),
+      myProviderIds$: vi.fn(() => of<number[]>([])),
       providers$: vi.fn(() => of(emptyProviders)),
       tracked$: vi.fn(() => of(null)),
       episodes$: vi.fn(() => NEVER),
@@ -590,6 +703,7 @@ describe('TitleDetailPage', () => {
         return of<DetailViewState>({ kind: 'loaded', source: 'cache', detail });
       }),
       region$: vi.fn(() => of('NL')),
+      myProviderIds$: vi.fn(() => of<number[]>([])),
       providers$: vi.fn(() => of(emptyProviders)),
       tracked$: vi.fn(() =>
         of({
@@ -977,5 +1091,79 @@ describe('TitleDetailPage', () => {
       expect(toast.present).toHaveBeenCalledTimes(1);
       expect(complete).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+// --- spec 0060: pure partitionProviders helper ---
+
+describe('partitionProviders (spec 0060 — pure)', () => {
+  const netflix: WatchProvider = {
+    providerId: 8,
+    name: 'Netflix',
+    type: 'flatrate',
+  };
+  const prime: WatchProvider = {
+    providerId: 9,
+    name: 'Prime Video',
+    type: 'flatrate',
+  };
+  const playRent: WatchProvider = {
+    providerId: 10,
+    name: 'Google Play',
+    type: 'rent',
+  };
+  const appleBuy: WatchProvider = {
+    providerId: 2,
+    name: 'Apple TV',
+    type: 'buy',
+  };
+
+  it('a selected flatrate provider → mine; others → elsewhere', () => {
+    const { mine, elsewhere } = partitionProviders(
+      [netflix, prime, playRent, appleBuy],
+      [8],
+    );
+    expect(mine).toEqual([netflix]);
+    expect(elsewhere).toEqual([prime, playRent, appleBuy]);
+  });
+
+  it('no selected ids → everything is elsewhere', () => {
+    const { mine, elsewhere } = partitionProviders(
+      [netflix, playRent, appleBuy],
+      [],
+    );
+    expect(mine).toEqual([]);
+    expect(elsewhere).toEqual([netflix, playRent, appleBuy]);
+  });
+
+  it('a rent/buy provider whose id is in myProviderIds stays in elsewhere (only flatrate can be mine)', () => {
+    const rentWithSelectedId: WatchProvider = {
+      providerId: 8,
+      name: 'Netflix Store',
+      type: 'rent',
+    };
+    const buyWithSelectedId: WatchProvider = {
+      providerId: 8,
+      name: 'Netflix Store',
+      type: 'buy',
+    };
+    const { mine, elsewhere } = partitionProviders(
+      [rentWithSelectedId, buyWithSelectedId],
+      [8],
+    );
+    expect(mine).toEqual([]);
+    expect(elsewhere).toEqual([rentWithSelectedId, buyWithSelectedId]);
+  });
+
+  it('all flatrate selected → all mine, elsewhere empty', () => {
+    const { mine, elsewhere } = partitionProviders([netflix, prime], [8, 9]);
+    expect(mine).toEqual([netflix, prime]);
+    expect(elsewhere).toEqual([]);
+  });
+
+  it('empty input → both empty', () => {
+    const { mine, elsewhere } = partitionProviders([], [8]);
+    expect(mine).toEqual([]);
+    expect(elsewhere).toEqual([]);
   });
 });

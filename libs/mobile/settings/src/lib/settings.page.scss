@@ -195,6 +195,161 @@ ion-content {
   color: var(--vultus-on-surface-variant);
 }
 
+// ── My Providers card (spec 0060) ─────────────────────────────────────────
+// Header row of this card is a static icon-tile + title + subtitle (no
+// trailing control), matching the Stitch fork; the chip grid + footer follow.
+.settings-row--header {
+  align-items: center;
+}
+
+// Plain-text card title (`body-lg`/600) — the other cards derive their title
+// from the ion-select/toggle label, but this card's title is static text.
+.settings-row__title {
+  margin: 0;
+  font-size: var(--vultus-text-body-lg-size);
+  font-weight: 600;
+  line-height: var(--vultus-text-body-lg-line);
+  color: var(--vultus-on-surface);
+}
+
+// The subtitle sits directly under the static title (no control between), so
+// it needs no top gap.
+.settings-row__helper--tight {
+  margin-top: 2px;
+}
+
+// Chip grid — wraps below the header row, 12px gap per the Stitch markup
+// (`gap-3`), 16px top gap from the header.
+.provider-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: var(--vultus-space-md);
+}
+
+// One provider chip — ~96px wide tappable button: logo tile above a centred
+// name. Unselected = 1px outline-variant border (20% alpha) + 60% opacity;
+// selected = 2px primary border + checkmark badge + full opacity.
+.provider-chip {
+  position: relative;
+  box-sizing: border-box;
+  width: 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  background: transparent;
+  border: 1px solid
+    color-mix(in srgb, var(--vultus-outline-variant) 20%, transparent);
+  border-radius: var(--vultus-radius-md);
+  opacity: 0.6;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease-in-out,
+    opacity 150ms ease-in-out,
+    transform 100ms ease-in-out;
+
+  &:active {
+    transform: scale(0.96);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--ion-color-primary);
+    outline-offset: 2px;
+  }
+
+  &--selected {
+    border: 2px solid var(--ion-color-primary);
+    opacity: 1;
+  }
+}
+
+// 48x48 rounded logo tile; the checkmark badge overlaps its top-right corner.
+.provider-chip__logo {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--vultus-radius);
+  overflow: visible;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  img {
+    width: 100%;
+    height: 100%;
+    border-radius: var(--vultus-radius);
+    object-fit: cover;
+  }
+}
+
+// Letter fallback when a provider has no logo path.
+.provider-chip__logo-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--vultus-radius);
+  background: var(--vultus-surface-container-highest);
+  color: var(--vultus-on-surface);
+  font-weight: 700;
+  font-size: var(--vultus-text-body-lg-size);
+}
+
+// Selected badge — primary check_circle overlapping the logo's top-right, on a
+// surface disc so it reads clearly over the logo art.
+.provider-chip__badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  font-size: 18px;
+  color: var(--ion-color-primary);
+  background: var(--vultus-surface);
+  border-radius: 50%;
+}
+
+// Provider name — `label-sm` (11/500), centred, on-surface.
+.provider-chip__name {
+  font-size: var(--vultus-text-label-sm-size);
+  font-weight: var(--vultus-text-label-sm-weight);
+  line-height: var(--vultus-text-label-sm-line);
+  color: var(--vultus-on-surface);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+// Footer count — `label-sm` in on-surface-variant, aligned to the grid's left
+// edge, 12px above it.
+.provider-footer {
+  margin: var(--vultus-space-md) 0 0;
+  font-size: var(--vultus-text-label-sm-size);
+  font-weight: var(--vultus-text-label-sm-weight);
+  line-height: var(--vultus-text-label-sm-line);
+  color: var(--vultus-on-surface-variant);
+}
+
+// Loading state — a spinner + label instead of an empty card while the catalog
+// is being fetched.
+.providers-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--vultus-space-sm);
+  margin-top: var(--vultus-space-md);
+
+  ion-spinner {
+    width: 20px;
+    height: 20px;
+    color: var(--ion-color-primary);
+  }
+}
+
+.providers-loading__label {
+  font-size: var(--vultus-text-body-md-size);
+  color: var(--vultus-on-surface-variant);
+}
+
 // Loading / error render-gate — centred on the page background, matching the
 // screen's surface while the user doc resolves (skeleton) or after it fails
 // (error state).

@@ -3,8 +3,10 @@ import {
   mapSeasonEpisodes,
   mapTvSeasonCount,
   mapWatchProviders,
+  mergeCatalogProviders,
   normalizeDate,
 } from './tmdb-mappers';
+import type { TmdbWatchProviderListEntry } from './tmdb-dtos';
 
 describe('normalizeDate', () => {
   it('coerces a date-only string to a UTC midnight ISO instant', () => {
@@ -42,6 +44,91 @@ describe('mapWatchProviders ignored fields', () => {
   it('returns an empty map for empty/missing results', () => {
     expect(mapWatchProviders({})).toEqual({});
     expect(mapWatchProviders({ results: {} })).toEqual({});
+  });
+});
+
+describe('mergeCatalogProviders (spec 0060)', () => {
+  const netflix: TmdbWatchProviderListEntry = {
+    provider_id: 8,
+    provider_name: 'Netflix',
+    logo_path: '/netflix.jpg',
+  };
+  const disney: TmdbWatchProviderListEntry = {
+    provider_id: 337,
+    provider_name: 'Disney Plus',
+    logo_path: '/disney.jpg',
+  };
+  const prime: TmdbWatchProviderListEntry = {
+    provider_id: 9,
+    provider_name: 'Amazon Prime Video',
+    logo_path: '/prime.jpg',
+  };
+
+  it('merges movie + tv lists into one CatalogProvider[]', () => {
+    const result = mergeCatalogProviders([netflix], [disney]);
+    expect(result).toEqual([
+      { providerId: 337, name: 'Disney Plus', logoPath: '/disney.jpg' },
+      { providerId: 8, name: 'Netflix', logoPath: '/netflix.jpg' },
+    ]);
+  });
+
+  it('dedupes by providerId — a provider in both lists appears once (first wins)', () => {
+    const movieNetflix = { ...netflix, logo_path: '/movie-logo.jpg' };
+    const tvNetflix = { ...netflix, logo_path: '/tv-logo.jpg' };
+    const result = mergeCatalogProviders([movieNetflix], [tvNetflix]);
+    expect(result).toHaveLength(1);
+    // First occurrence (movie side) wins.
+    expect(result[0]).toEqual({
+      providerId: 8,
+      name: 'Netflix',
+      logoPath: '/movie-logo.jpg',
+    });
+  });
+
+  it('maps logo_path ?? null (null and missing → null)', () => {
+    const nullLogo: TmdbWatchProviderListEntry = {
+      provider_id: 1,
+      provider_name: 'NullLogo',
+      logo_path: null,
+    };
+    const missingLogo = {
+      provider_id: 2,
+      provider_name: 'MissingLogo',
+    } as TmdbWatchProviderListEntry;
+    const result = mergeCatalogProviders([nullLogo, missingLogo], []);
+    expect(result).toEqual([
+      { providerId: 2, name: 'MissingLogo', logoPath: null },
+      { providerId: 1, name: 'NullLogo', logoPath: null },
+    ]);
+  });
+
+  it('sorts by name, case-insensitive', () => {
+    const lower: TmdbWatchProviderListEntry = {
+      provider_id: 3,
+      provider_name: 'apple tv',
+      logo_path: null,
+    };
+    const upper: TmdbWatchProviderListEntry = {
+      provider_id: 4,
+      provider_name: 'Zee5',
+      logo_path: null,
+    };
+    const result = mergeCatalogProviders([upper, lower], [netflix]);
+    expect(result.map((p) => p.name)).toEqual(['apple tv', 'Netflix', 'Zee5']);
+  });
+
+  it('handles movie-only input', () => {
+    const result = mergeCatalogProviders([netflix, prime], []);
+    expect(result.map((p) => p.providerId)).toEqual([9, 8]);
+  });
+
+  it('handles tv-only input', () => {
+    const result = mergeCatalogProviders([], [disney, netflix]);
+    expect(result.map((p) => p.providerId)).toEqual([337, 8]);
+  });
+
+  it('returns [] for two empty inputs', () => {
+    expect(mergeCatalogProviders([], [])).toEqual([]);
   });
 });
 

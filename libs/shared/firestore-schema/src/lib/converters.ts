@@ -11,6 +11,7 @@ import type {
   EpisodeDoc,
   FcmToken,
   NotificationDoc,
+  ProviderCatalogDoc,
   RegionAvailability,
   SyncRun,
   TitleCacheEntry,
@@ -25,6 +26,8 @@ import type {
   FcmTokenWriteData,
   NotificationReadData,
   NotificationWriteData,
+  ProviderCatalogReadData,
+  ProviderCatalogWriteData,
   RegionAvailabilityReadData,
   RegionAvailabilityWriteData,
   SyncRunReadData,
@@ -43,6 +46,7 @@ export function userToData(user: User): UserWriteData {
     region: user.region,
     notificationPrefs: user.notificationPrefs,
     fcmTokens: user.fcmTokens.map(fcmTokenToData),
+    myProviderIds: user.myProviderIds,
   };
 }
 export function dataToUser(data: UserReadData): User {
@@ -56,6 +60,8 @@ export function dataToUser(data: UserReadData): User {
       deliveryHour: data.notificationPrefs.deliveryHour ?? null,
     },
     fcmTokens: (data.fcmTokens ?? []).map(dataToFcmToken),
+    // Legacy docs (pre-0060) lack myProviderIds; coalesce missing → [].
+    myProviderIds: data.myProviderIds ?? [],
   };
 }
 
@@ -165,6 +171,24 @@ export function dataToTitleCache(data: TitleCacheReadData): TitleCacheEntry {
     type: data.type,
     traktId: data.traktId,
     metadata: data.metadata,
+    lastSyncedAt: data.lastSyncedAt.toDate().toISOString(),
+  };
+}
+
+// --- ProviderCatalogDoc ---
+export function providerCatalogToData(
+  doc: ProviderCatalogDoc,
+): ProviderCatalogWriteData {
+  return {
+    providers: doc.providers,
+    lastSyncedAt: new Date(doc.lastSyncedAt),
+  };
+}
+export function dataToProviderCatalog(
+  data: ProviderCatalogReadData,
+): ProviderCatalogDoc {
+  return {
+    providers: data.providers,
     lastSyncedAt: data.lastSyncedAt.toDate().toISOString(),
   };
 }
