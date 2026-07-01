@@ -2,7 +2,7 @@
 number: 0058
 slug: doc-integrity-guards
 title: 'Deterministic documentation integrity: spec-status ledger + CI drift guards'
-status: approved # draft | approved | implementing | done
+status: done # draft | approved | implementing | done
 slices: [] # foundation / tooling + docs — touches no product slice
 scopes: [] # tools/* is intentionally NOT Sheriff-tagged (see §3); no scope tag applies
 created: 2026-07-01
@@ -53,7 +53,7 @@ In scope:
 - **Deliverable 3 — lib-README guard.** A vitest guard over every
   `libs/**/README.md` that fails on the Nx scaffold sentinel and asserts the
   CLAUDE.md-mandated section structure is present.
-- **PLAN §2 fix (required to make deliverable 2 pass).** Reformat *only* the PLAN
+- **PLAN §2 fix (required to make deliverable 2 pass).** Reformat _only_ the PLAN
   §2 "Design system" paragraph into a structured `token-name: #hex` table with the
   correct hexes drawn from `theme.scss`. This is the minimum edit needed so the
   new hex guard is green on the same PR.
@@ -108,7 +108,7 @@ the vitest guard can import it without executing the CLI, mirroring
 - `SPEC_GLOB` — the spec-file selector, `docs/specs/NNNN-*.md`
   (`/^\d{4}-.*\.md$/` on basename; `README.md` and `STATUS.md` excluded).
 - `parseSpecFrontmatter(markdown: string): { number, slug, title, status,
-  slices: string[], scopes: string[] }` — pure. Reads the leading `---` YAML
+slices: string[], scopes: string[] }` — pure. Reads the leading `---` YAML
   frontmatter block; tolerates missing optional `slices`/`scopes` (default `[]`).
   Throws a clear error naming the file if `number`/`slug`/`title`/`status` is
   absent. **The scalar parse MUST be robust to the real frontmatter shapes in
@@ -156,7 +156,7 @@ depends on all three.
 
 **N/A — not a mobile UI feature.** This spec introduces no page, route, component,
 or user-facing action. No Stitch screen applies and none is pulled. The only
-design-token contact is *reading* `theme.scss` values to fix PLAN §2 prose (see
+design-token contact is _reading_ `theme.scss` values to fix PLAN §2 prose (see
 §7 task S4), which uses the committed `theme.scss` as the source of truth — no
 hex is hand-transcribed from memory.
 
@@ -193,19 +193,19 @@ establishes shared config, so it is sequential.
 > no path alias; `tools/**` is untagged so Sheriff permits it). The S1 `inputs`
 > glob **`{workspaceRoot}/tools/scripts/gen-spec-status.mjs`** covers that raw
 > import for cache invalidation, so editing the generator re-runs the guard.
-_Manifest:_ `tools/doc-integrity-test/project.json`,
-`tools/doc-integrity-test/vite.config.mts`,
-`tools/doc-integrity-test/tsconfig.json`,
-`tools/doc-integrity-test/tsconfig.spec.json`.
+> _Manifest:_ `tools/doc-integrity-test/project.json`,
+> `tools/doc-integrity-test/vite.config.mts`,
+> `tools/doc-integrity-test/tsconfig.json`,
+> `tools/doc-integrity-test/tsconfig.spec.json`.
 
 > **Nx `inputs` note (S1):** unlike a lib whose test only depends on its own
 > `src`, these guards read files across the repo, so the `test` target must
 > declare those as inputs or Nx will serve a stale cached pass after
 > PLAN/README/theme/spec edits. Set:
 > `inputs: ["default", "{workspaceRoot}/docs/PLAN.md",
-> "{workspaceRoot}/docs/specs/**/*.md", "{workspaceRoot}/libs/**/README.md",
-> "{workspaceRoot}/libs/shared/ui-kit/src/lib/theme.scss",
-> "{workspaceRoot}/tools/scripts/gen-spec-status.mjs"]`.
+"{workspaceRoot}/docs/specs/**/*.md", "{workspaceRoot}/libs/**/README.md",
+"{workspaceRoot}/libs/shared/ui-kit/src/lib/theme.scss",
+"{workspaceRoot}/tools/scripts/gen-spec-status.mjs"]`.
 > (This matches how `tools/sheriff-test` adds `sheriff.config.ts` +
 > `tools/sheriff-fixtures/**` to its `test` inputs.)
 > **Note:** this explicit per-target `inputs` array intentionally **replaces**
@@ -282,7 +282,7 @@ Confirm no `.github/workflows/ci.yml` change is needed (see §8 CI note) and rec
 the finding. `tools/` projects carry no `README.md` mandate (the CLAUDE.md README
 rule applies to `libs/**`), so none is added. Sequential wrap-up.
 _Manifest:_ (verification only; no file writes expected — if the finding is that
-ci.yml *does* need a step, this task edits `.github/workflows/ci.yml`.)
+ci.yml _does_ need a step, this task edits `.github/workflows/ci.yml`.)
 
 **S7 [sequential] — Generate the committed ledger (FINAL step; finding 3).**
 Only after every other task is done **and 0058's own frontmatter `status` is set
@@ -310,7 +310,7 @@ in. **S5a's freshness assertion is validated only after S7 commits STATUS.md.**
 Per PLAN §5 pyramid this is **unit-level only**. **No component tests** (no UI).
 **No e2e flows required — this is a docs/tooling change only** (no route, no
 user-facing action; the e2e rubric's "not required" branch applies). The guards
-*are* the tests.
+_are_ the tests.
 
 **Ledger freshness (`spec-status-ledger.spec.ts`) — unit.**
 
@@ -320,13 +320,13 @@ user-facing action; the e2e rubric's "not required" branch applies). The guards
 - **Inline-comment stripping (finding 1a):** a fixture with
   `status: approved # draft | approved | implementing | done` parses to `status`
   === exactly `'approved'` (not `'approved # draft | approved | implementing |
-  done'`), and `slices: [] # foundation / tooling` parses to `slices` === `[]`.
+done'`), and `slices: [] # foundation / tooling` parses to `slices` === `[]`.
 - **Quote stripping (finding 1b):** a fixture with a single-quoted
   `title: 'Deterministic documentation integrity: spec-status ledger + CI drift
-  guards'` parses to `title` with NO surrounding quotes and the inner `:`
+guards'` parses to `title` with NO surrounding quotes and the inner `:`
   preserved; a bare (unquoted) title fixture yields the identical string.
 - **Flow-sequence arrays (finding 1c):** `scopes: [scope:functions,
-  scope:shared]` parses to `['scope:functions', 'scope:shared']` (each element
+scope:shared]` parses to `['scope:functions', 'scope:shared']` (each element
   intact, not split on its `:`); `slices: []` parses to `[]`.
 - `renderStatusMarkdown` is deterministic: sorted by number, stable columns,
   per-status counts correct for a small fixture set.
@@ -345,22 +345,22 @@ user-facing action; the e2e rubric's "not required" branch applies). The guards
   `#10B981` and assert the comparison fails for `primary` — reproducing today's
   real bug and proving the guard would have caught it.
 - Guard against silent no-op: assert every token in the mapping is actually found
-  in *both* sources (a missing token fails, so renaming a var can't hide a drift).
+  in _both_ sources (a missing token fails, so renaming a var can't hide a drift).
 
 **Key token → var mapping (the guard's contract; theme.scss is source of truth):**
 
-| Token (PLAN §2 table)  | theme.scss var                          | Expected hex |
-| ---------------------- | --------------------------------------- | ------------ |
-| `primary`              | `--vultus-primary`                      | `#4edea3`    |
-| `primary-container`    | `--vultus-primary-container`            | `#10b981`    |
-| `background` (surface) | `--vultus-surface`                      | `#0b1326`    |
-| `surface-container`    | `--vultus-surface-container`            | `#171f33`    |
-| `surface-highest`      | `--vultus-surface-container-highest`    | `#2d3449`    |
-| `on-surface`           | `--vultus-on-surface`                   | `#dae2fd`    |
-| `status-watching`      | `--vultus-status-watching`              | `#3b82f6`    |
-| `status-completed`     | `--vultus-status-completed`             | `#10b981`    |
-| `status-dropped`       | `--vultus-status-dropped`               | `#ef4444`    |
-| `status-planned`       | `--vultus-status-planned`               | `#94a3b8`    |
+| Token (PLAN §2 table)  | theme.scss var                       | Expected hex |
+| ---------------------- | ------------------------------------ | ------------ |
+| `primary`              | `--vultus-primary`                   | `#4edea3`    |
+| `primary-container`    | `--vultus-primary-container`         | `#10b981`    |
+| `background` (surface) | `--vultus-surface`                   | `#0b1326`    |
+| `surface-container`    | `--vultus-surface-container`         | `#171f33`    |
+| `surface-highest`      | `--vultus-surface-container-highest` | `#2d3449`    |
+| `on-surface`           | `--vultus-on-surface`                | `#dae2fd`    |
+| `status-watching`      | `--vultus-status-watching`           | `#3b82f6`    |
+| `status-completed`     | `--vultus-status-completed`          | `#10b981`    |
+| `status-dropped`       | `--vultus-status-dropped`            | `#ef4444`    |
+| `status-planned`       | `--vultus-status-planned`            | `#94a3b8`    |
 
 (The "deep-navy surface ramp background→cards→overlays" is represented by
 `background` / `surface-container` / `surface-highest`. `--ion-color-primary`
@@ -403,6 +403,7 @@ duplicate assertions.)
   The **`/usage/i` marker is dropped** (not all 12 have it; requiring it would
   fail 5 compliant READMEs). Keep it heading-presence only — no prose-quality
   judgment (that is the follow-up `/audit-docs` skill's job).
+
 - **Live-guard assertion:** run the predicate over the **real**
   `libs/**/README.md` set (all 12) and assert every one passes **with zero
   edits**. Re-derivation confirms no current README must change; therefore **no
@@ -460,7 +461,7 @@ Tailored PLAN §5 checklist:
 
 - **PLAN formatting is now coupled to the hex guard.** Reformatting §2 into a
   parseable `token: #hex` table means a future free-form edit of that table can
-  break the guard's parser. Accepted (decided): the guard reads a *structured*
+  break the guard's parser. Accepted (decided): the guard reads a _structured_
   table, not prose, precisely to avoid brittle prose-parsing; the parser should
   fail loudly (missing-token assertion) rather than silently skip, so drift is
   visible, not hidden.

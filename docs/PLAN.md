@@ -98,13 +98,25 @@ Angular implementation should match it.
   `list_design_systems` / `get` the design system, `generate_screen_from_text`,
   `generate_variants`, `edit_screens`.
 - **Design system:** "Vultus Design System" — dark-first, **Inter** typography,
-  primary **Emerald `#10B981`**, navy-slate surfaces (`#0F172A` / `#1E293B`),
-  8px grid, 0.5rem default radius. Semantic status colors map directly to the
-  watchlist `status` field:
-  - Watching → `#3B82F6` (electric blue)
-  - Completed → `#10B981` (emerald)
-  - Dropped → `#EF4444` (muted red)
-  - Planned → `#94A3B8` (neutral slate)
+  8px grid, 0.5rem default radius. The core tokens (source of truth:
+  `libs/shared/ui-kit/src/lib/theme.scss`, whose `--vultus-*` vars are exported
+  from `docs/design/vultus-design-system.md`):
+
+  | Token             | Hex       |
+  | ----------------- | --------- |
+  | primary           | `#4edea3` |
+  | primary-container | `#10b981` |
+  | background        | `#0b1326` |
+  | surface-container | `#171f33` |
+  | surface-highest   | `#2d3449` |
+  | on-surface        | `#dae2fd` |
+  | status-watching   | `#3b82f6` |
+  | status-completed  | `#10b981` |
+  | status-dropped    | `#ef4444` |
+  | status-planned    | `#94a3b8` |
+
+  The four `status-*` colors map directly to the watchlist `status` field
+  (watching → blue, completed → emerald, dropped → red, planned → slate).
 
 When building a mobile slice, pull the relevant Stitch screen first and align
 component structure, spacing, and the design-system tokens above. Treat the
