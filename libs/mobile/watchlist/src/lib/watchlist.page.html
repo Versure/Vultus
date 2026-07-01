@@ -172,7 +172,12 @@
             name="checkmark-circle"
             aria-hidden="true"
           ></ion-icon>
-          {{ 'On ' + pill.name }} } @else { {{ 'Also on ' + pill.name }} }
+          <span class="availability-pill__text">{{ 'On ' + pill.name }}</span>
+          } @else {
+          <span class="availability-pill__text"
+            >{{ 'Also on ' + pill.name }}</span
+          >
+          }
         </span>
         } @if (item.status !== 'planned') {
         <button
