@@ -12,8 +12,8 @@
 
 Total specs: 61
 
-- done: 55
-- approved: 6
+- done: 56
+- approved: 5
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -71,7 +71,7 @@ Total specs: 61
 | 52 | title-detail-refresh | Add pull-to-refresh manual sync to the title-detail page (shared SyncStateService) | done | slice:title-detail, slice:watchlist | scope:mobile, scope:shared |
 | 53 | completed-marks-episodes-watched | Mark all episodes watched when a TV show is manually set to Completed | done | slice:title-detail, slice:watchlist | scope:mobile |
 | 54 | advanced-watchlist-filters | Restyle the watchlist filter/search controls to the Advanced Watchlist Stitch design | done | slice:watchlist | scope:mobile |
-| 55 | android-cutout-runtime-theme | Instrument the Android running-window theme to diagnose the still-visible camera-cutout letterbox, then apply the data-indicated fix | approved | — | scope:mobile |
+| 55 | android-cutout-runtime-theme | Instrument the Android running-window theme to diagnose the still-visible camera-cutout letterbox, then apply the data-indicated fix | done | — | scope:mobile |
 | 56 | title-detail-mark-watched | Add a "Mark as Watched" action for untracked titles on the title-detail page | approved | slice:title-detail | scope:mobile |
 | 57 | leaving-platform-notifications | Notify when a tracked title loses flatrate availability in the user's region | approved | slice:dispatch-notifications, slice:notifications, slice:settings | scope:functions, scope:mobile, scope:shared |
 | 58 | doc-integrity-guards | Deterministic documentation integrity: spec-status ledger + CI drift guards | done | — | — |
