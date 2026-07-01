@@ -29,6 +29,28 @@ ignored):
 Each kind is gated by the user's `NotificationPrefs` opt-in
 (`movieAvailable` / `cameToPlatform` / `episodeAired`).
 
+## Delivery window (spec 0051)
+
+`NotificationPrefs.deliveryHour` lets a user pin the **UTC hour** at which they
+want pushes delivered:
+
+- The gate is **FCM-only**: when the dispatch timestamp's UTC hour does not match
+  `deliveryHour`, the `fcm.send` for that user is skipped (and so are stale-token
+  prunes — `fcmSent` / `staleTokensPruned` are not incremented).
+- The **inbox `NotificationDoc` is always written** regardless of the window
+  (decision 3) — the gate only defers the OS push, never the in-app record.
+- The decision is **per-user** and evaluated **once per user** against the single
+  dispatch timestamp (the same clock that stamps `sentAt`); there is **no queuing
+  or retry** — a skipped push is simply not sent this run.
+- `deliveryHour == null` (including `undefined` on legacy pre-0051 docs, via the
+  `== null` check) means **"any time"** → always send.
+
+The predicate lives in `transitions.ts` and is exported from the barrel:
+
+```ts
+isWithinDeliveryWindow(deliveryHour: number | null, now: Date): boolean
+```
+
 ## FCM contract (decision 2)
 
 Sends are **data-only** messages: `{ notificationId, titleId, kind, region,
@@ -53,8 +75,8 @@ tmdbId }`, all string values. The `notificationId` is the deterministic
   `DispatcherConfig`, `AvailabilityChange`, `DispatchSummary`.
 - Port types: `WatchlistStore`, `EpisodeStore`, `NotificationStore`,
   `FcmSender`, `TrackingUser`, `TrackedEpisode`, `FcmSendResult`.
-- Pure logic: `classifyFlatrateTransition`, `hasFlatrate`, `decideKinds`, and
-  type `FlatrateTransition`.
+- Pure logic: `classifyFlatrateTransition`, `hasFlatrate`, `decideKinds`,
+  `isWithinDeliveryWindow`, and type `FlatrateTransition`.
 
 ## Boundaries
 

@@ -2,7 +2,7 @@
 number: 0051
 slug: notification-quiet-hours
 title: Add a notification delivery-hour preference (UTC) gating FCM sends
-status: approved
+status: done
 slices: [slice:settings, slice:dispatch-notifications]
 scopes: [scope:shared, scope:mobile, scope:functions]
 created: 2026-06-30
@@ -97,11 +97,11 @@ Out of scope (explicitly):
 
 ## Affected slices & Sheriff tags
 
-| Project                          | Path                                    | Sheriff tags                                      | Change                                                                                              |
-| -------------------------------- | --------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| shared-domain (edit)             | `libs/shared/domain`                    | `scope:shared`                                    | **add** `deliveryHour: number \| null` to `NotificationPrefs` (additive); update README + assertion |
-| mobile-settings (edit)           | `libs/mobile/settings`                  | `scope:mobile`, `slice:settings`                  | add the "Notification time" picker row + service signal/setter; mock-providers mirror; README       |
-| functions-dispatch-notifications (edit) | `libs/functions/dispatch-notifications` | `scope:functions`, `slice:dispatch-notifications` | gate `fcm.send` on the per-user `deliveryHour` window (doc still written); update README + tests     |
+| Project                                 | Path                                    | Sheriff tags                                      | Change                                                                                              |
+| --------------------------------------- | --------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| shared-domain (edit)                    | `libs/shared/domain`                    | `scope:shared`                                    | **add** `deliveryHour: number \| null` to `NotificationPrefs` (additive); update README + assertion |
+| mobile-settings (edit)                  | `libs/mobile/settings`                  | `scope:mobile`, `slice:settings`                  | add the "Notification time" picker row + service signal/setter; mock-providers mirror; README       |
+| functions-dispatch-notifications (edit) | `libs/functions/dispatch-notifications` | `scope:functions`, `slice:dispatch-notifications` | gate `fcm.send` on the per-user `deliveryHour` window (doc still written); update README + tests    |
 
 - **Tagging is by PATH GLOB in `sheriff.config.ts`** (specs 0010/0012). All three
   projects already resolve their tags from their paths
@@ -138,11 +138,11 @@ field rides on the **existing** `User` / `NotificationPrefs` shape and its
 existing `userToData` / `dataToUser` converters in
 `@vultus/shared/firestore-schema`.
 
-| PLAN §4 path                                   | Access                          | By                                                                          |
-| ---------------------------------------------- | ------------------------------- | --------------------------------------------------------------------------- |
-| `users/{uid}.notificationPrefs.deliveryHour`   | **read**, **create**, **update**| settings slice (read on load; default `null` on eager create; write on pick)|
-| `users/{uid}.notificationPrefs.deliveryHour`   | **read**                        | dispatcher (per-user, via the `TrackingUser.notificationPrefs` it loads)    |
-| `users/{uid}/notifications/{id}`               | **create** (unchanged)          | dispatcher — **always** written regardless of the delivery window           |
+| PLAN §4 path                                 | Access                           | By                                                                           |
+| -------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------- |
+| `users/{uid}.notificationPrefs.deliveryHour` | **read**, **create**, **update** | settings slice (read on load; default `null` on eager create; write on pick) |
+| `users/{uid}.notificationPrefs.deliveryHour` | **read**                         | dispatcher (per-user, via the `TrackingUser.notificationPrefs` it loads)     |
+| `users/{uid}/notifications/{id}`             | **create** (unchanged)           | dispatcher — **always** written regardless of the delivery window            |
 
 - **New field shape:** `deliveryHour: number | null`. `null` (or, for legacy docs
   that predate this spec, **absent**) means "any time / no preference". A number
@@ -156,7 +156,7 @@ existing `userToData` / `dataToUser` converters in
     `dataToUser` already passes `notificationPrefs` through wholesale** (like the
     notification `payload` passthrough in spec 0012); if it constructs the prefs
     object field-by-field, add `deliveryHour: data.notificationPrefs.deliveryHour
-    ?? null`. Pin the chosen approach with a converter round-trip test (see Test
+?? null`. Pin the chosen approach with a converter round-trip test (see Test
     plan).
   - **Dispatcher:** the guard treats `deliveryHour == null` (covers both `null`
     and `undefined`) as "send any time". Because the dispatcher gets its prefs
@@ -167,8 +167,8 @@ existing `userToData` / `dataToUser` converters in
     either). **Choose and document** the explicit `== null` check in the core.
 - **Default on eager create:** the settings `load()` create path (spec 0011)
   writes the defaults `{ region: 'NL', notificationPrefs: { episodeAired: true,
-  movieAvailable: true, cameToPlatform: true, deliveryHour: null }, fcmTokens: []
-  }`. Add `deliveryHour: null` to the create defaults so a freshly-created doc has
+movieAvailable: true, cameToPlatform: true, deliveryHour: null }, fcmTokens: []
+}`. Add `deliveryHour: null` to the create defaults so a freshly-created doc has
   the field explicitly.
 - **Write on pick:** persist by updating `notificationPrefs` (the same
   whole-object update the toggle uses today) so all four prefs are written
@@ -287,7 +287,7 @@ export function isWithinDeliveryWindow(
   `DispatcherConfig.now`). Derive the UTC hour from it:
   `new Date(timestamp).getUTCHours()` — **reuse the same `timestamp` already
   computed once per `dispatch()` call** (`dispatcher.ts` computes `const
-  timestamp = now()`), so the clock is consistent with `sentAt` and remains
+timestamp = now()`), so the clock is consistent with `sentAt` and remains
   deterministic in tests.
 - **The guard wraps ONLY the FCM send loop, not the notification write.** In
   `dispatchForUser` the current flow per enabled kind is: build the
@@ -395,8 +395,7 @@ pattern). Concretely:
   - first option **"Any time"** with `[value]="null"`;
   - then 24 options, one per hour, `[value]="hour"` displaying the **zero-padded
     UTC label** `"00:00 UTC" … "23:00 UTC"` (format `String(hour).padStart(2,'0')
-    + ':00 UTC'`). The selected value renders in `primary` per the
-    `.settings-row__select ::part(text)` rule (same as Region).
+    - ':00 UTC'`). The selected value renders in `primary`per the`.settings-row\_\_select ::part(text)` rule (same as Region).
 - **Type roles:** the `label` ("Notification time") = `body-lg`/600 (the
   `.settings-row__select ::part(label)` rule); the selected value = `body-lg`/700
   primary; the helper text = `body-md` `on-surface-variant`. Pin via the existing
@@ -443,7 +442,7 @@ to avoid layout shift:
   row renders in Inter, not a system fallback (the screenshot compare catches a
   fallback).
 - **Transitions:** reuse the existing `.settings-card` `transition: background-color
-  150ms` — add **no** new animation the screen doesn't show.
+150ms` — add **no** new animation the screen doesn't show.
 
 **Visual verification (CLAUDE.md):** serve `pnpm nx run mobile:serve-mock` (or
 render the page with the mocked `SettingsService`, seeding `deliveryHour` to both
@@ -473,7 +472,7 @@ are pairwise disjoint.
 - Decide the converter coalesce: verify how `dataToUser`/`userToData` in
   `libs/shared/firestore-schema` handle `notificationPrefs`. If they construct the
   prefs object field-by-field, add `deliveryHour: data.notificationPrefs.deliveryHour
-  ?? null` to `dataToUser` (legacy-doc tolerance) and pass `deliveryHour` through
+?? null` to `dataToUser` (legacy-doc tolerance) and pass `deliveryHour` through
   in `userToData`; extend the user round-trip test to set + assert `deliveryHour`
   (number and null) and a **missing-field → null** case. If `notificationPrefs` is
   a wholesale passthrough, only the round-trip test changes (and the missing-field
@@ -525,8 +524,8 @@ are pairwise disjoint.
   it.
 - In `dispatcher.ts` `dispatchForUser`: keep `notifications.write(...)` +
   `notificationsWritten++` unconditional; wrap the `for (const fcmToken of
-  user.fcmTokens)` send loop in `if (isWithinDeliveryWindow(user.notificationPrefs
-  .deliveryHour, new Date(timestamp))) { ... } else { console.debug(...) }`
+user.fcmTokens)` send loop in `if (isWithinDeliveryWindow(user.notificationPrefs
+.deliveryHour, new Date(timestamp))) { ... } else { console.debug(...) }`
   (one debug line per skipped user). The core uses `deliveryHour == null` semantics
   (tolerates `undefined` from legacy docs).
 - If a `WatchlistStore` Admin adapter in `apps/functions` constructs
@@ -561,6 +560,7 @@ Per the PLAN §5 pyramid — unit (domain/converter, dispatcher), component
 (settings page), and the e2e rubric outcome below.
 
 **Unit (shared/domain + firestore-schema):**
+
 - `NotificationPrefs` type accepts `deliveryHour: number` and `deliveryHour: null`
   (the `_user` literal compiles — a compile-time gate, no runtime assertion needed
   beyond the literal).
@@ -571,6 +571,7 @@ Per the PLAN §5 pyramid — unit (domain/converter, dispatcher), component
   through `dataToUser` (the coalesce). These pin the legacy-tolerance contract.
 
 **Unit (dispatch-notifications):**
+
 - `isWithinDeliveryWindow`: `null` → `true` at any hour; a number equal to
   `now.getUTCHours()` → `true`; a number not equal → `false`; boundary hours
   `0` and `23` behave correctly (use a fixed `Date` with a known UTC hour).
@@ -597,6 +598,7 @@ Per the PLAN §5 pyramid — unit (domain/converter, dispatcher), component
     **stay green** — the guard only suppresses the send loop.
 
 **Component (settings — `settings.page.spec.ts`, mocked `SettingsService`):**
+
 - The "Notification time" `ion-select` renders once loaded, with an "Any time"
   option plus 24 hour options (assert option count = 25), the value reflecting
   `service.deliveryHour()`.
@@ -628,17 +630,16 @@ Tailored from PLAN §5 to the projects touched. Green gate is **typecheck + lint
 settings row.
 
 - [ ] `pnpm nx typecheck shared-domain shared-firestore-schema mobile-settings
-      functions-dispatch-notifications` passes — the additive `deliveryHour`, the
+    functions-dispatch-notifications` passes — the additive `deliveryHour`, the
       converter, the picker, and the dispatcher guard compile.
 - [ ] `pnpm nx lint shared-domain shared-firestore-schema mobile-settings
-      functions-dispatch-notifications` passes **with Sheriff active**: settings
+    functions-dispatch-notifications` passes **with Sheriff active**: settings
       imports only `@vultus/shared/*` + AngularFire/Ionic (no other slice, no
       `scope:functions`); the dispatcher core stays Firebase-free and imports no
       other slice; no `scope:mobile` ↔ `scope:functions` edge.
 - [ ] `pnpm nx test shared-firestore-schema` passes — the user round-trip covers
       `deliveryHour` (number, null, and missing → null).
-- [ ] `pnpm nx test functions-dispatch-notifications` passes — `isWithinDeliveryWindow`
-      + the dispatcher window tests (outside → FCM skipped but doc written; inside →
+- [ ] `pnpm nx test functions-dispatch-notifications` passes — `isWithinDeliveryWindow` + the dispatcher window tests (outside → FCM skipped but doc written; inside →
       sends; null → any time; per-user independence; legacy → any time); the 0012
       tests stay green.
 - [ ] `pnpm nx test mobile-settings` passes — the delivery-hour service + page

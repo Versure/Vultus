@@ -65,6 +65,7 @@ export class OnboardingService {
               episodeAired: true,
               movieAvailable: true,
               cameToPlatform: true,
+              deliveryHour: null,
             },
             fcmTokens: [],
           }),

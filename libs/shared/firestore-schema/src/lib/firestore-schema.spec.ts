@@ -73,6 +73,7 @@ describe('converters — round-trip identity', () => {
         episodeAired: true,
         movieAvailable: false,
         cameToPlatform: true,
+        deliveryHour: null,
       },
       fcmTokens: [
         {
@@ -88,6 +89,59 @@ describe('converters — round-trip identity', () => {
       ],
     };
     expect(dataToUser(simulateStored(userToData(user)) as never)).toEqual(user);
+  });
+
+  it('User: deliveryHour set (8) round-trips correctly', () => {
+    const user: User = {
+      region: 'NL',
+      notificationPrefs: {
+        episodeAired: true,
+        movieAvailable: true,
+        cameToPlatform: false,
+        deliveryHour: 8,
+      },
+      fcmTokens: [],
+    };
+    const result = dataToUser(simulateStored(userToData(user)) as never);
+    expect(result).toEqual(user);
+    expect(result.notificationPrefs.deliveryHour).toBe(8);
+  });
+
+  it('User: deliveryHour null round-trips as null', () => {
+    const user: User = {
+      region: 'DE',
+      notificationPrefs: {
+        episodeAired: false,
+        movieAvailable: false,
+        cameToPlatform: true,
+        deliveryHour: null,
+      },
+      fcmTokens: [],
+    };
+    const result = dataToUser(simulateStored(userToData(user)) as never);
+    expect(result).toEqual(user);
+    expect(result.notificationPrefs.deliveryHour).toBeNull();
+  });
+
+  it('User: backward-compat — legacy notificationPrefs missing deliveryHour maps to null', () => {
+    // Simulates a doc written before spec 0051 (no deliveryHour in stored prefs).
+    const user: User = {
+      region: 'GB',
+      notificationPrefs: {
+        episodeAired: true,
+        movieAvailable: false,
+        cameToPlatform: true,
+        deliveryHour: 14,
+      },
+      fcmTokens: [],
+    };
+    const stored = simulateStored(userToData(user)) as Record<string, unknown>;
+    // Delete deliveryHour to simulate a pre-0051 stored doc.
+    delete (stored['notificationPrefs'] as Record<string, unknown>)[
+      'deliveryHour'
+    ];
+    const result = dataToUser(stored as never);
+    expect(result.notificationPrefs.deliveryHour).toBeNull();
   });
 
   it('WatchlistItem: addedAt round-trips; traktId null survives', () => {

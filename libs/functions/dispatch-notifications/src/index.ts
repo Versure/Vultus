@@ -24,5 +24,6 @@ export {
   classifyFlatrateTransition,
   hasFlatrate,
   decideKinds,
+  isWithinDeliveryWindow,
 } from './lib/transitions';
 export type { FlatrateTransition } from './lib/transitions';

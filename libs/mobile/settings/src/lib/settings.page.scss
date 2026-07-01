@@ -157,6 +157,13 @@ ion-content {
     color: var(--vultus-on-surface-variant);
     opacity: 1;
   }
+
+  // Disabled state (e.g. the delivery-hour picker while Notifications is off):
+  // dim the whole control so it reads as inert, matching Ionic's disabled
+  // affordance without a hard-coded colour.
+  &.select-disabled {
+    opacity: 0.4;
+  }
 }
 
 // Notifications toggle — title (body-lg/600) on the leading edge, the switch on

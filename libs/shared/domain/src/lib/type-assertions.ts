@@ -105,6 +105,7 @@ const _user = {
     episodeAired: true,
     movieAvailable: false,
     cameToPlatform: true,
+    deliveryHour: null,
   },
   fcmTokens: [
     { token: 'abc', deviceId: 'dev-1', createdAt: '2026-06-18T10:00:00.000Z' },

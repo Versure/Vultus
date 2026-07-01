@@ -10,13 +10,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // mock, which is all a component test needs.
 interface MockSettingsService {
   regions: readonly Region[];
+  deliveryHours: readonly number[];
   region: WritableSignal<Region | null>;
   notificationsEnabled: WritableSignal<boolean>;
+  deliveryHour: WritableSignal<number | null>;
   loaded: WritableSignal<boolean>;
   loadFailed: WritableSignal<boolean>;
   load: ReturnType<typeof vi.fn>;
   setRegion: ReturnType<typeof vi.fn>;
   setNotificationsEnabled: ReturnType<typeof vi.fn>;
+  setDeliveryHour: ReturnType<typeof vi.fn>;
   retryLoad: ReturnType<typeof vi.fn>;
 }
 
@@ -51,13 +54,16 @@ import { SettingsService } from './settings.service';
 function mockService(loaded: boolean, loadFailed = false): MockSettingsService {
   return {
     regions: REGIONS,
+    deliveryHours: Array.from({ length: 24 }, (_v, i) => i),
     region: signal<Region | null>('NL'),
     notificationsEnabled: signal<boolean>(true),
+    deliveryHour: signal<number | null>(null),
     loaded: signal<boolean>(loaded),
     loadFailed: signal<boolean>(loadFailed),
     load: vi.fn().mockResolvedValue(undefined),
     setRegion: vi.fn().mockResolvedValue(undefined),
     setNotificationsEnabled: vi.fn().mockResolvedValue(undefined),
+    setDeliveryHour: vi.fn().mockResolvedValue(undefined),
     retryLoad: vi.fn(),
   };
 }
@@ -114,7 +120,10 @@ describe('SettingsPage', () => {
 
   it('lists the ten regions as select options', async () => {
     const { el } = await setup(true);
-    const options = el.querySelectorAll('ion-select-option');
+    // The region select is the FIRST ion-select; scope to it so the new
+    // delivery-time select's options don't inflate the count.
+    const regionSelect = el.querySelectorAll('ion-select')[0];
+    const options = regionSelect.querySelectorAll('ion-select-option');
     expect(options.length).toBe(10);
     expect(options.length).toBe(REGIONS.length);
   });
@@ -127,6 +136,52 @@ describe('SettingsPage', () => {
       new CustomEvent('ionChange', { detail: { value: 'DE' } }),
     );
     expect(service.setRegion).toHaveBeenCalledWith('DE');
+  });
+
+  it('renders the Notification time select with 25 options (Any time + 24 hours)', async () => {
+    const { el } = await setup(true);
+    const selects = el.querySelectorAll('ion-select');
+    // Region select [0], delivery-time select [1].
+    expect(selects.length).toBe(2);
+    const deliverySelect = selects[1];
+    expect(deliverySelect.getAttribute('label')).toBe('Notification time');
+    const options = deliverySelect.querySelectorAll('ion-select-option');
+    expect(options.length).toBe(25);
+  });
+
+  it('changing the Notification time select calls setDeliveryHour with the chosen value', async () => {
+    const { el, service } = await setup(true);
+    const deliverySelect = el.querySelectorAll('ion-select')[1];
+    deliverySelect.dispatchEvent(
+      new CustomEvent('ionChange', { detail: { value: 8 } }),
+    );
+    expect(service.setDeliveryHour).toHaveBeenCalledWith(8);
+  });
+
+  it('disables the Notification time select when notifications are off', async () => {
+    const service = mockService(true);
+    service.notificationsEnabled.set(false);
+    const { el } = await setupWithService(service);
+    // Angular binds `[disabled]` to the ion-select element's `disabled`
+    // property (not a reflected attribute under jsdom), so assert the property.
+    const deliverySelect = el.querySelectorAll(
+      'ion-select',
+    )[1] as HTMLElement & {
+      disabled: boolean;
+    };
+    expect(deliverySelect.disabled).toBe(true);
+  });
+
+  it('enables the Notification time select when notifications are on', async () => {
+    const service = mockService(true);
+    service.notificationsEnabled.set(true);
+    const { el } = await setupWithService(service);
+    const deliverySelect = el.querySelectorAll(
+      'ion-select',
+    )[1] as HTMLElement & {
+      disabled: boolean;
+    };
+    expect(deliverySelect.disabled).toBe(false);
   });
 
   it('toggling notifications calls setNotificationsEnabled with the new boolean', async () => {

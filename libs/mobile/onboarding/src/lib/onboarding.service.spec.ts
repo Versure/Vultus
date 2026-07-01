@@ -109,6 +109,7 @@ describe('OnboardingService', () => {
         episodeAired: true,
         movieAvailable: true,
         cameToPlatform: true,
+        deliveryHour: null,
       },
       fcmTokens: [],
     });
