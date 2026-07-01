@@ -7,6 +7,7 @@ import {
   type WatchlistItem,
 } from '@vultus/shared/domain';
 import {
+  episodesPath,
   notificationsPath,
   watchlistItemPath,
   watchlistPath,
@@ -35,6 +36,13 @@ const collectionDataMock = vi.fn<(ref: Ref) => Observable<unknown>>();
 const docDataMock = vi.fn<(ref: Ref) => Observable<unknown>>();
 const updateDocMock = vi.fn<(ref: Ref, payload: unknown) => void>();
 const deleteDocMock = vi.fn<(ref: Ref) => void>();
+const getDocsMock = vi.fn<(ref: Ref) => Promise<unknown>>();
+const batchUpdateMock = vi.fn();
+const batchCommitMock = vi.fn(() => Promise.resolve());
+const writeBatchMock = vi.fn(() => ({
+  update: batchUpdateMock,
+  commit: batchCommitMock,
+}));
 
 vi.mock('@angular/fire/firestore', () => ({
   Firestore: class Firestore {},
@@ -44,10 +52,40 @@ vi.mock('@angular/fire/firestore', () => ({
   docData: (ref: Ref): Observable<unknown> => docDataMock(ref),
   updateDoc: (ref: Ref, payload: unknown): void => updateDocMock(ref, payload),
   deleteDoc: (ref: Ref): void => deleteDocMock(ref),
+  getDocs: (ref: Ref): Promise<unknown> => getDocsMock(ref),
+  writeBatch: (): unknown => writeBatchMock(),
 }));
 
 const UID = 'user-123';
 const fakeTs = (d: Date): FirestoreTimestampLike => ({ toDate: () => d });
+
+// --- Episode fixtures (read-data shape: airDate/watchedAt are Timestamp-like) ---
+interface EpFixture {
+  id: string;
+  season: number;
+  episode: number;
+  watched: boolean;
+}
+function epReadData(e: EpFixture) {
+  return {
+    season: e.season,
+    episode: e.episode,
+    title: null,
+    airDate: fakeTs(new Date('2008-01-20T00:00:00Z')),
+    watched: e.watched,
+    watchedAt: e.watched ? fakeTs(new Date('2026-06-24T10:00:00Z')) : null,
+  };
+}
+/** A getDocs() snapshot: { docs: [{ id, ref, data() }] }. */
+function docsSnap(eps: EpFixture[]) {
+  return {
+    docs: eps.map((e) => ({
+      id: e.id,
+      ref: { path: `ep/${e.id}` },
+      data: () => epReadData(e),
+    })),
+  };
+}
 
 function readDoc(
   over: Partial<{ tmdbId: number; type: string; status: string }>,
@@ -223,6 +261,10 @@ describe('WatchlistService', () => {
     docDataMock.mockReset();
     updateDocMock.mockReset();
     deleteDocMock.mockReset();
+    getDocsMock.mockReset();
+    batchUpdateMock.mockReset();
+    batchCommitMock.mockReset().mockResolvedValue(undefined);
+    writeBatchMock.mockClear();
   });
 
   it('watchlist$ maps docs through dataToWatchlistItem', async () => {
@@ -257,14 +299,112 @@ describe('WatchlistService', () => {
     expect(items[0].type).toBe('tv');
   });
 
-  it('updateStatus calls updateDoc with the item path + { status }', () => {
+  it('updateStatus calls updateDoc with the item path + { status } (movie → no episode read)', async () => {
     const service = createService(UID);
-    service.updateStatus(UID, '1', 'completed');
+    await service.updateStatus(UID, '1', 'completed', 'movie');
     expect(docMock).toHaveBeenCalledWith({}, watchlistItemPath(UID, '1'));
     expect(updateDocMock).toHaveBeenCalledTimes(1);
     const [ref, payload] = updateDocMock.mock.calls[0];
     expect(ref).toEqual({ path: watchlistItemPath(UID, '1') });
     expect(payload).toEqual({ status: 'completed' });
+    // Movie: the completed-episode branch is short-circuited entirely.
+    expect(getDocsMock).not.toHaveBeenCalled();
+    expect(writeBatchMock).not.toHaveBeenCalled();
+  });
+
+  describe('updateStatus — completed marks episodes watched (spec 0053)', () => {
+    it('TV + some unwatched episodes → status written AND batch commits { watched, watchedAt } for ONLY the unwatched docs', async () => {
+      getDocsMock.mockResolvedValue(
+        docsSnap([
+          { id: 's01e01', season: 1, episode: 1, watched: true }, // already watched
+          { id: 's01e02', season: 1, episode: 2, watched: false }, // unwatched
+          { id: 's01e03', season: 1, episode: 3, watched: false }, // unwatched
+        ]),
+      );
+      const service = createService(UID);
+      await service.updateStatus(UID, '2', 'completed', 'tv');
+
+      // Read the WHOLE subcollection (no where filter).
+      expect(collectionMock).toHaveBeenCalledWith({}, episodesPath(UID, '2'));
+      expect(getDocsMock).toHaveBeenCalledTimes(1);
+
+      // Only the two unwatched docs are batched — the already-watched one is not.
+      expect(batchUpdateMock).toHaveBeenCalledTimes(2);
+      const batchedPaths = batchUpdateMock.mock.calls.map(
+        ([ref]) => (ref as { path: string }).path,
+      );
+      expect(batchedPaths.sort()).toEqual(['ep/s01e02', 'ep/s01e03']);
+      for (const [, payload] of batchUpdateMock.mock.calls) {
+        const p = payload as { watched: boolean; watchedAt: unknown };
+        expect(p.watched).toBe(true);
+        expect(p.watchedAt).toBeInstanceOf(Date);
+      }
+      expect(batchCommitMock).toHaveBeenCalledTimes(1);
+
+      // Status is still written.
+      expect(updateDocMock).toHaveBeenCalledTimes(1);
+      expect(updateDocMock.mock.calls[0][1]).toEqual({ status: 'completed' });
+    });
+
+    it('TV + all episodes already watched → status written, NO batch commit', async () => {
+      getDocsMock.mockResolvedValue(
+        docsSnap([
+          { id: 's01e01', season: 1, episode: 1, watched: true },
+          { id: 's01e02', season: 1, episode: 2, watched: true },
+        ]),
+      );
+      const service = createService(UID);
+      await service.updateStatus(UID, '2', 'completed', 'tv');
+
+      expect(getDocsMock).toHaveBeenCalledTimes(1);
+      expect(batchUpdateMock).not.toHaveBeenCalled();
+      expect(batchCommitMock).not.toHaveBeenCalled();
+      expect(updateDocMock).toHaveBeenCalledTimes(1);
+      expect(updateDocMock.mock.calls[0][1]).toEqual({ status: 'completed' });
+    });
+
+    it('TV + empty subcollection → status written, NO batch commit', async () => {
+      getDocsMock.mockResolvedValue(docsSnap([]));
+      const service = createService(UID);
+      await service.updateStatus(UID, '2', 'completed', 'tv');
+
+      expect(getDocsMock).toHaveBeenCalledTimes(1);
+      expect(batchCommitMock).not.toHaveBeenCalled();
+      expect(updateDocMock).toHaveBeenCalledTimes(1);
+      expect(updateDocMock.mock.calls[0][1]).toEqual({ status: 'completed' });
+    });
+
+    it('Movie → status written, NO episode read/batch at all', async () => {
+      const service = createService(UID);
+      await service.updateStatus(UID, '9', 'completed', 'movie');
+
+      expect(getDocsMock).not.toHaveBeenCalled();
+      expect(writeBatchMock).not.toHaveBeenCalled();
+      expect(updateDocMock).toHaveBeenCalledTimes(1);
+      expect(updateDocMock.mock.calls[0][1]).toEqual({ status: 'completed' });
+    });
+
+    it('null uid → no-op (no status write, no episode read) with the widened signature', async () => {
+      const service = createService(null);
+      await service.updateStatus(null, '2', 'completed', 'tv');
+
+      expect(updateDocMock).not.toHaveBeenCalled();
+      expect(getDocsMock).not.toHaveBeenCalled();
+      expect(writeBatchMock).not.toHaveBeenCalled();
+    });
+
+    it.each(['watching', 'planned', 'dropped'] as const)(
+      "non-'completed' status (%s) on a TV show → status written, NO episode read/batch (forward direction only, decision 6)",
+      async (status) => {
+        const service = createService(UID);
+        await service.updateStatus(UID, '2', status, 'tv');
+
+        expect(getDocsMock).not.toHaveBeenCalled();
+        expect(writeBatchMock).not.toHaveBeenCalled();
+        expect(updateDocMock).toHaveBeenCalledTimes(1);
+        expect(updateDocMock.mock.calls[0][1]).toEqual({ status });
+      },
+    );
   });
 
   it('removeTitle calls deleteDoc with the item path', () => {
@@ -320,7 +460,7 @@ describe('WatchlistService', () => {
     );
     expect(region).toBeNull();
 
-    service.updateStatus(null, '1', 'completed');
+    void service.updateStatus(null, '1', 'completed', 'movie');
     service.removeTitle(null, '1');
     expect(updateDocMock).not.toHaveBeenCalled();
     expect(deleteDocMock).not.toHaveBeenCalled();
@@ -359,9 +499,9 @@ describe('WatchlistService', () => {
     expect(collectionDataMock).not.toHaveBeenCalled();
   });
 
-  it('every write targets a watchlist item doc (never user/title-cache)', () => {
+  it('every write targets a watchlist item doc (never user/title-cache)', async () => {
     const service = createService(UID);
-    service.updateStatus(UID, '1', 'dropped');
+    await service.updateStatus(UID, '1', 'dropped', 'movie');
     service.removeTitle(UID, '2');
     const writtenPaths = [
       ...updateDocMock.mock.calls,

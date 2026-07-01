@@ -33,8 +33,26 @@ group order stays Watching → Planned → Completed → Dropped.
   - `watchlist$(uid, type?)` — realtime `users/{uid}/watchlist`, mapped to
     domain `WatchlistItem`s, optionally filtered by `TitleType`. Null uid →
     `of([])`.
-  - `updateStatus(uid, titleId, status)` — updates only the `status` field on a
-    watchlist item. Null uid → no-op.
+  - `updateStatus(uid, titleId, status, type)` — updates the `status` field on a
+    watchlist item and returns `Promise<void>`. Null uid → no-op.
+    **Completed-marks-episodes side effect (spec 0053):** when the new `status`
+    is `'completed'` **and** `type === 'tv'`, every currently-unwatched episode
+    under `users/{uid}/watchlist/{titleId}/episodes` is batch-marked
+    `{ watched: true, watchedAt: <now> }` before the status write — so manually
+    completing a TV show from the watchlist tab marks all its episodes watched
+    (issue #131). Only the transition **to** `'completed'` triggers this; moving
+    a status **away** from `'completed'` leaves episodes untouched (forward
+    direction only). Movies short-circuit to a bare status write, and TV shows
+    whose episodes are all already watched or not-yet-synced are cheap no-ops
+    (the batch is skipped when there are zero unwatched docs — no extra status
+    read, and re-selecting "Completed" on an already-completed show is a no-op).
+    Episode docs are created by the sync engine and are only **updated** here
+    (never created). The `type` is the slice-local decision input for TV-vs-movie
+    and is passed from the caller's `WatchlistItem.type` — the private
+    `markAllEpisodesWatched` helper is deliberately duplicated with the
+    title-detail slice's copy (2-slice, short of the 3+-slice extract rule). The
+    page calls it fire-and-forget (`void`), so the action sheet closes
+    immediately and does not block on the batch.
   - `removeTitle(uid, titleId)` — deletes a watchlist item. Null uid → no-op.
   - `userRegion$(uid)` — the user's persisted region from `users/{uid}`. Null
     uid / missing doc → `null`.
@@ -146,9 +164,14 @@ See `@vultus/shared/ui-kit`'s README for the canonical service docs.
 ## Data access
 
 - **Reads:** `users/{uid}/watchlist` (realtime list), `users/{uid}` (region),
-  `title-cache/{tmdbId}/availability/{region}` (provider badges).
-- **Writes:** only `users/{uid}/watchlist/{titleId}` — status update and delete.
-  Never writes to `users/{uid}`, `title-cache`, or any other path.
+  `title-cache/{tmdbId}/availability/{region}` (provider badges), and — on the
+  `completed` + `tv` path only — a one-shot read of the whole
+  `users/{uid}/watchlist/{titleId}/episodes` subcollection (spec 0053).
+- **Writes:** `users/{uid}/watchlist/{titleId}` — status update and delete — plus,
+  on the `completed` + `tv` path, a batched `{ watched, watchedAt }` update onto
+  the currently-unwatched docs of `users/{uid}/watchlist/{titleId}/episodes`
+  (own-user episode docs, an already-permitted write shape). Never writes to
+  `users/{uid}`, `title-cache`, or any other path.
 
 The watchlist doc id is `String(tmdbId)` (e.g. `1399`), matching spec 0013's write binding.
 

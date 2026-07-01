@@ -151,6 +151,16 @@ export class TitleDetailPage {
   private currentTmdbId = 0;
 
   /**
+   * Synchronously-readable current title type for imperative handlers (spec
+   * 0053). Kept in sync from `detail$` so the status action-sheet handler can
+   * pass the resolved type to `updateStatus` (TV vs. movie decides whether
+   * completing the show batch-marks its episodes watched). Default `'tv'` is a
+   * safe placeholder — it is always overwritten by the loaded detail before the
+   * action sheet can open (the sheet only appears on a loaded, tracked title).
+   */
+  private currentType: TitleType = 'tv';
+
+  /**
    * Guard so the page-init auto-revert (spec 0050) fires at most once per
    * distinct tmdbId. Holds the last id `revertIfNewEpisodes` was called for.
    */
@@ -179,7 +189,11 @@ export class TitleDetailPage {
         (status): ActionSheetButton => ({
           text: STATUS_LABELS[status],
           handler: () => {
-            void this.service.updateStatus(this.currentTmdbId, status);
+            void this.service.updateStatus(
+              this.currentTmdbId,
+              status,
+              this.currentType,
+            );
           },
         }),
       ),
@@ -290,6 +304,12 @@ export class TitleDetailPage {
     // gained an unwatched entry (new episodes synced) silently reverts to
     // 'watching'. Deduped to once per distinct tmdbId via revertCheckedForId.
     this.detail$.pipe(takeUntilDestroyed()).subscribe((state) => {
+      if (state.kind === 'loaded') {
+        // Keep currentType in sync so the status action-sheet handler passes the
+        // resolved type to updateStatus (spec 0053: TV-completed batch-marks
+        // episodes; movie-completed does not).
+        this.currentType = state.detail.type;
+      }
       if (
         state.kind === 'loaded' &&
         state.detail.type === 'tv' &&
