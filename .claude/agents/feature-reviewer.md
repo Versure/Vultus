@@ -18,6 +18,17 @@ The orchestrator gives you the **spec path**, the **worktree path**, and the
 `git -C <worktree> diff <base>...HEAD` (and `git -C <worktree> status` for
 uncommitted work).
 
+**Uncommitted-diff guard (do this first).** If `git -C <worktree> diff
+
+<base>...HEAD` is **empty** but the working tree is **dirty**
+(`git -C <worktree> status --porcelain` is non-empty), the implemented work has
+not been committed yet — there is nothing on the committed diff to review. Do
+**not** return a `NEEDS_REWORK` verdict in this case (that would be a bogus
+blocking verdict on a false-negative empty diff). Instead report the **process
+note** `changes uncommitted — orchestrator must commit before review` and stop;
+the orchestrator commits at fan-in and re-runs the review against the committed
+diff.
+
 ## Read first
 
 - The spec — so you can check coverage of Scope, Public types, Data model, and
@@ -40,7 +51,16 @@ uncommitted work).
    were blocked on the spec being reviewed. If this PR delivers the dependency
    they name (e.g. a new route, a new component selector), those flows must be
    **un-skipped** — leaving them as `test.fixme` after the dependency lands is
-   a **blocking finding**.
+   a **blocking finding**. **Rendered-text assertion smell:** flag a
+   component/unit test that **normalizes whitespace** on a rendered-text
+   assertion (e.g. `.replace(/\s+/g, ' ').trim()` on the element text before
+   asserting) — that normalization masks stray-space / spacing rendering
+   defects (e.g. `" On Netflix "`), so it is a likely masked-defect smell;
+   prefer an exact-string assertion. Also flag **component-vs-e2e assertion
+   divergence** on the same rendered text — a component test that normalizes
+   whitespace while the e2e asserts an exact / `^…$` match (e.g.
+   `toHaveText(/^On Netflix$/)`) is inconsistent and lets the component test
+   pass over a defect the e2e catches.
 5. **Secrets/safety** — any committed secret, `.env` read, or hardcoded key.
 6. **Lib README currency** (CLAUDE.md DoD) — if the diff creates a lib or changes
    a lib's public API/behavior/boundaries, its `README.md` must be updated to

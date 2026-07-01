@@ -61,5 +61,9 @@ the **spec path**, the **worktree path**, and **your assigned task subset**
 Read the spec (Scope, Public types, Data model, Test plan) and your assigned
 tasks. Implement code + tests together. Run the narrowest available checks
 (`nx test <project>`, `nx lint <project>`) when the workspace supports them;
-note + skip if not bootstrapped. Return: files changed, a short summary, check
-output, and anything you couldn't do (blocked/ambiguous/out of assignment).
+note + skip if not bootstrapped. **On Windows,** after any `Edit`/`Write` on a
+source file, run `pnpm exec prettier --write` on the **changed files** before
+staging, so a phantom CRLF diff doesn't fail `prettier --check` (only the changed
+files — no whole-file EOL churn, no `.gitattributes` change). Return: files
+changed, a short summary, check output, and anything you couldn't do
+(blocked/ambiguous/out of assignment).

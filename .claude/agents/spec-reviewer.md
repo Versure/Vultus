@@ -35,7 +35,15 @@ Evaluate the spec against each of these and record concrete findings:
    config) that touch only scope/root files — don't flag it; do flag a slice
    feature that's missing its tag.
 4. **Type/API soundness** — are new types placed correctly (shared vs slice)?
-   Are signatures coherent?
+   Are signatures coherent? **(Blocking — shared-type ripple, F2)** When a spec
+   changes a `shared/domain` type — especially making a field **required** or
+   otherwise breaking existing consumers — its "Affected slices" must list
+   **every discoverable consumer**. Grep the repo for the type name and its
+   object literals; if a slice constructs or consumes that type but is **not**
+   listed in "Affected slices" (e.g. a required-field widening that would break a
+   `User` literal in an unlisted slice like `mobile-onboarding`), that omission is
+   a **blocking finding** — widening a required field is a repo-wide ripple and
+   every affected slice must be enumerated.
 5. **Testability** — does the test plan follow the pyramid (PLAN §5)? Is the
    logic actually unit-testable as specified? Are e2e flows named and minimal?
    For a `scope:mobile` spec that adds a new route or critical user action:
@@ -60,7 +68,15 @@ Evaluate the spec against each of these and record concrete findings:
    parallel task missing a manifest, or two parallel manifests that overlap
    (they must be marked sequential instead). Is new-slice generation / root
    config wiring kept in the sequential foundation, not parallelized?
-8. **Definition of done** — present and tailored, not generic?
+8. **Definition of done** — present and tailored, not generic? **(Blocking — DoD
+   ⇄ task-manifest coverage, F1)** Every DoD item must be covered by at least one
+   task in the task graph — cross-check each DoD requirement against the tasks'
+   file manifests. Flag as a **blocking finding** any DoD requirement (rules,
+   indexes, tests, config) not present in **any** task's file manifest — e.g. a
+   DoD line requiring a `firestore.rules` rule + rules-test while no task manifest
+   lists `firestore.rules` or the rules-test file. The spec-author must add a task
+   (or add the missing file to an existing manifest) so no DoD requirement is
+   orphaned.
 9. **Risks** — are the real risks (data-source accuracy, PLAN conflicts)
    surfaced?
 

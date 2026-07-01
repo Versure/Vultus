@@ -69,7 +69,7 @@ architecture and decisions; read it before non-trivial work.
     install + launch).
   - `serve-prod-debug` / `serve-prod` / `android-usb` **require a populated
     `.env.local`** — `inject-mobile-env.mjs` runs first and \*\*fails loudly (exit
-    1. naming the missing key\*_ if any `TMDB_API_KEY` / `FIREBASE\__` value is
+    1. naming the missing key\*\_ if any `TMDB_API_KEY` / `FIREBASE\__` value is
        absent.
 - **Definition of done** for any PR: typecheck + lint/Sheriff + unit + component
   (for non-trivial UI) + build + e2e (affected critical flows) all green, and the
@@ -88,9 +88,14 @@ architecture and decisions; read it before non-trivial work.
 
 - **Shell is PowerShell** (Windows). Use PS-safe syntax: `2>$null`, here-strings
   `@'...'@` for multi-line text, `$env:VAR`, `$LASTEXITCODE`.
-- **Secrets:** never read or write `.env.local` or any secret. Secrets live in
-  `.env.local` (gitignored), GitHub Actions secrets, and Firebase functions
-  config. Flag if a secret would be needed somewhere it shouldn't be.
+- **Secrets:** never **read, print, log, echo, or commit** the **contents** of
+  `.env.local` or any secret. Note: the `implement-feature` worktree seed
+  (spec 0040) **copies** `.env.local` and `google-services.json` as **opaque
+  files** between two local checkouts on the same machine — a file-to-file copy
+  is **not** reading a secret and is explicitly permitted. The prohibition is on
+  exposing secret **VALUES**. Secrets live in `.env.local` (gitignored), GitHub
+  Actions secrets, and Firebase functions config. Flag if a secret would be
+  needed somewhere it shouldn't be.
 - **Branches:** `spec/NNNN-slug` (spec PRs), `feat/NNNN-slug` (feature PRs).
   PRs target `main`; squash-merge so each spec/feature is one commit.
 - **Pre-commit hook:** husky + lint-staged run ESLint `--fix` (Sheriff included)

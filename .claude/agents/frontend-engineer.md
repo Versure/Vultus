@@ -135,6 +135,10 @@ Read the spec (Scope, Public types, UI/Stitch refs, Test plan) and your assigned
 tasks. **Fetch the Stitch screen and pin its concrete values/states first**, then
 implement components + tests together. Run the narrowest available checks
 (`nx test <project>`, `nx lint <project>`) when the workspace supports them; note +
-skip if not bootstrapped. Return: files changed, a short summary, check output, the
+skip if not bootstrapped. **On Windows,** after any `Edit`/`Write` on a source
+file, run `pnpm exec prettier --write` on the **changed files** before staging, so
+a phantom CRLF diff doesn't fail `prettier --check` (only the changed files — no
+whole-file EOL churn, no `.gitattributes` change). Return: files changed, a short
+summary, check output, the
 **Stitch screen ID used (or "unverified — why")**, the **visual-verification result
 or checklist**, and anything you couldn't do.

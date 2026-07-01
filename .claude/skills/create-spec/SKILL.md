@@ -41,6 +41,25 @@ branches, architecture — are in `CLAUDE.md`.)
   depend on unmerged specs (→ `test.fixme`). Record the approved flows in
   the decision record so `spec-author` names them explicitly in the Test
   plan section.
+- **DoD → task-graph coverage probe (F1):** as acceptance criteria firm up,
+  check that **every** DoD checkbox maps to at least one task/manifest — surface
+  any **orphan** requirement that no task would own, **especially**
+  `firestore.rules`, `firestore.indexes.json`, and rules-tests (these were
+  authored into the DoD but into no task manifest and escaped until final
+  reconciliation). Record each DoD item's owning task in the decision record so
+  `spec-author` leaves no orphan.
+- **Shared-type ripple probe (F2):** if the change makes a `shared/domain` field
+  **required** (or otherwise breaks existing consumers), treat it as a
+  **repo-wide ripple** — grep for the type / its object literals across the whole
+  repo and enumerate **all** affected slices, not just the obviously related
+  ones. Record every affected slice in the decision record so `spec-author`
+  lists them all under "Affected slices."
+- **Rendered-text assertion probe (F3):** for any assertion on **rendered UI
+  text**, agree that component/unit tests assert the **exact string**, not a
+  whitespace-normalized one that can mask a rendering defect (e.g. a stray space),
+  and that component and e2e assertions stay **consistent** on the same text.
+  Record this in the decision record so `spec-author` reflects it in the Test
+  plan.
 - If the feature is too big for one PR/session (PLAN §6), propose a split.
 - Record the decisions into a concise decision record for `spec-author`.
 
