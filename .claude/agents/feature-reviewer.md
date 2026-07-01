@@ -18,9 +18,8 @@ The orchestrator gives you the **spec path**, the **worktree path**, and the
 `git -C <worktree> diff <base>...HEAD` (and `git -C <worktree> status` for
 uncommitted work).
 
-**Uncommitted-diff guard (do this first).** If `git -C <worktree> diff
-
-<base>...HEAD` is **empty** but the working tree is **dirty**
+**Uncommitted-diff guard (do this first).** If `git -C <worktree> diff <base>...HEAD`
+is **empty** but the working tree is **dirty**
 (`git -C <worktree> status --porcelain` is non-empty), the implemented work has
 not been committed yet — there is nothing on the committed diff to review. Do
 **not** return a `NEEDS_REWORK` verdict in this case (that would be a bogus
