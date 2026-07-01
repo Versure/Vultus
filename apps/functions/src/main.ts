@@ -65,6 +65,16 @@ import {
 // Keep deployments in a single region (free-tier friendly, PLAN §2).
 setGlobalOptions({ region: 'europe-west1', maxInstances: 1 });
 
+// Initialize the Admin SDK eagerly at module load, not lazily inside a
+// handler: a lazy `getApps().length === 0` check race can leave a cold-start
+// invocation calling `getFirestore()` before `initializeApp()` has run,
+// throwing "the default Firebase app does not exist" (observed in prod on a
+// getWatchProviders cold start). Module-load code always runs before the
+// Functions Framework starts dispatching requests, so this ordering is safe.
+if (getApps().length === 0) {
+  initializeApp();
+}
+
 // --- Config / secrets (declared by NAME only; values read via .value() inside
 // the handler, never at module load, never from .env.local, never logged). ---
 const SYNC_SHARED_SECRET = defineSecret('SYNC_SHARED_SECRET');
@@ -283,12 +293,7 @@ export async function runSync(
   return { status: 200, body: response };
 }
 
-let adminInitialized = false;
 function ensureAdmin(): Firestore {
-  if (!adminInitialized && getApps().length === 0) {
-    initializeApp();
-  }
-  adminInitialized = true;
   return getFirestore();
 }
 
