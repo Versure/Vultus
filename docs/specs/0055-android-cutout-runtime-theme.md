@@ -2,7 +2,7 @@
 number: 0055
 slug: android-cutout-runtime-theme
 title: Instrument the Android running-window theme to diagnose the still-visible camera-cutout letterbox, then apply the data-indicated fix
-status: implementing
+status: done
 slices: []
 scopes: [scope:mobile]
 created: 2026-07-01
