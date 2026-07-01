@@ -2,7 +2,7 @@
 number: 0063
 slug: implement-feature-hardening
 title: Harden the implement-feature workflow against observed friction (specs 0060/0062)
-status: implementing
+status: done
 slices: []
 scopes: []
 created: 2026-07-01
