@@ -2,7 +2,7 @@
 number: 0062
 slug: android-webview-cutout-background
 title: Paint the Android WebView background behind the camera cutout via Capacitor's top-level backgroundColor config
-status: implementing
+status: done
 slices: []
 scopes: [scope:mobile]
 created: 2026-07-01
