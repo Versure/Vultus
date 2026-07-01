@@ -502,6 +502,55 @@ describe('TitleDetailPage', () => {
     expect(svc.add).toHaveBeenCalledWith(movieDetail);
   });
 
+  // --- spec 0056: untracked "Mark as Watched" one-step add ---
+
+  it('untracked → renders BOTH the Add and the Mark-as-Watched buttons', async () => {
+    const { fixture } = await setup({ tracked: null });
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-test="add-btn"]')).toBeTruthy();
+    expect(el.querySelector('[data-test="mark-watched-btn"]')).toBeTruthy();
+    expect(el.textContent).toContain('Mark as Watched');
+  });
+
+  it('untracked → tapping "Mark as Watched" calls markAsWatched → service.add(detail, "completed")', async () => {
+    const { fixture, svc } = await setup({ tracked: null });
+    const el = fixture.nativeElement as HTMLElement;
+    const markBtn = el.querySelector<HTMLElement>(
+      '[data-test="mark-watched-btn"]',
+    );
+    expect(markBtn).toBeTruthy();
+    markBtn?.click();
+    expect(svc.add).toHaveBeenCalledWith(movieDetail, 'completed');
+  });
+
+  it('untracked → tapping "Add to Watchlist" calls add with the default (no "completed" arg)', async () => {
+    const { fixture, svc } = await setup({ tracked: null });
+    const el = fixture.nativeElement as HTMLElement;
+    el.querySelector<HTMLElement>('[data-test="add-btn"]')?.click();
+    // Default add — called with only the detail (status defaults to 'planned').
+    expect(svc.add).toHaveBeenCalledWith(movieDetail);
+    expect(svc.add).not.toHaveBeenCalledWith(movieDetail, 'completed');
+  });
+
+  it('tracked → renders NEITHER the Add nor the Mark-as-Watched button', async () => {
+    const { fixture } = await setup({
+      tracked: {
+        type: 'movie',
+        tmdbId: 27205,
+        traktId: null,
+        title: 'Inception',
+        addedAt: '2026-01-01T00:00:00Z',
+        status: 'planned',
+      },
+    });
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-test="add-btn"]')).toBeFalsy();
+    expect(el.querySelector('[data-test="mark-watched-btn"]')).toBeFalsy();
+    // The existing tracked controls render instead (branch untouched).
+    expect(el.querySelector('[data-test="status-control"]')).toBeTruthy();
+    expect(el.querySelector('[data-test="remove-btn"]')).toBeTruthy();
+  });
+
   it('tracked → renders the status control + remove; openStatusSheet opens the action sheet; selecting calls updateStatus', async () => {
     const { fixture, svc } = await setup({
       tracked: {

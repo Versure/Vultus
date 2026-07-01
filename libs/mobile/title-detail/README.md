@@ -8,7 +8,8 @@ streaming providers that carry it in the user's region — split into **"On Your
 Providers"** vs **"Also Available On"** (spec 0060, see below) — the watchlist
 action area (add / change status / remove), and — for **TV** titles — a
 season-grouped **Episodes** section; for **movies** a **Mark as watched** toggle
-(spec 0034).
+(spec 0034). While a title is **untracked**, the action area offers a one-step
+**"Mark as Watched"** add alongside "Add to Watchlist" (spec 0056).
 
 ## Barrel exports (`@vultus/mobile/title-detail`)
 
@@ -118,8 +119,40 @@ no-op (no sync, no toast) — the refresher spinner is always dismissed via
   design is derived from the in-repo design system (`docs/design/vultus-design-system.md`)
   and is **flagged for human visual verification**.
 
+## Untracked "Mark as Watched" one-step add (spec 0056)
+
+When a title is **not yet tracked** (`vm.tracked === null` — the state on arriving
+from a search result), the action area renders two sibling buttons: the existing
+filled **"Add to Watchlist"** CTA (adds as `'planned'`) and a second, **outlined-
+primary** **"Mark as Watched"** button (`checkmark-circle` glyph). Tapping the
+latter calls `TitleDetailPage.markAsWatched(detail)` → `service.add(detail,
+'completed')`, adding the watchlist doc directly as `'completed'` for **both**
+movies and TV shows — no intermediate `planned`/`watching` step. The realtime
+`tracked$` subscription then flips the action area to the tracked layout with
+status **Completed** (no reload). The tracked branch and every other handler are
+untouched.
+
+For a **TV** add-as-`completed`, `add` also bulk-marks any **already-existing**
+episode docs watched (see the `add` signature below). For a brand-new show with
+**no** episode docs yet, only the `'completed'` watchlist doc is written; once the
+sync engine later populates episodes **unwatched**, the existing spec-0050
+page-init auto-revert flips the status to `'watching'` — this reversion is
+**correct and expected** (episode state cannot be marked before the docs exist),
+not a bug.
+
 ### Service methods
 
+- `add(detail, status?): Promise<void>` — **(spec 0016 / generalized in 0056)**
+  creates `users/{uid}/watchlist/{titleId}` with the denormalized `posterPath` +
+  `voteAverage`. `status` defaults to `'planned'` (preserving every existing
+  caller, incl. "Add to Watchlist"); pass `'completed'` for the one-step "Mark as
+  Watched" add. When `status === 'completed'` **and** `detail.type === 'tv'`, it
+  additionally `getDocs` the whole episodes subcollection (all seasons, no `where`
+  filter) and `writeBatch`-updates every **existing** doc to
+  `{ watched: true, watchedAt: <now> }` — mirroring `setSeasonWatched` minus the
+  season filter. It **never `setDoc`s / never creates** episode docs and is a
+  no-op on an empty subcollection; a movie or a `'planned'` add performs no episode
+  read/write. No-op on null uid.
 - `updateStatus(tmdbId, status, type): Promise<void>` — writes the watchlist
   item's `status`. **(spec 0053)** the signature carries the item's `type`: when
   `status === 'completed'` **and** `type === 'tv'`, it first batch-marks every
@@ -205,15 +238,18 @@ retry trigger (`onRetry()`).
 - **Subscribes** to `users/{uid}/watchlist/{titleId}` (realtime) for tracked state.
 - **Subscribes** to `users/{uid}/watchlist/{titleId}/episodes` (realtime,
   `idField: 'id'`) for the TV Episodes section (spec 0034).
-- **Writes** `users/{uid}/watchlist/{titleId}`: `add` (`status: 'planned'`,
-  with denormalized `posterPath` + `voteAverage`), `updateStatus`, `removeTitle`,
-  plus the auto-status re-derivation after an episode/season write.
+- **Writes** `users/{uid}/watchlist/{titleId}`: `add` (default `status:
+'planned'`, or `'completed'` for the spec-0056 "Mark as Watched" add, with
+  denormalized `posterPath` + `voteAverage`), `updateStatus`, `removeTitle`, plus
+  the auto-status re-derivation after an episode/season write.
 - **Writes** `users/{uid}/watchlist/{titleId}/episodes/{episodeId}`: only the
   `{ watched, watchedAt }` fields, via **`updateDoc` / `writeBatch` (never
   `setDoc`)** — episode docs are created by the sync engine and must pre-exist.
   This includes the spec-0053 completed-path batch (`updateStatus` on a TV show
-  set to `'completed'` marks all unwatched episodes watched). Never `title-cache`,
-  never `users/{uid}`.
+  set to `'completed'` marks all unwatched episodes watched) and the spec-0056 TV
+  add-as-`completed` bulk-mark (`add(detail, 'completed')` on a TV title flips
+  every already-existing episode doc watched; a no-op on an empty subcollection).
+  Never `title-cache`, never `users/{uid}`.
 
 ### Slice-local by design (NOT shared)
 

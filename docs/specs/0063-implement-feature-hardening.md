@@ -448,7 +448,7 @@ group edits don't collide. Apply, by step:
   conflict) and **A.3** (reconcile `gh pr view --json headRefOid` vs local HEAD
   before push).
 - **Step 8:** add group **A.4** (a `STATUS.md` freshness CI failure → regenerate
-  + push, not a code fix).
+  - push, not a code fix).
 - **New "Known environment behaviors" section** (group **G**): async Agent
   dispatch, Bash cwd reset, classifier poisoning.
 - Add a compact group **E1** note (build web before `pnpm exec cap sync`).
@@ -498,8 +498,9 @@ Manifest: `CLAUDE.md`
 
 Reword the Secrets bullet (D, preserving the real prohibition); add the cold-hook
 long-timeout note in Commands (C); add one-line Windows notes for `pnpm exec cap`
-+ build-first (E1), prettier-normalize changed files (E2), and reinforce
-absolute-paths / no-persisted-cwd (E3).
+
+- build-first (E1), prettier-normalize changed files (E2), and reinforce
+  absolute-paths / no-persisted-cwd (E3).
 
 ### T8 — [parallel] `.claude/settings.json` (group D)
 

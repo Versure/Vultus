@@ -2,7 +2,7 @@
 number: 0056
 slug: title-detail-mark-watched
 title: Add a "Mark as Watched" action for untracked titles on the title-detail page
-status: approved
+status: done
 slices: [slice:title-detail]
 scopes: [scope:mobile]
 created: 2026-07-01
@@ -106,7 +106,7 @@ In scope:
   the same write path with `'completed'` — implementer's choice; the binding
   contract is a **single-step add with a caller-chosen status**, reusing the
   existing `watchlistItemToData` + `setDoc` at `watchlistItemPath(uid,
-  String(tmdbId))` write (no new write target).
+String(tmdbId))` write (no new write target).
 - **TV — bulk-mark already-known episodes watched (updated requirement).** For a
   `type === 'tv'` add-as-watched, after (or as part of) writing the watchlist doc
   as `'completed'`, `getDocs` the title's episodes collection
@@ -150,7 +150,7 @@ Out of scope (non-goals — do NOT do these):
   episodes unwatched and the existing spec-0050 auto-revert flips the status to
   `'watching'` — **accepted/expected behavior**, not an oversight (see Risks).
 - **No status-picker / action-sheet replacement** of "Add to Watchlist" (decision
-  1) — that is a larger change than this issue warrants.
+  1. — that is a larger change than this issue warrants.
 - **No `shared/domain` / `shared/firestore-schema` change** — the write reuses the
   merged `WatchlistItem` shape + `watchlistItemToData` converter unchanged; the
   only new value is `status: 'completed'`, an existing `WatchStatus`.
@@ -159,10 +159,10 @@ Out of scope (non-goals — do NOT do these):
 
 ## Affected slices & Sheriff tags
 
-| Project             | Path                       | Sheriff tags                         | Change                                                                                                            |
-| ------------------- | -------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| Project             | Path                       | Sheriff tags                         | Change                                                                                                                                   |
+| ------------------- | -------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | mobile-title-detail | `libs/mobile/title-detail` | `scope:mobile`, `slice:title-detail` | Generalize `TitleDetailService.add()` (status param); add "Mark as Watched" button + handler to the untracked action-area; tests; README |
-| mobile-e2e          | `apps/mobile-e2e`          | (e2e; not Sheriff-policed lib)       | Two named e2e flows (movie + TV "mark as watched" from search)                                                   |
+| mobile-e2e          | `apps/mobile-e2e`          | (e2e; not Sheriff-policed lib)       | Two named e2e flows (movie + TV "mark as watched" from search)                                                                           |
 
 - **Entirely within `slice:title-detail`.** The change touches only
   `libs/mobile/title-detail/**` (service + page + tests + README) and the e2e
@@ -189,12 +189,12 @@ Out of scope (non-goals — do NOT do these):
 PLAN §4 paths. **No new field, no shared-type change.** The only new behavior is
 writing an existing `WatchStatus` value (`'completed'`) at add time.
 
-| PLAN §4 path                                  | Access by this slice                       | Fields / note                                                                     |
-| --------------------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------- |
-| `users/{uid}/watchlist/{titleId}` (doc)       | **create** (new: `status:'completed'`)     | one-step add-as-watched; same shape as the existing `add()` (`type`, `tmdbId`, `traktId:null`, `title`, `addedAt`, `posterPath`, `voteAverage`) with `status: 'completed'` |
-| `users/{uid}/watchlist/{titleId}` (doc)       | **read (realtime, already wired)**         | `tracked$` — the existing subscription flips the action-area to tracked once the doc lands (no reload) |
+| PLAN §4 path                                  | Access by this slice                                       | Fields / note                                                                                                                                                                         |
+| --------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `users/{uid}/watchlist/{titleId}` (doc)       | **create** (new: `status:'completed'`)                     | one-step add-as-watched; same shape as the existing `add()` (`type`, `tmdbId`, `traktId:null`, `title`, `addedAt`, `posterPath`, `voteAverage`) with `status: 'completed'`            |
+| `users/{uid}/watchlist/{titleId}` (doc)       | **read (realtime, already wired)**                         | `tracked$` — the existing subscription flips the action-area to tracked once the doc lands (no reload)                                                                                |
 | `users/{uid}/watchlist/{titleId}/episodes/**` | **read (one-shot) + update (bulk, TV only, if any exist)** | on a TV add-as-watched: `getDocs` all episode docs; `writeBatch` each to `{ watched: true, watchedAt }`. **Never creates docs**; a no-op when the subcollection is empty (decision 2) |
-| `title-cache/**`                              | **none**                                   | unchanged — read-only elsewhere; not touched here                                 |
+| `title-cache/**`                              | **none**                                                   | unchanged — read-only elsewhere; not touched here                                                                                                                                     |
 
 - **Add-as-completed write (decision 2).** Build the **same** `WatchlistItem`
   the existing `add()` builds (`title-detail.service.ts` lines 263–272), but with
@@ -209,8 +209,8 @@ writing an existing `WatchStatus` value (`'completed'`) at add time.
 - **TV bulk episode-mark (decision 2, updated).** On a TV add-as-watched, after
   (or in the same flow as) the `'completed'` watchlist write, `getDocs` the title's
   episode collection `episodesPath(uid, String(tmdbId))` (**no `where('season',
-  ...)` filter — all seasons**), and for **each** returned doc `batch.update(ref,
-  { watched: true, watchedAt })` via a `writeBatch`, then commit — the exact
+...)` filter — all seasons**), and for **each** returned doc `batch.update(ref,
+{ watched: true, watchedAt })` via a `writeBatch`, then commit — the exact
   pattern of `setSeasonWatched` (`title-detail.service.ts` lines 342–364) minus the
   season filter. `watchedAt = new Date()`. **Uses `updateDoc`/`batch.update` on
   existing docs only — NEVER `setDoc`, NEVER creates episode docs** (that is the
@@ -336,9 +336,9 @@ side exactly like the tracked-state `status-control` + `remove-control` pair.
    **outlined** treatment of the existing `.status-control` /
    `.movie-watched-control` (NOT a second filled CTA — the design keeps a single
    filled primary CTA per FIX-1 in spec 0016): **height 56px**, `border: 2px solid
-   var(--ion-color-primary)`, `border-radius: var(--vultus-radius-md)`,
+var(--ion-color-primary)`, `border-radius: var(--vultus-radius-md)`,
    `background: transparent`, text/icon `--ion-color-primary`, `font-family:
-   var(--vultus-font-family)`, `font-weight: 700`; **hover** →
+var(--vultus-font-family)`, `font-weight: 700`; **hover** →
    `background: color-mix(in srgb, var(--ion-color-primary) 10%, transparent)`;
    **active/pressed** → `transform: scale(0.98)`; **focus** → Ionic/browser default
    `:focus-visible` ring. Icon: **`checkmark-circle`** (the same glyph
@@ -358,10 +358,10 @@ side exactly like the tracked-state `status-control` + `remove-control` pair.
 
 ### View / interactive states (each a checkable acceptance item)
 
-| Element                     | default                                                                                              | focus                              | hover                                        | active/pressed                       | disabled                                                        |
-| --------------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------- | -------------------------------------------- | ------------------------------------ | --------------------------------------------------------------- |
-| **Add to Watchlist** (existing) | filled `ion-button color="primary"`, h-56px, `--vultus-radius-md`, `add-circle-outline`          | Ionic default `:focus-visible` ring | Ionic default                                | Ionic default                        | n/a                                                             |
-| **Mark as Watched** (NEW)   | outlined-primary (border-2 `--ion-color-primary`, text `--ion-color-primary`), h-56px, `checkmark-circle` glyph, label "Mark as Watched" | Ionic/browser default `:focus-visible` ring | `bg color-mix(primary 10%)` (matching `.status-control`) | `transform: scale(0.98)`             | not applicable in the untracked state (both actions always available) |
+| Element                         | default                                                                                                                                  | focus                                       | hover                                                    | active/pressed           | disabled                                                              |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | -------------------------------------------------------- | ------------------------ | --------------------------------------------------------------------- |
+| **Add to Watchlist** (existing) | filled `ion-button color="primary"`, h-56px, `--vultus-radius-md`, `add-circle-outline`                                                  | Ionic default `:focus-visible` ring         | Ionic default                                            | Ionic default            | n/a                                                                   |
+| **Mark as Watched** (NEW)       | outlined-primary (border-2 `--ion-color-primary`, text `--ion-color-primary`), h-56px, `checkmark-circle` glyph, label "Mark as Watched" | Ionic/browser default `:focus-visible` ring | `bg color-mix(primary 10%)` (matching `.status-control`) | `transform: scale(0.98)` | not applicable in the untracked state (both actions always available) |
 
 - **Untracked (`vm.tracked === null`):** BOTH "Add to Watchlist" **and** "Mark as
   Watched" render, side by side. (Assert in the component test.)
@@ -400,7 +400,7 @@ so the graph is **sequential** — there is **no [parallel] task** in this spec.
    - When `status === 'completed'` and `detail.type === 'tv'`, also `getDocs` the
      title's episodes collection (`episodesPath(uid, String(detail.tmdbId))`, no
      season filter) and `writeBatch`-update every existing doc to `{ watched: true,
-     watchedAt: new Date() }` — reuse the `setSeasonWatched` pattern (`getDocs` +
+watchedAt: new Date() }` — reuse the `setSeasonWatched` pattern (`getDocs` +
      `writeBatch`, lines 342–364) minus `where('season', ...)`. Never `setDoc`;
      no-op on an empty collection.
    - Files: `libs/mobile/title-detail/src/lib/title-detail.service.ts`.
@@ -439,7 +439,7 @@ so the graph is **sequential** — there is **no [parallel] task** in this spec.
      **neither** untracked button (the existing tracked controls render instead).
    - `libs/mobile/title-detail/README.md`: note the untracked action-area now
      offers a one-step "Mark as Watched" add and the generalized `add(detail,
-     status?)` signature; Sheriff tags unchanged; still no shared extraction.
+status?)` signature; Sheriff tags unchanged; still no shared extraction.
    - Files: `libs/mobile/title-detail/src/lib/title-detail.service.spec.ts`,
      `libs/mobile/title-detail/src/lib/title-detail.page.spec.ts`,
      `libs/mobile/title-detail/README.md`.
@@ -460,8 +460,7 @@ so the graph is **sequential** — there is **no [parallel] task** in this spec.
 (All slice internals stay under `libs/mobile/title-detail/**`; the only
 `apps/mobile-e2e` touches are the two flows + optional seed docs. **No
 `firestore.rules`, `firestore.indexes.json`, `sheriff.config.ts`, `ci.yml`,
-`playwright.config.ts`, `libs/functions/**`, `libs/shared/**`, `apps/mobile`
-shell, or `libs/mobile/search` file is touched.** Symbol/file names are
+`playwright.config.ts`, `libs/functions/**`, `libs/shared/**`, `apps/mobile`shell, or`libs/mobile/search` file is touched.** Symbol/file names are
 recommendations; the binding contract is the one-step add-with-status write + the
 untracked "Mark as Watched" button + the no-episode-write / no-cross-slice /
 no-shared-change guardrails.)
@@ -480,7 +479,7 @@ AngularFire + mocked `AUTH_UID`):**
 
 - **Default status preserved:** `add(detail)` (no status arg) writes a
   `WatchlistItem` with `status: 'planned'` at `watchlistItemPath(uid,
-  String(tmdbId))` via `watchlistItemToData` (existing behavior — assert it did NOT
+String(tmdbId))` via `watchlistItemToData` (existing behavior — assert it did NOT
   regress).
 - **Add as completed — movie:** `add(movieDetail, 'completed')` (or
   `addWatched(movieDetail)`) writes `status: 'completed'`, same path/converter,
@@ -488,7 +487,7 @@ AngularFire + mocked `AUTH_UID`):**
   through.
 - **Add as completed — tv, existing episodes:** with episode docs already mocked
   for the tmdbId (e.g. a re-add), `add(tvDetail, 'completed')` writes `status:
-  'completed'` **and** flips **every** existing episode doc to `watched: true`
+'completed'` **and** flips **every** existing episode doc to `watched: true`
   (+ `watchedAt`) via a `writeBatch` (assert each `batch.update` targets an
   episode doc ref, over all seasons — mirrors the `setSeasonWatched` test).
 - **Add as completed — tv, no episodes (brand-new show):** with the episodes
@@ -538,7 +537,7 @@ component + build**; the two e2e flows are a DoD gate enforced by `qa-runner` /
 
 - [ ] `pnpm nx run-many -t lint test -p mobile-title-detail` passes **with Sheriff
       active**: the slice imports only `@vultus/shared/domain` + `@vultus/shared/
-      firestore-schema` (both already imported) + AngularFire/Ionic/ionicons
+    firestore-schema` (both already imported) + AngularFire/Ionic/ionicons
       (third-party) — **no new import, no cross-slice import, no `apps/mobile` deep
       import (uid via `AUTH_UID`), no `scope:functions` import.**
 - [ ] `pnpm nx typecheck mobile-title-detail mobile` passes — the generalized
@@ -561,11 +560,11 @@ component + build**; the two e2e flows are a DoD gate enforced by `qa-runner` /
       blocker named; otherwise green.
 - [ ] `libs/mobile/title-detail/README.md` updated: the untracked action-area now
       offers a one-step "Mark as Watched" add; the generalized `add(detail,
-      status?)` signature; Sheriff tags unchanged — **no stale text** (CLAUDE.md
+    status?)` signature; Sheriff tags unchanged — **no stale text** (CLAUDE.md
       lib-README rule).
 - [ ] **`firestore.rules`, `firestore.indexes.json`, `sheriff.config.ts`,
       `ci.yml`, `playwright.config.ts`, `libs/functions/**`, `libs/shared/**`,
-      `libs/mobile/search/**`, and the `apps/mobile` shell are NOT modified**
+    `libs/mobile/search/**`, and the `apps/mobile` shell are NOT modified\*\*
       (verified-and-recorded in the PR).
 - [ ] **Guardrail verifications (review-checked):** (a) the add write reuses the
       existing `watchlistItemToData` + `setDoc` at `watchlistItemPath` (no new write

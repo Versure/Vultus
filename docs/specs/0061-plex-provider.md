@@ -147,14 +147,14 @@ Out of scope (explicitly):
 
 ## Affected slices & Sheriff tags
 
-| Project                        | Path                          | Sheriff tags                          | Change                                                                                                                                    |
-| ------------------------------ | ----------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| shared-domain (edit)           | `libs/shared/domain`          | `scope:shared`                        | **add** `hasPlex` to `User`; **add** `watchingViaPlex` to `WatchlistItem`; update the `_user` **and** `_watchlistItem` literals; README   |
-| shared-firestore-schema (edit) | `libs/shared/firestore-schema`| `scope:shared`                        | `userToData` / `dataToUser` carry `hasPlex` (read `?? false`); `watchlistItemToData` / `dataToWatchlistItem` carry `watchingViaPlex` (read `?? false`); data-types updated; tests; README |
-| mobile-settings (edit)         | `libs/mobile/settings`        | `scope:mobile`, `slice:settings`      | `hasPlex` signal + `toggleHasPlex`; read `hasPlex` in `load()`; `hasPlex: false` in the eager-create literal; the Plex chip in the "My Providers" section; mock mirror; page + template + scss; README; specs |
-| mobile-title-detail (edit)     | `libs/mobile/title-detail`    | `scope:mobile`, `slice:title-detail`  | read `watchingViaPlex` (from `tracked$`) + `hasPlex$()`; `toggleWatchingViaPlex` write; "Personal Tracking" subsection; page + template + scss; README; specs |
-| mobile-watchlist (edit)        | `libs/mobile/watchlist`       | `scope:mobile`, `slice:watchlist`     | read `watchingViaPlex` off the streamed item; read-only Plex badge in the card corner; template + scss; README; specs                     |
-| mobile-e2e (edit)              | `apps/mobile-e2e`             | untagged                              | new plex-provider flow spec; seed `hasPlex` + a watchlist item with `watchingViaPlex`                                                     |
+| Project                        | Path                           | Sheriff tags                         | Change                                                                                                                                                                                                        |
+| ------------------------------ | ------------------------------ | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| shared-domain (edit)           | `libs/shared/domain`           | `scope:shared`                       | **add** `hasPlex` to `User`; **add** `watchingViaPlex` to `WatchlistItem`; update the `_user` **and** `_watchlistItem` literals; README                                                                       |
+| shared-firestore-schema (edit) | `libs/shared/firestore-schema` | `scope:shared`                       | `userToData` / `dataToUser` carry `hasPlex` (read `?? false`); `watchlistItemToData` / `dataToWatchlistItem` carry `watchingViaPlex` (read `?? false`); data-types updated; tests; README                     |
+| mobile-settings (edit)         | `libs/mobile/settings`         | `scope:mobile`, `slice:settings`     | `hasPlex` signal + `toggleHasPlex`; read `hasPlex` in `load()`; `hasPlex: false` in the eager-create literal; the Plex chip in the "My Providers" section; mock mirror; page + template + scss; README; specs |
+| mobile-title-detail (edit)     | `libs/mobile/title-detail`     | `scope:mobile`, `slice:title-detail` | read `watchingViaPlex` (from `tracked$`) + `hasPlex$()`; `toggleWatchingViaPlex` write; "Personal Tracking" subsection; page + template + scss; README; specs                                                 |
+| mobile-watchlist (edit)        | `libs/mobile/watchlist`        | `scope:mobile`, `slice:watchlist`    | read `watchingViaPlex` off the streamed item; read-only Plex badge in the card corner; template + scss; README; specs                                                                                         |
+| mobile-e2e (edit)              | `apps/mobile-e2e`              | untagged                             | new plex-provider flow spec; seed `hasPlex` + a watchlist item with `watchingViaPlex`                                                                                                                         |
 
 - **Tagging is by PATH GLOB in `sheriff.config.ts`** (specs 0010/0012/0051). Every
   touched lib already has its tag; **this spec does NOT edit `sheriff.config.ts`**.
@@ -184,12 +184,12 @@ PLAN §4 paths. Two changes, **both additive booleans**: one on `users/{uid}`, o
 on `users/{uid}/watchlist/{titleId}`. **No new collection, no new index, no
 `firestore.rules` change** (see below).
 
-| PLAN §4 path                                | Access                            | By                                                                             |
-| ------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------ |
-| `users/{uid}.hasPlex`                        | **read**, **create**, **update**  | settings slice (read on load; default `false` on eager create; write on chip toggle) |
-| `users/{uid}.hasPlex`                        | **read**                          | title-detail slice (gates the toggle control's visibility)                     |
-| `users/{uid}/watchlist/{titleId}.watchingViaPlex` | **read**, **update**         | title-detail slice (read for active/empty state; write on toggle)              |
-| `users/{uid}/watchlist/{titleId}.watchingViaPlex` | **read**                     | watchlist slice (read-only card badge, off the already-streamed item)          |
+| PLAN §4 path                                      | Access                           | By                                                                                   |
+| ------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------ |
+| `users/{uid}.hasPlex`                             | **read**, **create**, **update** | settings slice (read on load; default `false` on eager create; write on chip toggle) |
+| `users/{uid}.hasPlex`                             | **read**                         | title-detail slice (gates the toggle control's visibility)                           |
+| `users/{uid}/watchlist/{titleId}.watchingViaPlex` | **read**, **update**             | title-detail slice (read for active/empty state; write on toggle)                    |
+| `users/{uid}/watchlist/{titleId}.watchingViaPlex` | **read**                         | watchlist slice (read-only card badge, off the already-streamed item)                |
 
 ### `users/{uid}.hasPlex` (additive)
 
@@ -205,7 +205,7 @@ on `users/{uid}/watchlist/{titleId}`. **No new collection, no new index, no
 - **No `firestore.rules` change.** The `users/{userId}` owner rule already covers
   every additive field (spec 0004/0011); confirmed against the current
   `firestore.rules` (the `match /users/{userId} { allow read, write: if
-  isOwner(userId) }` block).
+isOwner(userId) }` block).
 
 ### `users/{uid}/watchlist/{titleId}.watchingViaPlex` (additive)
 
@@ -363,7 +363,7 @@ toggleWatchingViaPlex(tmdbId: number, watchingViaPlex: boolean): Promise<void>;
   refactored, but a sibling read of the same doc is acceptable (the doc is already
   small). Null uid → `of(false)`.
 - `toggleWatchingViaPlex`: `updateDoc(doc(firestore, watchlistItemPath(uid,
-  String(tmdbId))), { watchingViaPlex })` — a single-field write. No-op on null uid.
+String(tmdbId))), { watchingViaPlex })` — a single-field write. No-op on null uid.
 - The **current** `watchingViaPlex` value is read off the existing `tracked$`
   stream (which already returns the full `WatchlistItem` via
   `dataToWatchlistItem`, now carrying `watchingViaPlex`) — **no new stream** needed
@@ -438,14 +438,14 @@ has all 7 chips. Read the Plex chip's real markup before touching
 
 **Checkable contract for the Plex chip (tick each vs the fetched markup + screenshot):**
 
-| Element                    | Spec                                                                                                                                                                                                 | Token / var                                    |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| **Chip footprint**         | Same width/height as the sibling TMDB chips (0060 pins ~96px wide; the Plex chip **must not drift** from that). Same wrap-row gap.                                                                    | (matches 0060 chip metrics)                    |
-| **Logo tile**              | A neutral logo tile (theme-token background, same radius as the sibling chip logos) containing the **bundled Plex logo image** (`<img>` from `apps/mobile/public/assets/`, `object-cover` filling the tile). NO hard-coded brand hex — the tile background uses a `--vultus-*` surface token and the brand colour lives in the image.             | `--vultus-*` surface token + bundled logo asset |
-| **Name label**             | "Plex" — `label-sm`, centered, `on-surface` (same type role as sibling chip names).                                                                                                                  | `--vultus-on-surface`                          |
-| **Secondary label**        | A small caption **"Manual"** under the chip name, `label-sm`/muted, distinguishing Plex from real subscriptions (no automatic availability). Sibling TMDB chips have **no** secondary label.          | `--vultus-on-surface-variant`                  |
-| **Selected (`hasPlex` true)** | `border-2` in `--ion-color-primary`; a `check_circle` (`checkmark-circle`) badge overlapping the top-right of the logo, primary-coloured; full opacity — **identical treatment to 0060's selected TMDB chips**, just backed by `hasPlex` instead of `myProviderIds` membership. | `--ion-color-primary`                          |
-| **Unselected (`hasPlex` false)** | `border` (1px) in `outline-variant` (~20% alpha); `opacity: 0.6`; no badge — identical to 0060's unselected chip.                                                                             | `--vultus-outline-variant`                     |
+| Element                          | Spec                                                                                                                                                                                                                                                                                                                                  | Token / var                                     |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| **Chip footprint**               | Same width/height as the sibling TMDB chips (0060 pins ~96px wide; the Plex chip **must not drift** from that). Same wrap-row gap.                                                                                                                                                                                                    | (matches 0060 chip metrics)                     |
+| **Logo tile**                    | A neutral logo tile (theme-token background, same radius as the sibling chip logos) containing the **bundled Plex logo image** (`<img>` from `apps/mobile/public/assets/`, `object-cover` filling the tile). NO hard-coded brand hex — the tile background uses a `--vultus-*` surface token and the brand colour lives in the image. | `--vultus-*` surface token + bundled logo asset |
+| **Name label**                   | "Plex" — `label-sm`, centered, `on-surface` (same type role as sibling chip names).                                                                                                                                                                                                                                                   | `--vultus-on-surface`                           |
+| **Secondary label**              | A small caption **"Manual"** under the chip name, `label-sm`/muted, distinguishing Plex from real subscriptions (no automatic availability). Sibling TMDB chips have **no** secondary label.                                                                                                                                          | `--vultus-on-surface-variant`                   |
+| **Selected (`hasPlex` true)**    | `border-2` in `--ion-color-primary`; a `check_circle` (`checkmark-circle`) badge overlapping the top-right of the logo, primary-coloured; full opacity — **identical treatment to 0060's selected TMDB chips**, just backed by `hasPlex` instead of `myProviderIds` membership.                                                       | `--ion-color-primary`                           |
+| **Unselected (`hasPlex` false)** | `border` (1px) in `outline-variant` (~20% alpha); `opacity: 0.6`; no badge — identical to 0060's unselected chip.                                                                                                                                                                                                                     | `--vultus-outline-variant`                      |
 
 **Structure note:** the Plex chip is a **`<button>`-role chip in the same wrapping
 row** as 0060's catalog chips, but rendered from its **own template block** (NOT a
@@ -455,9 +455,9 @@ member.
 
 **Interactive-state contract (tick each):**
 
-| Element    | default                                          | focus                 | active/press                                        | selected result                                                              |
-| ---------- | ------------------------------------------------ | --------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Plex chip  | unselected (border, 60% opacity) OR selected (primary border + badge, full opacity) per `hasPlex()` | `:focus-visible` ring | subtle press feedback (opacity/scale) consistent with the sibling chips; no lift | tapping calls `toggleHasPlex`; the chip flips selected/unselected with the same border+badge+opacity transition 0060 pinned |
+| Element   | default                                                                                             | focus                 | active/press                                                                     | selected result                                                                                                             |
+| --------- | --------------------------------------------------------------------------------------------------- | --------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Plex chip | unselected (border, 60% opacity) OR selected (primary border + badge, full opacity) per `hasPlex()` | `:focus-visible` ring | subtle press feedback (opacity/scale) consistent with the sibling chips; no lift | tapping calls `toggleHasPlex`; the chip flips selected/unselected with the same border+badge+opacity transition 0060 pinned |
 
 - **Font loading:** Inter is loaded app-wide (spec 0010) — confirm the chip renders
   in Inter (a named token only renders if the font is actually loaded).
@@ -496,27 +496,47 @@ follows 0060's two groups):
 
 ```html
 <div class="space-y-3">
-  <div class="text-on-surface-variant font-label-sm text-label-sm uppercase tracking-wider">Personal Tracking</div>
+  <div
+    class="text-on-surface-variant font-label-sm text-label-sm uppercase tracking-wider"
+  >
+    Personal Tracking
+  </div>
   <!-- ACTIVE row (watchingViaPlex true) -->
-  <div class="flex items-center justify-between p-3 rounded-lg bg-surface-container hover:bg-surface-container-high transition-colors cursor-pointer group">
+  <div
+    class="flex items-center justify-between p-3 rounded-lg bg-surface-container hover:bg-surface-container-high transition-colors cursor-pointer group"
+  >
     <div class="flex items-center gap-3">
-      <div class="w-10 h-10 rounded-lg bg-surface-container-highest flex items-center justify-center text-primary flex-shrink-0">
-        <img src="[bundled Plex logo asset]" alt="Plex Logo" class="w-full h-full object-cover rounded-lg">
+      <div
+        class="w-10 h-10 rounded-lg bg-surface-container-highest flex items-center justify-center text-primary flex-shrink-0"
+      >
+        <img
+          src="[bundled Plex logo asset]"
+          alt="Plex Logo"
+          class="w-full h-full object-cover rounded-lg"
+        />
       </div>
       <div>
         <p class="text-on-surface font-bold text-body-md">Watching via Plex</p>
         <p class="text-on-surface-variant text-label-sm">Local Server</p>
       </div>
     </div>
-    <button class="text-primary font-label-md text-label-md hover:underline">Change</button>
+    <button class="text-primary font-label-md text-label-md hover:underline">
+      Change
+    </button>
   </div>
   <!-- EMPTY/UNSET row (watchingViaPlex false) — only one of the two renders at runtime -->
-  <div class="flex items-center justify-between p-3 rounded-lg border border-dashed border-outline-variant/30 hover:border-primary/50 transition-colors cursor-pointer group">
+  <div
+    class="flex items-center justify-between p-3 rounded-lg border border-dashed border-outline-variant/30 hover:border-primary/50 transition-colors cursor-pointer group"
+  >
     <div class="flex items-center gap-3">
-      <div class="w-10 h-10 rounded-lg flex items-center justify-center text-on-surface-variant/50 flex-shrink-0">
+      <div
+        class="w-10 h-10 rounded-lg flex items-center justify-center text-on-surface-variant/50 flex-shrink-0"
+      >
         <span class="material-symbols-outlined">add</span>
       </div>
-      <p class="text-on-surface-variant/70 text-body-md">Mark as watching via Plex</p>
+      <p class="text-on-surface-variant/70 text-body-md">
+        Mark as watching via Plex
+      </p>
     </div>
   </div>
 </div>
@@ -527,11 +547,11 @@ follows 0060's two groups):
 
 **Checkable contract (tick each vs the fetched `562019f2…` markup + screenshot):**
 
-| State                     | Structure                                                                                                                                                                                                                            | Token intent                                                              |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| **Subsection header**     | A subgroup label **"Personal Tracking"** — `label-sm`, `uppercase`, letter-spaced (`tracking-wider`), `on-surface-variant`; same type role / treatment as the sibling group labels in the card.                                        | `--vultus-on-surface-variant`, `label-sm`                                 |
-| **Active (`watchingViaPlex` true)** | A row (`p-3`, `rounded-lg`, `surface-container` background): a **`w-10 h-10` (40×40) `rounded-lg` `surface-container-highest` logo tile** holding the **bundled Plex logo `<img>`** (`w-full h-full object-cover rounded-lg`), `gap-3` to the text · **bold "Watching via Plex"** (`text-on-surface`, `body-md`, `font-bold`) · muted caption **"Local Server"** (`text-on-surface-variant`, `label-sm`) · a **text-only "Change" button** at the row end (`text-primary`, `label-md`, `hover:underline`) to unset it. | `--vultus-surface-container` / `--vultus-surface-container-highest` (tiles) · `--vultus-on-surface` · `--vultus-on-surface-variant` · `--ion-color-primary` (Change button + text) · bundled logo asset |
-| **Empty/unset (`watchingViaPlex` false)** | A row (`p-3`, `rounded-lg`) with a **dashed 1px border** (`outline-variant` ~30% alpha), a **`w-10 h-10` tile holding a muted `material-symbols-outlined` "add" glyph** (`on-surface-variant` ~50% alpha), and text **"Mark as watching via Plex"** (`text-on-surface-variant` ~70% alpha, `body-md`) — the tappable affordance that sets the flag. | `--vultus-outline-variant` (dashed) · `--vultus-on-surface-variant` · `--ion-color-primary` (hover border) |
+| State                                     | Structure                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Token intent                                                                                                                                                                                            |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Subsection header**                     | A subgroup label **"Personal Tracking"** — `label-sm`, `uppercase`, letter-spaced (`tracking-wider`), `on-surface-variant`; same type role / treatment as the sibling group labels in the card.                                                                                                                                                                                                                                                                                                                        | `--vultus-on-surface-variant`, `label-sm`                                                                                                                                                               |
+| **Active (`watchingViaPlex` true)**       | A row (`p-3`, `rounded-lg`, `surface-container` background): a **`w-10 h-10` (40×40) `rounded-lg` `surface-container-highest` logo tile** holding the **bundled Plex logo `<img>`** (`w-full h-full object-cover rounded-lg`), `gap-3` to the text · **bold "Watching via Plex"** (`text-on-surface`, `body-md`, `font-bold`) · muted caption **"Local Server"** (`text-on-surface-variant`, `label-sm`) · a **text-only "Change" button** at the row end (`text-primary`, `label-md`, `hover:underline`) to unset it. | `--vultus-surface-container` / `--vultus-surface-container-highest` (tiles) · `--vultus-on-surface` · `--vultus-on-surface-variant` · `--ion-color-primary` (Change button + text) · bundled logo asset |
+| **Empty/unset (`watchingViaPlex` false)** | A row (`p-3`, `rounded-lg`) with a **dashed 1px border** (`outline-variant` ~30% alpha), a **`w-10 h-10` tile holding a muted `material-symbols-outlined` "add" glyph** (`on-surface-variant` ~50% alpha), and text **"Mark as watching via Plex"** (`text-on-surface-variant` ~70% alpha, `body-md`) — the tappable affordance that sets the flag.                                                                                                                                                                    | `--vultus-outline-variant` (dashed) · `--vultus-on-surface-variant` · `--ion-color-primary` (hover border)                                                                                              |
 
 - **The row is the tappable target** (`cursor-pointer` on both rows). Empty-state
   tap → `togglePlex(tracked)` sets `watchingViaPlex` true. Active-state "Change"
@@ -570,15 +590,15 @@ is **positioned by that same convention**, but its concrete Plex-badge markup is
 
 **Checkable contract (tick each):**
 
-| Element             | Spec                                                                                                                                                                                                       | Token intent                             |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| **Plex badge**      | A **compact** tag using the **bundled Plex logo image** (the same asset the other two renderers use) and/or a short "Plex" label, on a neutral theme-token background, small enough to fit the card's `items-end gap-sm` corner slot beside 0060's availability pill. `label-sm`/tiny scale, matching the card's meta scale. No hard-coded brand hex — brand colour lives in the logo image; the badge chrome uses `--vultus-*` / `--ion-*` vars. | bundled logo asset · `--vultus-*` chrome · card meta type role |
-| **Placement**       | In the SAME corner slot as 0060's availability pill, **stacked with `gap-sm`** below/beside it — **additive**, never replacing the pill (decision 4). When `watchingViaPlex` is false, the badge is absent and the pill renders exactly as 0060 defines it. | (0060 corner-slot convention)            |
-| **Interactivity**   | **Read-only** — non-interactive/presentational. The card itself remains the tappable target (unchanged). No hover/focus/active on the badge. Toggling happens only in title-detail (decision 5).            | (existing card interactivity)            |
+| Element           | Spec                                                                                                                                                                                                                                                                                                                                                                                                                                              | Token intent                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| **Plex badge**    | A **compact** tag using the **bundled Plex logo image** (the same asset the other two renderers use) and/or a short "Plex" label, on a neutral theme-token background, small enough to fit the card's `items-end gap-sm` corner slot beside 0060's availability pill. `label-sm`/tiny scale, matching the card's meta scale. No hard-coded brand hex — brand colour lives in the logo image; the badge chrome uses `--vultus-*` / `--ion-*` vars. | bundled logo asset · `--vultus-*` chrome · card meta type role |
+| **Placement**     | In the SAME corner slot as 0060's availability pill, **stacked with `gap-sm`** below/beside it — **additive**, never replacing the pill (decision 4). When `watchingViaPlex` is false, the badge is absent and the pill renders exactly as 0060 defines it.                                                                                                                                                                                       | (0060 corner-slot convention)                                  |
+| **Interactivity** | **Read-only** — non-interactive/presentational. The card itself remains the tappable target (unchanged). No hover/focus/active on the badge. Toggling happens only in title-detail (decision 5).                                                                                                                                                                                                                                                  | (existing card interactivity)                                  |
 
 - **Composition with 0060:** the badge is a small extra element inside the existing
   `flex flex-col items-end gap-sm` corner container, gated by `@if
-  (item.watchingViaPlex)`. It does NOT alter the availability-pill markup 0060 adds.
+(item.watchingViaPlex)`. It does NOT alter the availability-pill markup 0060 adds.
 
 > **Watchlist card unchanged by the new screen.** The consolidated
 > `562019f2…` covers title-detail only, not the watchlist card. This section stays
@@ -869,8 +889,7 @@ Tailored from PLAN §5. Affected: `shared-domain`, `shared-firestore-schema`,
       another slice; no `scope:mobile` ↔ `scope:functions` edge (none introduced);
       the Plex indicator stays duplicated per slice (2 slices, not extracted); no
       `@angular/fire/functions` / callable / shell token added.
-- [ ] `pnpm nx test shared-firestore-schema` — `hasPlex` (true/false/missing→false)
-      + `watchingViaPlex` (true/false/missing→false) round-trips.
+- [ ] `pnpm nx test shared-firestore-schema` — `hasPlex` (true/false/missing→false) + `watchingViaPlex` (true/false/missing→false) round-trips.
 - [ ] `pnpm nx test mobile-settings` — Plex chip render + `toggleHasPlex` + load +
       eager-create default; existing settings tests stay green.
 - [ ] `pnpm nx test mobile-title-detail` — subsection gate on `hasPlex`, active/empty
