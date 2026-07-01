@@ -69,12 +69,17 @@ architecture and decisions; read it before non-trivial work.
     install + launch).
   - `serve-prod-debug` / `serve-prod` / `android-usb` **require a populated
     `.env.local`** — `inject-mobile-env.mjs` runs first and \*\*fails loudly (exit
-    1. naming the missing key\*_ if any `TMDB_API_KEY` / `FIREBASE\__` value is
+    1. naming the missing key\*\_ if any `TMDB_API_KEY` / `FIREBASE\__` value is
        absent.
 - **Definition of done** for any PR: typecheck + lint/Sheriff + unit + component
   (for non-trivial UI) + build + e2e (affected critical flows) all green, and the
   changed slice has tests for its logic. Tooling-absent gates degrade gracefully —
   see the skills.
+- **Cold pre-commit hook is slow.** In a **fresh worktree** the husky +
+  lint-staged hook (ESLint `--fix`, Prettier, `gen-spec-status --check`) runs
+  **cold** and can exceed the default tool timeout — run the first `git commit`
+  with a long timeout (the Bash-tool max, `600000` ms) and consider backgrounding
+  it, rather than treating the timeout as a failure.
 - **Cloud Functions deploy gate.** CI validates the monorepo but the deployable
   artifact is the **pruned `dist/apps/functions`**, installed by Cloud Build with
   pnpm — a different beast. Any change to `apps/functions` deps or build **must**
@@ -88,9 +93,23 @@ architecture and decisions; read it before non-trivial work.
 
 - **Shell is PowerShell** (Windows). Use PS-safe syntax: `2>$null`, here-strings
   `@'...'@` for multi-line text, `$env:VAR`, `$LASTEXITCODE`.
-- **Secrets:** never read or write `.env.local` or any secret. Secrets live in
-  `.env.local` (gitignored), GitHub Actions secrets, and Firebase functions
-  config. Flag if a secret would be needed somewhere it shouldn't be.
+- **Windows tooling notes.** (E3) The shell **cwd resets between calls** — always
+  use **absolute paths** / `git -C $wt` / `cd $wt && …` in the same call; never
+  rely on a persisted cwd. (E2) The Edit/Write tools can emit **CRLF**, tripping
+  Prettier's `endOfLine: lf` (`prettier --check`) — after editing a source file
+  run `pnpm exec prettier --write` on the **changed files** before staging
+  (changed files only; no repo-wide `.gitattributes` renormalization). (E1) Use
+  `pnpm exec cap …` (not `npx cap …`, which can't resolve the `cap` binary in the
+  pnpm workspace), and build the web app first (`pnpm nx build mobile`) before
+  `pnpm exec cap sync android` — `cap sync` aborts without `dist/apps/mobile/browser`.
+- **Secrets:** never **read, print, log, echo, or commit** the **contents** of
+  `.env.local` or any secret. Note: the `implement-feature` worktree seed
+  (spec 0040) **copies** `.env.local` and `google-services.json` as **opaque
+  files** between two local checkouts on the same machine — a file-to-file copy
+  is **not** reading a secret and is explicitly permitted. The prohibition is on
+  exposing secret **VALUES**. Secrets live in `.env.local` (gitignored), GitHub
+  Actions secrets, and Firebase functions config. Flag if a secret would be
+  needed somewhere it shouldn't be.
 - **Branches:** `spec/NNNN-slug` (spec PRs), `feat/NNNN-slug` (feature PRs).
   PRs target `main`; squash-merge so each spec/feature is one commit.
 - **Pre-commit hook:** husky + lint-staged run ESLint `--fix` (Sheriff included)

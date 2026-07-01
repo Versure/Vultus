@@ -65,9 +65,19 @@ Body sections, in this order — keep each tight and concrete:
    rule.
 4. **Data model touchpoints** — exact Firestore collections/fields touched or
    added, referencing PLAN §4. Note new fields, converters, or security-rule
-   changes.
+   changes. Any collection/field the feature reads or writes needs a
+   corresponding `firestore.rules` rule (keyed by `userId`, PLAN §4) and, where
+   queried, a `firestore.indexes.json` entry — call these out here so §7's task
+   graph and the DoD both carry them (see the DoD ⇄ task-manifest cross-check
+   below).
 5. **Public types / APIs** — new or changed types (prefer `shared/domain`),
-   function signatures, HTTP endpoints, callable shapes.
+   function signatures, HTTP endpoints, callable shapes. **When a change makes a
+   `shared/domain` field _required_** (or otherwise breaks existing consumers),
+   treat it as a **repo-wide ripple**: grep the whole workspace for the type name
+   and for object literals that construct it, enumerate **every** consumer, and
+   list **every** affected slice in "Affected slices" (§3) — not just the
+   obviously related ones. Widening a required field breaks any slice that
+   constructs the type, including ones far from the feature (e.g. onboarding).
 6. **UI / Stitch screen refs** — for mobile slices only: the relevant Stitch
    screen plus the in-repo design system. **The authoritative tokens live at
    `docs/design/vultus-design-system.md`** — reference that file, do **not**
@@ -103,7 +113,14 @@ Body sections, in this order — keep each tight and concrete:
    implement-feature uses to fan out agents safely.
 8. **Test plan** — concrete tests per the PLAN §5 pyramid: unit (what logic),
    component (which components with non-trivial state), e2e (which named flows,
-   if any).
+   if any). **Rendered-text assertions:** component/unit tests that assert on
+   **rendered UI text** must assert the **exact string** — do **not** whitespace-
+   normalize (e.g. `.replace(/\s+/g,' ').trim()`) before asserting, which masks
+   rendering defects like a stray leading/trailing space. Keep the component/unit
+   assertion and the e2e assertion **consistent on the same text** (e.g. an e2e
+   `toHaveText(/^On Netflix$/)` should not be laxer or stricter than its
+   component counterpart). Spell this out in the test plan for any spec that
+   asserts on rendered copy.
 
    > **e2e decision rubric** (apply before writing this section):
    >
@@ -125,6 +142,18 @@ Body sections, in this order — keep each tight and concrete:
 9. **Definition of done** — copy the PLAN §5 checklist, tailored to this feature.
 10. **Risks** — known unknowns, data-source caveats (TMDB/Trakt accuracy),
     PLAN conflicts.
+
+## Before finishing: DoD ⇄ task-manifest cross-check
+
+Before you return, cross-check the **Definition of done** against the
+**Implementation task graph**: **every DoD checkbox MUST map to at least one
+task** in the graph. Walk each DoD item and confirm the file(s) that satisfy it
+appear in some task's file manifest; for any **orphan** requirement — one no task
+would produce — either add a task or add the file to an existing task's manifest
+before finishing. Watch especially for the ones that are easy to leave in the DoD
+prose but out of every manifest: **`firestore.rules`**,
+**`firestore.indexes.json`**, and **rules-tests**. A DoD requirement in no task
+manifest is a defect that escapes until final reconciliation.
 
 ## Output
 

@@ -14,5 +14,12 @@
         ]
       }
     ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(*Copy-Item*google-services.json*)",
+      "Bash(*Copy-Item*.env.local*)",
+      "Bash(*Copy-Item*environment.generated.ts*)"
+    ]
   }
 }

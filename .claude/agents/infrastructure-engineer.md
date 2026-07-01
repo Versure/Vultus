@@ -85,7 +85,11 @@ path**, and **your assigned task subset**.
      grant command. (See the `functions-deploy-pnpm-recipe` memo for the full
      deploy recipe; spec 0021 for the failure history.)
 - **Capacitor**: `capacitor.config.ts`, Android icon/splash, FCM push setup,
-  local APK build (PLAN §6 task 21).
+  local APK build (PLAN §6 task 21). **`cap sync` recipe (Windows/pnpm):** build
+  the web app first (`pnpm nx build mobile`), then `pnpm exec cap sync android`
+  — use `pnpm exec cap …`, not `npx cap …` (npx can't resolve the `cap` binary in
+  the pnpm workspace); `cap sync` aborts without a prior web build (`Could not
+find the web assets directory: dist/apps/mobile/browser`).
 - **PR template** under `.github/` when in scope (PLAN §5). Do **not** create
   GitHub issue templates — there are no issues; the spec file is the unit of work
   (see `docs/specs/README.md`).
@@ -95,5 +99,9 @@ path**, and **your assigned task subset**.
 Read the spec and your assigned tasks. Make the config/workflow changes, keeping
 them minimal and version-pinned where version drift would break CI (PLAN §9).
 Validate locally where possible (lint config parses, `nx` recognizes targets,
-workflow YAML is well-formed). Return: files changed, a short summary, any
+workflow YAML is well-formed). **On Windows,** after any `Edit`/`Write` on a
+source file, run `pnpm exec prettier --write` on the **changed files** before
+staging, so a phantom CRLF diff doesn't fail `prettier --check` (only the changed
+files — no whole-file EOL churn, no `.gitattributes` change). Return: files
+changed, a short summary, any
 validation output, and anything you couldn't do (blocked/ambiguous/out of scope).

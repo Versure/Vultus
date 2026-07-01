@@ -48,6 +48,29 @@ Sheriff is an import linter — it does **not** make files disjoint. Therefore:
   shared/root path above. On any failure, fail closed — pull it into foundation
   or run those tasks sequentially.
 
+## Known environment behaviors (group G)
+
+These are observations of the **current** harness — not in-repo bugs and not
+fixable here. They **may change**; they are recorded so the orchestrator plans
+around them rather than being surprised.
+
+- **The Agent tool runs async here.** With `run_in_background` omitted the Agent
+  tool **still returns immediately** ("Async agent launched") with an `agentId`;
+  the actual completion arrives **later** as a `<task-notification>`. So
+  **dispatch, then await notifications** — use `ScheduleWakeup` to resume — do
+  **not** expect an inline synchronous result from an Agent call. (One real run
+  needed ~15 wakeups to drain its fan-out.)
+- **Bash cwd resets** to the primary checkout between calls. Never rely on a
+  persisted working directory — always use **absolute paths** / `git -C $wt` /
+  `cd $wt && …` **within the same call**.
+- **Permission-classifier context sensitivity.** An earlier denied action (e.g.
+  the Step-2 `.env.local` seed copy) has been observed to influence the
+  classifier's judgment on **later, unrelated actions** in the same session (even
+  a benign markdown `Edit`). If a clearly-legitimate action is unexpectedly
+  blocked, the honest move is to **surface it to the user** for a decision rather
+  than looping. (See group D-fallback: a blocked seed is skip-and-warn, not an
+  abort.)
+
 ## Steps
 
 ### 1. Select & read the spec
@@ -56,6 +79,14 @@ Sheriff is an import linter — it does **not** make files disjoint. Therefore:
   (treat a merged spec missing the field as approved). Read it fully — Scope,
   Affected slices, Public types, Data model, **task graph + manifests**, Test
   plan, DoD.
+- **Spec-file-only-diff guard (group H).** Before proceeding, verify the selected
+  spec is genuinely _approved-but-unimplemented_, not already implemented: confirm
+  its merge landed a **spec-file-only diff** — e.g. `git show <merge-sha> --stat`
+  (or `git log --stat` for the spec's merge) shows **only** `docs/specs/NNNN-*.md`
+  changed. If the merge diff includes app/lib/config changes, the spec is likely
+  already implemented — stop and confirm before re-implementing. (Commit-subject
+  convention aside: spec PRs read `docs(spec 00NN): …`, feature PRs read
+  `feat(00NN): …` — a small disambiguation aid, not a rename effort.)
 
 ### 2. Create the worktree
 
@@ -69,6 +100,13 @@ Sheriff is an import linter — it does **not** make files disjoint. Therefore:
   `git worktree add -b feat/NNNN-slug $wt main`. Branch must not be active in the
   primary checkout. Set `status: implementing` **in the worktree** (worktree-local
   only — `main` advances `approved → done`).
+- **Regenerate + stage the ledger on this status flip (group A.1).** The
+  `approved → implementing` change edits a `docs/specs/*.md` file, so the local
+  pre-commit hook's `gen-spec-status.mjs --check` will fail unless the ledger is
+  fresh. Immediately after flipping `status:`, run
+  `node tools/scripts/gen-spec-status.mjs` **in the worktree** (`-C $wt` / from
+  `$wt`) and stage the regenerated `docs/specs/STATUS.md` **in the same commit** as
+  the status change. This removes the manual regenerate-and-recommit loop.
 - **Seed local-only files.** Immediately after the worktree is created or reused
   (so `$wt` exists on disk), copy these three gitignored files from the primary
   checkout (`$root`) into the worktree at the same relative paths. They are
@@ -123,11 +161,30 @@ Directory -Force`) — required for brand-new worktrees where
     they are copied as opaque local files and are **never read, logged, staged, or
     committed**. A reviewer must not "improve" this step by printing or templating
     their contents.
+  - **A blocked/denied copy is skip-and-warn, never an abort (group D-fallback).**
+    Treat a copy the permission classifier **denies** exactly like a missing source:
+    skip it, record a `$seedWarnings` string, and **surface it in Step 9's report** —
+    do **not** abort the run. The mock / emulator / typecheck / lint / test / build /
+    e2e paths do **not** need `.env.local` (only `serve-prod-debug` / `serve-prod` /
+    `android-usb` do), so a blocked seed is **not** a blocker for the DoD gates — it
+    only blocks on-device / real-prod manual testing. If the classifier
+    **persistently** blocks the copy, surface to the user the **manual fallback**:
+    run the three `Copy-Item` copies once in their own terminal. (The classifier's
+    LLM judgment sits above the settings allowlist — see the "Known environment
+    behaviors" section on poisoning.)
 
 - **Bootstrap check:** if no `nx.json` exists, go to step 3a.
 
 ### 3. Decompose & route (you)
 
+- **DoD ⇄ task-manifest reconciliation pre-flight (group F1).** Before fan-out,
+  list every DoD requirement and assert each maps to at least one task in the task
+  graph (present in some task's file manifest). Any **orphan** — a DoD requirement
+  in no task's manifest, especially `firestore.rules`, `firestore.indexes.json`,
+  and rules-tests — becomes a **foundation task** (added to the sequential
+  foundation, owned by the orchestrator or routed to infrastructure-engineer). This
+  is a belt to spec-reviewer's suspenders: catch the orphan here, at plan time, not
+  at final reconciliation.
 - Split tasks into **[sequential foundation]** — new-slice `nx generate`,
   installs, root/config wiring, `firestore.rules`/`indexes`, CI, shared-lib
   population, `apps/*` registration — and **[parallel]** slice-internal source
@@ -172,10 +229,44 @@ Directory -Force`) — required for brand-new worktrees where
   **fan out** routed specialists in parallel (all calls in one message), each
   confined to its manifest and forbidden from shared/root files or
   install/generate.
+- **Workspace-wide typecheck after any `shared/domain` foundation change
+  (group F2).** After **any** `shared/domain` foundation change (e.g. widening a
+  required field on a shared type), run a **workspace-wide** typecheck —
+  `pnpm nx run-many -t typecheck` (or affected with the shared lib as base) — **not**
+  just per-task typechecks. A widened required field breaks consumers **outside**
+  every task's scope (e.g. an object literal in a slice not listed in "Affected
+  slices"), which per-task typechecks miss.
 - On fan-in, **capture each agent's reported file list** and reconcile against
   its manifest: re-dispatch any slice whose agent failed/returned null or
   reported success but wrote nothing. (A global `git status` can't attribute
   files per slice or catch a clobber — trust the manifests + reported lists.)
+- **Normalize line endings before staging (group E2).** On Windows the `Edit`/
+  `Write` tools write CRLF, which trips Prettier's `endOfLine: lf` (`prettier
+--check`) and produces a phantom whole-file CRLF diff. After **any** `Edit`/`Write`
+  on a source file (including the orchestrator's own foundation edits), run
+  `pnpm exec prettier --write <changed files>` — **only the changed files** —
+  **before** staging. No whole-file EOL churn, and **no** `.gitattributes`
+  renormalization.
+- **The orchestrator commits at fan-in (group B) — implementers do not
+  self-commit.** After reconciling each agent's reported file list against its
+  manifest (and E2-normalizing), the orchestrator **commits all implemented work**
+  itself. A WIP commit is fine — the PR is squash-merged. Implementer subagents do
+  **not** self-commit: they would race the git index in a shared worktree. This
+  committed diff is an explicit **precondition of Step 5** — feature-reviewer
+  computes `git -C $wt diff main...HEAD`, so it **must run against a committed
+  diff**; if the working tree is dirty at Step 5, commit first.
+- **First commit of a cold/fresh worktree needs a long/backgrounded timeout
+  (group C).** On the **first commit of a fresh worktree**, husky + lint-staged
+  (eslint `--fix`, prettier `--write`, `gen-spec-status --check`) run cold and can
+  far exceed the default 2-min Bash timeout, SIGKILLing `git commit` (exit 143)
+  mid-hook. For that first commit use a **long timeout — `600000` ms (the Bash
+  tool's maximum**, so use that value, not a longer one) — and **prefer
+  `run_in_background: true`**, which sidesteps the ceiling entirely when the hook may
+  run past 10 min. **Recovery check before retrying:** lint-staged stashes and, on
+  kill, its stash-revert may be mid-flight, leaving the tree needing
+  re-verification. Before re-committing, inspect `git status --short` **and**
+  `git stash list`; if lint-staged left a stash, **restore it** before
+  re-committing.
 - **Lib README currency is part of done** (CLAUDE.md): any slice that creates a
   lib or changes a lib's public API/behavior/boundaries must update that lib's
   `README.md` in the same change — never leave the generated Nx scaffold text.
@@ -190,6 +281,11 @@ Directory -Force`) — required for brand-new worktrees where
 
 ### 5. Auto-review → bounded rework
 
+- **Precondition (group B): feature-reviewer must run against a committed diff.**
+  The reviewer computes `git -C $wt diff main...HEAD`; if the work is still in the
+  working tree, that diff is empty and the reviewer returns a bogus blocking
+  `NEEDS_REWORK`. If the working tree is dirty at this point, **commit first**
+  (Step 4 already commits at fan-in).
 - Spawn **feature-reviewer** on the diff (`git -C $wt diff main...HEAD`). For
   `NEEDS_REWORK`, dispatch the appropriate specialist(s) by scope tag (you handle
   shared-file fixes), re-review, up to the bound; then record open findings.
@@ -201,6 +297,12 @@ Directory -Force`) — required for brand-new worktrees where
   `SKIPPED` is a **blocking** unmet DoD gate, not an acceptable skip (only
   genuinely-not-bootstrapped tooling is an OK skip). For `FAIL`/unmet, dispatch
   the relevant specialist with details, re-run QA, up to the bound.
+- **`cap sync` on Windows (group E1).** Use `pnpm exec cap sync android` (not
+  `npx cap …` — `npx` can't resolve the `cap` binary in the pnpm workspace).
+  `cap sync`'s copy step **aborts without a prior web build** ("Could not find the
+  web assets directory: `dist/apps/mobile/browser`"), so when a spec's DoD requires
+  `cap sync`, run **`pnpm nx build mobile` first**, then `pnpm exec cap sync
+android` (or `pnpm exec cap copy android`).
 - **UI fidelity is not provable by the green gates.** typecheck/lint/test/build
   passing says nothing about whether a `scope:mobile` change _looks_ like the
   Stitch screen — that blind spot is what causes round-trip UI-rework passes. If
@@ -214,9 +316,33 @@ Directory -Force`) — required for brand-new worktrees where
 
 ### 7. Open the PR
 
+- **Sync with `origin/main` first (group A.2).** Before the commit/push, the
+  worktree branched off `main` at Step 2 and `main` has likely advanced (its
+  committed `docs/specs/STATUS.md` ledger is now stale relative to a fresh render).
+  Run `git -C $wt fetch origin main`, then `git -C $wt merge origin/main` into the
+  feature branch — **merge, not rebase** (the PR is squash-merged, so a merge
+  commit is harmless, and merge cleanly absorbs a "Update branch" divergence).
+  Resolve any `STATUS.md` conflict by **regenerating** the ledger
+  (`node tools/scripts/gen-spec-status.mjs` in `$wt`) and staging the regenerated
+  file — **not** by hand-editing the ledger.
 - Flip the spec to `status: done` **in the diff** by reading the frontmatter and
   setting `status:` (inserting it if absent — don't assume a line exists).
-  Merging marks it done. Commit all work, push `feat/NNNN-slug`.
+  Merging marks it done. **Regenerate + stage the ledger on this status flip
+  (group A.1):** the `→ done` change edits a `docs/specs/*.md` file, so run
+  `node tools/scripts/gen-spec-status.mjs` in `$wt` and stage the regenerated
+  `docs/specs/STATUS.md` **in the same commit** as the status change (else the
+  pre-commit hook's `--check` fails). Commit all work, push `feat/NNNN-slug`.
+- **Reconcile with the remote head before pushing (group A.3) — only when the PR
+  already exists.** On a `/rework-feature` or resumed run (a re-push into an
+  existing PR), run `gh pr view <pr> --json headRefOid` and compare to local
+  `HEAD`; if the remote is **ahead** (someone clicked GitHub's "Update branch"
+  button, adding a `Merge branch 'main'` commit the local worktree lacks),
+  `git -C $wt fetch origin feat/NNNN-slug` and merge / fast-forward the remote
+  branch into local **before** pushing, so the push is never rejected
+  non-fast-forward. On the **initial `gh pr create`** there is no PR yet, so this
+  is a **no-op — skip it**. (Cross-ref the standing memory items
+  `spec-status-ledger-ci-race` and `audit-docs-report-pr-lifecycle` — same
+  ledger-staleness family.)
 - `gh pr create --base main` referencing the spec, summarizing the change
   (`--draft` if any loop hit its bound or a required gate is unmet). **For a UI
   change whose visual fidelity could not be auto-verified, the PR body must make
@@ -239,6 +365,12 @@ Directory -Force`) — required for brand-new worktrees where
   the run id (`gh run list --branch feat/NNNN-slug -L 1 --json databaseId`),
   fetch `gh run view <id> --log-failed`, dispatch the relevant specialist to fix,
   commit, push. Up to the bound.
+- **A `STATUS.md` freshness failure is not a code failure (group A.4).** If CI's
+  `doc-integrity-test` (ledger freshness guard) fails because `docs/specs/STATUS.md`
+  is stale, treat it as **"regenerate the ledger + push"** — run
+  `node tools/scripts/gen-spec-status.mjs` in `$wt`, stage the regenerated ledger,
+  commit, push — **not** as a code failure requiring a specialist fix. (This is the
+  CI-side counterpart of the A.1/A.2 regenerate discipline.)
 
 ### 9. Report
 
