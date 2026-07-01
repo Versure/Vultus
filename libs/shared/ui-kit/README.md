@@ -51,9 +51,26 @@ qualify (watchlist, search, title-detail).
     runs edge-to-edge with the StatusBar plugin's `overlaysWebView: true`
     (spec 0029).
 - **`src/index.ts`** — the TS barrel. Exports `SHARED_UI_KIT_THEME_PATH`
-  (documenting the SCSS entrypoint) plus the four state atom components below:
-  `VultusSkeletonCard`, `VultusSkeletonHero`, `VultusEmptyState`,
-  `VultusErrorState`.
+  (documenting the SCSS entrypoint), the four state atom components below
+  (`VultusSkeletonCard`, `VultusSkeletonHero`, `VultusEmptyState`,
+  `VultusErrorState`), and the shared manual-sync state service below
+  (`SyncStateService` + the `LAST_SYNC_KEY` / `SYNC_COOLDOWN_MS` constants).
+- **`SyncStateService`** (`providedIn: 'root'`) — the shared client-side
+  **manual-sync cooldown** state behind the "refresh now" / sync triggers
+  (spec 0025; relocated here in spec 0052 so both the watchlist and title-detail
+  slices use one singleton). It reads/writes the `localStorage` key
+  **`vultus_last_sync_at`** (`LAST_SYNC_KEY`, ISO string), exposes a `canSync`
+  signal (false while inside the 5-minute / `300_000` ms `SYNC_COOLDOWN_MS`
+  cooldown, auto re-enabled by a timer at the exact expiry) and a `syncing`
+  signal, and a `triggerSync()` method that guards both signals, calls the
+  injected **`TRIGGER_SYNC`** (`@vultus/shared/domain/tokens`) thunk, records a
+  fresh timestamp + restarts the cooldown on success, and re-throws (without
+  advancing the timestamp) on failure so the caller can show an error toast. On
+  failure it logs at `console.error` with distinct messages for
+  `functions/not-found` and `functions/unauthenticated`. `localStorage` access
+  is guarded — if it is unavailable or throws, the service degrades to "always
+  allowed". As a singleton, the cooldown is **shared**: a sync triggered from one
+  slice gates the trigger in the other.
 
 ## Components
 
@@ -101,8 +118,12 @@ own SCSS — they do **not** re-declare tokens.
 ## Sheriff scope
 
 `scope:shared` — importable by **anyone** (`scope:mobile`, `scope:functions`,
-other shared libs). It imports nothing else. The theme is plain CSS variables,
-so no TypeScript cross-scope boundary is crossed.
+other shared libs). The theme is plain CSS variables, so no TypeScript
+cross-scope boundary is crossed there. Its TypeScript surface depends only on
+`@angular/core`, `@vultus/shared/domain` (`@vultus/shared/domain/tokens` for the
+`TRIGGER_SYNC` token), and `firebase/app` (the `FirebaseError` type) — all
+permitted `scope:shared` dependencies. It imports **no** other slice and nothing
+from `scope:mobile` / `scope:functions`.
 
 ## Running unit tests
 

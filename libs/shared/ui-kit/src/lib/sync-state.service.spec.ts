@@ -6,7 +6,7 @@ import {
   LAST_SYNC_KEY,
   SYNC_COOLDOWN_MS,
   SyncStateService,
-} from './watchlist.sync-state.service';
+} from './sync-state.service';
 
 /** Minimal in-memory localStorage stand-in (only the two methods we use). */
 function fakeStorage(initial: Record<string, string> = {}): Storage {
