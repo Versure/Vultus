@@ -10,10 +10,10 @@
 
 # Spec status ledger
 
-Total specs: 62
+Total specs: 63
 
 - done: 59
-- approved: 3
+- approved: 4
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -79,3 +79,4 @@ Total specs: 62
 | 60 | provider-preferences | Let users pick their subscribed providers and flag "on your platform" availability | done | slice:settings, slice:watchlist, slice:title-detail, slice:sync-titles | scope:mobile, scope:functions, scope:shared |
 | 61 | plex-provider | Add Plex as a manual, per-title "I'm watching this via Plex" provider | approved | slice:settings, slice:title-detail, slice:watchlist | scope:mobile, scope:shared |
 | 62 | android-webview-cutout-background | Paint the Android WebView background behind the camera cutout via Capacitor's top-level backgroundColor config | done | — | scope:mobile |
+| 63 | implement-feature-hardening | Harden the implement-feature workflow against observed friction (specs 0060/0062) | approved | — | — |
