@@ -25,6 +25,19 @@ across the barrel. `SeasonGroup` / `EpisodeRow` are exported only because the
 component test (and any future consumer) needs the shapes; they remain
 slice-local data.
 
+## Pull-to-refresh (spec 0052)
+
+The page's `<ion-content>` carries an `ion-refresher` (`slot="fixed"`). Pulling
+down calls `onRefresh`, which triggers a **whole-watchlist sync** via the shared
+**`SyncStateService.triggerSync()`** (`@vultus/shared/ui-kit`) — the same service
+the watchlist tab's refresh button uses. The page's Firestore streams (`tracked$`,
+`episodes$`) re-emit reactively once the sync writes land, so there is no
+detail-scoped refetch. A successful sync surfaces a **"Refreshed"** success toast;
+a failure surfaces an error toast. The **5-minute cooldown** is shared with the
+watchlist tab: inside the cooldown (`canSync()` is false) the pull is a silent
+no-op (no sync, no toast) — the refresher spinner is always dismissed via
+`event.detail.complete()`.
+
 ## TV Episodes section + movie watched toggle (spec 0034)
 
 - **TV titles** render an **Episodes** card below Where-to-Watch: episodes are
@@ -155,6 +168,8 @@ shared **types** (`@vultus/shared/domain`) and **path/converter** helpers
 - `TMDB_DETAIL_CONFIG` — base URLs + auth, provided by `apps/mobile` from
   `environment.tmdb`. The slice never reads `environment` or a secret directly.
 - AngularFire `Firestore` — injected (third-party, not policed by Sheriff).
+- `SyncStateService` (`@vultus/shared/ui-kit`) + `ToastController` (`@ionic/*`) —
+  injected for pull-to-refresh (spec 0052).
 
 The slice obtains the uid via the `AUTH_UID` token, **never** by importing
 `ShellAuthService` / `apps/mobile` (a forbidden `slice:title-detail → scope:mobile`

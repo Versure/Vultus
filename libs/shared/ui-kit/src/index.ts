@@ -21,3 +21,13 @@ export { VultusSkeletonCard } from './lib/skeleton-card/vultus-skeleton-card.com
 export { VultusSkeletonHero } from './lib/skeleton-hero/vultus-skeleton-hero.component';
 export { VultusEmptyState } from './lib/empty-state/vultus-empty-state.component';
 export { VultusErrorState } from './lib/error-state/vultus-error-state.component';
+
+// Manual-sync cooldown state for the toolbar "refresh now" trigger (spec 0025),
+// shared by the watchlist and title-detail slices (spec 0052). Imports only
+// `@angular/core`, `@vultus/shared/domain/tokens`, and `firebase/app` — all
+// permitted scope:shared dependencies.
+export {
+  SyncStateService,
+  LAST_SYNC_KEY,
+  SYNC_COOLDOWN_MS,
+} from './lib/sync-state.service';
