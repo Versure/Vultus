@@ -30,8 +30,12 @@ slice); this slice owns the inbox page reached at `tabs/notifications`.
   - `remove(id)` — deletes one notification. Null uid → no-op; best-effort.
 
 `NotificationRow` (the domain `NotificationDoc` + its real Firestore `id`) is
-exported only if a consumer/test needs it across the barrel; `relativeTime` and
-the `TMDB_POSTER_BASE` constant stay slice-internal.
+**not** re-exported from the barrel today — `notifications.page.ts`,
+`notifications.providers.mock.ts`, and the page's spec all import it directly
+from `./notifications.service`, which is fine since they're all inside this
+slice. Add it to the barrel only if a consumer outside this file needs the
+type; `relativeTime` and the `TMDB_POSTER_BASE` constant stay slice-internal
+regardless.
 
 ## Loading / empty states
 
