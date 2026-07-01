@@ -34,8 +34,14 @@ import {
 // name). The on-add trigger binds it so the runtime injects it.
 const TMDB_READ_TOKEN = defineSecret('TMDB_READ_TOKEN');
 
+// Initialize the Admin SDK eagerly at module load, not lazily inside the
+// trigger handler — see main.ts for why (a cold-start race can otherwise
+// leave getFirestore() called before initializeApp() ran).
+if (getApps().length === 0) {
+  initializeApp();
+}
+
 function ensureAdminForEpisodes(): Firestore {
-  if (getApps().length === 0) initializeApp();
   return getFirestore();
 }
 

@@ -24,8 +24,14 @@ import {
   createMessagingFcmSender,
 } from './dispatch/adapters';
 
+// Initialize the Admin SDK eagerly at module load, not lazily inside the
+// trigger handler — see main.ts for why (a cold-start race can otherwise
+// leave getFirestore()/getMessaging() called before initializeApp() ran).
+if (getApps().length === 0) {
+  initializeApp();
+}
+
 function ensureAdminForDispatch(): { db: Firestore; messaging: Messaging } {
-  if (getApps().length === 0) initializeApp();
   return { db: getFirestore(), messaging: getMessaging() };
 }
 
