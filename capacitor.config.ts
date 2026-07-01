@@ -4,6 +4,9 @@ const config: CapacitorConfig = {
   appId: 'app.vultus.mobile',
   appName: 'Vultus',
   webDir: 'dist/apps/mobile/browser',
+  // Native WebView surface paint (behind the display cutout / status bar).
+  // = --vultus-surface / --ion-background-color; matches StatusBar & SplashScreen.
+  backgroundColor: '#0b1326',
   plugins: {
     SplashScreen: {
       launchShowDuration: 500,
