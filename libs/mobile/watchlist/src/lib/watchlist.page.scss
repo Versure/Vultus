@@ -1,16 +1,15 @@
-// Watchlist tab — Stitch design.md + HTML reference applied.
-// All color literals come from the Stitch palette (watchlist-stitch.html).
-//
-// Key design.md tokens used as literals (diverge from --vultus-* where noted):
-//   surface / background:      #0b1326  (page bg)
-//   surface-container:         #171f33  (card base — watching/completed/dropped)
-//   surface-container-low:     #131b2e  (planned card — lower elevation = passive)
-//   surface-container-high:    #222a3d  (inactive pill bg)
-//   on-surface:                #dae2fd  (primary text)
-//   on-surface-variant:        #bbcabf  (muted text / meta / inactive pill text)
-//   primary:                   #4edea3  (active pill bg, availability badge)
-//   on-primary:                #003824  (text on primary bg)
-//   status-completed:          #10b981  (used for availability badge alt)
+// Watchlist tab styles. Filter/search/sheet controls follow the "Advanced
+// Watchlist" Stitch screen (spec 0054); colors/spacing/type consume the
+// `--vultus-*` theme vars (shared/ui-kit theme.scss) — no hand-set hex in the
+// new controls. Card/section styles pre-date spec 0054 (spec 0014/0043).
+
+// Shared keyboard-focus ring — a 2px primary-Emerald outline at ~50% opacity
+// (Stitch focus:ring-primary/50). `@extend`ed so the rule emits once.
+%vultus-focus-ring {
+  outline: none;
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--vultus-primary) 50%, transparent);
+}
 
 // -----------------------------------------------------------------------------
 // Header
@@ -86,118 +85,379 @@ ion-content {
 }
 
 // -----------------------------------------------------------------------------
-// Type filter — plain flex row of rounded-full pills.
-// Stitch: active = bg-primary (#4edea3) text-on-primary (#003824);
-//         inactive = bg-surface-container-high (#222a3d) text-on-surface-variant (#bbcabf)
-// px-lg (24px) py-sm (8px) text-label-md (12px/600/0.05em)
+// 1. Status filter chip row — the fixed four (All / Watching / Planned /
+//    Completed) pills with a live count badge, rendered unconditionally.
+//    Stitch "Advanced Watchlist": `flex gap-sm mb-lg`, chips `px-4 py-2`
+//    (16px/8px) `rounded-full` `text-label-md`.
+//      active   = bg-primary text-on-primary shadow-sm
+//      inactive = bg-surface-container-high text-on-surface-variant
+//      hover    = hover:bg-surface-variant/50
+//    16px side inset (margin-mobile) matches the sibling rows; scrolls
+//    horizontally (no wrap).
 // -----------------------------------------------------------------------------
-.type-filter {
-  display: flex;
-  flex-direction: row;
-  gap: 8px;
-  padding: var(--vultus-space-2) var(--vultus-space-2) var(--vultus-space-1);
-  margin-bottom: var(--vultus-space-1);
-}
-
-.filter-pill {
-  flex: 0 0 auto;
-  padding: 8px 24px;
-  border: none;
-  border-radius: 9999px;
-  background: #222a3d;
-  color: #bbcabf;
-  font-family: var(--vultus-font-family);
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  cursor: pointer;
-  transition:
-    background 120ms ease,
-    color 120ms ease;
-
-  &.active {
-    background: #4edea3;
-    color: #003824;
-  }
-}
-
-// -----------------------------------------------------------------------------
-// New filter rows (spec 0043 — token-derived; NO Stitch counterpart).
-// Status-filter chips, search bar, and provider-filter chips stack between the
-// type-filter row and the grouped list. Each row reuses the `.filter-pill`
-// style above for visual consistency. 16px side margins (margin-mobile) match
-// the type filter; 8px (spacing.sm) between sibling rows; rows scroll
-// horizontally (no wrap) like the type filter.
-// -----------------------------------------------------------------------------
-.status-filter,
-.provider-filter {
+.status-filter {
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
   gap: var(--vultus-space-sm);
-  padding: 0 var(--vultus-space-md);
-  margin-bottom: var(--vultus-space-sm);
+  padding: var(--vultus-space-md) var(--vultus-space-md) 0;
+  margin-bottom: var(--vultus-space-lg);
   overflow-x: auto;
   scrollbar-width: none;
 
   &::-webkit-scrollbar {
     display: none;
   }
-
-  .filter-pill {
-    white-space: nowrap;
-  }
 }
 
-// Status chip accent — when inactive, tint the label with the per-status color
-// (matching the section-header counts); the active pill keeps the primary fill.
-.status-pill {
-  &:not(.active) {
-    &.status-watching {
-      color: var(--vultus-status-watching);
-    }
-    &.status-completed {
-      color: var(--vultus-status-completed);
-    }
-    &.status-dropped {
-      color: var(--vultus-status-dropped);
-    }
-    &.status-planned {
-      color: var(--vultus-status-planned);
-    }
+.status-chip-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--vultus-space-xs);
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--vultus-radius-pill);
+  background: var(--vultus-surface-container-high);
+  color: var(--vultus-on-surface-variant);
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-label-md-size);
+  font-weight: var(--vultus-text-label-md-weight);
+  letter-spacing: var(--vultus-text-label-md-spacing);
+  line-height: var(--vultus-text-label-md-line);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    box-shadow 120ms ease;
+
+  // Count badge — reduced-opacity, label-sm-scale suffix (Stitch: opacity-70
+  // text-[10px]).
+  .status-chip-count {
+    font-size: 10px;
+    line-height: 1;
+    opacity: 0.7;
+  }
+
+  &:hover:not(.active) {
+    // Stitch `hover:bg-surface-variant/50`; the design's `surface-variant`
+    // (#2d3449) is the `--vultus-surface-container-highest` ramp step.
+    background: color-mix(
+      in srgb,
+      var(--vultus-surface-container-highest) 50%,
+      transparent
+    );
+  }
+
+  &:focus-visible {
+    @extend %vultus-focus-ring;
+  }
+
+  &.active {
+    background: var(--vultus-primary);
+    color: var(--vultus-on-primary);
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.15);
   }
 }
 
 // -----------------------------------------------------------------------------
-// Search bar — design-system Search Bar: surface-container fill, 0.5rem radius,
-// magnifying-glass icon, placeholder in on-surface-variant. On focus the border
-// transitions to primary Emerald. Style the inner `.searchbar-input` (where the
-// box-shadow/border actually render) via Ionic's CSS vars; the icon re-centers
-// for the default height. Token-derived (no Stitch counterpart).
+// 2. Type tab row — underline tabs (Advanced Watchlist restyle), NOT pills and
+//    NOT ion-segment. Stitch: `flex gap-md mb-lg overflow-x-auto scrollbar-hide
+//    pb-1`, tabs `text-label-md pb-1 px-1`.
+//      active   = text-primary + border-b-2 border-primary
+//      inactive = text-on-surface-variant, hover:text-on-surface
 // -----------------------------------------------------------------------------
+.type-tabs {
+  display: flex;
+  flex-direction: row;
+  gap: var(--vultus-space-md);
+  padding: 0 var(--vultus-space-md);
+  padding-bottom: var(--vultus-space-xs);
+  margin-bottom: var(--vultus-space-lg);
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.type-tab {
+  flex: 0 0 auto;
+  padding: 0 4px 4px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--vultus-on-surface-variant);
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-label-md-size);
+  font-weight: var(--vultus-text-label-md-weight);
+  letter-spacing: var(--vultus-text-label-md-spacing);
+  line-height: var(--vultus-text-label-md-line);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease;
+
+  &:hover:not(.active) {
+    color: var(--vultus-on-surface);
+  }
+
+  &:focus-visible {
+    @extend %vultus-focus-ring;
+    color: var(--vultus-on-surface);
+    border-radius: var(--vultus-radius-sm);
+  }
+
+  &.active {
+    color: var(--vultus-primary);
+    border-bottom-color: var(--vultus-primary);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// 3. Search bar + `tune` trigger — Stitch: `relative mb-lg`; the input is
+//    `bg-surface-container-high rounded-xl py-3 pl-10 pr-4`, `focus:ring-2
+//    focus:ring-primary/50`; the `tune` button sits at the right edge,
+//    vertically centered. The visible field is IonSearchbar's inner
+//    `.searchbar-input` (where the box-shadow/ring renders), driven by
+//    `--box-shadow`; the trigger overlays the wrapper's right edge.
+// -----------------------------------------------------------------------------
+.search-row {
+  position: relative;
+  margin: 0 var(--vultus-space-md) var(--vultus-space-lg);
+}
+
 .watchlist-search {
-  --background: var(--vultus-surface-container);
+  --background: var(--vultus-surface-container-high);
   --color: var(--vultus-on-surface);
   --placeholder-color: var(--vultus-on-surface-variant);
-  --placeholder-opacity: 1;
+  --placeholder-opacity: 0.5;
   --icon-color: var(--vultus-on-surface-variant);
   --clear-button-color: var(--vultus-on-surface-variant);
-  --border-radius: var(--vultus-radius);
-  --box-shadow: 0 0 0 1px var(--vultus-border);
-  padding-inline: var(--vultus-space-md);
-  padding-top: 0;
-  padding-bottom: var(--vultus-space-sm);
+  --border-radius: var(--vultus-radius-md); // xl = 0.75rem
+  --box-shadow: none;
+  // pl-10 clears the search icon; pr-4 + trigger width clears the tune button.
+  padding: 0;
 
-  // The visible field is the inner `.searchbar-input` (box-shadow renders
-  // there, driven by `--box-shadow`); ease the focus transition on it.
+  // The visible field is the inner `.searchbar-input`; ease the ring transition.
   ::ng-deep .searchbar-input {
+    padding-inline-end: 48px;
     transition: box-shadow 150ms ease-in-out;
   }
 
-  // Focus → primary-Emerald border (re-set the same `--box-shadow` knob).
+  // Focus → 2px primary-Emerald ring at ~50% opacity (Stitch focus:ring-primary/50).
   &.searchbar-has-focus {
-    --box-shadow: 0 0 0 1px var(--vultus-primary);
+    --box-shadow: 0 0 0 2px
+      color-mix(in srgb, var(--vultus-primary) 50%, transparent);
   }
+}
+
+.filter-trigger {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--vultus-radius);
+  background: transparent;
+  color: var(--vultus-on-surface-variant);
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: color 120ms ease;
+
+  &:hover {
+    color: var(--vultus-primary);
+  }
+
+  &:active {
+    color: var(--vultus-primary);
+  }
+
+  &:focus-visible {
+    @extend %vultus-focus-ring;
+    color: var(--vultus-on-surface);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Combined "Sort & Filter" bottom sheet — Stitch `#filter-sheet`: a fixed
+// overlay (backdrop `bg-black/60 backdrop-blur-sm`) behind a bottom-anchored
+// panel `bg-surface-container-high rounded-t-xl p-lg`; slides up from
+// `translate-y-full`. Drag handle, header (title + Done), Sort By + Provider
+// chip rows.
+// -----------------------------------------------------------------------------
+.filter-sheet {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  visibility: hidden;
+  pointer-events: none;
+
+  &.open {
+    visibility: visible;
+    pointer-events: auto;
+
+    .filter-sheet-backdrop {
+      opacity: 1;
+    }
+
+    .filter-sheet-panel {
+      transform: translateY(0);
+    }
+  }
+}
+
+.filter-sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 0.6);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+
+.filter-sheet-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--vultus-surface-container-high);
+  border-top-left-radius: var(--vultus-radius-md); // xl = 0.75rem
+  border-top-right-radius: var(--vultus-radius-md);
+  padding: var(--vultus-space-lg);
+  padding-bottom: calc(var(--vultus-space-lg) + env(safe-area-inset-bottom));
+  box-shadow: 0 -8px 32px rgb(0 0 0 / 0.45);
+  transform: translateY(100%);
+  transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.filter-sheet-handle {
+  width: 48px;
+  height: 6px;
+  margin: 0 auto var(--vultus-space-lg);
+  border-radius: var(--vultus-radius-pill);
+  // Stitch drag handle `bg-surface-variant`; the design's `surface-variant`
+  // (#2d3449) is the `--vultus-surface-container-highest` ramp step.
+  background: var(--vultus-surface-container-highest);
+}
+
+.filter-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--vultus-space-lg);
+}
+
+.filter-sheet-title {
+  margin: 0;
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-headline-sm-size);
+  font-weight: var(--vultus-text-headline-sm-weight);
+  line-height: var(--vultus-text-headline-sm-line);
+  color: var(--vultus-on-surface);
+}
+
+.filter-sheet-done {
+  border: none;
+  background: transparent;
+  color: var(--vultus-primary);
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-label-md-size);
+  font-weight: var(--vultus-text-label-md-weight);
+  letter-spacing: var(--vultus-text-label-md-spacing);
+  cursor: pointer;
+
+  &:focus-visible {
+    @extend %vultus-focus-ring;
+    border-radius: var(--vultus-radius-sm);
+  }
+}
+
+.filter-sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vultus-space-xl);
+}
+
+.filter-section-heading {
+  margin: 0 0 var(--vultus-space-md);
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-label-sm-size);
+  font-weight: var(--vultus-text-label-sm-weight);
+  line-height: var(--vultus-text-label-sm-line);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--vultus-on-surface-variant);
+}
+
+.filter-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--vultus-space-sm);
+}
+
+// Sort By / Provider chips — Stitch: `px-4 py-2 rounded-lg text-label-md`.
+//   inactive = bg-surface-container text-on-surface border border-outline-variant/20
+//   active   = bg-primary text-on-primary
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--vultus-space-xs);
+  padding: 8px 16px;
+  border: 1px solid
+    color-mix(in srgb, var(--vultus-outline-variant) 20%, transparent);
+  border-radius: var(--vultus-radius); // lg = 0.5rem
+  background: var(--vultus-surface-container);
+  color: var(--vultus-on-surface);
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-label-md-size);
+  font-weight: var(--vultus-text-label-md-weight);
+  letter-spacing: var(--vultus-text-label-md-spacing);
+  line-height: var(--vultus-text-label-md-line);
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+
+  .sort-dir {
+    font-size: 0.875rem;
+  }
+
+  &:hover:not(.active) {
+    border-color: color-mix(
+      in srgb,
+      var(--vultus-outline-variant) 40%,
+      transparent
+    );
+  }
+
+  &:focus-visible {
+    @extend %vultus-focus-ring;
+  }
+
+  &.active {
+    background: var(--vultus-primary);
+    border-color: var(--vultus-primary);
+    color: var(--vultus-on-primary);
+  }
+}
+
+.filter-empty {
+  margin: 0;
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-body-md-size);
+  color: var(--vultus-on-surface-variant);
+  opacity: 0.7;
 }
 
 .status-section {
