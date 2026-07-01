@@ -122,22 +122,26 @@ The auxiliary chip/availability streams (`statusChips$`, `availableProviders$`,
 error surfaces only through `vm$`'s error state, never as an uncaught error from a
 parallel subscriber.
 
-`SyncStateService` (`providedIn: 'root'`, slice-internal — **not** barrel-
-exported) owns the **manual-sync cooldown** behind the toolbar refresh button
-(spec 0025). It reads/writes the `localStorage` key **`vultus_last_sync_at`**
-(ISO string), exposes a `canSync` signal (false while inside the 5-minute /
-`300_000` ms cooldown, auto re-enabled by a timer at the exact expiry) and a
-`syncing` signal, and a `triggerSync()` method that guards both signals, calls
-the injected **`TRIGGER_SYNC`** thunk, records a fresh timestamp + restarts the
-cooldown on success, and re-throws (without advancing the timestamp) on failure
-so the page can show an error toast. On failure, `triggerSync()` logs at
-`console.error` level with distinct messages for `functions/not-found` (callable
-not deployed / wrong region) and `functions/unauthenticated` (auth not
-established) — visible in Chrome remote-debugging / `adb logcat` for on-device
-diagnosis (spec 0033). `localStorage` access is guarded — if it is
-unavailable or throws, the service degrades to "always allowed". `WatchlistPage`
-maps the resolve/reject to a "Watchlist synced" / "Sync failed — try again
-later" `ToastController` toast.
+`SyncStateService` (`providedIn: 'root'`) owns the **manual-sync cooldown**
+behind the toolbar refresh button (spec 0025). As of spec 0052 it **no longer
+lives in this slice** — it was relocated to **`@vultus/shared/ui-kit`** and is
+now shared with **`slice:title-detail`** (both slices inject the one singleton,
+so a sync triggered from either gates the other). `WatchlistPage` imports it from
+`@vultus/shared/ui-kit`. The service reads/writes the `localStorage` key
+**`vultus_last_sync_at`** (ISO string), exposes a `canSync` signal (false while
+inside the 5-minute / `300_000` ms cooldown, auto re-enabled by a timer at the
+exact expiry) and a `syncing` signal, and a `triggerSync()` method that guards
+both signals, calls the injected **`TRIGGER_SYNC`** thunk, records a fresh
+timestamp + restarts the cooldown on success, and re-throws (without advancing
+the timestamp) on failure so the page can show an error toast. On failure,
+`triggerSync()` logs at `console.error` level with distinct messages for
+`functions/not-found` (callable not deployed / wrong region) and
+`functions/unauthenticated` (auth not established) — visible in Chrome
+remote-debugging / `adb logcat` for on-device diagnosis (spec 0033).
+`localStorage` access is guarded — if it is unavailable or throws, the service
+degrades to "always allowed". `WatchlistPage` maps the resolve/reject to a
+"Watchlist synced" / "Sync failed — try again later" `ToastController` toast.
+See `@vultus/shared/ui-kit`'s README for the canonical service docs.
 
 ## Data access
 
