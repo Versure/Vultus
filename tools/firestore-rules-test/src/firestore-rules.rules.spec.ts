@@ -125,8 +125,39 @@ describe('title-cache/** — authenticated read, never client-write', () => {
   });
 });
 
+describe('provider-catalog/** — authenticated read, never client-write', () => {
+  beforeEach(async () => {
+    // Seed the shared catalog via a rules-bypassing admin context so the read
+    // tests have something to fetch.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const admin = ctx.firestore();
+      await setDoc(doc(admin, 'provider-catalog/NL'), {
+        providers: [],
+        lastSyncedAt: '2026-07-01T00:00:00.000Z',
+      });
+    });
+  });
+
+  it('8. an authenticated user can read the provider catalog', async () => {
+    const user = testEnv.authenticatedContext('userA').firestore();
+
+    await assertSucceeds(getDoc(doc(user, 'provider-catalog/NL')));
+  });
+
+  it('9. an authenticated user writing the provider catalog is denied', async () => {
+    const user = testEnv.authenticatedContext('userA').firestore();
+
+    await assertFails(
+      setDoc(doc(user, 'provider-catalog/NL'), {
+        providers: [],
+        lastSyncedAt: '2026-07-01T00:00:00.000Z',
+      }),
+    );
+  });
+});
+
 describe('default deny', () => {
-  it('7. a write to an undeclared top-level path is denied', async () => {
+  it('10. a write to an undeclared top-level path is denied', async () => {
     const user = testEnv.authenticatedContext('userA').firestore();
 
     await assertFails(

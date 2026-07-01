@@ -161,37 +161,84 @@
       <p class="muted-line" data-test="empty-providers">
         Not available to stream in your region
       </p>
-      } @else { @if (vm.providers.flatrate.length > 0) {
-      <div class="provider-group" data-test="group-flatrate">
-        <h3 class="group-label">Streaming</h3>
-        @for (p of vm.providers.flatrate; track p.providerId) {
-        <div class="provider-row">
-          <span class="provider-name">{{ p.name }}</span>
-          <span class="provider-type">{{ providerTypeLabel(p.type) }}</span>
+      } @else {
+      <div class="provider-groups">
+        <!-- Subgroup 1: On Your Providers (selected flatrate providers only). -->
+        @if (vm.split.mine.length > 0) {
+        <div class="provider-group" data-test="group-mine">
+          <div class="group-label group-label--mine">
+            <ion-icon
+              name="checkmark-circle"
+              class="group-label-icon"
+            ></ion-icon>
+            <span>On Your Providers</span>
+          </div>
+          @for (p of vm.split.mine; track p.providerId) {
+          <div class="provider-row" data-test="provider-row-mine">
+            <div class="provider-lead">
+              <span class="provider-logo" aria-hidden="true"
+                >{{ providerInitials(p.name) }}</span
+              >
+              <div class="provider-text">
+                <div class="provider-name-line">
+                  <span class="provider-name provider-name--mine"
+                    >{{ p.name }}</span
+                  >
+                  <span class="yours-tag" data-test="yours-tag">Yours</span>
+                </div>
+                <span class="provider-type"
+                  >{{ providerTypeLabel(p.type) }}</span
+                >
+              </div>
+            </div>
+            <ion-icon
+              name="open-outline"
+              class="provider-trailing"
+              aria-hidden="true"
+            ></ion-icon>
+          </div>
+          }
         </div>
         }
-      </div>
-      } @if (vm.providers.rent.length > 0) {
-      <div class="provider-group" data-test="group-rent">
-        <h3 class="group-label">Rent</h3>
-        @for (p of vm.providers.rent; track p.providerId) {
-        <div class="provider-row">
-          <span class="provider-name">{{ p.name }}</span>
-          <span class="provider-type">{{ providerTypeLabel(p.type) }}</span>
+
+        <!-- Divider between the two subgroups (only when both render). -->
+        @if (vm.split.mine.length > 0 && vm.split.elsewhere.length > 0) {
+        <div class="group-divider" data-test="group-divider"></div>
+        }
+
+        <!-- Subgroup 2: Also Available On (every other provider, any type). -->
+        @if (vm.split.elsewhere.length > 0) {
+        <div class="provider-group" data-test="group-elsewhere">
+          <div class="group-label group-label--elsewhere">
+            Also Available On
+          </div>
+          @for (p of vm.split.elsewhere; track p.providerId) {
+          <div class="provider-row" data-test="provider-row-elsewhere">
+            <div class="provider-lead">
+              <span class="provider-logo" aria-hidden="true"
+                >{{ providerInitials(p.name) }}</span
+              >
+              <div class="provider-text">
+                <span class="provider-name provider-name--elsewhere"
+                  >{{ p.name }}</span
+                >
+                <span class="provider-type"
+                  >{{ providerTypeLabel(p.type) }}</span
+                >
+              </div>
+            </div>
+            <ion-icon
+              name="open-outline"
+              class="provider-trailing"
+              aria-hidden="true"
+            ></ion-icon>
+          </div>
+          }
         </div>
         }
+        <!-- Room below for the spec-0061 Personal Tracking / Plex subgroup. -->
       </div>
-      } @if (vm.providers.buy.length > 0) {
-      <div class="provider-group" data-test="group-buy">
-        <h3 class="group-label">Buy</h3>
-        @for (p of vm.providers.buy; track p.providerId) {
-        <div class="provider-row">
-          <span class="provider-name">{{ p.name }}</span>
-          <span class="provider-type">{{ providerTypeLabel(p.type) }}</span>
-        </div>
-        }
-      </div>
-      } }
+      }
     </div>
 
     <!-- Episodes (TV only) -->

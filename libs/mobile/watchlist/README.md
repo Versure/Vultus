@@ -69,8 +69,14 @@ controls" below for the current control set.
   - `removeTitle(uid, titleId)` — deletes a watchlist item. Null uid → no-op.
   - `userRegion$(uid)` — the user's persisted region from `users/{uid}`. Null
     uid / missing doc → `null`.
+  - `myProviderIds$(uid)` — the user's selected TMDB provider ids from
+    `users/{uid}.myProviderIds` (spec 0060), default `[]` (a legacy doc missing
+    the field coalesces to `[]` via `dataToUser`). Null uid / missing doc → `[]`.
+    Reads the **same single** memoized `users/{uid}` `docData` stream as
+    `userRegion$` (both are projections of one shared `user$` source) — so region
+    and provider ids do **not** open two Firestore listeners on the same doc.
   - `availability$(tmdbId, region)` — provider availability from
-    `title-cache/{tmdbId}/availability/{region}` for the provider badge. Null
+    `title-cache/{tmdbId}/availability/{region}` for the availability pill. Null
     region / missing doc → `null`.
   - `unreadNotificationCount$` — a realtime stream of the count of UNREAD
     notifications (spec 0042). Reactive to the `AUTH_UID` null → uid transition
@@ -124,10 +130,13 @@ slice-internal (a single consumer, `WatchlistPage`, imports them intra-slice; no
 
 All are component-local, in-session, and operate client-side over the
 already-subscribed `watchlist$` stream — **no new Firestore read/write/index**.
-The provider filter reuses the **same memoized per-card `availability$`
-subscription** (`providerCache`, widened from `Observable<string | null>` to
-`Observable<string[]>`); the per-card badge still shows the first name via
-`names[0] ?? null`, so no second Listen channel is opened (decision 12).
+The provider filter reuses a **memoized per-card `availability$` subscription**
+(`providerCache`, `Observable<string[]>` of provider names). The per-card
+availability **pill** (spec 0060, see below) reads the full `RegionAvailability`
+via a sibling memoized cache (`availabilityCache`, `Observable<RegionAvailability
+| null>`) so it can see each provider's `type` + `providerId`; both caches
+`shareReplay` per `tmdbId|region` so no extra Firestore Listen channel is opened
+per change-detection cycle.
 
 The controls render top-to-bottom as: **status-filter chip row → underline
 type-tab row → search bar (with `tune` trigger)**, above the grouped list. The
@@ -204,9 +213,42 @@ degrades to "always allowed". `WatchlistPage` maps the resolve/reject to a
 "Watchlist synced" / "Sync failed — try again later" `ToastController` toast.
 See `@vultus/shared/ui-kit`'s README for the canonical service docs.
 
+## Availability pill — "on your provider" framing (spec 0060)
+
+Each card renders **one** partitioned availability pill instead of the old flat
+provider badge. Given the title's `title-cache/{tmdbId}/availability/{region}`
+providers and the user's `myProviderIds` (`users/{uid}.myProviderIds`), the pure
+slice-local `partitionAvailabilityPill(availability, myProviderIds)` filters to
+**flatrate** providers only (subscription coverage is a flatrate concept —
+spec 0060 decision 4) and yields:
+
+- **`{ kind: 'mine'; name }`** — ≥1 flatrate provider whose `providerId` is in
+  `myProviderIds`; `name` is the **first** such provider's name. Rendered as a
+  highlighted pill (`--ion-color-primary` ~10% fill, primary text) with a leading
+  `checkmark-circle` icon and the copy **"On {name}"**.
+- **`{ kind: 'elsewhere'; name }`** — no owned flatrate, but ≥1 flatrate provider
+  exists; `name` is the **first** flatrate provider's name. Rendered as a muted
+  pill (`--vultus-surface-container-highest` ~40% fill = the design's
+  `surface-variant`, `--vultus-on-surface-variant` text), **no** icon, copy
+  **"Also on {name}"**.
+- **`null`** — no flatrate provider at all (including rent/buy-only availability,
+  which is never a compact-card pill). No pill is rendered (the existing no-chip
+  treatment). A rent/buy provider whose id happens to be in `myProviderIds` is
+  **never** `mine` — only flatrate can be "yours".
+
+The pill is **presentational / non-interactive** (the card is the tap target); no
+new hover/focus states. Text is `label-sm` (the card's meta scale); all colors
+via `--vultus-*` / `--ion-*` vars (no hand-set hex). The page memoizes the full
+per-`tmdbId|region` availability stream (`shareReplay`) — like the existing
+`providerCache` — so binding `availabilityPill$(...) | async` never opens a fresh
+Firestore listener per change-detection cycle. This partition logic is
+deliberately **duplicated** with the title-detail slice's two-group split
+(2 slices, short of the 3+-slice extract rule — no shared helper is extracted).
+
 ## Data access
 
-- **Reads:** `users/{uid}/watchlist` (realtime list), `users/{uid}` (region),
+- **Reads:** `users/{uid}/watchlist` (realtime list), `users/{uid}` (region +
+  `myProviderIds`, one shared listener),
   `title-cache/{tmdbId}/availability/{region}` (provider badges), and — on the
   `completed` + `tv` path only — a one-shot read of the whole
   `users/{uid}/watchlist/{titleId}/episodes` subcollection (spec 0053).

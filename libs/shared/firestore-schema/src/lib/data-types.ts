@@ -8,6 +8,7 @@
 // write side is a plain `Date`.
 
 import type {
+  CatalogProvider,
   NotificationKind,
   NotificationPayload,
   NotificationPrefs,
@@ -41,11 +42,13 @@ export interface UserReadData {
   region: Region;
   notificationPrefs: NotificationPrefs; // passes through
   fcmTokens: FcmTokenReadData[]; // per-element mapped
+  myProviderIds?: number[]; // optional on read: legacy docs pre-0060 lack this field
 }
 export interface UserWriteData {
   region: Region;
   notificationPrefs: NotificationPrefs;
   fcmTokens: FcmTokenWriteData[];
+  myProviderIds: number[];
 }
 
 // --- WatchlistItem: addedAt ---
@@ -144,6 +147,16 @@ export interface SyncRunWriteData {
   titlesUpdated: number;
   errorCount: number;
   errors: string[];
+}
+
+// --- ProviderCatalogDoc: lastSyncedAt; providers pass through (spec 0060) ---
+export interface ProviderCatalogReadData {
+  providers: CatalogProvider[];
+  lastSyncedAt: FirestoreTimestampLike;
+}
+export interface ProviderCatalogWriteData {
+  providers: CatalogProvider[];
+  lastSyncedAt: Date;
 }
 
 // --- RegionAvailability: lastSyncedAt; providers + previousSnapshot pass through ---

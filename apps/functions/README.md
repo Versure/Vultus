@@ -13,6 +13,14 @@ wired in here through hexagonal adapters.
 - **`syncTitles`** — HTTP/scheduled sync engine entry point (`src/lib/*`,
   `src/main.ts`). Fetches metadata + providers + episodes and writes
   `title-cache`.
+- **`getWatchProviders`** — `onCall` callable (spec 0060). Given `{ region }`
+  it reads-or-refreshes the global `provider-catalog/{region}` cache (7-day
+  staleness) and returns `{ providers: CatalogProvider[] }`. On a cache miss/stale
+  it fetches the region's TMDB watch-provider catalog via the `sync-titles`
+  `TmdbClient`, best-effort writes the fresh doc, and returns it; if TMDB is
+  unavailable a stale cache is preferred over throwing (`unavailable` only when
+  there is no usable cache). SDK-agnostic core is `runGetWatchProviders`
+  (injected `db` / `createTmdb` / clock), mirroring `triggerSync`.
 - **`dispatchNotifications`** — Firestore `onDocumentWritten` trigger on
   `title-cache/{tmdbId}/availability/{region}` (spec 0012). On each availability
   write it diffs `previousSnapshot` vs `providers`, finds the in-region users

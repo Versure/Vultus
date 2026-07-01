@@ -75,6 +75,46 @@ The page exposes:
   global Notifications toggle is off (no pushes to schedule). Pushes are only
   sent during the chosen UTC hour; notifications still appear in the in-app
   inbox.
+- a **My Providers** card (spec 0060) — a wrapping grid of tappable provider
+  chips (a `<button>` per catalog entry, `aria-pressed`, NOT an
+  `ion-segment`/`ion-select`) placed **between** the Region and Notifications
+  cards. Each chip shows the provider logo + name; a **selected** chip (its id
+  in `myProviderIds`) gets a primary border + `checkmark-circle` badge + full
+  opacity, an **unselected** one an outline-variant border at 60% opacity.
+  Tapping a chip persists the toggled `users/{uid}.myProviderIds` array. A footer
+  reads "N of M selected · Region: {region}". While the catalog is fetching, a
+  spinner renders in place of the chips (never an empty card). Stitch reference:
+  `projects/13590348714018893783/screens/cebdfd02c7d44023b0e0019dd4907d48`
+  ("Settings - My Providers - Vultus").
+
+### My Providers — data flow (spec 0060)
+
+`myProviderIds: number[]` is an **open** list of TMDB provider ids on
+`users/{uid}` (default `[]`; legacy docs missing it read as `[]` via the
+converter). `SettingsService`:
+
+- reads `myProviderIds` in `load()` and writes `myProviderIds: []` in the
+  eager-create `User` literal;
+- exposes `providerCatalog: Signal<CatalogProvider[]>`,
+  `myProviderIds: Signal<number[]>`, `catalogLoading: Signal<boolean>`, and
+  `lastPrunedCount: Signal<number>` (readonly);
+- `loadProviderCatalog()` loads the current region's catalog via the
+  `scope:shared` `GET_WATCH_PROVIDERS` token (a thunk over the `getWatchProviders`
+  callable, provided by the shell — this slice never imports
+  `@angular/fire/functions`). It no-ops when the catalog is already loaded for the
+  current region;
+- `toggleProvider(id)` adds/removes one id and persists the WHOLE array;
+- `setRegion(region)` performs **two sequential** `users/{uid}` writes — first
+  the region, then (once the new region's catalog loads) the pruned
+  `myProviderIds` (ids not in the new catalog are dropped). It reports the dropped
+  count via `lastPrunedCount`; the page reacts to a `>0` value to raise a
+  `ToastController` toast. **Guard:** if the new catalog fails to load, the prune
+  is **skipped** (the provider list is never destroyed on a failed read) and
+  `lastPrunedCount` stays 0.
+
+The `mock` build profile seeds a full `providerCatalog` (Netflix, Disney Plus,
+Max, Amazon Prime Video) and `myProviderIds: [8]` (Netflix) so `mobile:serve-mock`
+renders a selected + unselected chip mix without a callable.
 
 ### Preserve-other-prefs write rule (spec 0051)
 
@@ -117,11 +157,16 @@ The current uid is obtained via the `scope:shared` `AUTH_UID` injection token
 
 - Tags: `scope:mobile`, `slice:settings` (by path glob in `sheriff.config.ts`).
 - May import: `scope:shared` libs (`@vultus/shared/domain` — `Region`, `User`,
-  `SyncRun`; `@vultus/shared/firestore-schema` — `userPath`/`dataToUser`/`userToData`,
-  `syncRunsCollection`/`dataToSyncRun`) and third-party packages (Ionic,
-  AngularFire).
+  `SyncRun`, `CatalogProvider`; `@vultus/shared/domain/tokens` — `AUTH_UID`,
+  `GET_WATCH_PROVIDERS`; `@vultus/shared/firestore-schema` —
+  `userPath`/`dataToUser`/`userToData`, `syncRunsCollection`/`dataToSyncRun`) and
+  third-party packages (Ionic, AngularFire).
 - Must not import: other slices (`slice:search` / `slice:watchlist`),
   `apps/mobile`, or any `scope:functions` code. The `sync-runs` collection is a
   cross-scope persistence contract: `apps/functions` writes it, this slice only
   **reads** it (client writes are denied by `firestore.rules`) — the two scopes
   share only the `scope:shared` data shape, never each other's code.
+- The provider catalog is reached only through the `scope:shared`
+  `GET_WATCH_PROVIDERS` token (a thunk the shell provides over the
+  `getWatchProviders` callable, mirroring `TRIGGER_SYNC`), so this slice never
+  imports `@angular/fire/functions` — no `scope:mobile` ↔ `scope:functions` edge.

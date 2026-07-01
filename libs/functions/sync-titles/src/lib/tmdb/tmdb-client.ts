@@ -3,6 +3,7 @@
 // the client never reads it from env/secret.
 
 import type {
+  CatalogProvider,
   Episode,
   Region,
   TitleMetadata,
@@ -15,12 +16,14 @@ import {
   mapSeasonEpisodes,
   mapTvShow,
   mapWatchProviders,
+  mergeCatalogProviders,
 } from './tmdb-mappers';
 import { TmdbError } from './tmdb-error';
 import type {
   TmdbMovieResponse,
   TmdbSeasonResponse,
   TmdbTvResponse,
+  TmdbWatchProviderListResponse,
   TmdbWatchProvidersResponse,
 } from './tmdb-dtos';
 import { mapTvSeasonCount } from './tmdb-mappers';
@@ -58,6 +61,11 @@ export interface TmdbClient {
     tmdbId: number,
     seasonNumber: number,
   ): Promise<Episode[] | null>;
+  /** Fetches the region's flatrate/rent/buy provider CATALOG (movie + tv merged,
+   *  deduped by providerId) from GET /watch/providers/{movie,tv}?watch_region=…
+   *  (spec 0060). Returns [] when TMDB returns an empty catalog; null on a TMDB
+   *  404 (consistent with the other methods). */
+  getRegionWatchProviders(region: Region): Promise<CatalogProvider[] | null>;
 }
 
 const DEFAULT_BASE_URL = 'https://api.themoviedb.org/3';
@@ -134,6 +142,30 @@ export function createTmdbClient(config: TmdbClientConfig): TmdbClient {
       return result === NOT_FOUND
         ? null
         : mapSeasonEpisodes(result, seasonNumber);
+    },
+
+    async getRegionWatchProviders(
+      region: Region,
+    ): Promise<CatalogProvider[] | null> {
+      // `region` is an ISO-3166-1 alpha-2 code (same as REGIONS) that maps
+      // directly onto the `watch_region` query param. The credential stays in
+      // the header (createHttpCore); never in the url.
+      const regionQuery = `watch_region=${encodeURIComponent(region)}`;
+      const [movie, tv] = await Promise.all([
+        core.request<TmdbWatchProviderListResponse>(
+          `/watch/providers/movie?${regionQuery}`,
+        ),
+        core.request<TmdbWatchProviderListResponse>(
+          `/watch/providers/tv?${regionQuery}`,
+        ),
+      ]);
+      // Per-side 404 → treat that side as []; only both sides 404 → null
+      // (mirrors the other methods' 404 → null contract).
+      if (movie === NOT_FOUND && tv === NOT_FOUND) return null;
+      return mergeCatalogProviders(
+        movie === NOT_FOUND ? [] : (movie.results ?? []),
+        tv === NOT_FOUND ? [] : (tv.results ?? []),
+      );
     },
   };
 }

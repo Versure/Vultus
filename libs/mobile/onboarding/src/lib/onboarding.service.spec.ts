@@ -112,6 +112,7 @@ describe('OnboardingService', () => {
         deliveryHour: null,
       },
       fcmTokens: [],
+      myProviderIds: [],
     });
     expect(opts).toEqual({ merge: true });
   });

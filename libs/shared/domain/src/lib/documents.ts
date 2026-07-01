@@ -3,7 +3,7 @@
 // import). The ISO ↔ Timestamp mapping lives in spec 0004's converters.
 
 import type { NotificationKind, Region, TitleType, WatchStatus } from './enums';
-import type { WatchProvider } from './entities';
+import type { CatalogProvider, WatchProvider } from './entities';
 
 export interface FcmToken {
   token: string;
@@ -27,6 +27,16 @@ export interface User {
   region: Region;
   notificationPrefs: NotificationPrefs;
   fcmTokens: FcmToken[];
+  /** TMDB provider ids the user subscribes to (spec 0060). Open number[] so a
+   *  later manual "provider" (Plex, spec 0061) can be layered in without a
+   *  migration. Default []; legacy docs missing it → [] via the converter. */
+  myProviderIds: number[];
+}
+
+// provider-catalog/{region} — global, function-written cache (PLAN §4).
+export interface ProviderCatalogDoc {
+  providers: CatalogProvider[];
+  lastSyncedAt: string; // ISO 8601
 }
 
 export interface WatchlistItem {
