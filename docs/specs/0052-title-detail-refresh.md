@@ -2,7 +2,7 @@
 number: 0052
 slug: title-detail-refresh
 title: Add pull-to-refresh manual sync to the title-detail page (shared SyncStateService)
-status: approved
+status: done
 slices: [slice:title-detail, slice:watchlist]
 scopes: [scope:mobile, scope:shared]
 created: 2026-06-30
@@ -111,10 +111,10 @@ Out of scope (explicitly):
 
 ## Affected slices & Sheriff tags
 
-| Project          | Path                       | Sheriff tags                          | Change                                                                                          |
-| ---------------- | -------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| shared-ui-kit    | `libs/shared/ui-kit`       | `scope:shared`                        | **add** `SyncStateService` (+ `LAST_SYNC_KEY`, `SYNC_COOLDOWN_MS`) + its moved test; barrel + README |
-| mobile-watchlist | `libs/mobile/watchlist`    | `scope:mobile`, `slice:watchlist`     | **remove** slice-local `SyncStateService` + spec; **re-point** import to `@vultus/shared/ui-kit`; README |
+| Project             | Path                       | Sheriff tags                         | Change                                                                                                       |
+| ------------------- | -------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| shared-ui-kit       | `libs/shared/ui-kit`       | `scope:shared`                       | **add** `SyncStateService` (+ `LAST_SYNC_KEY`, `SYNC_COOLDOWN_MS`) + its moved test; barrel + README         |
+| mobile-watchlist    | `libs/mobile/watchlist`    | `scope:mobile`, `slice:watchlist`    | **remove** slice-local `SyncStateService` + spec; **re-point** import to `@vultus/shared/ui-kit`; README     |
 | mobile-title-detail | `libs/mobile/title-detail` | `scope:mobile`, `slice:title-detail` | **add** `IonRefresher`+`IonRefresherContent`, inject `SyncStateService` + `ToastController`, handler; README |
 
 - **`sheriff.config.ts` is NOT modified.** All three paths already carry the
@@ -138,7 +138,7 @@ Out of scope (explicitly):
   **no** `scope:mobile` symbol, so the move does not create a `scope:shared →
 scope:mobile` edge. (`shared/ui-kit`'s README states "It imports nothing else"
   re: TS — update that note: it now additionally imports `@vultus/shared/domain`
-  + `firebase` + `@angular/core`, all permitted for a `scope:shared` lib.)
+  - `firebase` + `@angular/core`, all permitted for a `scope:shared` lib.)
 - **Not a premature `shared/` extraction.** The service now genuinely has **2**
   slice consumers (watchlist, title-detail) and depends only on `scope:shared`
   things; co-locating a single shared singleton in `shared/ui-kit` is the
@@ -381,7 +381,7 @@ is part of T1.
    - **Export** `SyncStateService`, `LAST_SYNC_KEY`, `SYNC_COOLDOWN_MS` from
      `libs/shared/ui-kit/src/index.ts` (keep all existing exports).
    - **Delete** the two original watchlist files (`watchlist.sync-state.service.ts`
-     + its `.spec.ts`).
+     - its `.spec.ts`).
    - **Re-point** `libs/mobile/watchlist/src/lib/watchlist.page.ts`'s import from
      `./watchlist.sync-state.service` to `@vultus/shared/ui-kit`. No other
      watchlist change.
