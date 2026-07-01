@@ -2,7 +2,7 @@
 number: 0059
 slug: audit-docs-skill
 title: '/audit-docs skill: LLM-judgment documentation drift audit'
-status: approved # draft | approved | implementing | done
+status: done # draft | approved | implementing | done
 slices: [] # tooling + docs — touches no product slice
 scopes: [] # delivers a .claude/skills/ skill + docs; no Sheriff scope tag applies (see §3)
 created: 2026-07-01
@@ -164,8 +164,8 @@ description: Audit Vultus documentation for drift against the codebase. Runs
 - **MUST NOT** use `AskUserQuestion` or any interactive prompt in the **headless
   path** (no human to answer). Any input-gathering step is **interactive-only**.
 - **MUST NOT** depend on any interactively-authenticated MCP (e.g. Stitch) — git
-  + file reads (+ `gh` for the PR) only, so the skill survives a fresh headless
-  cloud run.
+  - file reads (+ `gh` for the PR) only, so the skill survives a fresh headless
+    cloud run.
 - **MUST NOT** read or write secrets or `.env.local` (CLAUDE.md).
 
 These constraints and their rationale MUST be stated verbatim-in-spirit in
@@ -198,8 +198,8 @@ The report is markdown with these sections in order:
    `run \`node tools/scripts/gen-spec-status.mjs\` to update`). On pass, one
    line "Deterministic floor: PASS".
 3. **Stale references** (judgment class 1) — a table: `doc location (file:line
-   or section) | claimed artifact | kind (path/symbol/command/flag) | verdict
-   (MISSING/OK-but-moved) | evidence`. Type = **descriptive/safe-to-fix**.
+or section) | claimed artifact | kind (path/symbol/command/flag) | verdict
+(MISSING/OK-but-moved) | evidence`. Type = **descriptive/safe-to-fix**.
    Severity **HIGH** for a confirmed missing target, **MEDIUM** for
    OK-but-moved / ambiguous.
 4. **PLAN narrative vs reality** (judgment class 2) — a list: each entry names
@@ -267,7 +267,7 @@ interactive run only prints.
     file the skill writes, and it is a **new report file, never an edit to an
     audited doc** (report-only invariant holds: PLAN/README/CLAUDE are read-only).
   - **PR:** `gh pr create --base main --draft --title
-    "docs: documentation drift audit (<UTC-date>)"`, body = the report summary
+"docs: documentation drift audit (<UTC-date>)"`, body = the report summary
     (§5.3 section 5) + a link/pointer to `docs/DRIFT-REPORT.md`, plus a line
     stating the fixes are for a human/follow-up spec (report-only). Label
     best-effort (never blocking): `gh label create docs-drift --force 2>$null`
@@ -451,8 +451,7 @@ per line):
 - [ ] **Headless-safety constraints satisfied** (§5.1): model-invocable (no
       `disable-model-invocation`); **no `AskUserQuestion`/interactive prompt in
       the headless path**; **no Stitch/MCP dependency**; **no secrets access**.
-- [ ] **Deterministic floor reuses 0058** — shells `nx test doc-integrity-test`
-      + `gen-spec-status.mjs --check`; does not reimplement the guards; **fails
+- [ ] **Deterministic floor reuses 0058** — shells `nx test doc-integrity-test` + `gen-spec-status.mjs --check`; does not reimplement the guards; **fails
       loudly** if 0058's artifacts are absent (§5.5, §8d).
 - [ ] **Adaptive delivery** implemented per §5.4: interactive prints; headless
       opens a draft PR **only on drift** (branch `claude/audit-docs-<date>`,
