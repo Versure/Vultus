@@ -25,8 +25,17 @@ The barrel (`src/index.ts`) re-exports:
     `myProviderIds: number[]` — the TMDB provider ids the user subscribes to;
     open `number[]` so a later manual provider (Plex, spec 0061) can be layered
     in without a migration; default `[]`, legacy docs missing it coalesce to `[]`
-    via the converter, spec 0060), `NotificationPrefs` (per-kind opt-in toggles plus `deliveryHour: number | null` — quiet-hours delivery preference, spec 0051; `null` = any time, a number 0–23 = that UTC hour), `FcmToken`
-  - `WatchlistItem`, `EpisodeDoc` (fields: `season`, `episode`, `title` (nullable, spec 0034), `airDate`, `watched`, `watchedAt`)
+    via the converter, spec 0060 — and `hasPlex: boolean` — whether the user uses
+    a self-hosted Plex server (spec 0061); a separate boolean, NOT a member of
+    `myProviderIds` (Plex has no TMDB id); gates the per-title "watching via Plex"
+    toggle; default `false`, legacy docs missing it coalesce to `false` via the
+    converter), `NotificationPrefs` (per-kind opt-in toggles plus `deliveryHour: number | null` — quiet-hours delivery preference, spec 0051; `null` = any time, a number 0–23 = that UTC hour), `FcmToken`
+  - `WatchlistItem` (fields: `type`, `tmdbId`, `traktId`, `title`, `addedAt`,
+    `status`, `posterPath`/`voteAverage`/`releaseDate` (all nullable/optional),
+    plus `watchingViaPlex: boolean` — a manual per-title override that the user
+    watches THIS title via their Plex server, additive to and never replacing the
+    TMDB availability framing (spec 0061, GitHub #140); default `false`, legacy
+    docs missing it coalesce to `false` via the converter), `EpisodeDoc` (fields: `season`, `episode`, `title` (nullable, spec 0034), `airDate`, `watched`, `watchedAt`)
   - `NotificationDoc`, `NotificationPayload`
   - `SyncRun` — one completed sync-pipeline run (global `sync-runs/{runId}`); written by Cloud Functions, read by the settings slice (spec 0049)
   - `TitleCacheEntry`, `TitleMetadata`, `RegionAvailability`

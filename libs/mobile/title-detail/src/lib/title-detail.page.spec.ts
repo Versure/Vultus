@@ -112,6 +112,8 @@ interface SvcOpts {
   episodes?: SeasonGroup[];
   /** The user's selected provider ids (spec 0060); default []. */
   myProviderIds?: number[];
+  /** Whether the user uses Plex (spec 0061); default false. */
+  hasPlex?: boolean;
 }
 
 function makeService(o: SvcOpts = {}) {
@@ -137,6 +139,7 @@ function makeService(o: SvcOpts = {}) {
     detail$: vi.fn(() => detail$),
     region$: vi.fn(() => region$),
     myProviderIds$: vi.fn(() => of<number[]>(o.myProviderIds ?? [])),
+    hasPlex$: vi.fn(() => of<boolean>(o.hasPlex ?? false)),
     providers$: vi.fn(() => of(o.providers ?? emptyProviders)),
     tracked$: vi.fn(() => tracked$),
     episodes$: vi.fn(() => episodes$),
@@ -146,6 +149,7 @@ function makeService(o: SvcOpts = {}) {
     setEpisodeWatched: vi.fn().mockResolvedValue(undefined),
     setSeasonWatched: vi.fn().mockResolvedValue(undefined),
     setMovieWatched: vi.fn().mockResolvedValue(undefined),
+    toggleWatchingViaPlex: vi.fn().mockResolvedValue(undefined),
     revertIfNewEpisodes: vi.fn().mockResolvedValue(undefined),
   };
 }
@@ -635,12 +639,14 @@ describe('TitleDetailPage', () => {
       }),
       region$: vi.fn(() => of('NL')),
       myProviderIds$: vi.fn(() => of<number[]>([])),
+      hasPlex$: vi.fn(() => of<boolean>(false)),
       providers$: vi.fn(() => of(emptyProviders)),
       tracked$: vi.fn(() => of(null)),
       episodes$: vi.fn(() => NEVER),
       add: vi.fn().mockResolvedValue(undefined),
       updateStatus: vi.fn().mockResolvedValue(undefined),
       removeTitle: vi.fn().mockResolvedValue(undefined),
+      toggleWatchingViaPlex: vi.fn().mockResolvedValue(undefined),
       revertIfNewEpisodes: vi.fn().mockResolvedValue(undefined),
     };
 
@@ -753,6 +759,7 @@ describe('TitleDetailPage', () => {
       }),
       region$: vi.fn(() => of('NL')),
       myProviderIds$: vi.fn(() => of<number[]>([])),
+      hasPlex$: vi.fn(() => of<boolean>(false)),
       providers$: vi.fn(() => of(emptyProviders)),
       tracked$: vi.fn(() =>
         of({
@@ -768,6 +775,7 @@ describe('TitleDetailPage', () => {
       add: vi.fn().mockResolvedValue(undefined),
       updateStatus: vi.fn().mockResolvedValue(undefined),
       removeTitle: vi.fn().mockResolvedValue(undefined),
+      toggleWatchingViaPlex: vi.fn().mockResolvedValue(undefined),
       revertIfNewEpisodes: vi.fn().mockResolvedValue(undefined),
     };
 
@@ -956,6 +964,133 @@ describe('TitleDetailPage', () => {
       '[data-test="movie-watched-btn"]',
     );
     expect(btn?.disabled).toBe(true);
+  });
+
+  // --- spec 0061: "Personal Tracking" Plex subsection ---
+
+  describe('Personal Tracking / Plex subsection (spec 0061)', () => {
+    const trackedItem = (watchingViaPlex: boolean) => ({
+      type: 'movie' as const,
+      tmdbId: 27205,
+      traktId: null,
+      title: 'Inception',
+      addedAt: '2026-01-01T00:00:00Z',
+      status: 'planned' as const,
+      watchingViaPlex,
+    });
+
+    it('hasPlex false → the Personal Tracking subsection is absent entirely', async () => {
+      const { fixture } = await setup({
+        hasPlex: false,
+        tracked: trackedItem(false),
+      });
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.querySelector('[data-test="personal-tracking"]')).toBeFalsy();
+      expect(el.querySelector('[data-test="plex-empty-row"]')).toBeFalsy();
+      expect(el.querySelector('[data-test="plex-active-row"]')).toBeFalsy();
+    });
+
+    it('hasPlex true + untracked → subsection absent (no watchlist doc to write to)', async () => {
+      const { fixture } = await setup({ hasPlex: true, tracked: null });
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.querySelector('[data-test="personal-tracking"]')).toBeFalsy();
+    });
+
+    it('hasPlex true + watchingViaPlex false → empty affordance renders; tap → toggleWatchingViaPlex(id, true)', async () => {
+      const { fixture, svc } = await setup({
+        hasPlex: true,
+        tracked: trackedItem(false),
+      });
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.querySelector('[data-test="personal-tracking"]')).toBeTruthy();
+      const empty = el.querySelector<HTMLElement>(
+        '[data-test="plex-empty-row"]',
+      );
+      expect(empty).toBeTruthy();
+      expect(el.textContent).toContain('Mark as watching via Plex');
+      // The active row must NOT render.
+      expect(el.querySelector('[data-test="plex-active-row"]')).toBeFalsy();
+
+      empty?.click();
+      expect(svc.toggleWatchingViaPlex).toHaveBeenCalledWith(27205, true);
+    });
+
+    it('hasPlex true + watchingViaPlex true → active row + Change button; tap Change → toggleWatchingViaPlex(id, false)', async () => {
+      const { fixture, svc } = await setup({
+        hasPlex: true,
+        tracked: trackedItem(true),
+      });
+      const el = fixture.nativeElement as HTMLElement;
+      const active = el.querySelector<HTMLElement>(
+        '[data-test="plex-active-row"]',
+      );
+      expect(active).toBeTruthy();
+      expect(el.textContent).toContain('Watching via Plex');
+      expect(el.textContent).toContain('Local Server');
+      // The empty affordance must NOT render.
+      expect(el.querySelector('[data-test="plex-empty-row"]')).toBeFalsy();
+
+      const change = el.querySelector<HTMLElement>('[data-test="plex-change"]');
+      expect(change).toBeTruthy();
+      expect(change?.textContent).toContain('Change');
+      change?.click();
+      expect(svc.toggleWatchingViaPlex).toHaveBeenCalledWith(27205, false);
+    });
+
+    it('renders the bundled Plex wordmark asset in the active tile (not a brand-hex tile)', async () => {
+      const { fixture } = await setup({
+        hasPlex: true,
+        tracked: trackedItem(true),
+      });
+      const el = fixture.nativeElement as HTMLElement;
+      const img = el.querySelector<HTMLImageElement>(
+        '[data-test="plex-active-row"] img',
+      );
+      expect(img).toBeTruthy();
+      expect(img?.getAttribute('src')).toBe('/assets/plex-logo.svg');
+    });
+
+    // Additivity (decision 4 / DoD): the 0060 provider groups render UNCHANGED
+    // regardless of watchingViaPlex — the Plex subsection is additive, never a
+    // replacement for the TMDB availability framing.
+    it.each([true, false])(
+      'additivity: the 0060 provider split renders unchanged when watchingViaPlex is %s',
+      async (watchingViaPlex) => {
+        const providers: GroupedProviders = {
+          flatrate: [
+            { providerId: 8, name: 'Netflix', type: 'flatrate' },
+            { providerId: 9, name: 'Prime Video', type: 'flatrate' },
+          ],
+          rent: [],
+          buy: [],
+        };
+        const { fixture } = await setup({
+          hasPlex: true,
+          myProviderIds: [8],
+          providers,
+          tracked: trackedItem(watchingViaPlex),
+        });
+        const el = fixture.nativeElement as HTMLElement;
+        // Both 0060 groups still render, mine first, with the divider between.
+        const mine = el.querySelector('[data-test="group-mine"]');
+        const elsewhere = el.querySelector('[data-test="group-elsewhere"]');
+        expect(mine).toBeTruthy();
+        expect(elsewhere).toBeTruthy();
+        expect(el.querySelector('[data-test="group-divider"]')).toBeTruthy();
+        expect(mine?.textContent).toContain('Netflix');
+        expect(mine?.querySelector('[data-test="yours-tag"]')).toBeTruthy();
+        expect(elsewhere?.textContent).toContain('Prime Video');
+        // …and the Plex subsection sits AFTER the provider groups in DOM order.
+        const plex = el.querySelector('[data-test="personal-tracking"]');
+        expect(plex).toBeTruthy();
+        if (elsewhere && plex) {
+          expect(
+            elsewhere.compareDocumentPosition(plex) &
+              Node.DOCUMENT_POSITION_FOLLOWING,
+          ).toBeTruthy();
+        }
+      },
+    );
   });
 
   describe('revertIfNewEpisodes page-init wire-up (spec 0050)', () => {

@@ -107,6 +107,15 @@ export class SettingsPage implements OnInit {
     return provider.logoPath ? `${TMDB_LOGO_BASE}${provider.logoPath}` : null;
   }
 
+  /**
+   * Toggles the Plex chip (spec 0061). Separate handler from
+   * `onProviderToggle` — Plex is its OWN boolean (`hasPlex`), not a
+   * `myProviderIds` catalog entry.
+   */
+  protected onPlexToggle(): void {
+    void this.service.toggleHasPlex();
+  }
+
   private async presentPruneToast(dropped: number): Promise<void> {
     const region = this.service.region();
     const noun = dropped === 1 ? 'provider' : 'providers';

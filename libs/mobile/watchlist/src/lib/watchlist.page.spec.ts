@@ -1074,6 +1074,150 @@ describe('WatchlistPage', () => {
     });
   });
 
+  // ── Read-only Plex badge (spec 0061 — additive, never replaces the pill) ────
+
+  describe('read-only Plex badge (spec 0061)', () => {
+    it('renders the read-only Plex badge when watchingViaPlex is true', async () => {
+      const service = mockService([
+        item({
+          tmdbId: 1,
+          status: 'watching',
+          title: 'W1',
+          watchingViaPlex: true,
+        }),
+      ]);
+      const { el } = await setup(service);
+      const badge = el.querySelector<HTMLElement>('.plex-badge');
+      expect(badge).toBeTruthy();
+      // Uses the bundled Plex wordmark asset.
+      const logo = badge?.querySelector<HTMLImageElement>('.plex-badge__logo');
+      expect(logo).toBeTruthy();
+      expect(logo?.getAttribute('src')).toBe('/assets/plex-logo.svg');
+      // Read-only / non-interactive: no click handler, no button/anchor role.
+      expect(badge?.tagName.toLowerCase()).toBe('span');
+      expect(badge?.querySelector('button, a')).toBeFalsy();
+    });
+
+    it('does NOT render the Plex badge when watchingViaPlex is false', async () => {
+      const service = mockService([
+        item({
+          tmdbId: 1,
+          status: 'watching',
+          title: 'W1',
+          watchingViaPlex: false,
+        }),
+      ]);
+      const { el } = await setup(service);
+      expect(el.querySelector('.plex-badge')).toBeFalsy();
+    });
+
+    it('does NOT render the Plex badge when watchingViaPlex is absent (legacy item)', async () => {
+      // The `item()` factory omits watchingViaPlex → the field is undefined,
+      // exactly like a legacy doc streamed before the converter coalesce.
+      const service = mockService([
+        item({ tmdbId: 1, status: 'watching', title: 'W1' }),
+      ]);
+      const { el } = await setup(service);
+      expect(el.querySelector('.plex-badge')).toBeFalsy();
+    });
+
+    // ── Additivity: the Plex badge and the availability pill are independent ──
+    // Neither ever suppresses or overrides the other (spec 0061 decision 4).
+
+    it('renders BOTH the Plex badge AND the availability pill when watchingViaPlex is true and a flatrate provider exists', async () => {
+      const service = mockService(
+        [
+          item({
+            tmdbId: 1,
+            status: 'watching',
+            title: 'W1',
+            watchingViaPlex: true,
+          }),
+        ],
+        0,
+        { 1: [{ providerId: 8, name: 'Netflix', type: 'flatrate' }] },
+        'US',
+        [8], // owns Netflix → "mine" pill
+      );
+      const { el } = await setup(service);
+      // Plex badge present…
+      expect(el.querySelector('.plex-badge')).toBeTruthy();
+      // …AND the availability pill still renders exactly as 0060 defines it.
+      const pill = el.querySelector<HTMLElement>('.availability-pill');
+      expect(pill).toBeTruthy();
+      expect(pill?.classList.contains('is-mine')).toBe(true);
+      expect(pill?.textContent?.replace(/\s+/g, ' ').trim()).toBe('On Netflix');
+    });
+
+    it('the availability pill renders identically whether or not watchingViaPlex is set (badge never affects the pill)', async () => {
+      const providers = {
+        1: [{ providerId: 15, name: 'Hulu', type: 'flatrate' as const }],
+      };
+      // Without Plex.
+      const withoutPlex = mockService(
+        [item({ tmdbId: 1, status: 'planned', title: 'P1' })],
+        0,
+        providers,
+        'US',
+        [8],
+      );
+      const a = await setup(withoutPlex);
+      const pillA = a.el.querySelector<HTMLElement>('.availability-pill');
+      expect(a.el.querySelector('.plex-badge')).toBeFalsy();
+      expect(pillA?.classList.contains('is-mine')).toBe(false);
+      expect(pillA?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+        'Also on Hulu',
+      );
+
+      TestBed.resetTestingModule();
+
+      // With Plex — same seed, watchingViaPlex flipped true. The pill must be
+      // byte-for-byte the same "Also on Hulu" elsewhere pill.
+      const withPlex = mockService(
+        [
+          item({
+            tmdbId: 1,
+            status: 'planned',
+            title: 'P1',
+            watchingViaPlex: true,
+          }),
+        ],
+        0,
+        providers,
+        'US',
+        [8],
+      );
+      const b = await setup(withPlex);
+      const pillB = b.el.querySelector<HTMLElement>('.availability-pill');
+      expect(b.el.querySelector('.plex-badge')).toBeTruthy();
+      expect(pillB?.classList.contains('is-mine')).toBe(false);
+      expect(pillB?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+        'Also on Hulu',
+      );
+    });
+
+    it('renders the Plex badge even when there is NO availability pill (badge is independent of the pill)', async () => {
+      // No flatrate availability → no pill; the Plex badge must still render.
+      const service = mockService(
+        [
+          item({
+            tmdbId: 1,
+            status: 'watching',
+            title: 'W1',
+            watchingViaPlex: true,
+          }),
+        ],
+        0,
+        {}, // no availability at all → no pill
+        'US',
+        [8],
+      );
+      const { el } = await setup(service);
+      expect(el.querySelector('.availability-pill')).toBeFalsy();
+      expect(el.querySelector('.plex-badge')).toBeTruthy();
+    });
+  });
+
   describe('toolbar refresh button (spec 0025)', () => {
     it('idle: renders in slot="end", enabled, aria-label="Refresh watchlist"', async () => {
       const service = mockService([]);

@@ -45,6 +45,7 @@ function existingDoc(data: {
     deliveryHour?: number | null;
   };
   myProviderIds?: number[];
+  hasPlex?: boolean;
 }): SnapLike {
   return {
     exists: () => true,
@@ -60,6 +61,9 @@ function existingDoc(data: {
       ...(data.myProviderIds !== undefined
         ? { myProviderIds: data.myProviderIds }
         : {}),
+      // Omitting `hasPlex` simulates a legacy (pre-0061) doc; when present it
+      // round-trips via the converter's `?? false` coalesce.
+      ...(data.hasPlex !== undefined ? { hasPlex: data.hasPlex } : {}),
     }),
   };
 }
@@ -136,6 +140,7 @@ describe('SettingsService', () => {
       },
       fcmTokens: [],
       myProviderIds: [],
+      hasPlex: false,
     });
     expect(service.region()).toBe('NL');
     expect(service.notificationsEnabled()).toBe(true);
@@ -501,6 +506,137 @@ describe('SettingsService', () => {
     const [, payload] = setDocMock.mock.calls[0];
     expect((payload as { myProviderIds: number[] }).myProviderIds).toEqual([]);
     expect(service.myProviderIds()).toEqual([]);
+  });
+
+  // ── Plex — hasPlex (spec 0061) ───────────────────────────────────────────
+
+  it('load() reads hasPlex: true into the signal', async () => {
+    getDocMock.mockResolvedValue(
+      existingDoc({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+        },
+        hasPlex: true,
+      }),
+    );
+    const service = createService(UID);
+
+    await service.load();
+
+    expect(service.hasPlex()).toBe(true);
+  });
+
+  it('load() defaults hasPlex to false for a legacy doc missing the field', async () => {
+    getDocMock.mockResolvedValue(
+      existingDoc({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+        },
+        // no hasPlex → converter coalesces to false
+      }),
+    );
+    const service = createService(UID);
+
+    await service.load();
+
+    expect(service.hasPlex()).toBe(false);
+  });
+
+  it('eager-create writes hasPlex: false in the default User literal', async () => {
+    getDocMock.mockResolvedValue(missingDoc);
+    const service = createService(UID);
+
+    await service.load();
+
+    const [, payload] = setDocMock.mock.calls[0];
+    expect((payload as { hasPlex: boolean }).hasPlex).toBe(false);
+    expect(service.hasPlex()).toBe(false);
+  });
+
+  it('toggleHasPlex flips false→true and persists { hasPlex: true } to users/{uid}', async () => {
+    getDocMock.mockResolvedValue(
+      existingDoc({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+        },
+        hasPlex: false,
+      }),
+    );
+    const service = createService(UID);
+    await service.load();
+    expect(service.hasPlex()).toBe(false);
+
+    await service.toggleHasPlex();
+
+    expect(updateDocMock).toHaveBeenCalledTimes(1);
+    const [ref, payload] = updateDocMock.mock.calls[0];
+    expect(ref).toEqual({ path: USER_DOC });
+    expect(payload).toEqual({ hasPlex: true });
+    expect(service.hasPlex()).toBe(true);
+  });
+
+  it('toggleHasPlex flips true→false and persists { hasPlex: false }', async () => {
+    getDocMock.mockResolvedValue(
+      existingDoc({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+        },
+        hasPlex: true,
+      }),
+    );
+    const service = createService(UID);
+    await service.load();
+    expect(service.hasPlex()).toBe(true);
+
+    await service.toggleHasPlex();
+
+    const [, payload] = updateDocMock.mock.calls[0];
+    expect(payload).toEqual({ hasPlex: false });
+    expect(service.hasPlex()).toBe(false);
+  });
+
+  it('toggleHasPlex never touches myProviderIds (separate scalar write)', async () => {
+    getDocMock.mockResolvedValue(
+      existingDoc({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+        },
+        myProviderIds: [8, 337],
+        hasPlex: false,
+      }),
+    );
+    const service = createService(UID);
+    await service.load();
+
+    await service.toggleHasPlex();
+
+    const [, payload] = updateDocMock.mock.calls[0];
+    expect(Object.keys(payload as object)).not.toContain('myProviderIds');
+    // The selection is untouched.
+    expect(service.myProviderIds()).toEqual([8, 337]);
+  });
+
+  it('toggleHasPlex null-uid guard: no write', async () => {
+    const service = createService(null);
+
+    await service.toggleHasPlex();
+
+    expect(updateDocMock).not.toHaveBeenCalled();
   });
 
   it('toggleProvider adds an absent id and persists the whole array', async () => {

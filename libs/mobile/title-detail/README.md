@@ -51,10 +51,50 @@ rule (CLAUDE.md / PLAN §3); do not extract a shared helper.
 
 **Rendering rules:** only non-empty subgroups render (no empty header/divider);
 order is **"On Your Providers"** first, then **"Also Available On"**, with a
-hairline divider between them when both are present (also the seam where the
-spec-0061 "Personal Tracking" / Plex group will sit — not built here). When there
+hairline divider between them when both are present, and — below them — the
+spec-0061 **"Personal Tracking"** Plex subsection (see below). When there
 are **no** providers at all, the existing "Not available to stream in your region"
 copy is shown unchanged; the null-region prompt is likewise unchanged.
+
+## "Personal Tracking" — manual Plex override (spec 0061)
+
+A **"Personal Tracking"** subsection sits at the **bottom** of the "Where to
+Watch" card, below 0060's provider groups, separated by the same
+`border-t outline-variant/10` divider convention. It is a **manual,
+presentation-only** flag — Vultus cannot query a self-hosted Plex server, so this
+is not sync/availability data (GitHub #140).
+
+- **Visibility gate:** the whole subsection renders **only when `vm.hasPlex` is
+  true** (the user uses Plex, read from `users/{uid}.hasPlex` via
+  `TitleDetailService.hasPlex$()`, default `false`) **and** the title is tracked
+  (there is a watchlist doc to write the flag onto). When `hasPlex` is false the
+  subsection is omitted entirely (not even an empty-state row). The **read** of
+  the per-title flag is not otherwise gated — a title tagged before the user
+  unchecked "I use Plex" still displays correctly wherever the item is streamed.
+- **State (exactly one row renders):** driven by `vm.tracked.watchingViaPlex`.
+  - **Active** (`true`): a `surface-container` row with a 40×40
+    `surface-container-highest` tile holding the bundled Plex wordmark
+    (`/assets/plex-logo.svg`, `object-fit: contain` — the asset is a WIDE
+    wordmark, so `contain` keeps it uncropped), a bold **"Watching via Plex"**
+    title, a muted **"Local Server"** caption, and a text-only **"Change"**
+    affordance. Tapping the row unsets the flag.
+  - **Empty** (`false`): a dashed `outline-variant/30` row with a muted `add`
+    glyph tile and **"Mark as watching via Plex"**; the whole row taps to set the
+    flag (border shifts to `primary/50` on hover).
+- **Toggle:** both states call `TitleDetailPage.togglePlex(tracked)` →
+  `service.toggleWatchingViaPlex(tracked.tmdbId, !tracked.watchingViaPlex)`, a
+  single-field scalar `updateDoc({ watchingViaPlex })`. The realtime `tracked$`
+  subscription then swaps the row in place.
+- **Additive, never a replacement (decision 4):** this subsection renders **in
+  addition to** 0060's "On Your Providers" / "Also Available On" groups — the
+  TMDB availability framing is unchanged whether `watchingViaPlex` is true or
+  false (asserted in the component tests). The Plex brand colour lives entirely
+  in the image asset; every chrome colour consumes `--vultus-*` / `--ion-*`
+  tokens (no hard-coded hex).
+
+The bundled `/assets/plex-logo.svg` is a **shared static asset** consumed by URL
+(also used by the settings chip and the watchlist badge in their own slices) —
+it is not a lib import, so it creates no cross-slice Sheriff edge.
 
 The 40×40 logo tile shows the provider's **initials** (the per-title
 `WatchProvider` carries no logo path — unlike the catalog's `CatalogProvider`).
@@ -173,6 +213,15 @@ not a bug.
   auto-revert for TV: if status is `'completed'` and at least one episode is
   `watched: false`, silently writes `status: 'watching'`. No-op on movie / null
   uid / empty subcollection / non-`'completed'` status.
+- `hasPlex$(): Observable<boolean>` — **(spec 0061)** whether the user uses Plex
+  (`users/{uid}.hasPlex`, read via `docData` + `dataToUser`, default `false` —
+  legacy docs missing it → `false`). Gates the "Personal Tracking" toggle
+  control's visibility. Null uid / missing doc → `false`.
+- `toggleWatchingViaPlex(tmdbId, watchingViaPlex): Promise<void>` — **(spec 0061)** persists the per-title Plex override with a single-field scalar
+  `updateDoc({ watchingViaPlex })` at the watchlist item path (like
+  `updateStatus`'s `{ status }`). Never touches `myProviderIds` / `hasPlex`.
+  No-op on null uid. The current value is read off the existing `tracked$` stream
+  (no new read stream).
 
 ## Usage
 
@@ -234,13 +283,17 @@ retry trigger (`onRetry()`).
   empty until the daily sync), it falls back to a **live, display-only** TMDB
   fetch via a **slice-local `TmdbDetailClient`**. The client **never writes
   `title-cache`** (functions-only per `firestore.rules`).
-- **Reads** `users/{uid}.region` for the providers region.
-- **Subscribes** to `users/{uid}/watchlist/{titleId}` (realtime) for tracked state.
+- **Reads** `users/{uid}.region` for the providers region, `users/{uid}.myProviderIds`
+  (spec 0060) for the Where-to-Watch split, and `users/{uid}.hasPlex` (spec 0061,
+  via `hasPlex$()`) to gate the "Personal Tracking" control.
+- **Subscribes** to `users/{uid}/watchlist/{titleId}` (realtime) for tracked state
+  (which now also carries `watchingViaPlex`, spec 0061).
 - **Subscribes** to `users/{uid}/watchlist/{titleId}/episodes` (realtime,
   `idField: 'id'`) for the TV Episodes section (spec 0034).
 - **Writes** `users/{uid}/watchlist/{titleId}`: `add` (default `status:
 'planned'`, or `'completed'` for the spec-0056 "Mark as Watched" add, with
-  denormalized `posterPath` + `voteAverage`), `updateStatus`, `removeTitle`, plus
+  denormalized `posterPath` + `voteAverage`), `updateStatus`, `removeTitle`,
+  `toggleWatchingViaPlex` (spec 0061 — single-field `{ watchingViaPlex }`), plus
   the auto-status re-derivation after an episode/season write.
 - **Writes** `users/{uid}/watchlist/{titleId}/episodes/{episodeId}`: only the
   `{ watched, watchedAt }` fields, via **`updateDoc` / `writeBatch` (never

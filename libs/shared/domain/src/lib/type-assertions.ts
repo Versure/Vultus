@@ -111,6 +111,7 @@ const _user = {
     { token: 'abc', deviceId: 'dev-1', createdAt: '2026-06-18T10:00:00.000Z' },
   ],
   myProviderIds: [],
+  hasPlex: false,
 } satisfies User;
 
 const _watchlistItem = {
@@ -120,6 +121,7 @@ const _watchlistItem = {
   title: 'Game of Thrones',
   addedAt: '2026-06-18T10:00:00.000Z',
   status: 'watching',
+  watchingViaPlex: false,
 } satisfies WatchlistItem;
 
 const _episodeDoc = {

@@ -222,6 +222,46 @@ export class TitleDetailService {
   }
 
   /**
+   * Whether the user uses a Plex server (`users/{uid}.hasPlex`, spec 0061).
+   * Reads the same `users/{uid}` doc `region$` / `myProviderIds$` read, via
+   * `dataToUser` (default `false` — a legacy doc pre-0061 lacks the field →
+   * `false`). Gates the "Personal Tracking" toggle control's visibility on
+   * title-detail. Null uid / missing doc → `false`.
+   */
+  hasPlex$(): Observable<boolean> {
+    const uid = this.uid();
+    if (!uid) {
+      return of(false);
+    }
+    return (
+      docData(doc(this.firestore, userPath(uid))) as Observable<
+        UserReadData | undefined
+      >
+    ).pipe(map((data) => (data ? dataToUser(data).hasPlex : false)));
+  }
+
+  /**
+   * Persist the per-title `watchingViaPlex` override (spec 0061) with a single
+   * scalar `updateDoc({ watchingViaPlex })` at the watchlist item path — like
+   * `updateStatus`'s `{ status }` write. NEVER rewrites the whole item, never
+   * touches `myProviderIds` / `hasPlex`. No-op on null uid. The current value is
+   * read off the existing `tracked$` stream (no new read stream needed).
+   */
+  async toggleWatchingViaPlex(
+    tmdbId: number,
+    watchingViaPlex: boolean,
+  ): Promise<void> {
+    const uid = this.uid();
+    if (!uid) {
+      return;
+    }
+    await updateDoc(
+      doc(this.firestore, watchlistItemPath(uid, String(tmdbId))),
+      { watchingViaPlex },
+    );
+  }
+
+  /**
    * Grouped providers for a title in the resolved region. From the cached
    * `availability/{region}` doc when the title is cached, else from the live
    * client. Null region → never fetched (caller renders the null-region prompt).
@@ -303,6 +343,9 @@ export class TitleDetailService {
       status,
       posterPath: detail.posterPath,
       voteAverage: detail.voteAverage,
+      // A freshly added title is never yet tagged as watched via Plex (spec
+      // 0061); the flag is toggled later from the "Personal Tracking" subsection.
+      watchingViaPlex: false,
     };
     await setDoc(
       doc(this.firestore, watchlistItemPath(uid, String(detail.tmdbId))),

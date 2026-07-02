@@ -24,6 +24,7 @@ interface MockSettingsService {
   myProviderIds: WritableSignal<number[]>;
   catalogLoading: WritableSignal<boolean>;
   lastPrunedCount: WritableSignal<number>;
+  hasPlex: WritableSignal<boolean>;
   load: ReturnType<typeof vi.fn>;
   setRegion: ReturnType<typeof vi.fn>;
   setNotificationsEnabled: ReturnType<typeof vi.fn>;
@@ -31,6 +32,7 @@ interface MockSettingsService {
   retryLoad: ReturnType<typeof vi.fn>;
   loadProviderCatalog: ReturnType<typeof vi.fn>;
   toggleProvider: ReturnType<typeof vi.fn>;
+  toggleHasPlex: ReturnType<typeof vi.fn>;
 }
 
 const CATALOG: CatalogProvider[] = [
@@ -80,6 +82,7 @@ function mockService(loaded: boolean, loadFailed = false): MockSettingsService {
     myProviderIds: signal<number[]>([8]),
     catalogLoading: signal<boolean>(false),
     lastPrunedCount: signal<number>(0),
+    hasPlex: signal<boolean>(true),
     load: vi.fn().mockResolvedValue(undefined),
     setRegion: vi.fn().mockResolvedValue(undefined),
     setNotificationsEnabled: vi.fn().mockResolvedValue(undefined),
@@ -87,6 +90,7 @@ function mockService(loaded: boolean, loadFailed = false): MockSettingsService {
     retryLoad: vi.fn(),
     loadProviderCatalog: vi.fn().mockResolvedValue(undefined),
     toggleProvider: vi.fn().mockResolvedValue(undefined),
+    toggleHasPlex: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -223,10 +227,14 @@ describe('SettingsPage', () => {
     expect(service.loadProviderCatalog).toHaveBeenCalledTimes(1);
   });
 
-  it('renders a chip per provider in the catalog', async () => {
+  it('renders a chip per provider in the catalog (plus the Plex chip)', async () => {
     const { el } = await setup(true);
-    const chips = el.querySelectorAll('.provider-chip');
-    expect(chips.length).toBe(CATALOG.length);
+    // The Plex chip (spec 0061) is also a `.provider-chip`; exclude it to count
+    // only the TMDB catalog chips.
+    const catalogChips = el.querySelectorAll(
+      '.provider-chip:not(.provider-chip--plex)',
+    );
+    expect(catalogChips.length).toBe(CATALOG.length);
   });
 
   it('marks the selected chip (id in myProviderIds) with aria-pressed and the selected class', async () => {
@@ -297,5 +305,65 @@ describe('SettingsPage', () => {
     expect(errorEl).toBeTruthy();
     errorEl?.dispatchEvent(new CustomEvent('retry'));
     expect(service.retryLoad).toHaveBeenCalledTimes(1);
+  });
+
+  // ── Plex chip (spec 0061) ────────────────────────────────────────────────
+
+  it('renders the Plex chip as the last chip in the grid', async () => {
+    const { el } = await setup(true);
+    const grid = el.querySelector('.provider-grid');
+    const chips = Array.from(grid?.querySelectorAll('.provider-chip') ?? []);
+    const plex = grid?.querySelector('.provider-chip--plex');
+    expect(plex).toBeTruthy();
+    // It sits AFTER all the TMDB catalog chips.
+    expect(chips[chips.length - 1]).toBe(plex);
+    expect(plex?.querySelector('.provider-chip__name')?.textContent).toBe(
+      'Plex',
+    );
+    expect(plex?.querySelector('img')?.getAttribute('src')).toBe(
+      '/assets/plex-logo.svg',
+    );
+  });
+
+  it('renders the Plex-only "Manual" secondary caption', async () => {
+    const { el } = await setup(true);
+    const plex = el.querySelector('.provider-chip--plex');
+    expect(plex?.querySelector('.provider-chip__caption')?.textContent).toBe(
+      'Manual',
+    );
+    // Sibling TMDB chips have no caption.
+    const firstCatalog = el.querySelector(
+      '.provider-chip:not(.provider-chip--plex)',
+    );
+    expect(firstCatalog?.querySelector('.provider-chip__caption')).toBeFalsy();
+  });
+
+  it('renders the Plex chip selected (badge + aria-pressed) when hasPlex is true', async () => {
+    const service = mockService(true);
+    service.hasPlex.set(true);
+    const { el } = await setupWithService(service);
+    const plex = el.querySelector('.provider-chip--plex');
+    expect(plex?.getAttribute('aria-pressed')).toBe('true');
+    expect(plex?.classList.contains('provider-chip--selected')).toBe(true);
+    expect(plex?.querySelector('.provider-chip__badge')).toBeTruthy();
+  });
+
+  it('renders the Plex chip unselected (no badge) when hasPlex is false', async () => {
+    const service = mockService(true);
+    service.hasPlex.set(false);
+    const { el } = await setupWithService(service);
+    const plex = el.querySelector('.provider-chip--plex');
+    expect(plex?.getAttribute('aria-pressed')).toBe('false');
+    expect(plex?.classList.contains('provider-chip--selected')).toBe(false);
+    expect(plex?.querySelector('.provider-chip__badge')).toBeFalsy();
+  });
+
+  it('tapping the Plex chip calls onPlexToggle → toggleHasPlex', async () => {
+    const { el, service } = await setup(true);
+    const plex = el.querySelectorAll('.provider-chip--plex')[0] as HTMLElement;
+    plex.click();
+    expect(service.toggleHasPlex).toHaveBeenCalledTimes(1);
+    // It never calls the TMDB provider toggle.
+    expect(service.toggleProvider).not.toHaveBeenCalled();
   });
 });

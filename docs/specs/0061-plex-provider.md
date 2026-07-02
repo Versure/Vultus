@@ -2,7 +2,7 @@
 number: 0061
 slug: plex-provider
 title: Add Plex as a manual, per-title "I'm watching this via Plex" provider
-status: approved
+status: done
 slices: [slice:settings, slice:title-detail, slice:watchlist]
 scopes: [scope:mobile, scope:shared]
 created: 2026-07-01

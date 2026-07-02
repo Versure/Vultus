@@ -43,12 +43,14 @@ export interface UserReadData {
   notificationPrefs: NotificationPrefs; // passes through
   fcmTokens: FcmTokenReadData[]; // per-element mapped
   myProviderIds?: number[]; // optional on read: legacy docs pre-0060 lack this field
+  hasPlex?: boolean; // optional on read: legacy docs pre-0061 lack this field
 }
 export interface UserWriteData {
   region: Region;
   notificationPrefs: NotificationPrefs;
   fcmTokens: FcmTokenWriteData[];
   myProviderIds: number[];
+  hasPlex: boolean;
 }
 
 // --- WatchlistItem: addedAt ---
@@ -62,6 +64,7 @@ export interface WatchlistItemReadData {
   posterPath?: string | null;
   voteAverage?: number | null;
   releaseDate?: string | null; // plain ISO date string; NOT a Timestamp
+  watchingViaPlex?: boolean; // optional on read: legacy docs pre-0061 lack this field
 }
 export interface WatchlistItemWriteData {
   type: TitleType;
@@ -73,6 +76,7 @@ export interface WatchlistItemWriteData {
   posterPath?: string | null;
   voteAverage?: number | null;
   releaseDate?: string | null; // plain ISO date string; NOT a Timestamp
+  watchingViaPlex: boolean;
 }
 
 // --- EpisodeDoc: airDate + nullable watchedAt + nullable title (spec 0034) ---
