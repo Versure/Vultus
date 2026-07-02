@@ -438,7 +438,8 @@ export const triggerSync = onCall<unknown, Promise<TriggerSyncResponse>>(
     cors: [
       'https://vultus-cab62.web.app',
       'https://vultus-cab62.firebaseapp.com',
-      'http://localhost', // Capacitor Android WebView (production native app)
+      'https://localhost', // Capacitor Android WebView (default androidScheme is https)
+      'http://localhost', // Capacitor Android WebView (legacy http scheme)
       'http://localhost:4200', // Angular dev server (serve-prod-debug)
     ],
   },
@@ -586,7 +587,8 @@ export const getWatchProviders = onCall<
     cors: [
       'https://vultus-cab62.web.app',
       'https://vultus-cab62.firebaseapp.com',
-      'http://localhost', // Capacitor Android WebView (production native app)
+      'https://localhost', // Capacitor Android WebView (default androidScheme is https)
+      'http://localhost', // Capacitor Android WebView (legacy http scheme)
       'http://localhost:4200', // Angular dev server (serve-prod-debug)
     ],
   },
