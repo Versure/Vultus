@@ -16,10 +16,10 @@ Per-document read/write shapes for the Firestore wire boundary:
 | `FirestoreTimestampLike`      | read      | Structural — satisfied by both SDK `Timestamp`s                                  |
 | `EpisodeReadData`             | read      | `title?: string \| null` (optional — pre-0034 docs lack the field)               |
 | `EpisodeWriteData`            | write     | `title: string \| null`                                                          |
-| `WatchlistItemReadData`       | read      |                                                                                  |
-| `WatchlistItemWriteData`      | write     |                                                                                  |
-| `UserReadData`                | read      | `myProviderIds?: number[]` (optional — legacy docs pre-0060 lack it)             |
-| `UserWriteData`               | write     | `myProviderIds: number[]` (required)                                             |
+| `WatchlistItemReadData`       | read      | `watchingViaPlex?: boolean` (optional — legacy docs pre-0061 lack it)            |
+| `WatchlistItemWriteData`      | write     | `watchingViaPlex: boolean` (required)                                            |
+| `UserReadData`                | read      | `myProviderIds?: number[]` (pre-0060); `hasPlex?: boolean` (pre-0061) optional   |
+| `UserWriteData`               | write     | `myProviderIds: number[]`; `hasPlex: boolean` (both required)                    |
 | `NotificationReadData`        | read      |                                                                                  |
 | `NotificationWriteData`       | write     |                                                                                  |
 | `TitleCacheReadData`          | read      |                                                                                  |
@@ -36,8 +36,8 @@ Per-document read/write shapes for the Firestore wire boundary:
 Pure functions mapping domain types to/from their Firestore wire shapes:
 
 - `episodeToData` / `dataToEpisode` — `EpisodeDoc` ↔ `EpisodeWriteData`/`EpisodeReadData`. `title` passes through; `?? null` default handles stored docs missing the field (backward-compat, spec 0034).
-- `watchlistItemToData` / `dataToWatchlistItem`
-- `userToData` / `dataToUser` — `myProviderIds` passes through on write; `dataToUser` coalesces a missing field to `[]` (backward-compat, spec 0060).
+- `watchlistItemToData` / `dataToWatchlistItem` — `watchingViaPlex` passes through on write (`?? false`); `dataToWatchlistItem` coalesces a missing field to `false` (backward-compat, spec 0061).
+- `userToData` / `dataToUser` — `myProviderIds` passes through on write; `dataToUser` coalesces a missing field to `[]` (backward-compat, spec 0060). `hasPlex` passes through on write; `dataToUser` coalesces a missing field to `false` (backward-compat, spec 0061).
 - `notificationToData` / `dataToNotification`
 - `titleCacheToData` / `dataToTitleCache`
 - `syncRunToData` / `dataToSyncRun` — `SyncRun` ↔ `SyncRunWriteData`/`SyncRunReadData`; only `startedAt`/`completedAt` cross the Timestamp boundary, all other fields pass through (spec 0049).
