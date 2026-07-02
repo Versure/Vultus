@@ -2,7 +2,7 @@
 number: 0064
 slug: android-cutout-viewport-fit
 title: Extend the WebView under the Android display cutout via viewport-fit=cover, with a dark window background fallback
-status: approved
+status: done
 slices: []
 scopes: [scope:mobile]
 created: 2026-07-02
