@@ -320,6 +320,36 @@ ion-content {
   overflow-wrap: anywhere;
 }
 
+// ── Plex chip (spec 0061) ──────────────────────────────────────────────────
+// The Plex logo tile carries a neutral surface-container-highest background
+// (the brand colour lives in the bundled image, NOT in this SCSS) and uses
+// `object-fit: contain` because the asset is a WIDE WORDMARK (viewBox 148x68.2)
+// — `cover` would crop it. A little inset keeps the wordmark off the tile edges.
+.provider-chip__logo--plex {
+  background: var(--vultus-surface-container-highest);
+  overflow: hidden;
+
+  img {
+    width: 100%;
+    height: 100%;
+    padding: 4px;
+    box-sizing: border-box;
+    object-fit: contain;
+    border-radius: var(--vultus-radius);
+  }
+}
+
+// Plex-only secondary caption ("Manual") — `label-sm`, muted
+// `on-surface-variant`, sits directly under the "Plex" name (no extra gap; the
+// chip's own `gap` handles spacing). Sibling TMDB chips have no caption.
+.provider-chip__caption {
+  font-size: var(--vultus-text-label-sm-size);
+  font-weight: var(--vultus-text-label-sm-weight);
+  line-height: var(--vultus-text-label-sm-line);
+  color: var(--vultus-on-surface-variant);
+  text-align: center;
+}
+
 // Footer count — `label-sm` in on-surface-variant, aligned to the grid's left
 // edge, 12px above it.
 .provider-footer {

@@ -498,6 +498,174 @@ ion-content {
 }
 
 // -----------------------------------------------------------------------------
+// Personal Tracking — the spec-0061 Plex override subsection (canonical Stitch
+// screen "Movie Detail - Personal Tracking - Vultus",
+// 562019f29ce2412d90c757a7e45a98bf). Sits at the BOTTOM of the "Where to Watch"
+// card, below 0060's provider groups, after the same `.group-divider` hairline.
+// Exactly one of two rows renders per `watchingViaPlex`:
+//   - ACTIVE (true): a surface-container row with the 40×40 surface-container-
+//     highest logo tile (bundled /assets/plex-logo.svg wordmark, object-fit
+//     contain so the wide mark is not cropped), a bold "Watching via Plex"
+//     title + muted "Local Server" caption, and a text-only "Change" affordance.
+//   - EMPTY (false): a dashed outline-variant row with a muted `add` glyph tile
+//     and "Mark as watching via Plex" — the whole row taps to set the flag.
+// The Plex brand colour lives ENTIRELY in the image asset; every chrome colour
+// here consumes --vultus-* / --ion-* tokens (no hard-coded hex).
+// -----------------------------------------------------------------------------
+.personal-tracking {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vultus-space-sm); // space-y-3
+
+  // Subgroup label — same treatment as the sibling "Also Available On" label
+  // (label-sm, uppercase, tracking-wider, muted on-surface-variant).
+  .group-label--plex {
+    color: var(--vultus-on-surface-variant);
+  }
+}
+
+// Shared row chrome for both states (both are full-width tappable buttons).
+.plex-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--vultus-space-sm) var(--vultus-space-md); // p-3
+  border-radius: var(--vultus-radius); // rounded-lg (0.5rem)
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease;
+
+  &:focus-visible {
+    outline: 2px solid var(--ion-color-primary);
+    outline-offset: 2px;
+  }
+
+  &:active {
+    transform: scale(0.99);
+  }
+}
+
+.plex-lead {
+  display: flex;
+  align-items: center;
+  // gap-3 in the mock is 12px; the token grid only has 8/16, so use 12px
+  // explicitly to match the mock rhythm between tile and text (no colour hex).
+  gap: 12px;
+  min-width: 0;
+}
+
+// 40×40 logo tile — surface-container-highest, rounded-lg, holds the bundled
+// Plex wordmark. The mark is a WIDE wordmark (viewBox 148×68.2), so
+// object-fit: contain (NOT cover) keeps it uncropped; the neutral tile shows
+// around it.
+.plex-tile {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--vultus-radius);
+  background: var(--vultus-surface-container-highest);
+  overflow: hidden;
+
+  // Empty-state tile: no fill, just the muted `add` glyph centered.
+  &--empty {
+    background: transparent;
+
+    ion-icon {
+      font-size: 22px;
+      color: color-mix(
+        in srgb,
+        var(--vultus-on-surface-variant) 50%,
+        transparent
+      );
+    }
+  }
+}
+
+.plex-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 6px; // breathing room so the wordmark isn't edge-to-edge
+}
+
+.plex-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.plex-title {
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-body-md-size);
+  line-height: var(--vultus-text-body-md-line);
+  font-weight: 700; // font-bold
+  color: var(--vultus-on-surface);
+}
+
+.plex-caption {
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-label-sm-size);
+  font-weight: var(--vultus-text-label-sm-weight);
+  line-height: var(--vultus-text-label-sm-line);
+  color: var(--vultus-on-surface-variant);
+}
+
+// Text-only "Change" affordance (label-md, primary, underline on hover). Lives
+// inside the tappable active row (the row flips the flag; the label is the
+// visual affordance). Hover-underline is driven by the row hover below.
+.plex-change {
+  flex-shrink: 0;
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-label-md-size);
+  font-weight: var(--vultus-text-label-md-weight);
+  line-height: var(--vultus-text-label-md-line);
+  letter-spacing: var(--vultus-text-label-md-spacing);
+  color: var(--ion-color-primary);
+}
+
+// ACTIVE row: surface-container background, surface-container-high on hover
+// (matches the provider-row raise). The "Change" label underlines on hover.
+.plex-row--active {
+  background: var(--vultus-surface-container);
+
+  &:hover {
+    background: var(--vultus-surface-container-high);
+
+    .plex-change {
+      text-decoration: underline;
+    }
+  }
+}
+
+// EMPTY row: dashed outline-variant border (~30% alpha), muted text; the border
+// shifts to primary/50 on hover.
+.plex-row--empty {
+  border: 1px dashed
+    color-mix(in srgb, var(--vultus-outline-variant) 30%, transparent);
+
+  &:hover {
+    border-color: color-mix(in srgb, var(--ion-color-primary) 50%, transparent);
+  }
+}
+
+.plex-empty-text {
+  min-width: 0;
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-body-md-size);
+  line-height: var(--vultus-text-body-md-line);
+  color: color-mix(in srgb, var(--vultus-on-surface-variant) 70%, transparent);
+}
+
+// -----------------------------------------------------------------------------
 // Loading / not-found / error states are rendered by the shared ui-kit atoms
 // (vultus-skeleton-hero / vultus-empty-state / vultus-error-state), which carry
 // their own styling — no slice-local rules needed here.

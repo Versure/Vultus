@@ -179,6 +179,25 @@
           >
           }
         </span>
+        }
+        <!-- Read-only Plex badge (spec 0061): a compact, non-interactive tag
+             shown ADDITIVELY when the item is manually tagged as watched via
+             the user's Plex server. It sits inline beside 0060's availability
+             pill (this branch has no `items-end gap-sm` corner slot yet — see
+             the spec's "0060 composition note (T5)"), and NEVER replaces the
+             pill (decision 4). The card itself remains the tap target; the badge
+             carries no click/hover/focus handler. The toggle lives only in
+             title-detail (decision 5). Layout-precedent only — not a literal
+             Stitch citation. Brand colour lives in the bundled logo image; the
+             badge chrome uses `--vultus-*` tokens (no hard-coded hex). -->
+        @if (item.watchingViaPlex) {
+        <span class="plex-badge" aria-label="Watching via Plex">
+          <img
+            src="/assets/plex-logo.svg"
+            alt="Plex"
+            class="plex-badge__logo"
+          />
+        </span>
         } @if (item.status !== 'planned') {
         <button
           type="button"
