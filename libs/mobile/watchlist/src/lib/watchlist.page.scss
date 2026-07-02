@@ -11,6 +11,16 @@
     color-mix(in srgb, var(--vultus-primary) 50%, transparent);
 }
 
+// Shared compact-pill base — the flex-start-anchored inline-flex, vertically
+// centred, pill-radius chrome common to the availability pill (spec 0060) and
+// the Plex badge (spec 0061). `@extend`ed so these declarations emit once.
+%compact-pill {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--vultus-radius-pill);
+}
+
 // -----------------------------------------------------------------------------
 // Header
 // -----------------------------------------------------------------------------
@@ -605,12 +615,9 @@ ion-content {
 // step per docs/design/vultus-design-system.md.)
 // -----------------------------------------------------------------------------
 .availability-pill {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
+  @extend %compact-pill;
   gap: var(--vultus-space-xs);
   padding: 2px 8px;
-  border-radius: var(--vultus-radius-pill);
   font-family: var(--vultus-font-family);
   font-size: var(--vultus-text-label-sm-size);
   font-weight: var(--vultus-text-label-sm-weight);
@@ -648,27 +655,25 @@ ion-content {
 // chrome uses `--vultus-*` tokens — no hand-set hex.
 // -----------------------------------------------------------------------------
 .plex-badge {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  // `gap-sm`-scale inset, mirroring the compact pill beside it.
+  @extend %compact-pill;
+  // `gap-sm`-scale inset, mirroring the compact pill beside it. With a single
+  // logo child, the flex start-packing centres it visually (symmetric padding),
+  // so no explicit `justify-content` is needed.
   padding: 3px 8px;
-  border-radius: var(--vultus-radius-pill);
   // Neutral theme-token tile (the design's `surface-variant` ramp step), same
-  // family the availability pill's "elsewhere" fill uses.
+  // family the availability pill's "elsewhere" fill uses. Mirrors 0060's
+  // availability pill, which likewise sets no `pointer-events`: the badge has no
+  // handlers, so a tap lands on it and bubbles up to the card (the tap target).
   background: var(--vultus-surface-container-highest);
-  pointer-events: none;
 
   .plex-badge__logo {
-    // Height tuned to the card's label-sm meta scale; width follows the
-    // wordmark's aspect ratio via `contain` (never `cover`, which would crop
-    // the wide mark).
+    // Height tuned to the card's label-sm meta scale; width tracks the wordmark
+    // aspect ratio (img default `width: auto`) via `contain` (never `cover`,
+    // which would crop the wide mark). The img is a flex item of the inline-flex
+    // badge, so it is blockified automatically — no explicit `display` needed.
     height: 0.75rem;
-    width: auto;
     max-width: 44px;
     object-fit: contain;
-    display: block;
   }
 }
 

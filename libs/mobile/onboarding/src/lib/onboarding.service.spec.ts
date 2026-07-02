@@ -113,6 +113,7 @@ describe('OnboardingService', () => {
       },
       fcmTokens: [],
       myProviderIds: [],
+      hasPlex: false,
     });
     expect(opts).toEqual({ merge: true });
   });
