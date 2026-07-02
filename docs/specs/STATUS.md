@@ -12,8 +12,8 @@
 
 Total specs: 64
 
-- done: 61
-- approved: 3
+- done: 62
+- approved: 2
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -80,4 +80,4 @@ Total specs: 64
 | 61 | plex-provider | Add Plex as a manual, per-title "I'm watching this via Plex" provider | approved | slice:settings, slice:title-detail, slice:watchlist | scope:mobile, scope:shared |
 | 62 | android-webview-cutout-background | Paint the Android WebView background behind the camera cutout via Capacitor's top-level backgroundColor config | done | — | scope:mobile |
 | 63 | implement-feature-hardening | Harden the implement-feature workflow against observed friction (specs 0060/0062) | done | — | — |
-| 64 | android-cutout-viewport-fit | Extend the WebView under the Android display cutout via viewport-fit=cover, with a dark window background fallback | approved | — | scope:mobile |
+| 64 | android-cutout-viewport-fit | Extend the WebView under the Android display cutout via viewport-fit=cover, with a dark window background fallback | done | — | scope:mobile |
