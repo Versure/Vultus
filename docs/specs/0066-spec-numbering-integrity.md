@@ -2,7 +2,7 @@
 number: 0066
 slug: spec-numbering-integrity
 title: Fix spec-number allocation (branch-based scan), repair the landed 0043/0046 collision, and guard against recurrence
-status: implementing # draft | approved | implementing | done
+status: done # draft | approved | implementing | done
 slices: [] # tooling + docs; tools/* is intentionally not Sheriff-tagged (spec 0058)
 scopes: []
 created: 2026-07-02
