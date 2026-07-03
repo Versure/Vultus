@@ -173,6 +173,51 @@ Directory -Force`) — required for brand-new worktrees where
     LLM judgment sits above the settings allowlist — see the "Known environment
     behaviors" section on poisoning.)
 
+- **Bootstrap dependencies in the worktree (spec 0065).** A fresh worktree has
+  **no `node_modules`** (gitignored — git only populates committed files), yet
+  every downstream step (the `pnpm exec lint-staged` pre-commit hook, group-E2
+  `pnpm exec prettier --write`, Step 4's `pnpm nx run-many -t typecheck`, and all
+  `qa-runner` gates) assumes it exists. **After** the `git worktree add` + spec-0040
+  seed above and **before** any `pnpm exec` / gate / commit, classify the spec and
+  bootstrap accordingly:
+  - **Classify.** The spec is **code-bearing** if any changed path is inside the
+    Nx/TS graph (executable code under `apps/**`, `libs/**`, `tools/**`) or
+    `nx affected` is non-empty; otherwise it is **docs-only** (`slices: []` /
+    `scopes: []`, changes confined to `.claude/**`, `docs/**`, root config
+    markdown). **When unsure, treat as code-bearing** — a misclassified docs-only
+    install merely spends time, but a misclassified code-bearing spec cascade-fails
+    every gate on missing deps.
+  - **Code-bearing → real worktree install.** Run `pnpm install` in `$wt` (`-C $wt`
+    / `cd $wt` **in the same call**, per the E3 no-persisted-cwd rule) with a
+    **long/backgrounded timeout** (~11 min; use the Bash-tool max `600000` ms or
+    `run_in_background: true` — a long-running install is **not** a failure).
+    1. Attempt `pnpm install` in `$wt`.
+    2. **If** it fails on the Windows firebase-tools nested `semver` bin-link
+       (`ENOENT … semver.js.EXE`), **re-run** `pnpm install --config.bin-links=false`
+       (this succeeds and creates all package symlinks + `.bin` entries). This flag
+       is the **recovery after** the plain-install semver failure, not the first
+       command.
+
+    The `re2: false` / `sharp: true` `allowBuilds` entries in `pnpm-workspace.yaml`
+    are prerequisites (already landed); a future dep change that re-inserts a fresh
+    `allowBuilds` placeholder aborts install (exit 1) and must be resolved before
+    retrying. On **any other** install failure (not the documented semver mode),
+    **halt the run as `needs-human`** with the install output — do **not** proceed
+    to gates that will cascade-fail on missing deps.
+
+  - **Docs-only → skip the install; use the primary-checkout shortcut.** Do **not**
+    run `pnpm install` in the worktree. Instead run the pre-commit hook's
+    substantive steps via the **primary checkout's** already-installed tooling:
+    `node <repoRoot>/node_modules/prettier/bin/prettier.cjs --write <changed files>`
+    (invoked from the worktree cwd so Prettier's config/ignore resolve correctly)
+    and `node tools/scripts/gen-spec-status.mjs` (zero-dependency) — then commit.
+    Without `node_modules` the worktree's `pnpm exec lint-staged` pre-commit hook
+    effectively no-ops, and **CI's full install is the authoritative gate**.
+  - **Never junction** the primary checkout's `node_modules` into the worktree — in
+    **both** branches. `pnpm exec` runs a dep-status check that can **purge** the
+    modules directory, deleting the primary checkout's real `node_modules` (observed
+    on spec 0063). This is a **hard prohibition**, never a faster alternative.
+
 - **Bootstrap check:** if no `nx.json` exists, go to step 3a.
 
 ### 3. Decompose & route (you)
