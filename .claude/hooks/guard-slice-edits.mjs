@@ -18,6 +18,14 @@
  *
  * Fail-OPEN: any parse/shape surprise allows the edit. A broken guard must never
  * brick the workflow — it should under-block, not over-block.
+ *
+ * KNOWN GAP (by design): this guard's PreToolUse matcher is `Edit|Write` ONLY.
+ * An orchestrator that writes slice files through a shell — PowerShell
+ * `Set-Content` / here-string, or a Bash heredoc — bypasses this hook entirely,
+ * because those go through the Bash tool, not Edit|Write. This is out of scope
+ * by design (see spec 0069 item 4): don't assume the guard covers shell writes.
+ * A write-heuristic on Bash/PowerShell would only be built if orchestrator
+ * shell-writes are actually observed.
  */
 import { readFileSync } from 'node:fs';
 
@@ -26,7 +34,7 @@ function allow() {
   process.exit(0);
 }
 
-function deny(relPath, reason) {
+function deny(reason) {
   process.stdout.write(
     JSON.stringify({
       hookSpecificOutput: {
@@ -45,6 +53,11 @@ try {
 } catch {
   allow(); // unreadable/malformed stdin — fail open
 }
+
+// Post-parse object guard: JSON.parse('null') succeeds (returns null, no throw)
+// and any non-object payload would crash the property access below. Fail open on
+// anything that isn't a plain object before touching input.agent_id.
+if (typeof input !== 'object' || input === null) allow();
 
 // Subagent calls carry agent_id; the orchestrator's do not. Only the
 // orchestrator is constrained here.
@@ -73,11 +86,12 @@ if (!isSliceFile) allow();
 const isExempt =
   /\/src\/index\.ts$/.test(rel) || // lib public barrel
   rel === 'apps/functions/src/main.ts' || // functions export/registration barrel
+  rel === 'apps/mobile/src/main.ts' || // mobile bootstrap
+  rel === 'apps/mobile/src/app/app.config.ts' || // mobile provider registration
   /^apps\/mobile\/src\/.*\.routes\.ts$/.test(rel); // mobile route registration
 if (isExempt) allow();
 
 deny(
-  rel,
   `Blocked: the implement-feature orchestrator must not hand-author slice files ` +
     `(${rel}) in a feature worktree. Route this to a specialist subagent ` +
     `(backend-engineer / frontend-engineer / feature-implementer) per ` +
