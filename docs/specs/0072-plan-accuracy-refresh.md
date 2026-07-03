@@ -2,7 +2,7 @@
 number: 0072
 slug: plan-accuracy-refresh
 title: Refresh docs/PLAN.md to eliminate accumulated drift against the shipped codebase
-status: implementing # draft | approved | implementing | done
+status: done # draft | approved | implementing | done
 slices: [] # docs-only foundation work — touches no product slice
 scopes: [] # docs-only — touches no scope tag
 created: 2026-07-03
