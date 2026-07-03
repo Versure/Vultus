@@ -10,10 +10,10 @@
 
 # Spec status ledger
 
-Total specs: 64
+Total specs: 65
 
 - done: 63
-- approved: 1
+- approved: 2
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -81,3 +81,4 @@ Total specs: 64
 | 62 | android-webview-cutout-background | Paint the Android WebView background behind the camera cutout via Capacitor's top-level backgroundColor config | done | — | scope:mobile |
 | 63 | implement-feature-hardening | Harden the implement-feature workflow against observed friction (specs 0060/0062) | done | — | — |
 | 64 | android-cutout-viewport-fit | Extend the WebView under the Android display cutout via viewport-fit=cover, with a dark window background fallback | done | — | scope:mobile |
+| 67 | ai-setup-instruction-corrections | Correct drifted/incorrect standing-instruction content in agents, PLAN.md, and CLAUDE.md | approved | — | — |
