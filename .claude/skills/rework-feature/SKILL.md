@@ -26,8 +26,11 @@ instead of a fresh spec. (Project-wide rules are in `CLAUDE.md`.)
   feature PRs (`gh pr list`) and ask.
 - Resolve the absolute worktree path (`$wt`, dir `feat-NNNN-slug`):
   ```powershell
-  $root = (git rev-parse --path-format=absolute --git-common-dir) -replace '\.git$',''
-  $wt   = [System.IO.Path]::GetFullPath("$root/../Vultus-worktrees/feat-NNNN-slug")
+  # Single deriver of $root/$wt (tools/scripts/resolve-worktree.mjs, spec 0071).
+  # Prints two lines: $root (primary checkout) then $wt (this worktree).
+  $resolved = node tools/scripts/resolve-worktree.mjs feat-NNNN-slug
+  $root = $resolved[0]
+  $wt   = $resolved[1]
   ```
   `git worktree prune`; if `$wt` is registered (implement-feature leaves it in
   place), reuse it (`git -C $wt checkout feat/NNNN-slug; git -C $wt pull`); elif

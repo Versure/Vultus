@@ -51,26 +51,19 @@ PushNotifications API from a component); the **native** Capacitor setup
 
 ## Frontend domain guidance
 
-- **Match the design — and actually fetch it the right way.** `get_screen` (ID in
-  the spec; use `list_screens`/`get_project` for project
-  `projects/13590348714018893783` to find it) returns **metadata + download URLs,
-  NOT the rendered markup**. The screen object alone is almost un-pinnable — the
-  real values live in the HTML it links to. Recipe:
-  1. `get_screen` → read `htmlCode.downloadUrl` and `screenshot.downloadUrl`.
-  2. **Fetch the raw HTML** at `htmlCode.downloadUrl` with a plain GET, saving it
-     to a scratch file, then Read it. Use `curl -sSL -o <scratch>.html <url>` from
-     the Bash tool (Git Bash) — or `Invoke-WebRequest -UseBasicParsing` if
-     PowerShell happens to be available. **Do NOT use WebFetch** for this — it
-     summarizes the page and strips the `<style>`/Tailwind-config block you need.
-  3. In that HTML, read the **Tailwind config** (`tailwind.config` → `colors`,
-     `fontSize`, `spacing`, `borderRadius`) for exact values, and the **element
-     markup** for structure (which utility classes each part uses).
-  4. Fetch `screenshot.downloadUrl` and eyeball it against your render.
-     **If `get_screen` errors, retry** (transient failures are common). **If you
-     genuinely cannot read the screen HTML, the task is blocked** — implement to the
-     spec's stated values, **report "Stitch screen unverified" prominently** as a
-     `needs-human` item, and do **not** pass it off as done. Always record the screen
-     ID + the download URL you read.
+- **Match the design — fetch the screen the right way.** The canonical fetch
+  recipe (`get_screen` → `htmlCode.downloadUrl` → raw GET, **not** WebFetch →
+  retry → blocked/`needs-human`) lives in **CLAUDE.md → "UI fidelity is a
+  contract"**; follow it, don't re-transcribe it. Your role delta: **you** are the
+  one who performs the fetch. Find the screen ID in the spec (use
+  `list_screens`/`get_project` for project `projects/13590348714018893783`), fetch
+  the raw HTML at `htmlCode.downloadUrl` with `curl -sSL -o <scratch>.html <url>`
+  from the Bash tool (Git Bash) — or `Invoke-WebRequest -UseBasicParsing` — then
+  Read it and pull the Tailwind config (`colors`/`fontSize`/`spacing`/`borderRadius`)
+  - element markup, and eyeball `screenshot.downloadUrl` against your render. **If
+    you genuinely cannot read the screen HTML, the task is blocked** — report "Stitch
+    screen unverified" as a `needs-human` item, never pass it off as done. Always
+    record the screen ID + the download URL you read.
 - **Translate the design to concrete CSS, not vibes.** Before writing SCSS, pin
   the exact values the screen implies: element dimensions (input/control
   **heights**, not just "taller"), spacing/insets, radius, and **every interactive
@@ -81,19 +74,20 @@ PushNotifications API from a component); the **native** Capacitor setup
   token set is `docs/design/vultus-design-system.md` (exported from Stitch), wired
   into `shared/ui-kit` `theme.scss` as `--vultus-*` / `--ion-*` vars. **Consume
   those vars; never hand-transcribe a hex** from memory or from prose — stale
-  hand-copied values (e.g. the old "primary `#10B981`, surface `#0F172A`") are the
-  single biggest source of UI-rework loops. The real language is dark-first,
-  **Inter**, primary **Emerald `#4edea3`** (`#10B981` is `primary-container`, not
-  primary), a deep-navy **surface ramp** (`--vultus-surface #0b1326` →
-  `--vultus-surface-container #171f33` → `--vultus-surface-container-highest
-#2d3449`), text `--vultus-on-surface #dae2fd` / `--vultus-on-surface-variant
-#bbcabf`, 8px grid, 0.5rem radius, and a type scale (`--vultus-text-*`:
-  label-sm 11/500 … display-lg 32/700). Map the watchlist `status` field to its
-  semantic var: `--vultus-status-watching #3B82F6`, `-completed #10B981`,
-  `-dropped #EF4444`, `-planned #94A3B8`. If a value you need isn't in `theme.scss`
-  yet, read it from `docs/design/vultus-design-system.md` and **add it to
-  `theme.scss`** (when you own ui-kit) rather than hardcoding a literal in a slice.
-  **A token only renders if it's actually wired:** a font named in
+  hand-copied values are the single biggest source of UI-rework loops (see
+  CLAUDE.md's design note for the one deliberate anti-confusion example: primary is
+  emerald `--vultus-primary`, **not** `--vultus-primary-container`). The language is
+  dark-first, **Inter**, an emerald primary, a deep-navy surface ramp
+  (`--vultus-surface` → `--vultus-surface-container` →
+  `--vultus-surface-container-highest`), text `--vultus-on-surface` /
+  `--vultus-on-surface-variant`, an 8px grid, 0.5rem radius, and a `--vultus-text-*`
+  type scale (label-sm … display-lg). Map the watchlist `status` field to its
+  semantic var: `--vultus-status-watching` / `-completed` / `-dropped` /
+  `-planned`. For any concrete value read `docs/design/vultus-design-system.md` /
+  `theme.scss` — never a literal from here. If a value you need isn't in
+  `theme.scss` yet, read it from the design doc and **add it to `theme.scss`** (when
+  you own ui-kit) rather than hardcoding a literal in a slice. **A token only
+  renders if it's actually wired:** a font named in
   `--vultus-font-family` is _not loaded_ unless a web-font (Google Fonts link in
   `apps/mobile/src/index.html`) provides it — otherwise it silently falls back to
   system-ui. If the design's font isn't loaded, that's a setup gap to fix (or
@@ -142,10 +136,9 @@ Read the spec (Scope, Public types, UI/Stitch refs, Test plan) and your assigned
 tasks. **Fetch the Stitch screen and pin its concrete values/states first**, then
 implement components + tests together. Run the narrowest available checks
 (`nx test <project>`, `nx lint <project>`) when the workspace supports them; note +
-skip if not bootstrapped. **On Windows,** after any `Edit`/`Write` on a source
-file, run `pnpm exec prettier --write` on the **changed files** before staging, so
-a phantom CRLF diff doesn't fail `prettier --check` (only the changed files — no
-whole-file EOL churn, no `.gitattributes` change). Return: files changed, a short
+skip if not bootstrapped. **On Windows, apply CLAUDE.md E2** (after any
+`Edit`/`Write`, `pnpm exec prettier --write` the changed files before staging).
+Return: files changed, a short
 summary, check output, the
 **Stitch screen ID used (or "unverified — why")**, the **visual-verification result
 or checklist**, and anything you couldn't do.

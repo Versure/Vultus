@@ -35,8 +35,11 @@ shell, branches — are in `CLAUDE.md`.)
   **primary** checkout, not the worktree — the common-dir formula is
   worktree-invariant):
   ```powershell
-  $root = (git rev-parse --path-format=absolute --git-common-dir) -replace '\.git[\\/]?$',''
-  $wt   = [System.IO.Path]::GetFullPath("$root/../Vultus-worktrees/feat-NNNN-slug")
+  # Single deriver of $root/$wt (tools/scripts/resolve-worktree.mjs, spec 0071).
+  # Prints two lines: $root (primary checkout) then $wt (this worktree).
+  $resolved = node tools/scripts/resolve-worktree.mjs feat-NNNN-slug
+  $root = $resolved[0]
+  $wt   = $resolved[1]
   ```
 
 ### 2. Verify the PR is merged (gate)

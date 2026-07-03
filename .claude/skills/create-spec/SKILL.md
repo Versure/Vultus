@@ -74,8 +74,11 @@ branches, architecture — are in `CLAUDE.md`.)
 - Determine `NNNN` and `slug`. Branch→dir maps `/`→`-` (so `spec/NNNN-slug` →
   dir `spec-NNNN-slug`). Resolve an absolute, worktree-invariant path once:
   ```powershell
-  $root = (git rev-parse --path-format=absolute --git-common-dir) -replace '\.git$',''
-  $wt   = [System.IO.Path]::GetFullPath("$root/../Vultus-worktrees/spec-NNNN-slug")
+  # Single deriver of $root/$wt (tools/scripts/resolve-worktree.mjs, spec 0071).
+  # Prints two lines: $root (primary checkout) then $wt (this worktree).
+  $resolved = node tools/scripts/resolve-worktree.mjs spec-NNNN-slug
+  $root = $resolved[0]
+  $wt   = $resolved[1]
   ```
 - Create idempotently: `git worktree prune`; if `$wt` is already registered,
   reuse it (`git -C $wt checkout spec/NNNN-slug; git -C $wt pull`); elif the

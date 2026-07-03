@@ -23,8 +23,9 @@ architecture and decisions; read it before non-trivial work.
   token set lives in the repo** at `docs/design/vultus-design-system.md` (exported
   from Stitch) and is wired into `shared/ui-kit` `theme.scss`. Design language:
   dark-first, Inter, primary Emerald `#4edea3` (note: `#10B981` is
-  `primary-container`, **not** primary), deep-navy surface ramp (`#0b1326`
-  background → `#171f33` cards → `#2d3449` overlays), `on-surface` text `#dae2fd`,
+  `primary-container`, **not** primary), a deep-navy surface ramp
+  (`--vultus-surface` background → `--vultus-surface-container` cards →
+  `--vultus-surface-container-highest` overlays), `--vultus-on-surface` text,
   8px grid. **Never hand-transcribe a hex from memory or from prose — cite
   `docs/design/vultus-design-system.md` (or the fetched Stitch screen) and consume
   the `--vultus-*` / `--ion-*` vars `theme.scss` exposes.** Treat the Stitch design
