@@ -64,7 +64,8 @@ emulators:exec` gate) is the authoritative validator. Report the CI URL.
   report it as `FAIL (DoD gate unmet)`, not a quiet skip. Do not let a feature
   pass by skipping the very checks its spec mandated.
 - **Cold worktree (first run) — raise the timeout, and a timeout is NOT a
-  `FAIL`.** On a **fresh worktree**, the first `nx affected -t typecheck | lint |
+  `FAIL`** (cf. CLAUDE.md's cold-hook note). On a **fresh worktree**, the first
+  `nx affected -t typecheck | lint |
 test | build` gate runs cold (no Nx cache, cold dependency graph) and can far
   exceed the default Bash timeout. For the first run of each of these gates in a
   cold worktree, invoke the Bash tool with its **long/max timeout** (600000 ms —
@@ -77,16 +78,12 @@ test | build` gate runs cold (no Nx cache, cold dependency graph) and can far
 
 ## Capacitor `cap sync` (when a spec's DoD requires it)
 
-If a spec's DoD requires a Capacitor sync gate (e.g. native Android work),
-observe two Windows/pnpm-workspace traps:
+If a spec's DoD requires a Capacitor sync gate (e.g. native Android work):
 
-- **Use `pnpm exec cap sync android`, not `npx cap …`.** `npx` cannot resolve
-  the `cap` binary in the pnpm workspace; `pnpm exec` resolves it correctly.
-- **Build the web assets first.** `cap sync`'s copy step aborts without a prior
-  web build (`Could not find the web assets directory:
-dist/apps/mobile/browser`). So run `pnpm nx build mobile` **first**, then
-  `pnpm exec cap sync android` (or `pnpm exec cap copy android`, which serializes
-  `capacitor.config.ts` regardless of web-asset contents).
+- **Apply CLAUDE.md E1** (`pnpm exec cap sync android`, not `npx`; build the web
+  app — `pnpm nx build mobile` — first, or `cap sync` aborts on the missing
+  `dist/apps/mobile/browser`). `pnpm exec cap copy android` serializes
+  `capacitor.config.ts` regardless of web-asset contents.
 
 ## No fixing
 
