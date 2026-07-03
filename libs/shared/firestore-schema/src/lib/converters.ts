@@ -48,6 +48,9 @@ export function userToData(user: User): UserWriteData {
     fcmTokens: user.fcmTokens.map(fcmTokenToData),
     myProviderIds: user.myProviderIds,
     hasPlex: user.hasPlex,
+    // Plain nested object of ISO strings — passes through like notificationPrefs;
+    // never-linked/unlinked coalesces to null (spec 0073).
+    plexSync: user.plexSync ?? null,
   };
 }
 export function dataToUser(data: UserReadData): User {
@@ -65,6 +68,8 @@ export function dataToUser(data: UserReadData): User {
     myProviderIds: data.myProviderIds ?? [],
     // Legacy docs (pre-0061) lack hasPlex; coalesce missing → false.
     hasPlex: data.hasPlex ?? false,
+    // Legacy docs (pre-0073) lack plexSync; coalesce missing → null.
+    plexSync: data.plexSync ?? null,
   };
 }
 

@@ -1,7 +1,8 @@
 # mobile-settings
 
-Region picker, global notifications toggle, and eager `users/{uid}` init for the
-Vultus settings tab (PLAN §6 item 16, spec 0011).
+Region picker, global notifications toggle, eager `users/{uid}` init, the "My
+Providers" catalog, and the **Plex link + one-way sync** for the Vultus settings
+tab (PLAN §6 item 16; specs 0011 / 0049 / 0051 / 0060 / 0061 / 0073).
 
 ## Public API
 
@@ -10,12 +11,111 @@ The barrel (`@vultus/mobile/settings`) exports:
 - `SettingsPage` — standalone Ionic page (selector `lib-settings`); lazy-loaded
   by the tabs shell in `apps/mobile` via
   `loadComponent: () => import('@vultus/mobile/settings').then(m => m.SettingsPage)`.
+- `PlexConnectPage` (spec 0073) — standalone Ionic page (selector
+  `lib-plex-connect`) for the `/tabs/settings/plex` pushed sub-route; lazy-loaded
+  by the shell the same way.
+- `PlexLinkService`, `PlexSyncService` (spec 0073) — **`providedIn: 'root'`**
+  singletons. Exported so the shell's `app.config.ts` can wire `PLEX_SYNC_TRIGGER`
+  over `PlexSyncService.sync()` from the ROOT injector and both pages can share
+  that instance. **Do NOT list them in `SETTINGS_PROVIDERS`** (page-scoping would
+  fork the state from the boot/resume trigger's instance).
+- `CapacitorHttpPlexClient`, `MockPlexClient` (spec 0073) — the two `PlexClient`
+  impls, exported so the shell's `PLEX_CLIENT` factory selects between them
+  (`Capacitor.isNativePlatform()` → real, else mock). There is **no
+  `PLEX_PROVIDERS`** export and **no `plex.providers.ts`** — the shell factory is
+  the single client selector.
+- `PlexSyncSummary` (type) — the `{ added, updated, skipped }` outcome of a sync.
 
 `SettingsService` and `SyncStatusService` are internal data-access services used
 only by `SettingsPage` / its cards and are intentionally **not** barrel-exported
 (keeps the public surface minimal). `SyncStatusCardComponent`
 (selector `lib-sync-status-card`) is likewise an internal component composed into
 `SettingsPage` only.
+
+## Plex link + one-way sync (spec 0073)
+
+One-way import from the user's self-hosted Plex Media Server (PMS): new PMS
+library items become watchlist entries and PMS watch state drives Vultus's
+`status` + episode-watched machinery. On-device, LAN, `scope:mobile` +
+`scope:shared` only — **no Cloud Function change**. Stitch screens:
+Settings Plex card `0e2bb1f198f04186b39e4a2604413417`; Connect page
+`398cde766832491e92e1c0c5cc09ab4e`.
+
+### `PlexClient` (real + mock)
+
+`PlexClient` is a `scope:shared` interface (`@vultus/shared/domain`) describing
+the plex.tv / PMS surface (PIN-link, resources discovery, paged library + episode
+reads). Two impls live in this slice:
+
+- `CapacitorHttpPlexClient` — the NATIVE impl; every plex.tv / PMS call goes
+  through `CapacitorHttp` (`@capacitor/core`) because the PMS sends no CORS
+  headers. **Only works on-device** (verified post-merge via `android-usb`).
+- `MockPlexClient` — deterministic fixtures (pin auto-authorizes; a small library
+  with a watched tmdb-GUID movie, a planned tmdb-GUID movie, a partially-watched
+  tmdb-GUID show, and one GUID-less item; a two-episode show with the first
+  watched). Selected for every non-native surface (web / dev / e2e / serve-mock).
+
+### `PlexLinkService` (`providedIn: 'root'`)
+
+Owns the plex.tv PIN-link state machine, on-device token persistence, server
+discovery, and the `hasPlex` / `plexSync` Firestore link metadata. Surface:
+
+- signals `stage` (`idle`|`code`|`waiting`|`connected`|`error`), `code`, `server`,
+  `expiresInSeconds`, `countdown` (mm:ss), plus the settings-card state `linked`,
+  `serverName`, `lastSyncAt`;
+- `requestCode()` (→ `code`, starts the countdown + polling), `regenerateCode()`,
+  `cancel()`, `isLinked()`, `loadState()` (loads the card state), `unlink()`.
+
+On a successful poll it persists the token to `@capacitor/preferences` (key
+`plex_token`), discovers the server, then `updateDoc(userPath(uid), { hasPlex:
+true, plexSync: { linkedAt, lastSyncAt, serverName } })`. The merged `PlexPin`
+carries no `expiresIn`, so the link-window countdown is owned locally (seeded to
+the plex.tv ~15-minute PIN TTL at code issue). **Unlink** clears the Preferences
+token + `plexSync` (`deleteField()`), KEEPS `hasPlex` + all synced data, and
+touches no watchlist/episode doc.
+
+### `PlexSyncService` (`providedIn: 'root'`)
+
+`sync()` runs one-way import: an **additions** pass (cursor-gated on
+`plexSync.lastSyncAt ?? linkedAt`) + a **watched-mirror** pass (full mirror for
+matched titles), then advances `plexSync.lastSyncAt`. `running` (signal) drives
+the "Sync now" spinner/disabled state. No-op when uid null, not linked (no
+Preferences token), or already running (concurrent guard, claimed synchronously).
+
+Key invariants:
+
+- **GUID matching**: `tmdb://603` → tmdbId 603; a GUID-less item is SKIPPED
+  (counted, never fuzzy-matched, no write).
+- **Status derivation is REPLICATED locally** (the slice cannot import
+  `TitleDetailService`): movie `viewCount > 0` → `completed`; show `planned →
+watching` on ≥1 watched episode, `watching → completed` when all present
+  episodes watched. **Sticky-`dropped`**: a dropped title keeps its status (no
+  status write) but STILL receives the episode mirror.
+- **Watch-implies-add**: a watched, untracked tmdb-GUID item is added (movie →
+  `completed`, show → `watching`), `watchingViaPlex: true`, `traktId: null`.
+- **Episode mirror writes EXISTING docs only** (`updateDoc`); it NEVER creates an
+  episode doc — a Plex-watched episode with no local doc is a no-op. The doc id is
+  `s{SS}e{EEE}` (season padded to 2, episode to 3, e.g. `s01e001`) — replicated
+  from `sync-episodes`' `episode-id.ts` (a `scope:functions` lib this slice cannot
+  import), derived from Plex `parentIndex` (season) + `index` (episode).
+
+The X-Plex-Token is stored ONLY in `@capacitor/preferences`, NEVER written to any
+Firestore path, and NEVER logged/echoed (CLAUDE.md secrets rule).
+
+### Plex Server card (in `SettingsPage`)
+
+Between "My Providers" and the Notification cards (spec 0073 §6A). Gated on
+`plexLink.linked()`: a disconnected "Connect Plex Server" nav row →
+`/tabs/settings/plex`; or a connected block with the server name, an emerald
+"Connected" dot, "Last synced — {relative}" (or "Not synced yet"), a "Sync now"
+text button (disabled + "Syncing…" while `plexSync.running()`), and a
+"Disconnect" text button (confirm alert → `unlink()`). The logo tile uses a
+`--vultus-*` surface token; the Plex brand colour lives only in
+`/assets/plex-logo.svg`.
+
+The `mock` build profile provides page-scoped mock mirrors of the root
+`PlexLinkService` / `PlexSyncService` (seeded CONNECTED) so `mobile:serve-mock`
+renders the connected card + the connect stages with no Preferences / plex.tv.
 
 ### Last-synced card (spec 0049)
 
@@ -185,16 +285,24 @@ The current uid is obtained via the `scope:shared` `AUTH_UID` injection token
 
 - Tags: `scope:mobile`, `slice:settings` (by path glob in `sheriff.config.ts`).
 - May import: `scope:shared` libs (`@vultus/shared/domain` — `Region`, `User`,
-  `SyncRun`, `CatalogProvider`; `@vultus/shared/domain/tokens` — `AUTH_UID`,
-  `GET_WATCH_PROVIDERS`; `@vultus/shared/firestore-schema` —
-  `userPath`/`dataToUser`/`userToData`, `syncRunsCollection`/`dataToSyncRun`) and
-  third-party packages (Ionic, AngularFire).
-- Must not import: other slices (`slice:search` / `slice:watchlist`),
-  `apps/mobile`, or any `scope:functions` code. The `sync-runs` collection is a
+  `SyncRun`, `CatalogProvider`, and the Plex vocabulary `PlexClient` / `PlexPin` /
+  `PlexServer` / `PlexLibraryItem` / `PlexEpisodeItem`; `@vultus/shared/domain/tokens`
+  — `AUTH_UID`, `GET_WATCH_PROVIDERS`, `PLEX_CLIENT`; `@vultus/shared/firestore-schema`
+  — `userPath`/`dataToUser`/`userToData`, `watchlistItemPath`/`watchlistItemToData`,
+  `episodePath`/`episodesPath`, `dataToWatchlistItem`,
+  `syncRunsCollection`/`dataToSyncRun`) and third-party packages (Ionic,
+  AngularFire, `@capacitor/core`, `@capacitor/preferences`).
+- Must not import: other slices (`slice:search` / `slice:watchlist` /
+  `slice:title-detail`), `apps/mobile`, or any `scope:functions` code. The Plex
+  sync engine writes watchlist/episode docs by PATH via the shared
+  `firestore-schema` converters (data-level cross-slice communication, like 0061)
+  — it never imports `slice:watchlist` / `slice:title-detail`, and the
+  `s{SS}e{EEE}` episode-id logic is **replicated** locally rather than imported
+  from the `scope:functions` `sync-episodes` lib. The `sync-runs` collection is a
   cross-scope persistence contract: `apps/functions` writes it, this slice only
-  **reads** it (client writes are denied by `firestore.rules`) — the two scopes
-  share only the `scope:shared` data shape, never each other's code.
+  **reads** it — the two scopes share only the `scope:shared` data shape.
 - The provider catalog is reached only through the `scope:shared`
-  `GET_WATCH_PROVIDERS` token (a thunk the shell provides over the
-  `getWatchProviders` callable, mirroring `TRIGGER_SYNC`), so this slice never
-  imports `@angular/fire/functions` — no `scope:mobile` ↔ `scope:functions` edge.
+  `GET_WATCH_PROVIDERS` token; the Plex client only through the `scope:shared`
+  `PLEX_CLIENT` token (both provided by the shell) — so this slice never imports
+  `@angular/fire/functions` and there is **no `scope:mobile` ↔ `scope:functions`
+  edge** anywhere in the Plex sync path.

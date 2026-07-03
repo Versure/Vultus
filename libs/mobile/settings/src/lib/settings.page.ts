@@ -1,5 +1,7 @@
 import { Component, type OnInit, effect, inject } from '@angular/core';
+import { Router } from '@angular/router';
 import {
+  AlertController,
   IonButton,
   IonButtons,
   IonContent,
@@ -20,15 +22,19 @@ import { addIcons } from 'ionicons';
 import {
   albumsOutline,
   checkmarkCircle,
+  chevronForward,
   filmOutline,
   globeOutline,
   notificationsOutline,
   personCircleOutline,
   timeOutline,
 } from 'ionicons/icons';
+import { PlexLinkService } from './plex-link.service';
+import { PlexSyncService } from './plex-sync.service';
 import { SETTINGS_PROVIDERS } from './settings.providers';
 import { SettingsService } from './settings.service';
 import { SyncStatusCardComponent } from './sync-status-card.component';
+import { relativeTime } from './sync-status-card.component';
 
 // TMDB logo path base for provider logos. `logoPath` on `CatalogProvider` is a
 // bare TMDB path (e.g. `/abc.jpg`); w92 is the smallest TMDB logo size, ample
@@ -60,7 +66,14 @@ const TMDB_LOGO_BASE = 'https://image.tmdb.org/t/p/w92';
 })
 export class SettingsPage implements OnInit {
   protected readonly service = inject(SettingsService);
+  // Root singletons (spec 0073) — SHARED with the shell's boot/resume trigger;
+  // deliberately NOT listed in SETTINGS_PROVIDERS, so the page injects the same
+  // instance the trigger drives (a page-scoped provide would fork the state).
+  protected readonly plexLink = inject(PlexLinkService);
+  protected readonly plexSync = inject(PlexSyncService);
   private readonly toastController = inject(ToastController);
+  private readonly alertController = inject(AlertController);
+  private readonly router = inject(Router);
 
   constructor() {
     addIcons({
@@ -71,6 +84,7 @@ export class SettingsPage implements OnInit {
       timeOutline,
       albumsOutline,
       checkmarkCircle,
+      chevronForward,
     });
 
     // Raise a toast whenever a region change prunes ≥1 provider from the user's
@@ -87,6 +101,53 @@ export class SettingsPage implements OnInit {
   ngOnInit(): void {
     void this.service.load();
     void this.service.loadProviderCatalog();
+    // Load the Plex link state so the card renders the correct (dis)connected
+    // block (spec 0073). Fire-and-forget; the card defaults to disconnected.
+    void this.plexLink.loadState();
+  }
+
+  /** Navigate to the Connect Plex sub-page (disconnected row tap, spec 0073). */
+  protected openPlexConnect(): void {
+    void this.router.navigate(['/tabs/settings/plex']);
+  }
+
+  /** Run one Plex sync (connected "Sync now"). No-op guarded in the service. */
+  protected syncPlexNow(): void {
+    void this.plexSync.sync().then(() => this.plexLink.loadState());
+  }
+
+  /**
+   * "Last synced — {relative}" text (or "Not synced yet" when never synced).
+   * Reuses the slice-local `relativeTime` helper (sync-status card).
+   */
+  protected plexLastSyncedLabel(): string {
+    const iso = this.plexLink.lastSyncAt();
+    return iso === null
+      ? 'Not synced yet'
+      : `Last synced — ${relativeTime(iso, Date.now())}`;
+  }
+
+  /**
+   * "Disconnect" — confirm first (unlink drops the sync cursor), then unlink
+   * (clears the device token + `plexSync`; keeps `hasPlex` + all synced data).
+   */
+  protected async disconnectPlex(): Promise<void> {
+    const alert = await this.alertController.create({
+      header: 'Disconnect Plex?',
+      message:
+        'This removes the link to your Plex server. Your synced titles and watch history are kept.',
+      buttons: [
+        { text: 'Cancel', role: 'cancel' },
+        {
+          text: 'Disconnect',
+          role: 'destructive',
+          handler: () => {
+            void this.plexLink.unlink();
+          },
+        },
+      ],
+    });
+    await alert.present();
   }
 
   protected retry(): void {

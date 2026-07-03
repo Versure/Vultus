@@ -141,6 +141,7 @@ describe('SettingsService', () => {
       fcmTokens: [],
       myProviderIds: [],
       hasPlex: false,
+      plexSync: null,
     });
     expect(service.region()).toBe('NL');
     expect(service.notificationsEnabled()).toBe(true);

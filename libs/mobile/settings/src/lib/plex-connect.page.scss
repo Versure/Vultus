@@ -1,0 +1,342 @@
+// Connect Plex page — visual alignment to Stitch screen
+// 398cde766832491e92e1c0c5cc09ab4e ("Connect Plex - Vultus", spec 0073 §6B).
+//
+// All colours/typography/spacing/radius come from the shared/ui-kit theme vars
+// (--vultus-* / --ion-*) — NO hard-coded hex. The Plex brand colour lives in the
+// bundled /assets/plex-logo.svg image, not here. rounded-xl = --vultus-radius-md
+// (0.75rem); rounded-lg = --vultus-radius (0.5rem).
+
+// Fixed header — matches the app bar height + surface; centered title.
+ion-header {
+  ion-toolbar {
+    --background: var(--vultus-surface);
+    --border-width: 0 0 1px 0;
+    --border-color: color-mix(
+      in srgb,
+      var(--vultus-outline-variant) 30%,
+      transparent
+    );
+    --border-style: solid;
+    --box-shadow: none;
+
+    ion-title {
+      text-align: center;
+      font-size: var(--vultus-text-headline-sm-size);
+      font-weight: var(--vultus-text-headline-sm-weight);
+      line-height: var(--vultus-text-headline-sm-line);
+      color: var(--vultus-on-surface);
+    }
+  }
+}
+
+// Back arrow — 40x40 round button, subtle hover, press-scale (active:scale-95).
+.back-button {
+  --padding-start: 0;
+  --padding-end: 0;
+  --border-radius: 9999px;
+  --background-hover: color-mix(
+    in srgb,
+    var(--vultus-surface-container-highest) 50%,
+    transparent
+  );
+  width: 40px;
+  height: 40px;
+
+  ion-icon {
+    color: var(--vultus-on-surface);
+    font-size: 22px;
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+}
+
+ion-content {
+  --background: var(--vultus-surface);
+}
+
+// Content canvas — 16px side margins (`margin-mobile`), 24px (`lg`) gaps.
+.connect-main {
+  padding: var(--vultus-space-md);
+  max-width: 42rem;
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--vultus-space-lg);
+}
+
+// One stage card — surface-container fill, 0.75rem (`xl`) radius, hairline
+// border, 24px (`lg`) padding, centred column.
+.stage-card {
+  background: var(--vultus-surface-container);
+  border: 1px solid
+    color-mix(in srgb, var(--vultus-outline-variant) 20%, transparent);
+  border-radius: var(--vultus-radius-md);
+  padding: var(--vultus-space-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+// 48x48 (`w-12 h-12`) rounded Plex logo tile; neutral surface tile (the brand
+// colour is in the image). 40x40 variant for the server row.
+.plex-tile {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--vultus-radius);
+  overflow: hidden;
+  background: var(--vultus-surface-container-highest);
+  flex-shrink: 0;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 4px;
+    box-sizing: border-box;
+  }
+}
+
+.plex-tile--lg {
+  width: 48px;
+  height: 48px;
+  margin-bottom: var(--vultus-space-md);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+}
+
+// Instruction — body-md on-surface-variant, capped width, 24px below.
+.stage-instruction {
+  margin: 0 0 var(--vultus-space-lg);
+  max-width: 240px;
+  font-size: var(--vultus-text-body-md-size);
+  font-weight: var(--vultus-text-body-md-weight);
+  line-height: var(--vultus-text-body-md-line);
+  color: var(--vultus-on-surface-variant);
+}
+
+// Code box — surface-container-high fill, 0.5rem radius, full width, hairline.
+.code-box {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--vultus-surface-container-high);
+  border: 1px solid
+    color-mix(in srgb, var(--vultus-outline-variant) 30%, transparent);
+  border-radius: var(--vultus-radius);
+  padding: var(--vultus-space-md) var(--vultus-space-lg);
+  margin-bottom: var(--vultus-space-sm);
+}
+
+// The 4-char code — display-lg-mobile (28px/700), primary, wide tracking.
+.code-value {
+  font-size: var(--vultus-text-display-lg-mobile-size);
+  font-weight: 700;
+  line-height: var(--vultus-text-display-lg-mobile-line);
+  letter-spacing: 0.15em;
+  color: var(--ion-color-primary);
+}
+
+// Expiry countdown — label-sm on-surface-variant, 24px below.
+.code-expiry {
+  margin: 0 0 var(--vultus-space-lg);
+  font-size: var(--vultus-text-label-sm-size);
+  font-weight: var(--vultus-text-label-sm-weight);
+  line-height: var(--vultus-text-label-sm-line);
+  color: var(--vultus-on-surface-variant);
+}
+
+.code-expiry--expired {
+  color: var(--vultus-error);
+}
+
+// Waiting row — 48x48 spinner ring + label + Cancel, stacked, 16px below.
+.waiting-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--vultus-space-sm);
+  margin-bottom: var(--vultus-space-lg);
+}
+
+// 48x48 spinner ring: a base track + a spinning arc (1s linear), primary.
+.spinner-ring {
+  position: relative;
+  width: 48px;
+  height: 48px;
+
+  &__track {
+    position: absolute;
+    inset: 0;
+    border: 4px solid
+      color-mix(in srgb, var(--ion-color-primary) 20%, transparent);
+    border-radius: 50%;
+  }
+
+  &__arc {
+    position: absolute;
+    inset: 0;
+    border: 4px solid var(--ion-color-primary);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: plex-spin 1s linear infinite;
+  }
+}
+
+@keyframes plex-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.waiting-label {
+  margin: 0;
+  font-size: var(--vultus-text-body-md-size);
+  font-weight: var(--vultus-text-body-md-weight);
+  line-height: var(--vultus-text-body-md-line);
+  color: var(--vultus-on-surface-variant);
+}
+
+// Muted text button (Cancel) — label-md on-surface-variant → on-surface on hover.
+.text-button-muted {
+  background: transparent;
+  border: 0;
+  padding: var(--vultus-space-sm) 0;
+  cursor: pointer;
+  font-size: var(--vultus-text-label-md-size);
+  font-weight: var(--vultus-text-label-md-weight);
+  line-height: var(--vultus-text-label-md-line);
+  letter-spacing: var(--vultus-text-label-md-spacing);
+  color: var(--vultus-on-surface-variant);
+  transition: color 150ms ease-in-out;
+
+  &:hover {
+    color: var(--vultus-on-surface);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--ion-color-primary);
+    outline-offset: 2px;
+  }
+}
+
+// Solid button ("Get a new code" / "Done") — primary-container fill, on-primary
+// bold text, full width, 0.75rem (`xl`) radius, press-scale.
+.solid-button {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--vultus-primary-container);
+  color: var(--vultus-on-primary);
+  border: 0;
+  border-radius: var(--vultus-radius-md);
+  padding: 12px var(--vultus-space-md);
+  font-family: var(--vultus-font-family);
+  font-weight: 700;
+  font-size: var(--vultus-text-body-md-size);
+  cursor: pointer;
+  transition:
+    opacity 150ms ease-in-out,
+    transform 100ms ease-in-out;
+
+  &:hover {
+    opacity: 0.9;
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--ion-color-primary);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+// Connected check tile — 48x48 round, status-completed at 10% alpha holding a
+// filled check icon (32px, status-completed).
+.check-tile {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: color-mix(
+    in srgb,
+    var(--vultus-status-completed) 10%,
+    transparent
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--vultus-space-md);
+}
+
+.check-icon {
+  font-size: 32px;
+  color: var(--vultus-status-completed);
+}
+
+// "Connected to Plex" heading — body-lg bold, on-surface, 16px below.
+.connected-heading {
+  margin: 0 0 var(--vultus-space-md);
+  font-size: var(--vultus-text-body-lg-size);
+  font-weight: 700;
+  line-height: var(--vultus-text-body-lg-line);
+  color: var(--vultus-on-surface);
+}
+
+// Server row inset — full-width surface-container-low card, 40x40 tile + name +
+// caption + trailing verified icon, 24px below.
+.server-row {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--vultus-space-md);
+  background: var(--vultus-surface-container-low);
+  border: 1px solid
+    color-mix(in srgb, var(--vultus-outline-variant) 10%, transparent);
+  border-radius: var(--vultus-radius);
+  padding: var(--vultus-space-md);
+  margin-bottom: var(--vultus-space-lg);
+  text-align: left;
+
+  &__body {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  &__name {
+    margin: 0;
+    font-size: var(--vultus-text-body-md-size);
+    font-weight: 700;
+    line-height: var(--vultus-text-body-md-line);
+    color: var(--vultus-on-surface);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__caption {
+    margin: 0;
+    font-size: var(--vultus-text-label-sm-size);
+    font-weight: var(--vultus-text-label-sm-weight);
+    line-height: var(--vultus-text-label-sm-line);
+    color: var(--vultus-on-surface-variant);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__verified {
+    flex-shrink: 0;
+    font-size: 20px;
+    color: var(--ion-color-primary);
+  }
+}

@@ -58,6 +58,16 @@ export const appRoutes: Route[] = [
             (m) => m.NotificationsPage,
           ),
       },
+      {
+        // Pushed (not a tab) Connect Plex sub-page (spec 0073). Reached from the
+        // Settings Plex Server card's disconnected row via
+        // ['tabs','settings','plex']; nested under `tabs` to preserve the tab
+        // context, but the page renders WITHOUT the bottom nav (it has its own
+        // header, per the Stitch screen 398cde76…).
+        path: 'settings/plex',
+        loadComponent: () =>
+          import('@vultus/mobile/settings').then((m) => m.PlexConnectPage),
+      },
       { path: '', redirectTo: 'watchlist', pathMatch: 'full' },
     ],
   },

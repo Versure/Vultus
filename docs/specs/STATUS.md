@@ -12,8 +12,8 @@
 
 Total specs: 73
 
-- done: 71
-- approved: 2
+- done: 72
+- approved: 1
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -89,4 +89,4 @@ Total specs: 73
 | 70 | audit-docs-accuracy | Fix the audit-docs skill — stale "must-detect" example and the phantom scheduled runner | done | — | — |
 | 71 | normative-text-dedup | De-duplicate copy-pasted normative rules (Stitch recipe, worktree snippet, design hexes, Windows E-notes) | done | — | — |
 | 72 | plan-accuracy-refresh | Refresh docs/PLAN.md to eliminate accumulated drift against the shipped codebase | done | — | — |
-| 73 | plex-sync | One-way Plex → Vultus sync (library additions + watch status) | approved | slice:settings | scope:mobile, scope:shared |
+| 73 | plex-sync | One-way Plex → Vultus sync (library additions + watch status) | done | slice:settings | scope:mobile, scope:shared |

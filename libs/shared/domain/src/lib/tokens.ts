@@ -8,6 +8,7 @@ import { InjectionToken, type Signal } from '@angular/core';
 
 import type { Region } from './enums';
 import type { CatalogProvider } from './entities';
+import type { PlexClient } from './plex';
 
 /**
  * The resolved Firebase auth uid, or `null` before the anonymous session
@@ -39,3 +40,16 @@ export const TRIGGER_SYNC = new InjectionToken<
 export const GET_WATCH_PROVIDERS = new InjectionToken<
   (region: Region) => Promise<CatalogProvider[]>
 >('GET_WATCH_PROVIDERS');
+
+/** The Plex client, provided by the shell (real CapacitorHttp on native; a
+ *  deterministic mock on web/dev/e2e). scope:shared so the settings slice
+ *  injects it without importing apps/mobile. (spec 0073) */
+export const PLEX_CLIENT = new InjectionToken<PlexClient>('PLEX_CLIENT');
+
+/** A thunk the shell calls on boot + resume to run one Plex sync (no-op when
+ *  not linked / not native / already running). scope:shared so the shell wires
+ *  it over the settings slice's PlexSyncService without importing the slice
+ *  the wrong way. (spec 0073) */
+export const PLEX_SYNC_TRIGGER = new InjectionToken<() => Promise<void>>(
+  'PLEX_SYNC_TRIGGER',
+);

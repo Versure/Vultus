@@ -1,7 +1,9 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { IonApp, IonRouterOutlet } from '@ionic/angular/standalone';
 import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
+import { PLEX_SYNC_TRIGGER } from '@vultus/shared/domain/tokens';
 import { NotificationHandlerService } from './notification-handler.service';
 
 @Component({
@@ -14,6 +16,10 @@ export class App implements OnInit {
   protected title = 'mobile';
 
   private readonly notificationHandler = inject(NotificationHandlerService);
+  // Plex sync trigger (spec 0073) — a scope:shared thunk the shell provides over
+  // the settings slice's PlexSyncService. Native-guarded internally (a no-op
+  // off-native), so the boot/resume calls below are safe on web.
+  private readonly plexSyncTrigger = inject(PLEX_SYNC_TRIGGER);
 
   ngOnInit(): void {
     // Fire-and-forget: ngOnInit must return void (OnInit contract). The
@@ -21,6 +27,13 @@ export class App implements OnInit {
     void this.initStatusBar();
     // Register FCM push handlers (native-only, idempotent — see the service).
     void this.notificationHandler.init();
+    // Kick a Plex sync on app open (boot). The thunk is native-guarded, so this
+    // is a safe no-op on web; the sync service's own concurrent guard covers any
+    // overlap with the resume listener below.
+    void this.plexSyncTrigger();
+    // Register a foreground-resume listener that re-runs the Plex sync
+    // (native-only, idempotent — mirrors initStatusBar's guard style).
+    void this.registerPlexResumeSync();
   }
 
   private async initStatusBar(): Promise<void> {
@@ -29,5 +42,19 @@ export class App implements OnInit {
     }
     await StatusBar.setOverlaysWebView({ overlay: true });
     await StatusBar.setStyle({ style: Style.Dark });
+  }
+
+  private async registerPlexResumeSync(): Promise<void> {
+    if (!Capacitor.isNativePlatform()) {
+      return;
+    }
+    // appStateChange fires on foreground/background transitions; re-sync when
+    // the app becomes active again. The concurrent-sync guard in PlexSyncService
+    // makes a resume-during-sync a safe no-op.
+    await CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+      if (isActive) {
+        void this.plexSyncTrigger();
+      }
+    });
   }
 }

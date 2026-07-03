@@ -1,10 +1,13 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, computed, signal } from '@angular/core';
 import {
   REGIONS,
   type CatalogProvider,
+  type PlexServer,
   type Region,
   type SyncRun,
 } from '@vultus/shared/domain';
+import { PlexLinkService } from './plex-link.service';
+import { PlexSyncService, type PlexSyncSummary } from './plex-sync.service';
 import { SettingsService } from './settings.service';
 import { SyncStatusService } from './sync-status.service';
 
@@ -30,6 +33,11 @@ import { SyncStatusService } from './sync-status.service';
  * renders both selected and unselected chips. `hasPlex` is seeded `true` so the
  * Plex chip renders selected. `loadProviderCatalog` / `toggleProvider` /
  * `toggleHasPlex` mutate the in-memory signals (no callable).
+ *
+ * Plex (spec 0073): this file ALSO provides page-scoped mock mirrors of the
+ * ROOT `PlexLinkService` / `PlexSyncService` (seeded CONNECTED — server name +
+ * recent `lastSyncAt`) so `mobile:serve-mock` renders the Settings Plex card's
+ * connected block and the Connect page stages without Preferences / plex.tv.
  */
 // Seeded provider catalog (TMDB provider ids + real logo paths) so the mock
 // renders logos + a selected/unselected mix.
@@ -173,7 +181,112 @@ class MockSyncStatusServiceImpl {
   }
 }
 
+/**
+ * Mock `PlexLinkService` for the `mock` build profile (spec 0073).
+ *
+ * Structurally mirrors `PlexLinkService`'s public signal/method surface with NO
+ * Preferences / Firebase / plex.tv. Seeded **connected** (a server name + a
+ * recent `lastSyncAt`) so `mobile:serve-mock` renders the Settings Plex card's
+ * CONNECTED block. `requestCode` walks the connect-page stage machine
+ * deterministically (code → connected on the next macrotask) so the connect page
+ * is eyeball-able too. `unlink()` flips back to disconnected.
+ */
+@Injectable()
+class MockPlexLinkServiceImpl {
+  private readonly _stage = signal<
+    'idle' | 'code' | 'waiting' | 'connected' | 'error'
+  >('idle');
+  private readonly _code = signal<string | null>(null);
+  private readonly _server = signal<PlexServer | null>(null);
+  private readonly _expiresInSeconds = signal<number>(0);
+  private readonly _linked = signal<boolean>(true);
+  private readonly _serverName = signal<string | null>('Vultus Media Server');
+  private readonly _lastSyncAt = signal<string | null>(
+    new Date(Date.now() - 12 * 60 * 1000).toISOString(),
+  );
+
+  readonly stage = this._stage.asReadonly();
+  readonly code = this._code.asReadonly();
+  readonly server = this._server.asReadonly();
+  readonly expiresInSeconds = this._expiresInSeconds.asReadonly();
+  readonly countdown = computed(() => {
+    const total = this._expiresInSeconds();
+    const mm = Math.floor(total / 60);
+    const ss = total % 60;
+    return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+  });
+  readonly linked = this._linked.asReadonly();
+  readonly serverName = this._serverName.asReadonly();
+  readonly lastSyncAt = this._lastSyncAt.asReadonly();
+
+  isLinked(): Promise<boolean> {
+    return Promise.resolve(this._linked());
+  }
+
+  loadState(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  requestCode(): Promise<void> {
+    this._code.set('H7X2');
+    this._stage.set('code');
+    this._expiresInSeconds.set(14 * 60 + 32);
+    // Auto-advance to connected so the connected stage is eyeball-able.
+    setTimeout(() => {
+      this._server.set({
+        name: 'Vultus Media Server',
+        baseUrl: 'http://192.168.1.20:32400',
+        accessToken: 'mock',
+      });
+      this._stage.set('connected');
+    }, 1500);
+    return Promise.resolve();
+  }
+
+  regenerateCode(): Promise<void> {
+    return this.requestCode();
+  }
+
+  cancel(): void {
+    this._stage.set('idle');
+    this._code.set(null);
+    this._expiresInSeconds.set(0);
+  }
+
+  unlink(): Promise<void> {
+    this._linked.set(false);
+    this._serverName.set(null);
+    this._lastSyncAt.set(null);
+    this._stage.set('idle');
+    return Promise.resolve();
+  }
+}
+
+/**
+ * Mock `PlexSyncService` mirror (spec 0073) — no Firebase / plex.tv. `sync()`
+ * flips `running` briefly then resolves an empty summary so `mobile:serve-mock`
+ * can exercise the "Sync now" spinner/disabled state.
+ */
+@Injectable()
+class MockPlexSyncServiceImpl {
+  private readonly _running = signal<boolean>(false);
+  readonly running = this._running.asReadonly();
+
+  async sync(): Promise<PlexSyncSummary> {
+    this._running.set(true);
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    this._running.set(false);
+    return { added: 0, updated: 0, skipped: 0 };
+  }
+}
+
 export const SETTINGS_PROVIDERS = [
   { provide: SettingsService, useClass: MockSettingsServiceImpl },
   { provide: SyncStatusService, useClass: MockSyncStatusServiceImpl },
+  // Page-scoped mock mirrors of the ROOT Plex services (spec 0073), so
+  // serve-mock renders the connected card without Preferences / plex.tv. The
+  // REAL settings.providers.ts stays clean of Plex services (the page injects
+  // the shell-provided root singletons there).
+  { provide: PlexLinkService, useClass: MockPlexLinkServiceImpl },
+  { provide: PlexSyncService, useClass: MockPlexSyncServiceImpl },
 ] as const;
