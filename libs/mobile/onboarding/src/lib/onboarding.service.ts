@@ -69,6 +69,7 @@ export class OnboardingService {
             },
             fcmTokens: [],
             myProviderIds: [],
+            hasPlex: false,
           }),
           { merge: true },
         );

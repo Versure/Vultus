@@ -40,6 +40,11 @@ import {
  * provides over the `getWatchProviders` callable) — this slice never imports
  * `@angular/fire/functions` or `apps/functions`. The user's chosen provider ids
  * persist in `users/{uid}.myProviderIds` (an open `number[]`; default `[]`).
+ *
+ * Plex (spec 0061): `users/{uid}.hasPlex` is a SEPARATE boolean (default
+ * `false`), NOT a member of `myProviderIds` (Plex has no TMDB id). It is toggled
+ * from its own 7th "My Providers" chip via `toggleHasPlex`, never through
+ * `toggleProvider`.
  */
 @Injectable()
 export class SettingsService {
@@ -79,6 +84,9 @@ export class SettingsService {
   // reacts to this to raise a toast; reset to 0 on any prune that drops nothing
   // (and never surfaced when the prune is skipped on a catalog-load failure).
   private readonly _lastPrunedCount = signal<number>(0);
+  // Plex (spec 0061): whether the user uses a self-hosted Plex server. A
+  // separate boolean on `users/{uid}` — NOT a member of `myProviderIds`.
+  private readonly _hasPlex = signal<boolean>(false);
   // The region whose catalog is currently loaded into `_providerCatalog`, so
   // `loadProviderCatalog()` can no-op when it's already loaded for this region.
   private loadedCatalogRegion: Region | null = null;
@@ -110,6 +118,11 @@ export class SettingsService {
    * was dropped (or the prune was skipped on a failed catalog load).
    */
   readonly lastPrunedCount = this._lastPrunedCount.asReadonly();
+  /**
+   * Whether the user uses a Plex server (persisted on `users/{uid}.hasPlex`;
+   * default `false`). Backs the "My Providers" Plex chip (spec 0061).
+   */
+  readonly hasPlex = this._hasPlex.asReadonly();
 
   constructor() {
     // Reactively load once a uid resolves. ngOnInit's load() is the fast path
@@ -155,6 +168,7 @@ export class SettingsService {
           },
           fcmTokens: [],
           myProviderIds: [],
+          hasPlex: false,
         };
         await setDoc(ref, userToData(user));
       }
@@ -166,6 +180,7 @@ export class SettingsService {
       );
       this._deliveryHour.set(user.notificationPrefs.deliveryHour);
       this._myProviderIds.set(user.myProviderIds);
+      this._hasPlex.set(user.hasPlex);
       this._loaded.set(true);
     } catch (error) {
       // Surface the failure as an error state. `_loaded` stays false; the
@@ -280,6 +295,22 @@ export class SettingsService {
       myProviderIds: next,
     });
     this._myProviderIds.set(next);
+  }
+
+  /**
+   * Toggles `hasPlex` and persists it via a scalar `updateDoc({ hasPlex })`
+   * (spec 0061), like `setRegion`'s `{ region }` write. Null-uid guarded.
+   * SEPARATE from `toggleProvider` — Plex is not a `myProviderIds` catalog
+   * entry and this write never touches `myProviderIds`.
+   */
+  async toggleHasPlex(): Promise<void> {
+    const uid = this.uid();
+    if (uid === null) {
+      return;
+    }
+    const next = !this._hasPlex();
+    await updateDoc(doc(this.firestore, userPath(uid)), { hasPlex: next });
+    this._hasPlex.set(next);
   }
 
   /**

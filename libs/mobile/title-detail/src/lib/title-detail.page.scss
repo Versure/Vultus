@@ -5,19 +5,137 @@
 // ui-kit theme.scss for this slice.
 
 // -----------------------------------------------------------------------------
+// Shared SCSS placeholders — @extend groups these declarations into a single
+// emitted rule, so repeated chrome (fonts, type-scale groups, the outlined
+// primary control, 40×40 tiles, flex rows) compiles far smaller than repeating
+// the literal properties on every selector. No visual behavior changes: every
+// consuming selector keeps the exact same declarations it had before.
+// -----------------------------------------------------------------------------
+%font {
+  font-family: var(--vultus-font-family);
+}
+
+// Type-scale groups (size/weight/line[/spacing]) reused across many selectors.
+%type-label-md {
+  @extend %font;
+  font-size: var(--vultus-text-label-md-size);
+  font-weight: var(--vultus-text-label-md-weight);
+  line-height: var(--vultus-text-label-md-line);
+  letter-spacing: var(--vultus-text-label-md-spacing);
+}
+
+%type-label-sm {
+  @extend %font;
+  font-size: var(--vultus-text-label-sm-size);
+  font-weight: var(--vultus-text-label-sm-weight);
+  line-height: var(--vultus-text-label-sm-line);
+}
+
+%type-body-md {
+  @extend %font;
+  font-size: var(--vultus-text-body-md-size);
+  line-height: var(--vultus-text-body-md-line);
+}
+
+// The most-repeated foreground colour, hoisted so the (long) var()
+// declaration is emitted once and shared across all consumers. Applied ONLY to
+// base selectors with no competing color in a state/modifier block, so extend
+// hoisting can never flip which colour wins.
+%fg-muted {
+  color: var(--vultus-on-surface-variant);
+}
+
+// Outlined-primary 56px control chrome shared by the untracked "Mark as
+// Watched" CTA, the tracked status control and the movie watched toggle. Each
+// consumer adds only its own deltas (flex vs. padding, weight, extra states).
+%outlined-primary-control {
+  @extend %inline-center;
+  height: 56px;
+  gap: var(--vultus-space-sm);
+  border: 2px solid var(--ion-color-primary);
+  border-radius: var(--vultus-radius-md);
+  background: transparent;
+  color: var(--ion-color-primary);
+  @extend %font;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    transform 80ms ease;
+
+  ion-icon {
+    font-size: 20px;
+  }
+}
+
+// The .mark-watched-cta / .status-control pair share identical flex-fill,
+// bold weight and hover/active states (only their inner content differs).
+%outlined-primary-cta {
+  @extend %outlined-primary-control;
+  flex: 1;
+  font-weight: 700;
+
+  &:hover {
+    background: color-mix(in srgb, var(--ion-color-primary) 10%, transparent);
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+}
+
+// 40×40 rounded tile shared by the provider logo and the Plex logo tile.
+%tile-40 {
+  @extend %inline-center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+// Vertically-centered flex — the dominant row layout across the page.
+%flex-center {
+  display: flex;
+  align-items: center;
+}
+
+// Fully-centered inline-flex — control chrome and square icon tiles.
+%inline-center {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+// Full-width flex row with space-between (provider rows / plex rows).
+%row-between {
+  @extend %flex-center;
+  justify-content: space-between;
+}
+
+// Horizontal lead cluster (tile + text), min-width:0 so the text can ellipsize.
+%lead-cluster {
+  @extend %flex-center;
+  min-width: 0;
+}
+
+// Vertical text stack with a 2px gap (name/type, title/caption).
+%text-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+// -----------------------------------------------------------------------------
 // Header — matches the standard app bar used on search / watchlist / settings.
 // -----------------------------------------------------------------------------
-ion-header {
-  ion-toolbar {
-    --background: var(--vultus-surface);
-    --border-width: 0 0 1px 0;
-    --border-color: var(--vultus-outline-variant);
-    --border-style: solid;
-    --box-shadow: none;
+ion-header ion-toolbar {
+  --background: var(--vultus-surface);
+  --border-width: 0 0 1px 0;
+  --border-color: var(--vultus-outline-variant);
+  --border-style: solid;
+  --box-shadow: none;
 
-    ion-title {
-      padding-inline: 16px;
-    }
+  ion-title {
+    padding-inline: 16px;
   }
 }
 
@@ -26,7 +144,7 @@ ion-header {
   align-items: center;
   gap: 8px;
   color: var(--ion-color-primary);
-  font-family: var(--vultus-font-family);
+  @extend %font;
   font-weight: 700;
   font-size: 1.125rem;
 }
@@ -60,10 +178,9 @@ ion-content {
 }
 
 .hero-placeholder {
+  @extend %flex-center;
   width: 100%;
   height: 100%;
-  display: flex;
-  align-items: center;
   justify-content: center;
   background: var(--vultus-surface-container);
 
@@ -105,17 +222,13 @@ ion-content {
   border-radius: var(--vultus-radius-sm);
   background: var(--vultus-primary-container);
   color: var(--vultus-on-primary-container);
-  font-family: var(--vultus-font-family);
-  font-size: var(--vultus-text-label-md-size);
-  font-weight: var(--vultus-text-label-md-weight);
-  line-height: var(--vultus-text-label-md-line);
-  letter-spacing: var(--vultus-text-label-md-spacing);
+  @extend %type-label-md;
   text-transform: uppercase;
 }
 
 .hero-title {
   margin: 0;
-  font-family: var(--vultus-font-family);
+  @extend %font;
   font-size: var(--vultus-text-display-lg-mobile-size);
   font-weight: var(--vultus-text-display-lg-weight);
   line-height: var(--vultus-text-display-lg-mobile-line);
@@ -124,15 +237,10 @@ ion-content {
 }
 
 .hero-meta {
-  display: flex;
-  align-items: center;
+  @extend %flex-center;
   gap: var(--vultus-space-lg);
-  font-family: var(--vultus-font-family);
-  font-size: var(--vultus-text-label-md-size);
-  font-weight: var(--vultus-text-label-md-weight);
-  line-height: var(--vultus-text-label-md-line);
-  letter-spacing: var(--vultus-text-label-md-spacing);
-  color: var(--vultus-on-surface-variant);
+  @extend %type-label-md;
+  @extend %fg-muted;
 }
 
 .meta-item {
@@ -191,61 +299,11 @@ ion-content {
 // filled primary CTA, spec 0016 FIX-1). Same 56px height as the sibling
 // .add-cta so the two align in the .action-area flex row.
 .mark-watched-cta {
-  flex: 1;
-  height: 56px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--vultus-space-sm);
-  border: 2px solid var(--ion-color-primary);
-  border-radius: var(--vultus-radius-md);
-  background: transparent;
-  color: var(--ion-color-primary);
-  font-family: var(--vultus-font-family);
-  font-weight: 700;
-  cursor: pointer;
-  transition:
-    background 120ms ease,
-    transform 80ms ease;
-
-  &:hover {
-    background: color-mix(in srgb, var(--ion-color-primary) 10%, transparent);
-  }
-
-  &:active {
-    transform: scale(0.98);
-  }
-
-  ion-icon {
-    font-size: 20px;
-  }
+  @extend %outlined-primary-cta;
 }
 
 .status-control {
-  flex: 1;
-  height: 56px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--vultus-space-sm);
-  border: 2px solid var(--ion-color-primary);
-  border-radius: var(--vultus-radius-md);
-  background: transparent;
-  color: var(--ion-color-primary);
-  font-family: var(--vultus-font-family);
-  font-weight: 700;
-  cursor: pointer;
-  transition:
-    background 120ms ease,
-    transform 80ms ease;
-
-  &:hover {
-    background: color-mix(in srgb, var(--ion-color-primary) 10%, transparent);
-  }
-
-  &:active {
-    transform: scale(0.98);
-  }
+  @extend %outlined-primary-cta;
 
   .status-dot {
     width: 10px;
@@ -256,17 +314,15 @@ ion-content {
 }
 
 .remove-control {
+  @extend %inline-center;
   height: 56px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   gap: var(--vultus-space-xs);
   padding: 0 var(--vultus-space-md);
   border: none;
   border-radius: var(--vultus-radius-md);
   background: transparent;
   color: var(--vultus-status-dropped);
-  font-family: var(--vultus-font-family);
+  @extend %font;
   font-weight: 600;
   cursor: pointer;
 
@@ -297,11 +353,10 @@ ion-content {
 }
 
 .card-heading {
-  display: flex;
-  align-items: center;
+  @extend %flex-center;
   gap: var(--vultus-space-sm);
   margin: 0 0 var(--vultus-space-md);
-  font-family: var(--vultus-font-family);
+  @extend %font;
   font-size: var(--vultus-text-headline-sm-size);
   font-weight: var(--vultus-text-headline-sm-weight);
   line-height: var(--vultus-text-headline-sm-line);
@@ -314,19 +369,17 @@ ion-content {
 
 .synopsis-text {
   margin: 0;
-  font-family: var(--vultus-font-family);
+  @extend %font;
   font-size: var(--vultus-text-body-lg-size);
   font-weight: var(--vultus-text-body-lg-weight);
   line-height: var(--vultus-text-body-lg-line);
-  color: var(--vultus-on-surface-variant);
+  @extend %fg-muted;
 }
 
 .muted-line {
   margin: 0;
-  font-family: var(--vultus-font-family);
-  font-size: var(--vultus-text-body-md-size);
-  line-height: var(--vultus-text-body-md-line);
-  color: var(--vultus-on-surface-variant);
+  @extend %type-body-md;
+  @extend %fg-muted;
 }
 
 // -----------------------------------------------------------------------------
@@ -363,14 +416,10 @@ ion-content {
 }
 
 .group-label {
+  @extend %flex-center;
   margin: 0;
-  display: flex;
-  align-items: center;
   gap: 6px; // matches the mock's gap-1.5
-  font-family: var(--vultus-font-family);
-  font-size: var(--vultus-text-label-sm-size);
-  font-weight: var(--vultus-text-label-sm-weight);
-  line-height: var(--vultus-text-label-sm-line);
+  @extend %type-label-sm;
   letter-spacing: 0.05em; // tracking-wider
   text-transform: uppercase;
 
@@ -392,9 +441,7 @@ ion-content {
 }
 
 .provider-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  @extend %row-between;
   padding: var(--vultus-space-sm) var(--vultus-space-md);
   border-radius: var(--vultus-radius);
   background: var(--vultus-surface-container);
@@ -412,47 +459,34 @@ ion-content {
 }
 
 .provider-lead {
-  display: flex;
-  align-items: center;
+  @extend %lead-cluster;
   gap: var(--vultus-space-sm);
-  min-width: 0;
 }
 
 // 40×40 text logo tile — the per-title WatchProvider has no logo path, so the
 // tile shows the provider's initials (rounded, on the raised surface).
 .provider-logo {
-  width: 40px;
-  height: 40px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  @extend %tile-40;
   border-radius: var(--vultus-radius-md);
   background: var(--vultus-surface-container-highest);
   color: var(--vultus-on-surface);
-  font-family: var(--vultus-font-family);
+  @extend %font;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
 
 .provider-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+  @extend %text-stack;
 }
 
 .provider-name-line {
-  display: flex;
-  align-items: center;
+  @extend %flex-center;
   gap: var(--vultus-space-sm);
 }
 
 .provider-name {
-  font-family: var(--vultus-font-family);
-  font-size: var(--vultus-text-body-md-size);
-  line-height: var(--vultus-text-body-md-line);
+  @extend %type-body-md;
 
   // Mine: bold, full-strength text.
   &--mine {
@@ -474,18 +508,15 @@ ion-content {
   border-radius: var(--vultus-radius-pill);
   background: color-mix(in srgb, var(--ion-color-primary) 10%, transparent);
   color: var(--ion-color-primary);
-  font-family: var(--vultus-font-family);
+  @extend %font;
   font-size: 10px;
   font-weight: 700;
   line-height: 1.4;
 }
 
 .provider-type {
-  font-family: var(--vultus-font-family);
-  font-size: var(--vultus-text-label-sm-size);
-  font-weight: var(--vultus-text-label-sm-weight);
-  line-height: var(--vultus-text-label-sm-line);
-  color: var(--vultus-on-surface-variant);
+  @extend %type-label-sm;
+  @extend %fg-muted;
 }
 
 // Decorative trailing glyph (open_in_new equivalent) — NOT a link/button. Shifts
@@ -493,8 +524,153 @@ ion-content {
 .provider-trailing {
   flex-shrink: 0;
   font-size: 20px;
-  color: var(--vultus-on-surface-variant);
+  @extend %fg-muted;
   transition: color 150ms ease;
+}
+
+// -----------------------------------------------------------------------------
+// Personal Tracking — the spec-0061 Plex override subsection (canonical Stitch
+// screen "Movie Detail - Personal Tracking - Vultus",
+// 562019f29ce2412d90c757a7e45a98bf). Sits at the BOTTOM of the "Where to Watch"
+// card, below 0060's provider groups, after the same `.group-divider` hairline.
+// Exactly one of two rows renders per `watchingViaPlex`:
+//   - ACTIVE (true): a surface-container row with the 40×40 surface-container-
+//     highest logo tile (bundled /assets/plex-logo.svg wordmark, object-fit
+//     contain so the wide mark is not cropped), a bold "Watching via Plex"
+//     title + muted "Local Server" caption, and a text-only "Change" affordance.
+//   - EMPTY (false): a dashed outline-variant row with a muted `add` glyph tile
+//     and "Mark as watching via Plex" — the whole row taps to set the flag.
+// The Plex brand colour lives ENTIRELY in the image asset; every chrome colour
+// here consumes --vultus-* / --ion-* tokens (no hard-coded hex).
+// -----------------------------------------------------------------------------
+.personal-tracking {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vultus-space-sm); // space-y-3
+
+  // Subgroup label — same treatment as the sibling "Also Available On" label
+  // (label-sm, uppercase, tracking-wider, muted on-surface-variant).
+  .group-label--plex {
+    @extend %fg-muted;
+  }
+}
+
+// Shared row chrome for both states (both are full-width tappable buttons).
+.plex-row {
+  @extend %row-between;
+  width: 100%;
+  padding: var(--vultus-space-sm) var(--vultus-space-md); // p-3
+  border-radius: var(--vultus-radius); // rounded-lg (0.5rem)
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease;
+
+  &:focus-visible {
+    outline: 2px solid var(--ion-color-primary);
+    outline-offset: 2px;
+  }
+
+  &:active {
+    transform: scale(0.99);
+  }
+}
+
+.plex-lead {
+  @extend %lead-cluster;
+  // gap-3 in the mock is 12px; the token grid only has 8/16, so use 12px
+  // explicitly to match the mock rhythm between tile and text (no colour hex).
+  gap: 12px;
+}
+
+// 40×40 logo tile — surface-container-highest, rounded-lg, holds the bundled
+// Plex wordmark. The mark is a WIDE wordmark (viewBox 148×68.2), so
+// object-fit: contain (NOT cover) keeps it uncropped; the neutral tile shows
+// around it.
+.plex-tile {
+  @extend %tile-40;
+  border-radius: var(--vultus-radius);
+  background: var(--vultus-surface-container-highest);
+  overflow: hidden;
+
+  // Empty-state tile: no fill, just the muted `add` glyph centered.
+  &--empty {
+    background: transparent;
+
+    ion-icon {
+      font-size: 22px;
+      color: color-mix(
+        in srgb,
+        var(--vultus-on-surface-variant) 50%,
+        transparent
+      );
+    }
+  }
+}
+
+.plex-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 6px; // breathing room so the wordmark isn't edge-to-edge
+}
+
+.plex-text {
+  @extend %text-stack;
+}
+
+.plex-title {
+  @extend %type-body-md;
+  font-weight: 700; // font-bold
+  color: var(--vultus-on-surface);
+}
+
+.plex-caption {
+  @extend %type-label-sm;
+  @extend %fg-muted;
+}
+
+// Text-only "Change" affordance (label-md, primary, underline on hover). Lives
+// inside the tappable active row (the row flips the flag; the label is the
+// visual affordance). Hover-underline is driven by the row hover below.
+.plex-change {
+  flex-shrink: 0;
+  @extend %type-label-md;
+  color: var(--ion-color-primary);
+}
+
+// ACTIVE row: surface-container background, surface-container-high on hover
+// (matches the provider-row raise). The "Change" label underlines on hover.
+.plex-row--active {
+  background: var(--vultus-surface-container);
+
+  &:hover {
+    background: var(--vultus-surface-container-high);
+
+    .plex-change {
+      text-decoration: underline;
+    }
+  }
+}
+
+// EMPTY row: dashed outline-variant border (~30% alpha), muted text; the border
+// shifts to primary/50 on hover.
+.plex-row--empty {
+  border: 1px dashed
+    color-mix(in srgb, var(--vultus-outline-variant) 30%, transparent);
+
+  &:hover {
+    border-color: color-mix(in srgb, var(--ion-color-primary) 50%, transparent);
+  }
+}
+
+.plex-empty-text {
+  min-width: 0;
+  @extend %type-body-md;
+  color: color-mix(in srgb, var(--vultus-on-surface-variant) 70%, transparent);
 }
 
 // -----------------------------------------------------------------------------
@@ -516,13 +692,13 @@ ion-content {
 
   .alert-title {
     color: var(--vultus-on-surface);
-    font-family: var(--vultus-font-family);
+    @extend %font;
     font-weight: 600;
   }
 
   .alert-message {
     color: var(--vultus-on-surface-variant);
-    font-family: var(--vultus-font-family);
+    @extend %font;
   }
 
   .vultus-alert-cancel {
@@ -540,22 +716,9 @@ ion-content {
 // the action area below the status/remove row (spec 0034).
 // -----------------------------------------------------------------------------
 .movie-watched-control {
-  height: 56px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--vultus-space-sm);
+  @extend %outlined-primary-control;
   padding: 0 var(--vultus-space-md);
-  border: 2px solid var(--ion-color-primary);
-  border-radius: var(--vultus-radius-md);
-  background: transparent;
-  color: var(--ion-color-primary);
-  font-family: var(--vultus-font-family);
   font-weight: 600;
-  cursor: pointer;
-  transition:
-    background 120ms ease,
-    transform 80ms ease;
 
   &.is-watched {
     background: color-mix(in srgb, var(--ion-color-primary) 20%, transparent);
@@ -568,10 +731,6 @@ ion-content {
 
   &:not(:disabled):active {
     transform: scale(0.98);
-  }
-
-  ion-icon {
-    font-size: 20px;
   }
 }
 
@@ -586,41 +745,37 @@ ion-content {
 }
 
 .season-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  @extend %row-between;
   min-height: 48px;
   cursor: pointer;
   padding: var(--vultus-space-sm) 0;
 }
 
 .season-label {
-  font-family: var(--vultus-font-family);
-  font-size: var(--vultus-text-body-lg-size);
+  @extend %type-body-md;
   font-weight: 600;
   color: var(--vultus-on-surface);
 }
 
 .season-heading-right {
-  display: flex;
-  align-items: center;
+  @extend %flex-center;
   gap: var(--vultus-space-sm);
 }
 
 .season-count {
-  font-family: var(--vultus-font-family);
+  @extend %font;
   font-size: var(--vultus-text-label-md-size);
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--vultus-on-surface-variant);
+  @extend %fg-muted;
 }
 
 .bulk-toggle {
   border: none;
   background: transparent;
   color: var(--ion-color-primary);
-  font-family: var(--vultus-font-family);
+  @extend %font;
   font-size: var(--vultus-text-label-md-size);
   font-weight: 600;
   cursor: pointer;
@@ -629,7 +784,7 @@ ion-content {
 
 .chevron-icon {
   font-size: 18px;
-  color: var(--vultus-on-surface-variant);
+  @extend %fg-muted;
   transition: transform 200ms ease;
 
   &.expanded {
@@ -642,8 +797,7 @@ ion-content {
 }
 
 .episode-row {
-  display: flex;
-  align-items: center;
+  @extend %flex-center;
   min-height: 56px;
   padding: var(--vultus-space-sm) 0;
   gap: var(--vultus-space-sm);
@@ -652,24 +806,19 @@ ion-content {
 
 .episode-number {
   min-width: 32px;
-  font-family: var(--vultus-font-family);
-  font-size: var(--vultus-text-body-md-size);
+  @extend %type-body-md;
   font-weight: 600;
-  color: var(--vultus-on-surface-variant);
+  @extend %fg-muted;
   flex-shrink: 0;
 }
 
 .episode-info {
+  @extend %text-stack;
   flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
 }
 
 .episode-title {
-  font-family: var(--vultus-font-family);
-  font-size: var(--vultus-text-body-md-size);
+  @extend %type-body-md;
   font-weight: 400;
   color: var(--vultus-on-surface);
   white-space: nowrap;
@@ -678,17 +827,16 @@ ion-content {
 }
 
 .episode-air-date {
-  font-family: var(--vultus-font-family);
+  @extend %font;
   font-size: var(--vultus-text-label-sm-size);
   font-weight: var(--vultus-text-label-sm-weight, 500);
-  color: var(--vultus-on-surface-variant);
+  @extend %fg-muted;
 }
 
 .watched-toggle {
+  @extend %flex-center;
   width: 32px;
   height: 32px;
-  display: flex;
-  align-items: center;
   justify-content: center;
   border: none;
   background: transparent;

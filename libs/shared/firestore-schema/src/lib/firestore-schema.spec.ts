@@ -94,6 +94,7 @@ describe('converters — round-trip identity', () => {
         },
       ],
       myProviderIds: [8, 337],
+      hasPlex: false,
     };
     expect(dataToUser(simulateStored(userToData(user)) as never)).toEqual(user);
   });
@@ -109,6 +110,7 @@ describe('converters — round-trip identity', () => {
       },
       fcmTokens: [],
       myProviderIds: [8],
+      hasPlex: false,
     };
     const result = dataToUser(simulateStored(userToData(user)) as never);
     expect(result).toEqual(user);
@@ -126,6 +128,7 @@ describe('converters — round-trip identity', () => {
       },
       fcmTokens: [],
       myProviderIds: [],
+      hasPlex: false,
     };
     const result = dataToUser(simulateStored(userToData(user)) as never);
     expect(result).toEqual(user);
@@ -144,6 +147,7 @@ describe('converters — round-trip identity', () => {
       },
       fcmTokens: [],
       myProviderIds: [8],
+      hasPlex: false,
     };
     const stored = simulateStored(userToData(user)) as Record<string, unknown>;
     // Delete deliveryHour to simulate a pre-0051 stored doc.
@@ -165,6 +169,7 @@ describe('converters — round-trip identity', () => {
       },
       fcmTokens: [],
       myProviderIds: [8, 337, 119],
+      hasPlex: false,
     };
     const result = dataToUser(simulateStored(userToData(user)) as never);
     expect(result).toEqual(user);
@@ -182,6 +187,7 @@ describe('converters — round-trip identity', () => {
       },
       fcmTokens: [],
       myProviderIds: [],
+      hasPlex: false,
     };
     const result = dataToUser(simulateStored(userToData(user)) as never);
     expect(result).toEqual(user);
@@ -200,12 +206,70 @@ describe('converters — round-trip identity', () => {
       },
       fcmTokens: [],
       myProviderIds: [8],
+      hasPlex: false,
     };
     const stored = simulateStored(userToData(user)) as Record<string, unknown>;
     // Delete myProviderIds to simulate a pre-0060 stored doc.
     delete stored['myProviderIds'];
     const result = dataToUser(stored as never);
     expect(result.myProviderIds).toEqual([]);
+  });
+
+  it('User: hasPlex true round-trips', () => {
+    const user: User = {
+      region: 'NL',
+      notificationPrefs: {
+        episodeAired: true,
+        movieAvailable: true,
+        cameToPlatform: true,
+        deliveryHour: null,
+      },
+      fcmTokens: [],
+      myProviderIds: [8],
+      hasPlex: true,
+    };
+    const result = dataToUser(simulateStored(userToData(user)) as never);
+    expect(result).toEqual(user);
+    expect(result.hasPlex).toBe(true);
+  });
+
+  it('User: hasPlex false round-trips', () => {
+    const user: User = {
+      region: 'DE',
+      notificationPrefs: {
+        episodeAired: false,
+        movieAvailable: false,
+        cameToPlatform: false,
+        deliveryHour: null,
+      },
+      fcmTokens: [],
+      myProviderIds: [],
+      hasPlex: false,
+    };
+    const result = dataToUser(simulateStored(userToData(user)) as never);
+    expect(result).toEqual(user);
+    expect(result.hasPlex).toBe(false);
+  });
+
+  it('User: backward-compat — legacy doc missing hasPlex maps to false', () => {
+    // Simulates a doc written before spec 0061 (no hasPlex field stored).
+    const user: User = {
+      region: 'GB',
+      notificationPrefs: {
+        episodeAired: true,
+        movieAvailable: false,
+        cameToPlatform: true,
+        deliveryHour: null,
+      },
+      fcmTokens: [],
+      myProviderIds: [8],
+      hasPlex: true,
+    };
+    const stored = simulateStored(userToData(user)) as Record<string, unknown>;
+    // Delete hasPlex to simulate a pre-0061 stored doc.
+    delete stored['hasPlex'];
+    const result = dataToUser(stored as never);
+    expect(result.hasPlex).toBe(false);
   });
 
   it('WatchlistItem: addedAt round-trips; traktId null survives', () => {
@@ -216,6 +280,7 @@ describe('converters — round-trip identity', () => {
       title: 'Game of Thrones',
       addedAt: '2026-03-04T05:06:07.000Z',
       status: 'watching',
+      watchingViaPlex: false,
     };
     // posterPath/voteAverage/releaseDate are absent on the source item; the write
     // converter coerces them to null (never undefined), so the round-trip reads
@@ -241,6 +306,7 @@ describe('converters — round-trip identity', () => {
       posterPath: '/matrix.jpg',
       voteAverage: 8.2,
       releaseDate: '1999-03-31',
+      watchingViaPlex: false,
     };
     expect(
       dataToWatchlistItem(simulateStored(watchlistItemToData(item)) as never),
@@ -258,6 +324,7 @@ describe('converters — round-trip identity', () => {
       posterPath: null,
       voteAverage: null,
       releaseDate: null,
+      watchingViaPlex: false,
     };
     expect(
       dataToWatchlistItem(simulateStored(watchlistItemToData(item)) as never),
@@ -272,6 +339,7 @@ describe('converters — round-trip identity', () => {
       title: 'Inception',
       addedAt: '2026-03-04T05:06:07.000Z',
       status: 'watching',
+      watchingViaPlex: false,
     };
     const write = watchlistItemToData(item);
     expect(write.posterPath).toBeNull();
@@ -296,11 +364,76 @@ describe('converters — round-trip identity', () => {
       addedAt: '2026-03-04T05:06:07.000Z',
       status: 'completed',
       releaseDate: '1980-05-21',
+      watchingViaPlex: false,
     };
     const write = watchlistItemToData(item);
     // Stored as the raw string, NOT a Date/Timestamp.
     expect(write.releaseDate).toBe('1980-05-21');
     expect(write.releaseDate).not.toBeInstanceOf(Date);
+  });
+
+  it('WatchlistItem: watchingViaPlex true round-trips', () => {
+    const item: WatchlistItem = {
+      type: 'tv',
+      tmdbId: 76479,
+      traktId: 11,
+      title: 'The Boys',
+      addedAt: '2026-03-04T05:06:07.000Z',
+      status: 'watching',
+      posterPath: null,
+      voteAverage: null,
+      releaseDate: null,
+      watchingViaPlex: true,
+    };
+    const result = dataToWatchlistItem(
+      simulateStored(watchlistItemToData(item)) as never,
+    );
+    expect(result).toEqual(item);
+    expect(result.watchingViaPlex).toBe(true);
+  });
+
+  it('WatchlistItem: watchingViaPlex false round-trips', () => {
+    const item: WatchlistItem = {
+      type: 'movie',
+      tmdbId: 603,
+      traktId: 1,
+      title: 'The Matrix',
+      addedAt: '2026-03-04T05:06:07.000Z',
+      status: 'completed',
+      posterPath: null,
+      voteAverage: null,
+      releaseDate: null,
+      watchingViaPlex: false,
+    };
+    const result = dataToWatchlistItem(
+      simulateStored(watchlistItemToData(item)) as never,
+    );
+    expect(result).toEqual(item);
+    expect(result.watchingViaPlex).toBe(false);
+  });
+
+  it('WatchlistItem: backward-compat — legacy item missing watchingViaPlex maps to false', () => {
+    // Simulates a doc written before spec 0061 (no watchingViaPlex field stored).
+    const item: WatchlistItem = {
+      type: 'tv',
+      tmdbId: 1396,
+      traktId: null,
+      title: 'Breaking Bad',
+      addedAt: '2026-03-04T05:06:07.000Z',
+      status: 'planned',
+      posterPath: null,
+      voteAverage: null,
+      releaseDate: null,
+      watchingViaPlex: true,
+    };
+    const stored = simulateStored(watchlistItemToData(item)) as Record<
+      string,
+      unknown
+    >;
+    // Delete watchingViaPlex to simulate a pre-0061 stored doc.
+    delete stored['watchingViaPlex'];
+    const result = dataToWatchlistItem(stored as never);
+    expect(result.watchingViaPlex).toBe(false);
   });
 
   it('EpisodeDoc: watchedAt set (watched true), title present', () => {
@@ -536,6 +669,7 @@ describe('converters — directional spot-checks', () => {
       title: 'The Matrix',
       addedAt: '2026-03-04T05:06:07.000Z',
       status: 'planned',
+      watchingViaPlex: false,
     };
     expect(watchlistItemToData(item).addedAt).toBeInstanceOf(Date);
 

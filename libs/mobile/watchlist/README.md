@@ -245,6 +245,27 @@ Firestore listener per change-detection cycle. This partition logic is
 deliberately **duplicated** with the title-detail slice's two-group split
 (2 slices, short of the 3+-slice extract rule — no shared helper is extracted).
 
+## Read-only Plex badge (spec 0061)
+
+When a title is manually tagged as "watching via Plex" on title-detail, its
+watchlist card renders a small **read-only Plex badge** — a compact, neutral
+tile holding the bundled Plex wordmark (`/assets/plex-logo.svg`) — **alongside**
+0060's availability pill. It is driven purely by `item.watchingViaPlex`, which
+arrives on every `WatchlistItem` via the **existing `watchlist$` stream**
+(`dataToWatchlistItem` now carries the field): there is **no new service
+method, no new Firestore listener, and no new stream** for it (contrast 0060's
+`myProviderIds$`, which lives on `users/{uid}` — the Plex flag lives on the item
+itself, so it is already in hand). The badge is **additive, never a
+replacement**: when `watchingViaPlex` is false/absent the pill renders exactly
+as 0060 defines it, and the badge's presence/absence never affects the pill
+(decision 4). It is **presentational / non-interactive** — no click/hover/focus
+handler; the card remains the tap target and the toggle lives only in
+title-detail (decision 5). Because this branch does not yet carry 0060's
+`items-end gap-sm` card corner slot, the badge is placed **inline in
+`.card-meta`** next to the availability pill (per the spec's "0060 composition
+note (T5)"). Brand colour lives in the logo image; all badge chrome uses
+`--vultus-*` tokens (no hand-set hex).
+
 ## Data access
 
 - **Reads:** `users/{uid}/watchlist` (realtime list), `users/{uid}` (region +

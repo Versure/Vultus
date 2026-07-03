@@ -17,17 +17,19 @@ import { SyncStatusService } from './sync-status.service';
  * `GET_WATCH_PROVIDERS`); it structurally mirrors the public surface:
  * - option lists `regions`, `deliveryHours`;
  * - signals `region`, `notificationsEnabled`, `deliveryHour`, `loaded`,
- *   `loadFailed`, and the "My Providers" (spec 0060) signals `providerCatalog`,
- *   `myProviderIds`, `catalogLoading`, `lastPrunedCount`;
+ *   `loadFailed`, the "My Providers" (spec 0060) signals `providerCatalog`,
+ *   `myProviderIds`, `catalogLoading`, `lastPrunedCount`, and the Plex
+ *   (spec 0061) signal `hasPlex`;
  * - methods `load`, `setRegion`, `setNotificationsEnabled`, `setDeliveryHour`,
- *   `retryLoad`, and the "My Providers" methods `loadProviderCatalog`,
- *   `toggleProvider`.
+ *   `retryLoad`, the "My Providers" methods `loadProviderCatalog`,
+ *   `toggleProvider`, and the Plex method `toggleHasPlex`.
  *
  * `loaded` is pre-resolved (no spinner). The provider catalog is seeded with a
  * plausible set (Netflix, Disney Plus, Max, Prime Video) and `myProviderIds`
  * with a selected/unselected mix (`[8]` = Netflix) so `mobile:serve-mock`
- * renders both selected and unselected chips. `loadProviderCatalog` /
- * `toggleProvider` mutate the in-memory signals (no callable).
+ * renders both selected and unselected chips. `hasPlex` is seeded `true` so the
+ * Plex chip renders selected. `loadProviderCatalog` / `toggleProvider` /
+ * `toggleHasPlex` mutate the in-memory signals (no callable).
  */
 // Seeded provider catalog (TMDB provider ids + real logo paths) so the mock
 // renders logos + a selected/unselected mix.
@@ -75,6 +77,9 @@ class MockSettingsServiceImpl {
   private readonly _myProviderIds = signal<number[]>([8]);
   private readonly _catalogLoading = signal<boolean>(false);
   private readonly _lastPrunedCount = signal<number>(0);
+  // Plex (spec 0061) seeded selected so `mobile:serve-mock` shows the Plex chip
+  // in its selected state.
+  private readonly _hasPlex = signal<boolean>(true);
 
   readonly region = this._region.asReadonly();
   readonly notificationsEnabled = this._notificationsEnabled.asReadonly();
@@ -85,6 +90,7 @@ class MockSettingsServiceImpl {
   readonly myProviderIds = this._myProviderIds.asReadonly();
   readonly catalogLoading = this._catalogLoading.asReadonly();
   readonly lastPrunedCount = this._lastPrunedCount.asReadonly();
+  readonly hasPlex = this._hasPlex.asReadonly();
 
   load(): Promise<void> {
     return Promise.resolve();
@@ -121,6 +127,11 @@ class MockSettingsServiceImpl {
         ? current.filter((id) => id !== providerId)
         : [...current, providerId],
     );
+    return Promise.resolve();
+  }
+
+  toggleHasPlex(): Promise<void> {
+    this._hasPlex.set(!this._hasPlex());
     return Promise.resolve();
   }
 }

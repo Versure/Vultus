@@ -452,6 +452,91 @@ describe('TitleDetailService', () => {
     expect(ids).toEqual([]);
   });
 
+  // --- spec 0061: hasPlex$ / toggleWatchingViaPlex ---
+
+  it('hasPlex$ maps users/{uid}.hasPlex; false for a legacy doc missing it, false when absent (spec 0061)', async () => {
+    // Populated true.
+    docDataMock.mockReturnValue(
+      of({
+        region: 'NL',
+        notificationPrefs: {},
+        fcmTokens: [],
+        hasPlex: true,
+      }),
+    );
+    const service = createService(UID);
+    const on = await new Promise((resolve) =>
+      service.hasPlex$().subscribe(resolve),
+    );
+    expect(docMock).toHaveBeenCalledWith({}, userPath(UID));
+    expect(on).toBe(true);
+
+    // Populated false.
+    docDataMock.mockReturnValue(
+      of({
+        region: 'NL',
+        notificationPrefs: {},
+        fcmTokens: [],
+        hasPlex: false,
+      }),
+    );
+    TestBed.resetTestingModule();
+    const svcFalse = createService(UID);
+    const off = await new Promise((resolve) =>
+      svcFalse.hasPlex$().subscribe(resolve),
+    );
+    expect(off).toBe(false);
+
+    // Legacy doc missing hasPlex → false via dataToUser (?? false).
+    docDataMock.mockReturnValue(
+      of({ region: 'NL', notificationPrefs: {}, fcmTokens: [] }),
+    );
+    TestBed.resetTestingModule();
+    const legacy = createService(UID);
+    const legacyVal = await new Promise((resolve) =>
+      legacy.hasPlex$().subscribe(resolve),
+    );
+    expect(legacyVal).toBe(false);
+
+    // Absent doc → false.
+    docDataMock.mockReturnValue(of(undefined));
+    TestBed.resetTestingModule();
+    const none = createService(UID);
+    const noneVal = await new Promise((resolve) =>
+      none.hasPlex$().subscribe(resolve),
+    );
+    expect(noneVal).toBe(false);
+  });
+
+  it('null-uid guard: hasPlex$ → false (spec 0061)', async () => {
+    const service = createService(null);
+    const val = await new Promise((resolve) =>
+      service.hasPlex$().subscribe(resolve),
+    );
+    expect(val).toBe(false);
+    // No doc read attempted on a null uid.
+    expect(docDataMock).not.toHaveBeenCalled();
+  });
+
+  it('toggleWatchingViaPlex writes the scalar { watchingViaPlex } to the watchlist item path (spec 0061)', async () => {
+    const service = createService(UID);
+    await service.toggleWatchingViaPlex(27205, true);
+    expect(updateDocMock).toHaveBeenCalledTimes(1);
+    const [ref, payload] = updateDocMock.mock.calls[0];
+    expect(ref).toEqual({ path: watchlistItemPath(UID, '27205') });
+    expect(payload).toEqual({ watchingViaPlex: true });
+
+    updateDocMock.mockClear();
+    await service.toggleWatchingViaPlex(27205, false);
+    expect(updateDocMock.mock.calls[0][1]).toEqual({ watchingViaPlex: false });
+  });
+
+  it('toggleWatchingViaPlex with null uid → no-op (no write) (spec 0061)', async () => {
+    const service = createService(null);
+    await service.toggleWatchingViaPlex(27205, true);
+    expect(updateDocMock).not.toHaveBeenCalled();
+  });
+
   it('null region → providers not fetched, empty groups', async () => {
     const service = createService(UID);
     const groups = await new Promise((resolve) =>

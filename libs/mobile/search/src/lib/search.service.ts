@@ -137,6 +137,7 @@ export class SearchService {
       posterPath: result.posterPath ?? null,
       voteAverage: result.voteAverage ?? null,
       releaseDate: result.releaseDate ?? null,
+      watchingViaPlex: false,
     };
 
     try {

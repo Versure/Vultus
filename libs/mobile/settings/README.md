@@ -83,9 +83,19 @@ The page exposes:
   opacity, an **unselected** one an outline-variant border at 60% opacity.
   Tapping a chip persists the toggled `users/{uid}.myProviderIds` array. A footer
   reads "N of M selected · Region: {region}". While the catalog is fetching, a
-  spinner renders in place of the chips (never an empty card). Stitch reference:
+  spinner renders in place of the chips (never an empty card). The grid's LAST
+  chip is the **Plex** chip (spec 0061 — see below); it is NOT a catalog entry.
+  Stitch reference:
   `projects/13590348714018893783/screens/cebdfd02c7d44023b0e0019dd4907d48`
   ("Settings - My Providers - Vultus").
+- a **Plex** chip (spec 0061) — the 7th chip in the same "My Providers" grid,
+  rendered from its OWN template block (not a member of `providerCatalog()`) and
+  backed by the SEPARATE `hasPlex` boolean (NOT `myProviderIds` — Plex has no
+  TMDB id). It shares the sibling chips' footprint, border/badge/opacity
+  treatment; its neutral logo tile holds the bundled Plex wordmark image
+  (`/assets/plex-logo.svg`, `object-fit: contain` so the wide wordmark isn't
+  cropped), and it carries a Plex-only "Manual" secondary caption. Tapping it
+  calls `onPlexToggle` → `SettingsService.toggleHasPlex()`.
 
 ### My Providers — data flow (spec 0060)
 
@@ -115,6 +125,24 @@ converter). `SettingsService`:
 The `mock` build profile seeds a full `providerCatalog` (Netflix, Disney Plus,
 Max, Amazon Prime Video) and `myProviderIds: [8]` (Netflix) so `mobile:serve-mock`
 renders a selected + unselected chip mix without a callable.
+
+### Plex — hasPlex (spec 0061)
+
+`hasPlex: boolean` on `users/{uid}` (default `false`; legacy docs missing it read
+as `false` via the converter) records whether the user uses a self-hosted Plex
+server. It is a **separate boolean, never a member of `myProviderIds`** (Plex has
+no TMDB id). `SettingsService`:
+
+- reads `hasPlex` in `load()` and writes `hasPlex: false` in the eager-create
+  `User` literal;
+- exposes `hasPlex: Signal<boolean>` (readonly);
+- `toggleHasPlex()` flips the value and persists a **scalar**
+  `updateDoc(..., { hasPlex })` (like `setRegion`'s `{ region }`), null-uid
+  guarded. It NEVER touches `myProviderIds`.
+
+The `mock` build profile seeds `hasPlex: true` so `mobile:serve-mock` renders the
+Plex chip selected. The Plex chip toggle is wired through `onPlexToggle()` on the
+page (distinct from 0060's `onProviderToggle`).
 
 ### Preserve-other-prefs write rule (spec 0051)
 

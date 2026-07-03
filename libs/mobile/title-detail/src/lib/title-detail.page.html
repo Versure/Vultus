@@ -245,7 +245,55 @@
           }
         </div>
         }
-        <!-- Room below for the spec-0061 Personal Tracking / Plex subgroup. -->
+      </div>
+      }
+
+      <!-- Personal Tracking — the spec-0061 Plex override subsection. Sits at the
+           BOTTOM of the "Where to Watch" card, below 0060's provider groups,
+           separated by the same border-t divider convention. Rendered ONLY when
+           the user uses Plex (vm.hasPlex) AND the title is tracked (there is a
+           watchlist doc to write the flag onto). The READ of watchingViaPlex is
+           NOT gated by hasPlex elsewhere; here the whole toggle *control* is
+           gated (decision 3) — declutter for non-Plex users. -->
+      @if (vm.hasPlex && vm.tracked !== null) {
+      <div class="group-divider" data-test="plex-divider"></div>
+      <div class="personal-tracking" data-test="personal-tracking">
+        <div class="group-label group-label--plex">Personal Tracking</div>
+        @if (vm.tracked.watchingViaPlex) {
+        <!-- ACTIVE row — watchingViaPlex true. -->
+        <button
+          type="button"
+          class="plex-row plex-row--active"
+          data-test="plex-active-row"
+          (click)="togglePlex(vm.tracked)"
+        >
+          <span class="plex-lead">
+            <span class="plex-tile" aria-hidden="true">
+              <img src="/assets/plex-logo.svg" alt="Plex" class="plex-logo" />
+            </span>
+            <span class="plex-text">
+              <span class="plex-title">Watching via Plex</span>
+              <span class="plex-caption">Local Server</span>
+            </span>
+          </span>
+          <span class="plex-change" data-test="plex-change">Change</span>
+        </button>
+        } @else {
+        <!-- EMPTY/UNSET row — watchingViaPlex false. The whole row is tappable. -->
+        <button
+          type="button"
+          class="plex-row plex-row--empty"
+          data-test="plex-empty-row"
+          (click)="togglePlex(vm.tracked)"
+        >
+          <span class="plex-lead">
+            <span class="plex-tile plex-tile--empty" aria-hidden="true">
+              <ion-icon name="add"></ion-icon>
+            </span>
+            <span class="plex-empty-text">Mark as watching via Plex</span>
+          </span>
+        </button>
+        }
       </div>
       }
     </div>

@@ -31,6 +31,11 @@ export interface User {
    *  later manual "provider" (Plex, spec 0061) can be layered in without a
    *  migration. Default []; legacy docs missing it → [] via the converter. */
   myProviderIds: number[];
+  /** Whether the user uses a self-hosted Plex server (spec 0061). Gates the
+   *  per-title "watching via Plex" toggle in title-detail. A separate boolean —
+   *  NOT a member of myProviderIds (Plex has no TMDB id). Default false; legacy
+   *  docs missing it → false via the converter. */
+  hasPlex: boolean;
 }
 
 // provider-catalog/{region} — global, function-written cache (PLAN §4).
@@ -49,6 +54,11 @@ export interface WatchlistItem {
   posterPath?: string | null; // TMDB poster path, e.g. '/abc123.jpg'; null when unknown
   voteAverage?: number | null; // TMDB vote average 0–10; null when unknown
   releaseDate?: string | null; // plain ISO date, e.g. '2024-03-15'; null when unknown
+  /** Manual per-title override: the user watches THIS title via their Plex
+   *  server, regardless of TMDB availability (spec 0061, GitHub #140). Additive
+   *  to — never a replacement for — the TMDB availability framing (spec 0060).
+   *  Default false; legacy docs missing it → false via the converter. */
+  watchingViaPlex: boolean;
 }
 
 // users/{userId}/watchlist/{titleId}/episodes/{episodeId} — tv only.

@@ -122,6 +122,38 @@
             <span class="provider-chip__name">{{ provider.name }}</span>
           </button>
           }
+
+          <!--
+            Plex chip (spec 0061) — the LAST chip in the "My Providers" grid,
+            its OWN template block (NOT a member of `service.providerCatalog()`).
+            Backed by `service.hasPlex()` via its own `onPlexToggle` handler, not
+            0060's `toggleProvider`. Uses the SAME chip footprint / border+badge+
+            opacity treatment as the sibling TMDB chips; the neutral logo tile
+            holds the bundled Plex WORDMARK image (object-fit: contain so the wide
+            logo isn't cropped). Carries a Plex-only "Manual" secondary caption.
+          -->
+          @let plexSelected = service.hasPlex();
+          <button
+            type="button"
+            class="provider-chip provider-chip--plex"
+            [class.provider-chip--selected]="plexSelected"
+            [attr.aria-pressed]="plexSelected"
+            aria-label="Plex"
+            (click)="onPlexToggle()"
+          >
+            <span class="provider-chip__logo provider-chip__logo--plex">
+              <img src="/assets/plex-logo.svg" alt="Plex" loading="lazy" />
+              @if (plexSelected) {
+              <ion-icon
+                class="provider-chip__badge"
+                name="checkmark-circle"
+                aria-hidden="true"
+              ></ion-icon>
+              }
+            </span>
+            <span class="provider-chip__name">Plex</span>
+            <span class="provider-chip__caption">Manual</span>
+          </button>
         </div>
         <p class="provider-footer">
           {{ service.myProviderIds().length }} of {{

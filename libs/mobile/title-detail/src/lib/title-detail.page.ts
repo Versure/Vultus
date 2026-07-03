@@ -21,6 +21,7 @@ import {
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
 import {
+  add,
   addCircleOutline,
   calendarOutline,
   checkmarkCircle,
@@ -115,6 +116,13 @@ interface DetailVm {
   /** All providers partitioned into the "mine" / "elsewhere" subgroups. */
   split: ProviderSplit;
   tracked: WatchlistItem | null;
+  /**
+   * Whether the user uses a Plex server (spec 0061). Gates the visibility of the
+   * "Personal Tracking" subsection's toggle control (the READ of the per-title
+   * `watchingViaPlex` flag on `tracked` is NOT gated by this — a pre-tagged title
+   * still displays; only the control that lets you change it is gated).
+   */
+  hasPlex: boolean;
 }
 
 const EMPTY_PROVIDERS: GroupedProviders = { flatrate: [], rent: [], buy: [] };
@@ -281,6 +289,19 @@ export class TitleDetailPage {
       shareReplay({ bufferSize: 1, refCount: true }),
     );
 
+  /**
+   * Whether the user uses Plex (spec 0061), gating the "Personal Tracking"
+   * toggle control's visibility. Seeded `false` so the loaded page renders
+   * immediately before the `users/{uid}` docData first emits — matching the
+   * region$/myProviderIds$/tracked$ startWith pattern.
+   */
+  private readonly hasPlex$ = this.service
+    .hasPlex$()
+    .pipe(
+      startWith<boolean>(false),
+      shareReplay({ bufferSize: 1, refCount: true }),
+    );
+
   readonly vm$: Observable<DetailVm> = combineLatest([
     this.detail$,
     this.region$,
@@ -293,6 +314,7 @@ export class TitleDetailPage {
           providers: EMPTY_PROVIDERS,
           split: EMPTY_SPLIT,
           tracked: null,
+          hasPlex: false,
         });
       }
       const providers$ = this.service
@@ -306,8 +328,13 @@ export class TitleDetailPage {
       const tracked$ = this.service
         .tracked$(state.detail.tmdbId)
         .pipe(startWith<WatchlistItem | null>(null));
-      return combineLatest([providers$, tracked$, this.myProviderIds$]).pipe(
-        map(([providers, tracked, myProviderIds]) => ({
+      return combineLatest([
+        providers$,
+        tracked$,
+        this.myProviderIds$,
+        this.hasPlex$,
+      ]).pipe(
+        map(([providers, tracked, myProviderIds, hasPlex]) => ({
           state,
           region,
           providers,
@@ -318,6 +345,7 @@ export class TitleDetailPage {
             myProviderIds,
           ),
           tracked,
+          hasPlex,
         })),
       );
     }),
@@ -360,6 +388,7 @@ export class TitleDetailPage {
       checkmarkCircle,
       squareOutline,
       openOutline,
+      add,
     });
     // Keep currentTmdbId in sync so imperative handlers always act on the
     // title currently on screen (not the first navigation's id).
@@ -521,6 +550,20 @@ export class TitleDetailPage {
   /** Whether a season is currently collapsed. */
   isSeasonCollapsed(season: number): boolean {
     return this.collapsedSeasons.has(season);
+  }
+
+  /**
+   * Toggle the per-title "watching via Plex" override (spec 0061). Flips the
+   * current `watchingViaPlex` value on the tracked item and persists the scalar
+   * via the service. Both the empty-row tap and the active row's "Change" button
+   * call this — it flips whichever way the current value points. Fire-and-forget;
+   * the `tracked$` stream re-emits with the new value and the row swaps in place.
+   */
+  togglePlex(tracked: WatchlistItem): void {
+    void this.service.toggleWatchingViaPlex(
+      tracked.tmdbId,
+      !tracked.watchingViaPlex,
+    );
   }
 
   /** Movie mark-as-watched toggle: completed ↔ watching (dropped is no-op). */

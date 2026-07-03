@@ -47,6 +47,7 @@ export function userToData(user: User): UserWriteData {
     notificationPrefs: user.notificationPrefs,
     fcmTokens: user.fcmTokens.map(fcmTokenToData),
     myProviderIds: user.myProviderIds,
+    hasPlex: user.hasPlex,
   };
 }
 export function dataToUser(data: UserReadData): User {
@@ -62,6 +63,8 @@ export function dataToUser(data: UserReadData): User {
     fcmTokens: (data.fcmTokens ?? []).map(dataToFcmToken),
     // Legacy docs (pre-0060) lack myProviderIds; coalesce missing → [].
     myProviderIds: data.myProviderIds ?? [],
+    // Legacy docs (pre-0061) lack hasPlex; coalesce missing → false.
+    hasPlex: data.hasPlex ?? false,
   };
 }
 
@@ -94,6 +97,7 @@ export function watchlistItemToData(
     posterPath: item.posterPath ?? null,
     voteAverage: item.voteAverage ?? null,
     releaseDate: item.releaseDate ?? null,
+    watchingViaPlex: item.watchingViaPlex ?? false,
   };
 }
 export function dataToWatchlistItem(
@@ -109,6 +113,8 @@ export function dataToWatchlistItem(
     posterPath: data.posterPath ?? null,
     voteAverage: data.voteAverage ?? null,
     releaseDate: data.releaseDate ?? null,
+    // Legacy docs (pre-0061) lack watchingViaPlex; coalesce missing → false.
+    watchingViaPlex: data.watchingViaPlex ?? false,
   };
 }
 
