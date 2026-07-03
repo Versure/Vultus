@@ -32,6 +32,18 @@ instead of a fresh spec. (Project-wide rules are in `CLAUDE.md`.)
   `git worktree prune`; if `$wt` is registered (implement-feature leaves it in
   place), reuse it (`git -C $wt checkout feat/NNNN-slug; git -C $wt pull`); elif
   the branch exists, `git worktree add --force $wt feat/NNNN-slug`.
+- **Bootstrap dependencies if missing (spec 0065).** If the worktree is being
+  **recreated** (`git worktree add`), or a **code-bearing** rework reuses a worktree
+  that has no `node_modules` (mechanical check:
+  `if (-not (Test-Path "$wt/node_modules"))`), run the **same class-conditional
+  bootstrap** as implement-feature's Step 2 **before any gate**: code-bearing →
+  `pnpm install` in `$wt` with the semver fail-then-`--config.bin-links=false`
+  retry (~11 min, long/backgrounded timeout); docs-only → skip the install and run
+  prettier / `gen-spec-status` via the primary checkout's tooling. If reusing an
+  existing worktree that **already has `node_modules`**, skip the install. **Never
+  junction** the primary checkout's `node_modules` into the worktree — `pnpm exec`
+  runs a dep-status check that can purge it, deleting the primary checkout's real
+  `node_modules` (a hard prohibition).
 
 ### 2. Pull the work to do — two sources
 

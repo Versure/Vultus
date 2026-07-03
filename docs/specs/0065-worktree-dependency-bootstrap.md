@@ -2,7 +2,7 @@
 number: 0065
 slug: worktree-dependency-bootstrap
 title: Bootstrap dependencies in the implement-feature worktree (fresh worktrees have no node_modules)
-status: approved # draft | approved | implementing | done
+status: implementing # draft | approved | implementing | done
 slices: [] # tooling / prompt-file change — touches no product slice
 scopes: [] # .claude/** prompt files + CLAUDE.md; no Sheriff scope tag applies
 created: 2026-07-02
