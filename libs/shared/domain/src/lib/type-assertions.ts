@@ -114,6 +114,26 @@ const _user = {
   hasPlex: false,
 } satisfies User;
 
+// Optional `plexSync` present — proves the PlexSyncMeta shape compiles (spec
+// 0073). The `_user` literal above omits it, proving the field is optional.
+const _userWithPlexSync = {
+  region: 'NL',
+  notificationPrefs: {
+    episodeAired: true,
+    movieAvailable: false,
+    cameToPlatform: true,
+    deliveryHour: null,
+  },
+  fcmTokens: [],
+  myProviderIds: [],
+  hasPlex: true,
+  plexSync: {
+    linkedAt: '2026-07-03T10:00:00.000Z',
+    lastSyncAt: null,
+    serverName: 'Home PMS',
+  },
+} satisfies User;
+
 const _watchlistItem = {
   type: 'tv',
   tmdbId: 1399,
@@ -201,6 +221,7 @@ export const __TYPE_ASSERTIONS__ = [
   _statusesLiteral,
   _kindsLiteral,
   _user,
+  _userWithPlexSync,
   _watchlistItem,
   _episodeDoc,
   _episodeDocUnwatched,

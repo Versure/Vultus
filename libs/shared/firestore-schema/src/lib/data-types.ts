@@ -12,6 +12,7 @@ import type {
   NotificationKind,
   NotificationPayload,
   NotificationPrefs,
+  PlexSyncMeta,
   Region,
   TitleMetadata,
   TitleType,
@@ -44,6 +45,7 @@ export interface UserReadData {
   fcmTokens: FcmTokenReadData[]; // per-element mapped
   myProviderIds?: number[]; // optional on read: legacy docs pre-0060 lack this field
   hasPlex?: boolean; // optional on read: legacy docs pre-0061 lack this field
+  plexSync?: PlexSyncMeta | null; // optional on read: legacy docs pre-0073 lack this field; nested ISO strings pass through (no Timestamp mapping)
 }
 export interface UserWriteData {
   region: Region;
@@ -51,6 +53,7 @@ export interface UserWriteData {
   fcmTokens: FcmTokenWriteData[];
   myProviderIds: number[];
   hasPlex: boolean;
+  plexSync?: PlexSyncMeta | null; // optional on write: the coalesce supplies it (`?? null`); nested ISO strings pass through
 }
 
 // --- WatchlistItem: addedAt ---

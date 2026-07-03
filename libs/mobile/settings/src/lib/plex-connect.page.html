@@ -1,0 +1,101 @@
+<!--
+  Connect Plex page — Stitch screen 398cde766832491e92e1c0c5cc09ab4e
+  ("Connect Plex - Vultus", spec 0073 §6B). A pushed sub-page: fixed header with
+  a back arrow + centered "Connect Plex" title, NO bottom nav. The mock stacks
+  all three stage cards; at runtime ONE stage renders, driven by
+  `PlexLinkService.stage`. Colours are --vultus-* / --ion-* vars only (no
+  hard-coded hex); icons are Ionicons (the app-wide idiom — the Stitch markup's
+  Material Symbols are the design tool's convention, mapped to the equivalent
+  Ionicons here).
+-->
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-button class="back-button" aria-label="Go back" (click)="goBack()">
+        <ion-icon name="arrow-back" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+    <ion-title>Connect Plex</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <main class="connect-main">
+    <!-- Stage: LINK CODE (+ WAITING). The code + countdown + "Get a new code"
+         and the waiting spinner are reachable across the 'code'/'waiting'/'error'
+         stages. -->
+    @if (link.stage() === 'code' || link.stage() === 'waiting' || link.stage()
+    === 'error') {
+    <section class="stage-card" data-test="stage-code">
+      <div class="plex-tile plex-tile--lg" aria-hidden="true">
+        <img src="/assets/plex-logo.svg" alt="Plex" />
+      </div>
+      <p class="stage-instruction">
+        Enter this code at plex.tv/link on any device signed in to your Plex
+        account
+      </p>
+      <div class="code-box">
+        <span class="code-value">{{ link.code() ?? '····' }}</span>
+      </div>
+      @if (link.stage() === 'error') {
+      <p class="code-expiry code-expiry--expired" data-test="code-expired">
+        Code expired
+      </p>
+      } @else {
+      <p class="code-expiry" data-test="code-countdown">
+        Code expires in {{ link.countdown() }}
+      </p>
+      }
+
+      <!-- Waiting indicator, shown alongside the code while polling. -->
+      @if (link.stage() === 'waiting') {
+      <div class="waiting-row" data-test="stage-waiting">
+        <div class="spinner-ring" aria-hidden="true">
+          <div class="spinner-ring__track"></div>
+          <div class="spinner-ring__arc"></div>
+        </div>
+        <p class="waiting-label">Waiting for authorization…</p>
+        <button type="button" class="text-button-muted" (click)="goBack()">
+          Cancel
+        </button>
+      </div>
+      }
+
+      <button type="button" class="solid-button" (click)="regenerate()">
+        Get a new code
+      </button>
+    </section>
+    }
+
+    <!-- Stage: CONNECTED -->
+    @if (link.stage() === 'connected') {
+    <section class="stage-card" data-test="stage-connected">
+      <div class="check-tile" aria-hidden="true">
+        <ion-icon name="checkmark-circle" class="check-icon"></ion-icon>
+      </div>
+      <h3 class="connected-heading">Connected to Plex</h3>
+
+      @if (link.server(); as server) {
+      <div class="server-row" data-test="server-row">
+        <div class="plex-tile" aria-hidden="true">
+          <img src="/assets/plex-logo.svg" alt="Plex" />
+        </div>
+        <div class="server-row__body">
+          <p class="server-row__name">{{ server.name }}</p>
+          <p class="server-row__caption">
+            Local network · {{ server.baseUrl }}
+          </p>
+        </div>
+        <ion-icon
+          name="shield-checkmark"
+          class="server-row__verified"
+          aria-hidden="true"
+        ></ion-icon>
+      </div>
+      }
+
+      <button type="button" class="solid-button" (click)="done()">Done</button>
+    </section>
+    }
+  </main>
+</ion-content>

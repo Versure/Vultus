@@ -360,6 +360,245 @@ ion-content {
   color: var(--vultus-on-surface-variant);
 }
 
+// ── Plex Server card (spec 0073) ────────────────────────────────────────────
+// Stitch screen 0e2bb1f198f04186b39e4a2604413417. The card overrides the shared
+// .settings-card padding to 0 so the disconnected row / connected block own
+// their own 16px (`p-md`) padding, matching the screen. All colours are
+// --vultus-* / --ion-* vars; the Plex brand colour lives ONLY in the bundled
+// /assets/plex-logo.svg image, never in this SCSS.
+.settings-card--plex {
+  padding: 0;
+  overflow: hidden;
+
+  // The card's :active surface-tint is scoped to the sibling controls; the Plex
+  // blocks manage their own press feedback, so neutralize the inherited tint.
+  &:active {
+    background: var(--vultus-surface-container);
+  }
+}
+
+// 40x40 rounded neutral logo tile holding the Plex wordmark (object-fit:
+// contain so the wide wordmark isn't cropped). Tile bg = a surface token, NOT a
+// brand literal.
+.plex-logo-tile {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--vultus-radius);
+  overflow: hidden;
+  background: var(--vultus-surface-container-highest);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 4px;
+    box-sizing: border-box;
+  }
+}
+
+// Disconnected row — whole-row tappable button, 16px padding, space-between,
+// hover surface-tint + chevron nudge, focus ring, press feedback.
+.plex-connect-row {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--vultus-space-md);
+  padding: var(--vultus-space-md);
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 150ms ease-in-out;
+
+  &:hover {
+    background: color-mix(
+      in srgb,
+      var(--vultus-surface-container-highest) 30%,
+      transparent
+    );
+
+    .plex-connect-row__chevron {
+      transform: translateX(4px);
+    }
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--ion-color-primary);
+    outline-offset: -2px;
+  }
+
+  &:active {
+    background: color-mix(
+      in srgb,
+      var(--ion-color-primary) 5%,
+      var(--vultus-surface-container)
+    );
+  }
+
+  &__lead {
+    display: flex;
+    align-items: center;
+    gap: var(--vultus-space-md);
+    min-width: 0;
+  }
+
+  &__text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  // Title — body-lg (16px) semibold, on-surface.
+  &__title {
+    font-size: var(--vultus-text-body-lg-size);
+    font-weight: 600;
+    line-height: var(--vultus-text-body-lg-line);
+    color: var(--vultus-on-surface);
+  }
+
+  // Caption — label-sm (11px), on-surface-variant ~70%.
+  &__caption {
+    font-size: var(--vultus-text-label-sm-size);
+    font-weight: var(--vultus-text-label-sm-weight);
+    line-height: var(--vultus-text-label-sm-line);
+    color: color-mix(
+      in srgb,
+      var(--vultus-on-surface-variant) 70%,
+      transparent
+    );
+  }
+
+  &__chevron {
+    flex: 0 0 auto;
+    font-size: 22px;
+    color: var(--vultus-on-surface-variant);
+    transition: transform 150ms ease-in-out;
+  }
+}
+
+// Connected block — 16px padding, 16px vertical rhythm (`space-y-md`).
+.plex-connected {
+  padding: var(--vultus-space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--vultus-space-md);
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: var(--vultus-space-md);
+    min-width: 0;
+  }
+
+  &__id {
+    min-width: 0;
+  }
+
+  // Server name — body-lg (16px) semibold, on-surface.
+  &__name {
+    margin: 0;
+    font-size: var(--vultus-text-body-lg-size);
+    font-weight: 600;
+    line-height: var(--vultus-text-body-lg-line);
+    color: var(--vultus-on-surface);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__status {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+  }
+
+  // Emerald "Connected" dot — 8x8, --ion-color-primary.
+  &__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ion-color-primary);
+  }
+
+  // "Connected" — label-sm, primary.
+  &__status-label {
+    font-size: var(--vultus-text-label-sm-size);
+    font-weight: var(--vultus-text-label-sm-weight);
+    line-height: var(--vultus-text-label-sm-line);
+    color: var(--ion-color-primary);
+  }
+
+  &__sync-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--vultus-space-md);
+  }
+
+  // "Last synced — {relative}" — label-sm on-surface-variant ~70%.
+  &__last-synced {
+    margin: 0;
+    font-size: var(--vultus-text-label-sm-size);
+    font-weight: var(--vultus-text-label-sm-weight);
+    line-height: var(--vultus-text-label-sm-line);
+    color: color-mix(
+      in srgb,
+      var(--vultus-on-surface-variant) 70%,
+      transparent
+    );
+  }
+
+  &__footer {
+    padding-top: 8px;
+  }
+}
+
+// Plex text buttons — "Sync now" (label-sm bold primary) and "Disconnect"
+// (label-md semibold error). Both hover:opacity-80.
+.plex-text-button {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  transition: opacity 150ms ease-in-out;
+
+  &:hover {
+    opacity: 0.8;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--ion-color-primary);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  &--primary {
+    font-size: var(--vultus-text-label-sm-size);
+    font-weight: 700;
+    line-height: var(--vultus-text-label-sm-line);
+    color: var(--ion-color-primary);
+  }
+
+  &--danger {
+    font-size: var(--vultus-text-label-md-size);
+    font-weight: 600;
+    line-height: var(--vultus-text-label-md-line);
+    letter-spacing: var(--vultus-text-label-md-spacing);
+    color: var(--vultus-error);
+  }
+}
+
 // Loading state — a spinner + label instead of an empty card while the catalog
 // is being fetched.
 .providers-loading {

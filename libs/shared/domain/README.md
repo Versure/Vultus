@@ -27,9 +27,18 @@ The barrel (`src/index.ts`) re-exports:
     in without a migration; default `[]`, legacy docs missing it coalesce to `[]`
     via the converter, spec 0060 — and `hasPlex: boolean` — whether the user uses
     a self-hosted Plex server (spec 0061); a separate boolean, NOT a member of
-    `myProviderIds` (Plex has no TMDB id); gates the per-title "watching via Plex"
-    toggle; default `false`, legacy docs missing it coalesce to `false` via the
-    converter), `NotificationPrefs` (per-kind opt-in toggles plus `deliveryHour: number | null` — quiet-hours delivery preference, spec 0051; `null` = any time, a number 0–23 = that UTC hour), `FcmToken`
+    `myProviderIds` (Plex has no TMDB id); set `true` on Plex link (spec 0073);
+    gates the per-title "watching via Plex" toggle; default `false`, legacy docs
+    missing it coalesce to `false` via the converter — and `plexSync?:
+PlexSyncMeta | null` — the per-user Plex sync cursor + link metadata (spec
+    0073); OPTIONAL/nullable so legacy docs and never-linked users need no
+    migration; absent/`null` = never linked or unlinked; coalesced `?? null` via
+    the converter), `NotificationPrefs` (per-kind opt-in toggles plus `deliveryHour: number | null` — quiet-hours delivery preference, spec 0051; `null` = any time, a number 0–23 = that UTC hour), `FcmToken`
+  - `PlexSyncMeta` — per-user Plex sync cursor + link metadata (spec 0073):
+    `linkedAt` (ISO 8601 link time), `lastSyncAt: string | null` (ISO 8601 — the
+    additions cursor; `null` until the first sync completes), `serverName: string
+| null`. The X-Plex-Token is NOT stored here — it lives on-device in
+    `@capacitor/preferences`.
   - `WatchlistItem` (fields: `type`, `tmdbId`, `traktId`, `title`, `addedAt`,
     `status`, `posterPath`/`voteAverage`/`releaseDate` (all nullable/optional),
     plus `watchingViaPlex: boolean` — a manual per-title override that the user
@@ -40,6 +49,18 @@ The barrel (`src/index.ts`) re-exports:
   - `SyncRun` — one completed sync-pipeline run (global `sync-runs/{runId}`); written by Cloud Functions, read by the settings slice (spec 0049)
   - `TitleCacheEntry`, `TitleMetadata`, `RegionAvailability`
   - `ProviderCatalogDoc` — the global, function-written `provider-catalog/{region}` cache (`providers: CatalogProvider[]`, `lastSyncedAt` ISO 8601); mirrors `title-cache` as a shared, function-written cache (spec 0060)
+- **`./lib/plex`** — protocol-agnostic Plex vocabulary (spec 0073). Pure
+  structural types describing the PMS / plex.tv surface Vultus consumes, so both
+  the real (CapacitorHttp) and mock client impls — and the `PLEX_CLIENT` token —
+  are typed without importing the settings slice. **No CapacitorHttp/Capacitor/
+  Firebase import** — shared owns the vocabulary, the slice owns the protocol.
+  - `PlexPin` (`id`, `code` — 4-char link code, `authToken: string | null`),
+    `PlexServer` (`name`, `baseUrl`, `accessToken`), `PlexLibraryItem` (`type`
+    'movie' | 'tv', `tmdbId: number | null` — `null` = GUID-less → skip, `title`,
+    `addedAt` ISO 8601, `viewCount`, `lastViewedAt: string | null`, `ratingKey`),
+    `PlexEpisodeItem` (`season`, `episode`, `viewCount`, `lastViewedAt`).
+  - `PlexClient` — the interface both client impls implement: `requestPin`,
+    `checkPin`, `discoverServer`, `listLibrary`, `listEpisodes`.
 - **`./lib/tokens`** — cross-scope dependency-injection tokens. **Not re-exported
   from the main barrel** — import via the dedicated subpath
   `@vultus/shared/domain/tokens` (mobile-only; keeps `@angular/core` out of the
@@ -54,6 +75,13 @@ The barrel (`src/index.ts`) re-exports:
     region's TMDB watch-provider catalog via the `getWatchProviders` callable
     without importing `@angular/fire/functions` or `apps/mobile`; mirrors
     `TRIGGER_SYNC` (spec 0060).
+  - `PLEX_CLIENT` — `PlexClient` provided by the shell (real CapacitorHttp on
+    native; a deterministic mock on web/dev/e2e); the settings slice injects it
+    without importing `apps/mobile` (spec 0073).
+  - `PLEX_SYNC_TRIGGER` — `() => Promise<void>` thunk the shell calls on boot +
+    resume to run one Plex sync (no-op when not linked / not native / already
+    running); the shell wires it over the settings slice's `PlexSyncService`
+    (spec 0073).
 
 `NotificationPayload` carries the data a notification renders from:
 `tmdbId: number` (the TMDB id of the affected title), `titleId`, `title`,

@@ -95,6 +95,7 @@ describe('converters — round-trip identity', () => {
       ],
       myProviderIds: [8, 337],
       hasPlex: false,
+      plexSync: null,
     };
     expect(dataToUser(simulateStored(userToData(user)) as never)).toEqual(user);
   });
@@ -111,6 +112,7 @@ describe('converters — round-trip identity', () => {
       fcmTokens: [],
       myProviderIds: [8],
       hasPlex: false,
+      plexSync: null,
     };
     const result = dataToUser(simulateStored(userToData(user)) as never);
     expect(result).toEqual(user);
@@ -129,6 +131,7 @@ describe('converters — round-trip identity', () => {
       fcmTokens: [],
       myProviderIds: [],
       hasPlex: false,
+      plexSync: null,
     };
     const result = dataToUser(simulateStored(userToData(user)) as never);
     expect(result).toEqual(user);
@@ -170,6 +173,7 @@ describe('converters — round-trip identity', () => {
       fcmTokens: [],
       myProviderIds: [8, 337, 119],
       hasPlex: false,
+      plexSync: null,
     };
     const result = dataToUser(simulateStored(userToData(user)) as never);
     expect(result).toEqual(user);
@@ -188,6 +192,7 @@ describe('converters — round-trip identity', () => {
       fcmTokens: [],
       myProviderIds: [],
       hasPlex: false,
+      plexSync: null,
     };
     const result = dataToUser(simulateStored(userToData(user)) as never);
     expect(result).toEqual(user);
@@ -227,6 +232,7 @@ describe('converters — round-trip identity', () => {
       fcmTokens: [],
       myProviderIds: [8],
       hasPlex: true,
+      plexSync: null,
     };
     const result = dataToUser(simulateStored(userToData(user)) as never);
     expect(result).toEqual(user);
@@ -245,6 +251,7 @@ describe('converters — round-trip identity', () => {
       fcmTokens: [],
       myProviderIds: [],
       hasPlex: false,
+      plexSync: null,
     };
     const result = dataToUser(simulateStored(userToData(user)) as never);
     expect(result).toEqual(user);
@@ -270,6 +277,79 @@ describe('converters — round-trip identity', () => {
     delete stored['hasPlex'];
     const result = dataToUser(stored as never);
     expect(result.hasPlex).toBe(false);
+  });
+
+  it('User: plexSync populated (linkedAt/lastSyncAt/serverName) round-trips', () => {
+    const user: User = {
+      region: 'NL',
+      notificationPrefs: {
+        episodeAired: true,
+        movieAvailable: true,
+        cameToPlatform: true,
+        deliveryHour: null,
+      },
+      fcmTokens: [],
+      myProviderIds: [8],
+      hasPlex: true,
+      plexSync: {
+        linkedAt: '2026-07-03T10:00:00.000Z',
+        lastSyncAt: '2026-07-03T11:30:00.000Z',
+        serverName: 'Home PMS',
+      },
+    };
+    const result = dataToUser(simulateStored(userToData(user)) as never);
+    expect(result).toEqual(user);
+    // plexSync is a plain nested object of ISO strings — no Timestamp coercion.
+    expect(result.plexSync).toEqual({
+      linkedAt: '2026-07-03T10:00:00.000Z',
+      lastSyncAt: '2026-07-03T11:30:00.000Z',
+      serverName: 'Home PMS',
+    });
+  });
+
+  it('User: plexSync null round-trips as null', () => {
+    const user: User = {
+      region: 'DE',
+      notificationPrefs: {
+        episodeAired: false,
+        movieAvailable: false,
+        cameToPlatform: false,
+        deliveryHour: null,
+      },
+      fcmTokens: [],
+      myProviderIds: [],
+      hasPlex: false,
+      plexSync: null,
+    };
+    const result = dataToUser(simulateStored(userToData(user)) as never);
+    expect(result).toEqual(user);
+    expect(result.plexSync).toBeNull();
+  });
+
+  it('User: backward-compat — legacy doc missing plexSync maps to null', () => {
+    // Simulates a doc written before spec 0073 (no plexSync field stored).
+    const user: User = {
+      region: 'GB',
+      notificationPrefs: {
+        episodeAired: true,
+        movieAvailable: false,
+        cameToPlatform: true,
+        deliveryHour: null,
+      },
+      fcmTokens: [],
+      myProviderIds: [8],
+      hasPlex: true,
+      plexSync: {
+        linkedAt: '2026-07-03T10:00:00.000Z',
+        lastSyncAt: null,
+        serverName: 'Home PMS',
+      },
+    };
+    const stored = simulateStored(userToData(user)) as Record<string, unknown>;
+    // Delete plexSync to simulate a pre-0073 stored doc.
+    delete stored['plexSync'];
+    const result = dataToUser(stored as never);
+    expect(result.plexSync).toBeNull();
   });
 
   it('WatchlistItem: addedAt round-trips; traktId null survives', () => {

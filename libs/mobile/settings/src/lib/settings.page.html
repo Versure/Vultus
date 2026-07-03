@@ -163,6 +163,86 @@
         }
       </div>
 
+      <!--
+        Plex Server card (spec 0073) — sits BETWEEN "My Providers" and the
+        Notification cards, matching Stitch screen
+        0e2bb1f198f04186b39e4a2604413417. At runtime EXACTLY ONE block renders,
+        gated on `plexLink.linked()`:
+        - disconnected: a whole-row tappable "Connect Plex Server" nav row →
+          `/tabs/settings/plex`;
+        - connected: server name + emerald "Connected" dot, "Last synced —
+          {relative}" with a "Sync now" text button (disabled + "Syncing…" while
+          `plexSync.running()`), and a "Disconnect" text button (error color).
+        The logo tile uses a --vultus-* surface token; the Plex brand colour is
+        only in /assets/plex-logo.svg (no hard-coded hex).
+      -->
+      <div class="settings-card settings-card--plex">
+        @if (!plexLink.linked()) {
+        <button
+          type="button"
+          class="plex-connect-row"
+          aria-label="Connect Plex Server"
+          (click)="openPlexConnect()"
+        >
+          <span class="plex-connect-row__lead">
+            <span class="plex-logo-tile" aria-hidden="true">
+              <img src="/assets/plex-logo.svg" alt="Plex" />
+            </span>
+            <span class="plex-connect-row__text">
+              <span class="plex-connect-row__title">Connect Plex Server</span>
+              <span class="plex-connect-row__caption"
+                >Sync library additions and watch history</span
+              >
+            </span>
+          </span>
+          <ion-icon
+            class="plex-connect-row__chevron"
+            name="chevron-forward"
+            aria-hidden="true"
+          ></ion-icon>
+        </button>
+        } @else {
+        <div class="plex-connected">
+          <div class="plex-connected__header">
+            <span class="plex-logo-tile" aria-hidden="true">
+              <img src="/assets/plex-logo.svg" alt="Plex" />
+            </span>
+            <div class="plex-connected__id">
+              <p class="plex-connected__name">
+                {{ plexLink.serverName() ?? 'Plex Server' }}
+              </p>
+              <div class="plex-connected__status">
+                <span class="plex-connected__dot" aria-hidden="true"></span>
+                <span class="plex-connected__status-label">Connected</span>
+              </div>
+            </div>
+          </div>
+          <div class="plex-connected__sync-row">
+            <p class="plex-connected__last-synced">
+              {{ plexLastSyncedLabel() }}
+            </p>
+            <button
+              type="button"
+              class="plex-text-button plex-text-button--primary"
+              [disabled]="plexSync.running()"
+              (click)="syncPlexNow()"
+            >
+              {{ plexSync.running() ? 'Syncing…' : 'Sync now' }}
+            </button>
+          </div>
+          <div class="plex-connected__footer">
+            <button
+              type="button"
+              class="plex-text-button plex-text-button--danger"
+              (click)="disconnectPlex()"
+            >
+              Disconnect
+            </button>
+          </div>
+        </div>
+        }
+      </div>
+
       <!-- Notifications row — `ion-toggle` carries the real behaviour. -->
       <div class="settings-card">
         <div class="settings-row">

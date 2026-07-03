@@ -1,6 +1,10 @@
 import { signal, type WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { provideIonicAngular } from '@ionic/angular/standalone';
+import { Router } from '@angular/router';
+import {
+  AlertController,
+  provideIonicAngular,
+} from '@ionic/angular/standalone';
 import {
   REGIONS,
   type CatalogProvider,
@@ -56,8 +60,23 @@ vi.mock('./sync-status-card.component', async () => {
   const { Component } = await import('@angular/core');
   @Component({ selector: 'lib-sync-status-card', template: '' })
   class StubSyncStatusCardComponent {}
-  return { SyncStatusCardComponent: StubSyncStatusCardComponent };
+  // The page also imports `relativeTime` from this module (spec 0073 Plex card
+  // "Last synced — {relative}"); provide a deterministic stub.
+  return {
+    SyncStatusCardComponent: StubSyncStatusCardComponent,
+    relativeTime: (): string => '12 minutes ago',
+  };
 });
+
+// Mock the Plex service modules so the page test stays off the
+// `@angular/fire/firestore` / `@capacitor/*` import chains (bare classes act as
+// DI tokens; instances are supplied via useValue in setup).
+vi.mock('./plex-link.service', () => ({
+  PlexLinkService: class PlexLinkService {},
+}));
+vi.mock('./plex-sync.service', () => ({
+  PlexSyncService: class PlexSyncService {},
+}));
 
 // `./settings.providers` (imported transitively by the page) statically imports
 // the real `SyncStatusService`, which pulls in `@angular/fire/firestore`. Mock
@@ -68,6 +87,36 @@ vi.mock('./sync-status.service', () => ({
 
 import { SettingsPage } from './settings.page';
 import { SettingsService } from './settings.service';
+import { PlexLinkService } from './plex-link.service';
+import { PlexSyncService } from './plex-sync.service';
+
+interface MockPlexLink {
+  linked: WritableSignal<boolean>;
+  serverName: WritableSignal<string | null>;
+  lastSyncAt: WritableSignal<string | null>;
+  loadState: ReturnType<typeof vi.fn>;
+  unlink: ReturnType<typeof vi.fn>;
+}
+interface MockPlexSync {
+  running: WritableSignal<boolean>;
+  sync: ReturnType<typeof vi.fn>;
+}
+
+function mockPlexLink(linked: boolean): MockPlexLink {
+  return {
+    linked: signal<boolean>(linked),
+    serverName: signal<string | null>('Vultus Media Server'),
+    lastSyncAt: signal<string | null>(new Date().toISOString()),
+    loadState: vi.fn().mockResolvedValue(undefined),
+    unlink: vi.fn().mockResolvedValue(undefined),
+  };
+}
+function mockPlexSync(): MockPlexSync {
+  return {
+    running: signal<boolean>(false),
+    sync: vi.fn().mockResolvedValue({ added: 0, updated: 0, skipped: 0 }),
+  };
+}
 
 function mockService(loaded: boolean, loadFailed = false): MockSettingsService {
   return {
@@ -94,12 +143,26 @@ function mockService(loaded: boolean, loadFailed = false): MockSettingsService {
   };
 }
 
-async function setupWithService(service: MockSettingsService) {
+async function setupWithService(
+  service: MockSettingsService,
+  opts: { plexLinked?: boolean } = {},
+) {
+  const plexLink = mockPlexLink(opts.plexLinked ?? false);
+  const plexSync = mockPlexSync();
+  const router = { navigate: vi.fn() };
+  const alertPresent = vi.fn().mockResolvedValue(undefined);
+  const alertController = {
+    create: vi.fn().mockResolvedValue({ present: alertPresent }),
+  };
   await TestBed.configureTestingModule({
     imports: [SettingsPage],
     providers: [
       provideIonicAngular(),
       { provide: SettingsService, useValue: service },
+      { provide: PlexLinkService, useValue: plexLink },
+      { provide: PlexSyncService, useValue: plexSync },
+      { provide: Router, useValue: router },
+      { provide: AlertController, useValue: alertController },
     ],
   })
     // The component declares providers: [SettingsService] for lazy-chunk scoping.
@@ -111,7 +174,16 @@ async function setupWithService(service: MockSettingsService) {
   fixture.detectChanges();
   await fixture.whenStable();
   const el = fixture.nativeElement as HTMLElement;
-  return { fixture, service, el };
+  return {
+    fixture,
+    service,
+    el,
+    plexLink,
+    plexSync,
+    router,
+    alertController,
+    alertPresent,
+  };
 }
 
 async function setup(loaded: boolean, loadFailed = false) {
@@ -365,5 +437,145 @@ describe('SettingsPage', () => {
     expect(service.toggleHasPlex).toHaveBeenCalledTimes(1);
     // It never calls the TMDB provider toggle.
     expect(service.toggleProvider).not.toHaveBeenCalled();
+  });
+
+  // ── Plex Server card (spec 0073) ─────────────────────────────────────────
+
+  it('loads the Plex link state on init', async () => {
+    const { plexLink } = await setup(true);
+    expect(plexLink.loadState).toHaveBeenCalledTimes(1);
+  });
+
+  it('disconnected: renders EXACT "Connect Plex Server" + caption, gated on !linked', async () => {
+    const { el } = await setupWithService(mockService(true), {
+      plexLinked: false,
+    });
+    const row = el.querySelector('.plex-connect-row');
+    expect(row).toBeTruthy();
+    expect(row?.querySelector('.plex-connect-row__title')?.textContent).toBe(
+      'Connect Plex Server',
+    );
+    expect(row?.querySelector('.plex-connect-row__caption')?.textContent).toBe(
+      'Sync library additions and watch history',
+    );
+    // Connected block is NOT rendered.
+    expect(el.querySelector('.plex-connected')).toBeFalsy();
+  });
+
+  it('disconnected: tapping the row navigates to /tabs/settings/plex', async () => {
+    const { el, router } = await setupWithService(mockService(true), {
+      plexLinked: false,
+    });
+    (el.querySelectorAll('.plex-connect-row')[0] as HTMLElement).click();
+    expect(router.navigate).toHaveBeenCalledWith(['/tabs/settings/plex']);
+  });
+
+  it('connected: renders the server name, EXACT "Connected", "Sync now", "Disconnect"', async () => {
+    const { el } = await setupWithService(mockService(true), {
+      plexLinked: true,
+    });
+    const block = el.querySelector('.plex-connected');
+    expect(block).toBeTruthy();
+    expect(
+      block?.querySelector('.plex-connected__name')?.textContent,
+    ).toContain('Vultus Media Server');
+    expect(
+      block?.querySelector('.plex-connected__status-label')?.textContent,
+    ).toBe('Connected');
+    expect(
+      block?.querySelector('.plex-text-button--primary')?.textContent?.trim(),
+    ).toBe('Sync now');
+    expect(
+      block?.querySelector('.plex-text-button--danger')?.textContent?.trim(),
+    ).toBe('Disconnect');
+    // Disconnected row is NOT rendered.
+    expect(el.querySelector('.plex-connect-row')).toBeFalsy();
+  });
+
+  it('connected: "Sync now" calls PlexSyncService.sync()', async () => {
+    const { el, plexSync } = await setupWithService(mockService(true), {
+      plexLinked: true,
+    });
+    (
+      el.querySelectorAll('.plex-text-button--primary')[0] as HTMLElement
+    ).click();
+    expect(plexSync.sync).toHaveBeenCalledTimes(1);
+  });
+
+  it('connected: "Sync now" disabled and shows "Syncing…" while running()', async () => {
+    const service = mockService(true);
+    const { el, plexSync, fixture } = await setupWithService(service, {
+      plexLinked: true,
+    });
+    plexSync.running.set(true);
+    fixture.detectChanges();
+    const button = el.querySelectorAll(
+      '.plex-text-button--primary',
+    )[0] as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(button.textContent?.trim()).toBe('Syncing…');
+  });
+
+  it('connected: "Disconnect" opens a confirm alert (unlink runs from its handler)', async () => {
+    const { el, alertController } = await setupWithService(mockService(true), {
+      plexLinked: true,
+    });
+    (
+      el.querySelectorAll('.plex-text-button--danger')[0] as HTMLElement
+    ).click();
+    await Promise.resolve();
+    expect(alertController.create).toHaveBeenCalledTimes(1);
+    const arg = alertController.create.mock.calls[0][0] as {
+      buttons: { text: string; handler?: () => void }[];
+    };
+    const disconnectBtn = arg.buttons.find((b) => b.text === 'Disconnect');
+    expect(disconnectBtn).toBeTruthy();
+  });
+
+  it('connected: confirming the alert calls PlexLinkService.unlink()', async () => {
+    const { el, alertController, plexLink } = await setupWithService(
+      mockService(true),
+      { plexLinked: true },
+    );
+    (
+      el.querySelectorAll('.plex-text-button--danger')[0] as HTMLElement
+    ).click();
+    await Promise.resolve();
+    const arg = alertController.create.mock.calls[0][0] as {
+      buttons: { text: string; handler?: () => void }[];
+    };
+    const disconnectBtn = arg.buttons.find((b) => b.text === 'Disconnect');
+    disconnectBtn?.handler?.();
+    expect(plexLink.unlink).toHaveBeenCalledTimes(1);
+  });
+
+  it('connected: renders "Not synced yet" when lastSyncAt is null', async () => {
+    const service = mockService(true);
+    const link = mockPlexLink(true);
+    link.lastSyncAt.set(null);
+    const plexSync = mockPlexSync();
+    await TestBed.configureTestingModule({
+      imports: [SettingsPage],
+      providers: [
+        provideIonicAngular(),
+        { provide: SettingsService, useValue: service },
+        { provide: PlexLinkService, useValue: link },
+        { provide: PlexSyncService, useValue: plexSync },
+        { provide: Router, useValue: { navigate: vi.fn() } },
+        {
+          provide: AlertController,
+          useValue: { create: vi.fn().mockResolvedValue({ present: vi.fn() }) },
+        },
+      ],
+    })
+      .overrideComponent(SettingsPage, { set: { providers: [] } })
+      .compileComponents();
+    const fixture = TestBed.createComponent(SettingsPage);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(
+      el.querySelector('.plex-connected__last-synced')?.textContent?.trim(),
+    ).toBe('Not synced yet');
   });
 });

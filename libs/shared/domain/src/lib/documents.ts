@@ -23,6 +23,22 @@ export interface NotificationPrefs {
   deliveryHour: number | null;
 }
 
+/** Per-user Plex sync cursor + link metadata (spec 0073). The X-Plex-Token is
+ *  NOT stored here — it lives on-device in @capacitor/preferences. This holds
+ *  only the multi-device-safe additions cursor + display info. Absent/null =
+ *  never linked (or unlinked). */
+export interface PlexSyncMeta {
+  /** ISO 8601 — when the current device linked this server. */
+  linkedAt: string;
+  /** ISO 8601 — completion time of the last successful sync; null until the
+   *  first sync completes after linking. THE ADDITIONS CURSOR: items with Plex
+   *  `addedAt` newer than this are "new". Initialized to `linkedAt` at link
+   *  time (no backfill). */
+  lastSyncAt: string | null;
+  /** Human-readable PMS name for the connected-state UI; null if unknown. */
+  serverName: string | null;
+}
+
 export interface User {
   region: Region;
   notificationPrefs: NotificationPrefs;
@@ -31,11 +47,15 @@ export interface User {
    *  later manual "provider" (Plex, spec 0061) can be layered in without a
    *  migration. Default []; legacy docs missing it → [] via the converter. */
   myProviderIds: number[];
-  /** Whether the user uses a self-hosted Plex server (spec 0061). Gates the
-   *  per-title "watching via Plex" toggle in title-detail. A separate boolean —
-   *  NOT a member of myProviderIds (Plex has no TMDB id). Default false; legacy
-   *  docs missing it → false via the converter. */
+  /** Whether the user uses a self-hosted Plex server (spec 0061). Set true on
+   *  Plex link (spec 0073). Gates the per-title "watching via Plex" toggle in
+   *  title-detail. A separate boolean — NOT a member of myProviderIds (Plex has
+   *  no TMDB id). Default false; legacy docs missing it → false via the
+   *  converter. */
   hasPlex: boolean;
+  /** Plex sync cursor + link metadata (spec 0073). OPTIONAL/nullable so legacy
+   *  docs and never-linked users need no migration; coalesced `?? null`. */
+  plexSync?: PlexSyncMeta | null;
 }
 
 // provider-catalog/{region} — global, function-written cache (PLAN §4).

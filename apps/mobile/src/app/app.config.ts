@@ -7,6 +7,7 @@ import {
 } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { provideIonicAngular } from '@ionic/angular/standalone';
+import { Capacitor } from '@capacitor/core';
 import { initializeApp, provideFirebaseApp } from '@angular/fire/app';
 import { connectAuthEmulator, getAuth, provideAuth } from '@angular/fire/auth';
 import {
@@ -24,11 +25,18 @@ import {
 import {
   AUTH_UID,
   GET_WATCH_PROVIDERS,
+  PLEX_CLIENT,
+  PLEX_SYNC_TRIGGER,
   TRIGGER_SYNC,
 } from '@vultus/shared/domain/tokens';
 import type { CatalogProvider, Region } from '@vultus/shared/domain';
 import { TMDB_SEARCH_CONFIG } from '@vultus/mobile/search';
 import { TMDB_DETAIL_CONFIG } from '@vultus/mobile/title-detail';
+import {
+  CapacitorHttpPlexClient,
+  MockPlexClient,
+  PlexSyncService,
+} from '@vultus/mobile/settings';
 import { appRoutes } from './app.routes';
 import { environment } from '../environments/environment';
 import {
@@ -130,6 +138,38 @@ export const appConfig: ApplicationConfig = {
         >(fns, 'getWatchProviders');
         return (region: Region) =>
           callable({ region }).then((r) => r.data.providers);
+      },
+    },
+    // Provide the Plex client as a scope:shared token (spec 0073). This is the
+    // SINGLE real-vs-mock selector (no project.json fileReplacements, no
+    // plex.providers.ts): the real CapacitorHttp client only works on-device
+    // (the PMS sends no CORS headers), so every non-native surface
+    // (web / dev-server / e2e / serve-mock) gets the deterministic mock — the
+    // same "native vs not" gate initStatusBar / NotificationHandlerService use.
+    // Both client classes are dependency-free plain classes → `new` is correct.
+    {
+      provide: PLEX_CLIENT,
+      useFactory: () =>
+        Capacitor.isNativePlatform()
+          ? new CapacitorHttpPlexClient()
+          : new MockPlexClient(),
+    },
+    // Provide the Plex sync trigger as a scope:shared thunk (spec 0073) so the
+    // shell (App) can fire a sync on boot + resume without importing the
+    // settings slice's service graph the wrong way. THE NATIVE GUARD LIVES HERE
+    // (a no-op off-native), NOT inside PlexSyncService.sync() — so the settings
+    // page's "Sync now" button can still drive a mock sync on serve-mock.
+    // PlexSyncService is providedIn:'root', so this root factory resolves it
+    // (and its PLEX_CLIENT dep) from the root injector — the reason T3 made it
+    // root-provided (page-provided services are invisible here).
+    {
+      provide: PLEX_SYNC_TRIGGER,
+      useFactory: () => {
+        const svc = inject(PlexSyncService);
+        return () =>
+          Capacitor.isNativePlatform()
+            ? svc.sync().then(() => undefined)
+            : Promise.resolve();
       },
     },
     // TMDB search config (spec 0013) — provided at root from `environment.tmdb`

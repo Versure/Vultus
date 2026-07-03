@@ -114,6 +114,7 @@ describe('OnboardingService', () => {
       fcmTokens: [],
       myProviderIds: [],
       hasPlex: false,
+      plexSync: null,
     });
     expect(opts).toEqual({ merge: true });
   });
