@@ -547,12 +547,12 @@ These you have to do yourself; Claude Code can't.
       (package `app.vultus.mobile`; register it if not listed yet) →
       Download `google-services.json` → place at
       **`android/app/google-services.json`**. This file is **gitignored, not
-      committed** (spec 0026 decision 4; `android/.gitignore:67`) — it is public
-      client config (no private key), but each machine provisions it once from
-      the console, and CI decodes it from the base64 `GOOGLE_SERVICES_JSON`
-      GitHub secret before the native build
-      (`tools/scripts/inject-mobile-env.mjs --check-native`). Without this file
-      the app boots but Firebase + FCM will not initialise on-device.
+      committed** (spec 0026 decision 4; `android/.gitignore:67`) — public client
+      config (no private key), provisioned per-machine once from the console. The
+      local on-device build (`mobile:android-usb`) asserts its presence via
+      `tools/scripts/inject-mobile-env.mjs --check-native` (spec 0038); the web
+      CI build does not use it. Without this file the app boots but Firebase + FCM
+      will not initialise on-device.
 
 ---
 
