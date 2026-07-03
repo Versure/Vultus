@@ -2,7 +2,7 @@
 number: 0070
 slug: audit-docs-accuracy
 title: Fix the audit-docs skill — stale "must-detect" example and the phantom scheduled runner
-status: approved # draft | approved | implementing | done
+status: done # draft | approved | implementing | done
 slices: []
 scopes: []
 created: 2026-07-02
