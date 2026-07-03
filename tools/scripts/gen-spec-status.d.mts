@@ -63,8 +63,14 @@ export function parseSpecFrontmatter(
 export function renderStatusMarkdown(entries: SpecEntry[]): string;
 
 /**
+ * Cross-file integrity guard: throws if two entries share the same
+ * `Number(number)` (the error names the duplicate number and both slugs). Pure.
+ */
+export function assertSpecIntegrity(entries: SpecEntry[]): void;
+
+/**
  * List, read, and parse every spec file matching `SPEC_GLOB` in `specsDir`.
  * Impure (reads the filesystem). Returns entries in a stable order (sorted by
- * basename).
+ * basename). Runs `assertSpecIntegrity` over the parsed set.
  */
 export function readAllSpecs(specsDir: string): SpecEntry[];
