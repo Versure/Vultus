@@ -2,7 +2,7 @@
 number: 0067
 slug: ai-setup-instruction-corrections
 title: Correct drifted/incorrect standing-instruction content in agents, PLAN.md, and CLAUDE.md
-status: approved # draft | approved | implementing | done
+status: implementing # draft | approved | implementing | done
 slices: []
 scopes: []
 created: 2026-07-02
