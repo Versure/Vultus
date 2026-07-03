@@ -16,9 +16,10 @@ import type {
  * works on-device — web / dev-server / e2e / serve-mock get `MockPlexClient`
  * (selected by the shell's `PLEX_CLIENT` factory on `!isNativePlatform()`).
  *
- * Auth is the plex.tv PIN-link flow (decision 2): `requestPin` POSTs a strong
- * PIN, the user enters the 4-char `code` at plex.tv/link, `checkPin` polls until
- * an `authToken` appears. Server discovery (`discoverServer`) reads
+ * Auth is the plex.tv PIN-link flow (decision 2): `requestPin` requests a PIN
+ * with `strong=false` so plex.tv returns the 4-character `code` the user enters
+ * at plex.tv/link, `checkPin` polls until an `authToken` appears. Server
+ * discovery (`discoverServer`) reads
  * `/api/v2/resources`, prefers an OWNED server with a LOCAL connection
  * (`includeRelay=0`), and returns its local base URL + access token.
  *
@@ -107,7 +108,7 @@ export class CapacitorHttpPlexClient implements PlexClient {
     const res = await CapacitorHttp.post({
       url: `${PLEX_TV}/pins`,
       headers: plexHeaders({ 'Content-Type': 'application/json' }),
-      params: { strong: 'true' },
+      params: { strong: 'false' },
     });
     const body = asRecord(res.data);
     return {
