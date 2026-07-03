@@ -55,6 +55,11 @@ architecture and decisions; read it before non-trivial work.
 - Commands: `pnpm nx test`, `pnpm nx lint` (includes Sheriff), `pnpm nx build`,
   `pnpm nx e2e`, `firebase emulators:start`. Prefer
   `nx affected -t <target> --base=main`.
+  - **Emulator can't run in-session (environment limitation, not a repo bug).**
+    The Firestore emulator — or any Java NIO loopback server — **cannot run under
+    Claude Code tools in this environment**; emulator-dependent gates (including
+    `firebase emulators:start` and the Playwright e2e gate) run in CI or the
+    user's own terminal — don't attempt them in-session.
 - **Run the mobile app** via one of five named scenario targets (not the raw
   `pnpm nx serve`, which the e2e web server owns) — pick by what you need:
   - `pnpm nx run mobile:serve-mock` — UI/feature work with **no backend
@@ -68,9 +73,9 @@ architecture and decisions; read it before non-trivial work.
   - `pnpm nx run mobile:android-usb` — on-device testing over USB (build +
     install + launch).
   - `serve-prod-debug` / `serve-prod` / `android-usb` **require a populated
-    `.env.local`** — `inject-mobile-env.mjs` runs first and \*\*fails loudly (exit
-    1. naming the missing key\*\_ if any `TMDB_API_KEY` / `FIREBASE\__` value is
-       absent.
+    `.env.local`** — `inject-mobile-env.mjs` runs first and **fails loudly (exit
+    1, naming the missing key)** if any `TMDB_API_KEY` / `FIREBASE_*` value is
+    absent.
 - **Definition of done** for any PR: typecheck + lint/Sheriff + unit + component
   (for non-trivial UI) + build + e2e (affected critical flows) all green, and the
   changed slice has tests for its logic. Tooling-absent gates degrade gracefully —
@@ -134,8 +139,9 @@ architecture and decisions; read it before non-trivial work.
 
 This repo is built through a spec-first, mostly-autonomous workflow. **There are
 no GitHub issues** — a spec file (`docs/specs/NNNN-slug.md`), reviewed and merged
-as a PR, is the unit of work. This **supersedes the issue-driven model in
-PLAN §5–§6** (the architecture/DoD there remain authoritative).
+as a PR, is the unit of work. This section restates the spec-driven workflow that
+**PLAN §5 already documents**, kept here for the agent's immediate context (the
+architecture/DoD in PLAN remain authoritative).
 
 Five skills drive it (each is self-contained — its mechanics live in its
 `SKILL.md`): `/create-spec` → review the spec PR → `/rework-spec` → merge →
@@ -145,3 +151,6 @@ Five skills drive it (each is self-contained — its mechanics live in its
 subagents (`spec-author`, `spec-reviewer`, `feature-implementer`,
 `backend-engineer`, `frontend-engineer`, `infrastructure-engineer`,
 `feature-reviewer`, `qa-runner`) carry their own behavior rules.
+
+Two **maintenance skills** sit outside that spec loop: `/deploy-functions` (ship
+the Cloud Functions to Firebase) and `/audit-docs` (documentation drift audit).
