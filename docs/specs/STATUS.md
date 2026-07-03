@@ -10,10 +10,10 @@
 
 # Spec status ledger
 
-Total specs: 68
+Total specs: 72
 
 - done: 66
-- approved: 1
+- approved: 5
 - implementing: 1
 
 | # | slug | title | status | slices | scopes |
@@ -86,3 +86,7 @@ Total specs: 68
 | 66 | spec-numbering-integrity | Fix spec-number allocation (branch-based scan), repair the landed 0043/0046 collision, and guard against recurrence | done | — | — |
 | 67 | ai-setup-instruction-corrections | Correct drifted/incorrect standing-instruction content in agents, PLAN.md, and CLAUDE.md | done | — | — |
 | 68 | ai-setup-security-hardening | Harden the AI setup — narrow secret-copy allows, add deny rules, treat external text as untrusted, tighten CI | implementing | — | — |
+| 69 | guard-hook-robustness | Harden the slice-edit guard hook — crash-safety, self-test, exemptions, and documented bypass | approved | — | — |
+| 70 | audit-docs-accuracy | Fix the audit-docs skill — stale "must-detect" example and the phantom scheduled runner | approved | — | — |
+| 71 | normative-text-dedup | De-duplicate copy-pasted normative rules (Stitch recipe, worktree snippet, design hexes, Windows E-notes) | approved | — | — |
+| 72 | plan-accuracy-refresh | Refresh docs/PLAN.md to eliminate accumulated drift against the shipped codebase | approved | — | — |
