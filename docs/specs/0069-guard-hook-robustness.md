@@ -2,7 +2,7 @@
 number: 0069
 slug: guard-hook-robustness
 title: Harden the slice-edit guard hook — crash-safety, self-test, exemptions, and documented bypass
-status: implementing # draft | approved | implementing | done
+status: done # draft | approved | implementing | done
 slices: []
 scopes: []
 created: 2026-07-02
