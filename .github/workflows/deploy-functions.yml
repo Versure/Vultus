@@ -72,13 +72,33 @@ jobs:
       - name: Deploy preflight
         run: pnpm nx run functions:deploy-preflight
 
+      # Validate the workflow_dispatch `only` input BEFORE it ever reaches a
+      # shell command line. The input is passed through an intermediate env var
+      # and the guard matches the ENV VAR (never re-interpolates ${{ inputs.only }}
+      # into the shell — doing so would reintroduce the very Actions-injection this
+      # step prevents). Reject anything that is not a bare `functions` or a single
+      # `functions:<target>` selector.
+      - name: Validate deploy scope
+        env:
+          ONLY: ${{ inputs.only }}
+        run: |
+          if [[ ! "$ONLY" =~ ^functions(:[A-Za-z0-9_-]+)?$ ]]; then
+            echo "::error::Invalid deploy scope '$ONLY'. Expected 'functions' or 'functions:<target>' (letters/digits/_/- only)."
+            exit 1
+          fi
+          echo "Deploy scope validated: $ONLY"
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
+      # `--only "$ONLY"` reads the validated env var, NOT ${{ inputs.only }} — no
+      # workflow input is interpolated directly into this shell line.
       - name: Deploy to Firebase
-        run: pnpm exec firebase deploy --only ${{ inputs.only }} --project vultus-cab62 --non-interactive
+        env:
+          ONLY: ${{ inputs.only }}
+        run: pnpm exec firebase deploy --only "$ONLY" --project vultus-cab62 --non-interactive
 
       # After deploy, confirm the syncTitles Cloud Run service is publicly
       # invokable. gen2 onRequest functions are Cloud Run services, PRIVATE by

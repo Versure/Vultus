@@ -13,7 +13,8 @@
 Total specs: 68
 
 - done: 66
-- approved: 2
+- approved: 1
+- implementing: 1
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -84,4 +85,4 @@ Total specs: 68
 | 65 | worktree-dependency-bootstrap | Bootstrap dependencies in the implement-feature worktree (fresh worktrees have no node_modules) | done | — | — |
 | 66 | spec-numbering-integrity | Fix spec-number allocation (branch-based scan), repair the landed 0043/0046 collision, and guard against recurrence | done | — | — |
 | 67 | ai-setup-instruction-corrections | Correct drifted/incorrect standing-instruction content in agents, PLAN.md, and CLAUDE.md | done | — | — |
-| 68 | ai-setup-security-hardening | Harden the AI setup — narrow secret-copy allows, add deny rules, treat external text as untrusted, tighten CI | approved | — | — |
+| 68 | ai-setup-security-hardening | Harden the AI setup — narrow secret-copy allows, add deny rules, treat external text as untrusted, tighten CI | implementing | — | — |

@@ -85,4 +85,26 @@ empty` because of the worktree's `node_modules`. On any failure, fall back:
   cleanup was skipped). Report them with their apparent branch. **Do not delete
   them** — ask the user whether to remove each (and only after confirming its PR
   is merged). If the `Vultus-worktrees/` parent is now empty, offer to remove it.
+- **Orphans hold seeded secrets (spec 0068).** Every feature worktree is seeded
+  with **unencrypted copies** of three secret files (spec 0040 seed):
+  - `.env.local`
+  - `apps/mobile/src/environments/environment.generated.ts`
+  - `android/app/google-services.json`
+
+  Orphaned worktrees are deliberately never auto-deleted, so these copies
+  **accumulate on disk unencrypted**. Flag this in the orphan report.
+
+- **Cheap "purge seeds" option.** For each orphan, offer to delete **just those
+  three seeded files** (by path) while leaving the rest of the worktree intact.
+  This is **safe even for unmerged work** — the seeds are regenerable local
+  copies, not the orphan's real changes — so it does **not** require the
+  merged-PR gate that removing the whole worktree does. Delete by path only; **do
+  not read or print the contents** of these files. Example (PowerShell):
+  ```powershell
+  foreach ($f in @(
+    "$orphan/.env.local",
+    "$orphan/apps/mobile/src/environments/environment.generated.ts",
+    "$orphan/android/app/google-services.json"
+  )) { if (Test-Path $f) { Remove-Item -Force $f } }
+  ```
 - Summarize what was removed and anything left for the user to decide.

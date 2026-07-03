@@ -1,0 +1,19 @@
+# CODEOWNERS — visibility flag for the secret-handling surface (spec 0068).
+#
+# The CI workflows inject repository secrets (TMDB_API_KEY, the FIREBASE_* web
+# config, FIREBASE_SERVICE_ACCOUNT) and tools/scripts/inject-mobile-env.mjs is the
+# single mechanism that materializes those secrets into a build. A change to
+# either is security-relevant and should be reviewed deliberately.
+#
+# IMPORTANT — this only REQUESTS review, it does not enforce it. CODEOWNERS is a
+# hard gate ONLY if branch protection has "Require review from Code Owners"
+# enabled on the default branch. On this (solo) repo it currently functions as a
+# visibility flag: PRs touching these paths auto-request the owner as reviewer.
+# Enabling the branch-protection toggle is the optional other half that turns this
+# into a blocking gate.
+
+# CI/CD workflows (secret injection, deploy auth).
+/.github/workflows/**            @Versure
+
+# The build-time secret-injection mechanism.
+/tools/scripts/inject-mobile-env.mjs   @Versure
