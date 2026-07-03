@@ -10,10 +10,10 @@
 
 # Spec status ledger
 
-Total specs: 69
+Total specs: 70
 
 - done: 66
-- approved: 3
+- approved: 4
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -86,3 +86,4 @@ Total specs: 69
 | 67 | ai-setup-instruction-corrections | Correct drifted/incorrect standing-instruction content in agents, PLAN.md, and CLAUDE.md | done | — | — |
 | 68 | ai-setup-security-hardening | Harden the AI setup — narrow secret-copy allows, add deny rules, treat external text as untrusted, tighten CI | approved | — | — |
 | 69 | guard-hook-robustness | Harden the slice-edit guard hook — crash-safety, self-test, exemptions, and documented bypass | approved | — | — |
+| 70 | audit-docs-accuracy | Fix the audit-docs skill — stale "must-detect" example and the phantom scheduled runner | approved | — | — |
