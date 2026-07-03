@@ -96,33 +96,42 @@ Procedure:
    code) that contradicts it, and a one-line statement of the contradiction.
 3. Type = **prescriptive / needs-a-decision**, severity **HIGH**.
 
-### Canonical worked example (must be detected)
+### Illustrative example of the class (historical — do not expect against the current repo)
 
-**Finding:** PLAN §5 "The agentic workflow" and §6 still describe the
-**GitHub-issue task-management model** — every task is a GitHub issue, issues
-sized to one session, `.github/ISSUE_TEMPLATE/` templates, PR "references issue",
-branch convention `feat/<issue-number>-<slug>` — as the live process. For
-example, PLAN §5 "Task management — issue-driven" states:
+The following is a **historical illustration** of what a class-2 finding looks
+like — it is **not** a current expectation. **This specific PLAN §5–§6
+issue-workflow drift was fixed on 2026-07-01** (`grep "Every task is a GitHub
+issue" docs/PLAN.md` now returns nothing; PLAN §5 is now "Task management —
+spec-driven" and §6 is marked "Historical"). **Do not expect this instance
+against the current repo** — an agent that reports it today is fabricating a
+false positive. It is retained only to show the _shape_ of a class-2 finding.
+
+_As it stood before the fix,_ the finding read: PLAN §5 and §6 still described
+the **GitHub-issue task-management model** — every task is a GitHub issue,
+issues sized to one session, `.github/ISSUE_TEMPLATE/` templates, PR "references
+issue", branch convention `feat/<issue-number>-<slug>` — as the live process.
+For example, PLAN §5 "Task management — issue-driven" stated:
 
 > Every task is a GitHub issue. The issue is the unit of work; the PR closes the
 > issue.
 
-**Higher authority that contradicts it:** `docs/specs/README.md` (top): "This
+**Higher authority that contradicted it:** `docs/specs/README.md` (top): "This
 **spec-file workflow supersedes the GitHub-issue task management described in
 `docs/PLAN.md` §5–§6** — there are no GitHub issues; the spec file (reviewed and
-merged as a PR) is the unit of work." PLAN's own in-place "Superseded note
-(2026-06-16)" (around `docs/PLAN.md:250–260`) says the same.
+merged as a PR) is the unit of work."
 
-**Why this is drift, reported confidently:** the finding **IS the retained
-contradictory body content** — the obsolete issue-workflow prose still present
-**verbatim** in PLAN §5–§6 — **NOT the absence of an annotation**. PLAN §5
-already carries its own "Superseded note", yet the contradicting body text
-remains below it. The existing annotation does **not** resolve the drift; the
-obsolete body is the drift. Report it confidently as a class-2 finding (type
-prescriptive/needs-a-decision, severity HIGH), naming PLAN §5/§6, quoting the
-issue-workflow prose, and citing `docs/specs/README.md` as the authority. Do
-**not** second-guess whether the "superseded" note already fixes it — it does
-not — and do **not** rewrite PLAN.
+**What made it a class-2 finding (the general teaching):** a class-2 finding is
+the **retained contradictory body content** — obsolete prose still present
+**verbatim** in PLAN that contradicts a higher-authority source — **NOT the
+absence of an annotation**. In the historical case, PLAN §5 already carried a
+"Superseded note", yet the contradicting body text still remained below it; the
+existing annotation did **not** resolve the drift — the obsolete body was the
+drift. When you find a _live_ instance of this class, record it as a class-2
+finding (type prescriptive/needs-a-decision, severity HIGH), naming the PLAN
+section, quoting the contradicting prose, and citing the higher-authority
+source — and never rewrite PLAN. But only report a class-2 finding you have
+**verified against the current repo**; do not assert this now-removed instance
+as current.
 
 ## 4. Report layout (emit these sections in this order)
 
@@ -139,8 +148,11 @@ Markdown. The same layout whether printed (interactive) or written to
    Type for the whole section: descriptive/safe-to-fix.
 4. **PLAN narrative vs reality** — a list; each entry names the PLAN section,
    quotes the contradicting prose, names the higher-authority source, and states
-   the contradiction. Type: prescriptive/needs-a-decision. (The §3 canonical
-   example is the expected entry against the current repo.)
+   the contradiction. Type: prescriptive/needs-a-decision. (The §3 example is a
+   **historical illustration of the class**, not an expected entry — its PLAN
+   §5–§6 instance was fixed on 2026-07-01 and must **not** be expected against
+   the current repo. Only list class-2 findings you verify against the repo as
+   it stands.)
 5. **Summary** — counts **by severity** (BLOCKER > HIGH > MEDIUM) and **by type**
    (descriptive/safe-to-fix | prescriptive/needs-a-decision), plus an explicit
    overall verdict line: **`DRIFT FOUND`** or **`CLEAN`**. This verdict drives
@@ -161,8 +173,9 @@ audited doc**.
 **Mode detection** — decide interactive vs headless in this order:
 
 1. **`--mode` override first.** If `--mode interactive` or `--mode headless` is
-   passed, honor it. The scheduled routine always passes `--mode headless`, so
-   the load-bearing path never depends on a probe.
+   passed, honor it. A headless run — e.g. a not-yet-wired scheduled routine —
+   should pass `--mode headless`, so the load-bearing path never depends on a
+   probe.
 2. **Else read `AskUserQuestion`-availability as the interactivity signal** — the
    same judgment `create-spec` step 1 makes about its run context (interactive
    session vs autonomous loop/scheduler). This is **NOT** a programmatic
@@ -198,15 +211,21 @@ audited doc**.
 
 **Which mode-detection failure is safer.** A false **headless** in a human's
 interactive run opens an **unwanted draft PR** (visible noise the user must
-close). A false **interactive** in a scheduled routine **prints to a transcript
-nobody reads and loses the finding** (silent miss). The scheduled routine
-eliminates this risk by always passing `--mode headless`. For the residual
-ambiguous case (no `--mode`, inconclusive signal), default to **interactive** —
-the harmless failure.
+close). A false **interactive** in a headless run **prints to a transcript
+nobody reads and loses the finding** (silent miss). A headless run eliminates
+this risk by passing `--mode headless` explicitly. For the residual ambiguous
+case (no `--mode`, inconclusive signal), default to **interactive** — the
+harmless failure.
 
-## 6. How to schedule this (documentation only — no wiring here)
+## 6. How to schedule this (optional, not-yet-wired — documentation only)
 
-Intended weekly-routine invocation, from a fresh headless clone:
+**No scheduled workflow exists today.** Nothing in `.github/` invokes this
+skill headlessly — invocation is **manual** (`/audit-docs`). This section
+documents how one _could_ optionally wire a headless routine; it does not
+describe an active one. To actually schedule it, a human would add a workflow
+(none exists).
+
+The optional headless invocation, from a fresh headless clone, would be:
 
 ```
 /audit-docs --mode headless
@@ -215,10 +234,11 @@ Intended weekly-routine invocation, from a fresh headless clone:
 The committed `.claude/skills/audit-docs/` files are available in that fresh
 clone, and committed docs are the only durable state — so the skill survives
 headless with git + file reads (+ `gh` for the PR) only. Passing `--mode
-headless` explicitly makes the scheduled path deterministic (it never depends on
-the interactivity probe). On a clean week it no-ops (no PR); it PRs only when
-drift is found, so a weekly routine does not train the user to ignore it.
+headless` explicitly makes the headless path deterministic (it never depends on
+the interactivity probe). On a clean run it no-ops (no PR); it PRs only when
+drift is found, so a periodic routine would not train the user to ignore it.
 
-**Actual cron / GitHub Actions scheduling wiring is out of scope** — a human
-sets up the schedule (e.g. a scheduled headless run) that invokes the command
-above. This note only documents the intended invocation, not the plumbing.
+**Actual cron / GitHub Actions scheduling wiring does not exist and is out of
+scope** — to set up such a schedule a human would add a workflow (none exists
+today) that invokes the command above. This note only documents the intended
+invocation, not any plumbing.
