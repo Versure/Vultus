@@ -543,12 +543,15 @@ These you have to do yourself; Claude Code can't.
 - [ ] Install Node.js LTS, Android Studio (for Capacitor builds), Firebase
       CLI (`npm install -g firebase-tools`).
 - [x] **Download `google-services.json`** from the Firebase console for project
-      **`vultus-cab62`** (committed at `android/app/google-services.json`):
-      Project settings → Your apps → Android app
+      **`vultus-cab62`**: Project settings → Your apps → Android app
       (package `app.vultus.mobile`; register it if not listed yet) →
-      Download `google-services.json` → place at **`android/app/google-services.json`**
-      and **commit it** (it is public client config, not a secret — no private
-      key; committing is the standard Firebase Android setup). Without this file
+      Download `google-services.json` → place at
+      **`android/app/google-services.json`**. This file is **gitignored, not
+      committed** (spec 0026 decision 4; `android/.gitignore:67`) — it is public
+      client config (no private key), but each machine provisions it once from
+      the console, and CI decodes it from the base64 `GOOGLE_SERVICES_JSON`
+      GitHub secret before the native build
+      (`tools/scripts/inject-mobile-env.mjs --check-native`). Without this file
       the app boots but Firebase + FCM will not initialise on-device.
 
 ---
