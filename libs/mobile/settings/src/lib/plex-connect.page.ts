@@ -1,4 +1,10 @@
-import { Component, type OnDestroy, type OnInit, inject } from '@angular/core';
+import {
+  Component,
+  type OnDestroy,
+  type OnInit,
+  inject,
+  signal,
+} from '@angular/core';
 import {
   IonButton,
   IonButtons,
@@ -10,7 +16,12 @@ import {
   NavController,
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
-import { arrowBack, checkmarkCircle, shieldCheckmark } from 'ionicons/icons';
+import {
+  arrowBack,
+  checkmarkCircle,
+  copyOutline,
+  shieldCheckmark,
+} from 'ionicons/icons';
 import { PlexLinkService } from './plex-link.service';
 import { PlexSyncService } from './plex-sync.service';
 
@@ -47,8 +58,12 @@ export class PlexConnectPage implements OnInit, OnDestroy {
   private readonly sync = inject(PlexSyncService);
   private readonly nav = inject(NavController);
 
+  /** Transient "Copied" confirmation, auto-cleared ~2s after a successful copy. */
+  protected readonly copied = signal(false);
+  private copiedTimer: ReturnType<typeof setTimeout> | null = null;
+
   constructor() {
-    addIcons({ arrowBack, checkmarkCircle, shieldCheckmark });
+    addIcons({ arrowBack, checkmarkCircle, copyOutline, shieldCheckmark });
   }
 
   ngOnInit(): void {
@@ -64,6 +79,11 @@ export class PlexConnectPage implements OnInit, OnDestroy {
     if (this.link.stage() !== 'connected') {
       this.link.cancel();
     }
+    // Drop any pending "Copied" reset so no timer fires after teardown.
+    if (this.copiedTimer !== null) {
+      clearTimeout(this.copiedTimer);
+      this.copiedTimer = null;
+    }
   }
 
   /** Back arrow / Cancel — stop polling and pop the route. */
@@ -75,6 +95,34 @@ export class PlexConnectPage implements OnInit, OnDestroy {
   /** "Get a new code" — request a fresh PIN. */
   protected regenerate(): void {
     void this.link.regenerateCode();
+  }
+
+  /**
+   * Copy the current 4-char link code to the clipboard via the WEB Clipboard
+   * API (`navigator.clipboard`) — this works in the Capacitor Android WebView
+   * (secure `https` scheme + the tap's user gesture) and in serve-mock/web, so
+   * no `@capacitor/clipboard` plugin is needed. Feature-detected + guarded:
+   * a missing API or a rejected write (permission denied) is swallowed so the
+   * page never crashes; neither the code nor the error is logged.
+   */
+  protected async copyCode(): Promise<void> {
+    if (!navigator.clipboard?.writeText) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(this.link.code() ?? '');
+    } catch {
+      // writeText can reject when the gesture/permission is denied — no-op.
+      return;
+    }
+    this.copied.set(true);
+    if (this.copiedTimer !== null) {
+      clearTimeout(this.copiedTimer);
+    }
+    this.copiedTimer = setTimeout(() => {
+      this.copied.set(false);
+      this.copiedTimer = null;
+    }, 2000);
   }
 
   /** "Done" — pop back to Settings and kick an initial sync (fire-and-forget). */

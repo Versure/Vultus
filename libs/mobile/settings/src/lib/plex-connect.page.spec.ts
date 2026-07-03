@@ -81,8 +81,17 @@ async function setup(stage: Stage) {
 }
 
 describe('PlexConnectPage', () => {
+  let writeText: ReturnType<typeof vi.fn>;
+
   beforeEach(() => {
     TestBed.resetTestingModule();
+    // jsdom has no `navigator.clipboard` — stub the WEB Clipboard API the page
+    // uses (navigator.clipboard.writeText), fresh per test.
+    writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
   });
 
   it('renders the fixed header with the "Connect Plex" title and a back button', async () => {
@@ -119,6 +128,21 @@ describe('PlexConnectPage', () => {
     const { el, link } = await setup('code');
     (el.querySelectorAll('.solid-button')[0] as HTMLElement).click();
     expect(link.regenerateCode).toHaveBeenCalledTimes(1);
+  });
+
+  it('stage "code": tapping copy writes the code and shows "Copied" feedback', async () => {
+    const { el, fixture } = await setup('code');
+    expect(el.querySelector('[data-test="copied-feedback"]')).toBeFalsy();
+
+    (el.querySelectorAll('.copy-button')[0] as HTMLElement).click();
+    // Let the async writeText resolve, then flush the resulting signal update.
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(writeText).toHaveBeenCalledWith('H7X2');
+    expect(
+      el.querySelector('[data-test="copied-feedback"]')?.textContent?.trim(),
+    ).toBe('Copied');
   });
 
   it('stage "waiting": renders "Waiting for authorization…" and "Cancel"', async () => {
