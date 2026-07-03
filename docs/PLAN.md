@@ -20,9 +20,16 @@ In scope:
 - Track movies; notify the day they become available on a streaming platform.
 - Show _which_ platform a title is on (Netflix, Prime, Disney+, etc.) for the
   user's selected region.
-- Track watch progress (mark episodes/movies as watched). Treated as v1.1 —
-  built last, after the notification pipeline is working end-to-end.
-- Manual "refresh now" from the app, rate-limited to once per 5 minutes.
+- Track watch progress (mark episodes/movies as watched). **Shipped** (specs
+  0034 episode-watch-progress, 0050 auto-status-progression, 0053
+  completed-marks-episodes-watched, 0056 title-detail-mark-watched).
+- Manual "refresh now" from the app, rate-limited to once per 5 minutes. The
+  5-minute limit on the app path is **client-side only**
+  (`SYNC_COOLDOWN_MS = 300_000` at
+  `libs/shared/ui-kit/src/lib/sync-state.service.ts:9`, on the `triggerSync`
+  callable path). Server-side rate limiting (`RATE_LIMIT_MS` at
+  `apps/functions/src/main.ts:85`) exists only on the HTTP `syncTitles` user
+  path, which the app does not use — a deliberate decision (spec 0025 non-goal).
 
 Out of scope for v1:
 
@@ -34,26 +41,32 @@ Out of scope for v1:
 User scope: single user (you), but the data model is keyed by `userId` from
 day one so multi-user is a UI change later, not a migration.
 
+> **Note (scope of record):** §1 records the ORIGINAL v1 planning scope. The
+> spec ledger (`docs/specs/STATUS.md`) is the live scope record. The shipped
+> product now exceeds the original 5-item list (onboarding 0022, notifications
+> inbox 0042, quiet hours 0051, sync health 0049, provider preferences 0060,
+> watchlist sort/filter 0046/0054) without violating the out-of-scope list.
+
 ---
 
 ## 2. Architecture decisions
 
-| Decision           | Choice                                                | Rationale                                                                                                        |
-| ------------------ | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Frontend           | Ionic + Angular (Capacitor)                           | Stated constraint. Native Android via Capacitor.                                                                 |
-| Monorepo           | Nx workspace                                          | Stated constraint. Shared types between mobile + functions.                                                      |
-| Architecture style | Vertical slice (Nx-enforced via Sheriff)              | Each feature owns its UI, state, data, and types.                                                                |
-| Backend            | Firebase (Firestore + Auth + Cloud Functions + FCM)   | Single integrated platform; .NET dropped.                                                                        |
-| Functions runtime  | TypeScript                                            | End-to-end TS enables shared types via `libs/shared/domain`.                                                     |
-| Database           | Firestore                                             | Free tier covers personal use ~1000x over; real-time sync to client.                                             |
-| Auth               | Firebase Auth (anonymous in v1, email/password later) | Userid scoping from day one.                                                                                     |
-| Push               | FCM directly (Android only)                           | Free, full control, simplest stack.                                                                              |
-| Daily sync trigger | GitHub Actions cron → HTTP Cloud Function             | Keeps sync outside Cloud Functions; deployed on Blaze (free tier).                                               |
-| Manual refresh     | App calls same HTTP Cloud Function (rate-limited)     | Single code path for sync logic.                                                                                 |
-| Region scope       | Multi-region from day one                             | Trivial in data model, painful to add later.                                                                     |
-| Data sources       | TMDB (metadata + watch providers) + Trakt (calendar)  | Both free for non-commercial; complementary.                                                                     |
-| UI design source   | Google Stitch — "Vultus Android App Design"           | Canonical screens + design system; accessed via Stitch MCP.                                                      |
-| Hosting cost       | ~€0/month within free tier                            | Firebase Blaze (pay-as-you-go, free tier covers personal use) + GitHub Actions free tier + TMDB/Trakt free tier. |
+| Decision           | Choice                                                                                 | Rationale                                                                                                                                                                        |
+| ------------------ | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend           | Ionic + Angular (Capacitor)                                                            | Stated constraint. Native Android via Capacitor.                                                                                                                                 |
+| Monorepo           | Nx workspace                                                                           | Stated constraint. Shared types between mobile + functions.                                                                                                                      |
+| Architecture style | Vertical slice (Nx-enforced via Sheriff)                                               | Each feature owns its UI, state, data, and types.                                                                                                                                |
+| Backend            | Firebase (Firestore + Auth + Cloud Functions + FCM)                                    | Single integrated platform; .NET dropped.                                                                                                                                        |
+| Functions runtime  | TypeScript                                                                             | End-to-end TS enables shared types via `libs/shared/domain`.                                                                                                                     |
+| Database           | Firestore                                                                              | Free tier covers personal use ~1000x over; real-time sync to client.                                                                                                             |
+| Auth               | Firebase Auth (anonymous in v1, email/password later)                                  | Userid scoping from day one.                                                                                                                                                     |
+| Push               | FCM directly (Android only)                                                            | Free, full control, simplest stack.                                                                                                                                              |
+| Daily sync trigger | GitHub Actions cron → HTTP Cloud Function                                              | Cron POSTs the shared-secret HTTP `syncTitles` function; runs on Blaze within the free tier.                                                                                     |
+| Manual refresh     | App calls a separate `triggerSync` Gen2 callable                                       | The app uses a dedicated auth-gated callable (specs 0025; 0044 CORS; 0048 error surfacing), NOT the HTTP path.                                                                   |
+| Region scope       | Multi-region from day one                                                              | Trivial in data model, painful to add later.                                                                                                                                     |
+| Data sources       | TMDB (metadata, watch providers, episode airing) + Trakt (traktId resolution, tv only) | Both free for non-commercial. In the shipped sync engine Trakt only resolves `traktId` (`getShowTraktId`, tv only); `getCalendar` has no production caller.                      |
+| UI design source   | Google Stitch — "Vultus Android App Design"                                            | Canonical screens + design system; accessed via Stitch MCP.                                                                                                                      |
+| Hosting cost       | ~€0/month target, on Blaze                                                             | Blaze pay-as-you-go (required to deploy Cloud Functions), engineered to stay within free-tier allowances; budget **alert** recommended. + GitHub Actions + TMDB/Trakt free tier. |
 
 ### Why the .NET backend was dropped
 
@@ -138,10 +151,11 @@ over time. The **authoritative, current slice list lives in
 list here as complete.
 
 ```
-movie-tracker/
+vultus/
 ├── apps/
-│   ├── mobile/                           # Ionic shell, routing, app module
-│   └── functions/                        # Cloud Functions entry points
+│   ├── mobile/                           # Ionic shell, routing, app config (standalone)
+│   ├── functions/                        # Cloud Functions entry points
+│   └── mobile-e2e/                       # Playwright e2e suite (spec 0019)
 ├── libs/
 │   ├── shared/                           # Cross-slice ONLY
 │   │   ├── domain/                       # Show, Movie, Episode, WatchProvider, Region
@@ -150,19 +164,30 @@ movie-tracker/
 │   ├── mobile/                           # One slice lib per subfolder (see below)
 │   │   ├── watchlist/                    # Slice (illustrative — not the full set)
 │   │   ├── search/                       # Slice
-│   │   └── …                             # + onboarding, notifications, title-detail, settings, …
+│   │   ├── title-detail/                 # Slice
+│   │   ├── settings/                     # Slice
+│   │   ├── onboarding/                   # Slice (spec 0022)
+│   │   └── notifications/                # Slice (spec 0042)
 │   └── functions/                        # One slice lib per subfolder (see below)
 │       ├── sync-titles/                  # Slice: TMDB+Trakt clients, sync, HTTP handler
-│       └── …                             # + dispatch-notifications, sync-episodes, …
+│       ├── sync-episodes/                # Slice (spec 0047)
+│       └── dispatch-notifications/       # Slice
+├── android/                              # Capacitor Android platform (spec 0020)
+├── tools/                                # doc-integrity-test, firestore-rules-test, scripts, sheriff-fixtures/-test
 ├── docs/
 │   ├── PLAN.md                           # This document
+│   ├── design/                           # vultus-design-system.md — authoritative token set
+│   ├── setup/                            # Manual setup guides (Firebase, secrets)
 │   └── specs/                            # Spec-file workflow unit of work (see §5)
 ├── .github/
-│   └── workflows/                        # CI + scheduled sync trigger
+│   └── workflows/                        # CI + scheduled sync trigger + deploy
+├── .claude/                              # agents/hooks/skills/settings driving the §5 workflow
 ├── firebase.json
 ├── firestore.rules                       # Version-controlled security rules
 ├── firestore.indexes.json
 ├── sheriff.config.ts                     # Module boundary rules
+├── capacitor.config.ts                   # Capacitor app config
+├── pnpm-workspace.yaml
 ├── nx.json
 ├── package.json
 └── CLAUDE.md                             # Standing instructions for Claude Code
@@ -170,16 +195,19 @@ movie-tracker/
 
 ### Sheriff tags (enforced by lint, gated in CI)
 
-Each lib gets exactly one scope tag and zero or more type tags.
+Each lib gets exactly one scope tag and zero or more slice tags.
 
 - `scope:shared` — anything in `libs/shared/*`. Importable by anyone.
 - `scope:mobile` — `apps/mobile` and `libs/mobile/*`.
 - `scope:functions` — `apps/functions` and `libs/functions/*`.
-- `slice:<name>` — exactly one per slice lib under `libs/mobile/*` and
-  `libs/functions/*` (e.g. `slice:watchlist`, `slice:sync-titles`). The
-  authoritative, current set of `slice:` tags is defined in
-  `sheriff.config.ts`, not enumerated here (the list grows with each new
-  slice).
+- `slice:<name>` — assigned by PATH GLOB in `sheriff.config.ts` (one
+  `slice:<name>` per `libs/{mobile,functions}/<slice>`), so every slice lib
+  that exists inherits its tag automatically. The slices in use today are
+  `slice:watchlist`, `slice:search`, `slice:title-detail`, `slice:settings`,
+  `slice:onboarding`, `slice:notifications` (mobile) and `slice:sync-titles`,
+  `slice:dispatch-notifications`, `slice:sync-episodes` (functions). The
+  authoritative set is glob-derived in `sheriff.config.ts`, not this list (it
+  grows with each new slice).
 
 Rules:
 
@@ -188,6 +216,11 @@ Rules:
    anything tagged `slice:search`. They communicate via `scope:shared` only.
 3. `apps/*` can import `scope:shared` and any slice within their scope.
 4. Anything can import `scope:shared`.
+5. `scope:shared` may import ONLY `scope:shared` — it stays self-contained and
+   never depends on a mobile/functions scope or a slice (`sheriff.config.ts:81`,
+   `'scope:shared': 'scope:shared'`). (The `root`/`noTag` escape hatch at
+   `sheriff.config.ts:67-68` lets the virtual root and untagged barrels depend
+   on anything, keeping generated scaffolding green.)
 
 ### When to extract to `shared/`
 
@@ -212,6 +245,7 @@ users/{userId}
   region: "NL" | "DE" | ...
   notificationPrefs: { ... }
   fcmTokens: [ { token, deviceId, createdAt } ]
+  myProviderIds: number[]                  # TMDB provider ids the user subscribes to (spec 0060); default []
 
 users/{userId}/watchlist/{titleId}
   type: "movie" | "tv"
@@ -220,10 +254,14 @@ users/{userId}/watchlist/{titleId}
   title: string
   addedAt: timestamp
   status: "watching" | "completed" | "dropped" | "planned"
+  posterPath?: string | null              # denormalized TMDB poster path (spec 0035)
+  voteAverage?: number | null             # denormalized TMDB vote average (spec 0035)
+  releaseDate?: string | null             # denormalized release date, plain ISO (spec 0046)
 
 users/{userId}/watchlist/{titleId}/episodes/{episodeId}    # tv only
   season: number
   episode: number
+  title: string | null                    # episode name; null when unknown (specs 0034/0047)
   airDate: timestamp
   watched: boolean
   watchedAt: timestamp | null
@@ -238,6 +276,7 @@ users/{userId}/notifications/{notificationId}
 # Global (read-only from client, written by functions only)
 title-cache/{tmdbId}
   type: "movie" | "tv"
+  traktId: number | null                  # top-level Trakt show id, tv only (spec 0008)
   metadata: { ... }                       # Cached TMDB metadata
   lastSyncedAt: timestamp
 
@@ -246,8 +285,13 @@ title-cache/{tmdbId}/availability/{region}
   lastSyncedAt: timestamp
   previousSnapshot: [ ... ]               # For transition detection
 
+# Global provider catalog (authenticated read, written by functions only; spec 0060)
+provider-catalog/{region}
+  providers: [ { providerId, name, logoPath } ]
+  lastSyncedAt: timestamp
+
 sync-runs/{runId}                         # One doc per full sync run (spec 0049); authenticated read, Admin-SDK-only write
-  kind, userId, startedAt, completedAt, durationMs, titlesGathered, titlesUpdated, errorCount, errors
+  runId, kind, userId, startedAt, completedAt, durationMs, titlesGathered, titlesUpdated, errorCount, errors
 ```
 
 `title-cache` is shared across users — if you and a future user both track
@@ -273,8 +317,11 @@ _Severance_, we sync it once. This is also what makes the daily sync cheap.
   Contents:
   - Architecture decisions (link to this PLAN.md).
   - Vertical slice rules (no cross-slice imports, no premature DRY).
-  - Project commands: `nx test`, `nx lint`, `nx e2e`, `nx serve`,
-    `firebase emulators:start`.
+  - Project commands: `nx test`, `nx lint`, `nx e2e`,
+    `firebase emulators:start`, and serving via the five named scenario targets
+    (`mobile:serve-mock` / `serve-emulator` / `serve-prod-debug` / `serve-prod`
+    / `android-usb`, spec 0038) — not raw `nx serve`, which the e2e web server
+    owns.
   - Definition of done: typecheck + lint + Sheriff + unit tests + e2e green
     locally before pushing.
   - Secrets convention: `.env.local` (gitignored), GitHub Actions secrets
@@ -317,7 +364,8 @@ overhead — Claude Code can skip straight to the PR.
   PRs.
 - You review every PR. CI must be green. Merge via squash so each spec/feature
   maps to one commit on `main`.
-- After merge, GitHub Action deploys (when we add deploy workflows).
+- After merge, the deploy workflow (`.github/workflows/deploy-functions.yml`)
+  ships the Cloud Functions.
 
 ### Definition of done
 
@@ -339,9 +387,12 @@ A PR is mergeable only when _all_ of:
 - **Component tests (some):** Components with non-trivial state, branching,
   or conditional rendering. Angular Testing Library (on Vitest). Skip pure
   presentational components.
-- **e2e tests (5–10, named):** Critical user flows only. Playwright against
-  Firebase emulators. Claude Code will propose the specific flows in a
-  design note for the e2e setup task — you approve them there.
+- **e2e tests (named critical flows, currently 13):** Critical user flows only.
+  Playwright against Firebase emulators. The suite in `apps/mobile-e2e/src`
+  covers `app.boot`, `app.smoke`, `manual-sync-trigger`, `mark-watched`,
+  `notification-deep-links`, `notifications`, `onboarding`, `plex-provider`,
+  `provider-preferences`, `search`, `settings`, `title-detail`,
+  `watchlist-refresh`.
 
 ### Secrets
 
@@ -366,10 +417,12 @@ flag any time it would need a secret in a place it shouldn't be.
 ## 6. Initial task breakdown
 
 **Historical — this v1 breakdown is complete.** It predates the spec-driven
-workflow (§5) and was originally scoped as GitHub issues; all 23 items below
-have since shipped as specs (`docs/specs/0001-*` onward). Kept as a record of
-the original build order, not a live backlog. Roughly ordered by dependency;
-each was sized to ~one Claude Code session.
+workflow (§5) and was originally scoped as GitHub issues; all remaining items
+below have since shipped as specs (`docs/specs/0001-*` onward), except item 7
+(`CLAUDE.md`, authored in the pre-spec bootstrap commit, not a spec) and item 8
+(issue/PR templates, superseded and struck through) — 21 of the 23 map cleanly
+to specs. Kept as a record of the original build order, not a live backlog.
+Roughly ordered by dependency; each was sized to ~one Claude Code session.
 
 ### Foundation (must be done first, in order)
 
@@ -447,30 +500,32 @@ These you have to do yourself; Claude Code can't.
 
 - [ ] Create GitHub repo (private), enable branch protection on `main` once
       CI workflow is in place.
-- [ ] Create Firebase project at console.firebase.google.com. Enable
+- [x] Create Firebase project at console.firebase.google.com. Enable
       Firestore, Authentication (Anonymous), Cloud Messaging, Cloud
-      Functions.
-- [ ] Sign up for TMDB API at themoviedb.org/settings/api → request
+      Functions. (project `vultus-cab62`, Blaze, provisioned 2026-06-18)
+- [x] Sign up for TMDB API at themoviedb.org/settings/api → request
       Developer key. Free, instant. Add the key as a GitHub Actions secret
       named `TMDB_API_KEY` (repo → Settings → Secrets → Actions → New
       repository secret) so CI can inject it into the production build.
 - [ ] Sign up for Trakt API at trakt.tv/oauth/applications → create
       application, get client ID. Free, instant.
-- [ ] Add the deployed `syncTitles` endpoint URL as a GitHub Actions
+- [x] Add the deployed `syncTitles` endpoint URL as a GitHub Actions
       **variable** named `VULTUS_SYNC_URL` (repo → Settings → Secrets and
       variables → Actions → Variables) so the daily-sync cron knows where to
-      POST. Public value, so a variable, not a secret. (The project runs on
-      Blaze with the function deployed, per project setup.)
-- [ ] Add the sync shared secret as a GitHub Actions **secret** named
+      POST. Public value, so a variable, not a secret. (Referenced by
+      `.github/workflows/daily-sync.yml`; the project runs on Blaze with the
+      function deployed.)
+- [x] Add the sync shared secret as a GitHub Actions **secret** named
       `SYNC_SHARED_SECRET` (the value sent in the `X-Vultus-Sync-Secret`
       header by the daily-sync cron) — see PLAN §5's secrets table row
-      "Sync HTTP function shared secret". (Blaze, per project setup.)
+      "Sync HTTP function shared secret". (Referenced by
+      `.github/workflows/daily-sync.yml`.)
 - [ ] Set the **matching** `SYNC_SHARED_SECRET` param on the Cloud Function
       side (same value as the GitHub secret) so the header comparison passes;
-      rotating one without the other breaks the cron. (Blaze, per project
-      setup.)
-- [ ] Grant **public invokability** to the `synctitles` Cloud Run service
-      (Blaze, per project setup) — run:
+      rotating one without the other breaks the cron. _(console step — not
+      repo-verifiable; the daily-sync cron running proves it is set.)_
+- [x] Grant **public invokability** to the `synctitles` Cloud Run service
+      (spec 0021, applied + verified 2026-06-24) — run:
       `gcloud run services add-iam-policy-binding synctitles --region=europe-west1 --member=allUsers --role=roles/run.invoker --project=vultus-cab62`
       **Why:** gen2 `onRequest` functions are Cloud Run services, **private by
       default**. `syncTitles` self-authenticates via the `X-Vultus-Sync-Secret`
@@ -487,8 +542,9 @@ These you have to do yourself; Claude Code can't.
       authenticate.
 - [ ] Install Node.js LTS, Android Studio (for Capacitor builds), Firebase
       CLI (`npm install -g firebase-tools`).
-- [ ] **Download `google-services.json`** from the Firebase console for project
-      **`vultus-cab62`**: Project settings → Your apps → Android app
+- [x] **Download `google-services.json`** from the Firebase console for project
+      **`vultus-cab62`** (committed at `android/app/google-services.json`):
+      Project settings → Your apps → Android app
       (package `app.vultus.mobile`; register it if not listed yet) →
       Download `google-services.json` → place at **`android/app/google-services.json`**
       and **commit it** (it is public client config, not a secret — no private
@@ -505,34 +561,40 @@ These you have to do yourself; Claude Code can't.
 - iOS: revisit only after v1 is stable on Android for a month.
 - Multi-user UX: revisit only when there's a second user who actually wants
   to use the app.
-- Watch progress as v1.1 vs v2: build it after notifications are working;
-  decide then whether it's its own milestone.
+- ~~Watch progress as v1.1 vs v2~~ **Resolved:** watch progress shipped (specs
+  0034/0050/0053/0056); it was built as its own set of specs, not deferred to a
+  v2 milestone.
 
 ---
 
 ## 9. Risk register
 
-| Risk                                           | Mitigation                                                               |
-| ---------------------------------------------- | ------------------------------------------------------------------------ |
-| TMDB watch-provider data is wrong/stale for NL | Watchmode as layered fallback, encapsulated per slice                    |
-| Free-tier limits hit                           | All chosen tiers have ~1000x headroom for personal use                   |
-| FCM token expires/changes                      | Re-register on every app launch, store array of tokens                   |
-| Background daily sync fails silently           | Cloud Function logs to Firebase Logging; weekly sanity-check issue       |
-| Sheriff/Nx version mismatch breaks CI          | Pin versions; renovate updates via PR                                    |
-| Agent over-DRYs and breaks slices              | Explicit rule in CLAUDE.md; Sheriff catches cross-slice imports          |
-| Agent commits secrets                          | `.env.local` gitignored; CLAUDE.md rule; pre-commit hook with `gitleaks` |
+| Risk                                           | Mitigation                                                                                                                                                                                                     |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TMDB watch-provider data is wrong/stale for NL | Watchmode as layered fallback, encapsulated per slice                                                                                                                                                          |
+| Free-tier limits hit                           | All chosen tiers have ~1000x headroom for personal use                                                                                                                                                         |
+| FCM token expires/changes                      | Re-register on every app launch, store array of tokens                                                                                                                                                         |
+| Background daily sync fails silently           | Sync-health (spec 0049) surfaces last-run status in settings from `sync-runs`; `deploy-functions.yml` smoke gate verifies invokability post-deploy                                                             |
+| Sheriff/Nx version mismatch breaks CI          | Pin versions in `package.json` (no automated updater configured)                                                                                                                                               |
+| Agent over-DRYs and breaks slices              | Explicit rule in CLAUDE.md; Sheriff catches cross-slice imports                                                                                                                                                |
+| Agent commits secrets                          | `.env.local` gitignored; CLAUDE.md rule; husky pre-commit hook runs lint-staged (ESLint `--fix` + Prettier + `gen-spec-status --check`). No gitleaks scan configured (a recommended-but-unimplemented add-on). |
 
 ---
 
 ## 10. Definition of v1 shipped
 
-- [ ] APK installs on your Android phone.
-- [ ] You can search for a show, add it to your watchlist.
-- [ ] You can see which streaming service it's on in NL.
+- [x] APK installs on your Android phone. (specs 0020 + 0026; `android/` exists
+      on disk)
+- [x] You can search for a show, add it to your watchlist. (spec 0013)
+- [x] You can see which streaming service it's on in NL. (specs 0014/0016)
 - [ ] When a new episode airs and is on a service in NL, you get a push
-      notification within 24h.
+      notification within 24h. _(shipped; end-to-end prod delivery pending
+      re-verification)_
 - [ ] When a movie on your list becomes available on a service in NL, you
-      get a push notification within 24h.
-- [ ] Manual refresh works.
-- [ ] All CI gates green on `main`.
-- [ ] €0/month bill.
+      get a push notification within 24h. _(shipped; end-to-end prod delivery
+      pending re-verification)_
+- [x] Manual refresh works. (spec 0025 + fixes 0033/0044/0048)
+- [x] All CI gates green on `main`. (verified 2026-07-02)
+- [ ] Bill stays at €0/month. On the **Blaze** plan (required to deploy Cloud
+      Functions), engineered to stay within free-tier allowances; set a budget
+      **alert** as a guard. See §2 and `docs/setup/firebase-and-secrets.md`.

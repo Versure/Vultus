@@ -13,7 +13,8 @@
 Total specs: 72
 
 - done: 68
-- approved: 4
+- approved: 3
+- implementing: 1
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -88,4 +89,4 @@ Total specs: 72
 | 69 | guard-hook-robustness | Harden the slice-edit guard hook — crash-safety, self-test, exemptions, and documented bypass | done | — | — |
 | 70 | audit-docs-accuracy | Fix the audit-docs skill — stale "must-detect" example and the phantom scheduled runner | approved | — | — |
 | 71 | normative-text-dedup | De-duplicate copy-pasted normative rules (Stitch recipe, worktree snippet, design hexes, Windows E-notes) | approved | — | — |
-| 72 | plan-accuracy-refresh | Refresh docs/PLAN.md to eliminate accumulated drift against the shipped codebase | approved | — | — |
+| 72 | plan-accuracy-refresh | Refresh docs/PLAN.md to eliminate accumulated drift against the shipped codebase | implementing | — | — |
