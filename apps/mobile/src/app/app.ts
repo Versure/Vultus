@@ -5,9 +5,10 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { PLEX_SYNC_TRIGGER } from '@vultus/shared/domain/tokens';
 import { NotificationHandlerService } from './notification-handler.service';
+import { SplashComponent } from './splash/splash.component';
 
 @Component({
-  imports: [IonApp, IonRouterOutlet],
+  imports: [IonApp, IonRouterOutlet, SplashComponent],
   selector: 'app-root',
   templateUrl: './app.html',
   styleUrl: './app.scss',

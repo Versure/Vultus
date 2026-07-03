@@ -1,0 +1,324 @@
+// Stitch "Splash Screen - Vultus" (projects/13590348714018893783, screen
+// c0a785aff1d54cd59bd41a5fd5f10d3d). Concrete values (sizes, keyframes,
+// gradients) come from the exported screen's Tailwind config + markup; colors
+// consume the theme.scss tokens (docs/design/vultus-design-system.md), with
+// the design's alpha variants (primary/10, /20, /40, outline-variant/30, …)
+// derived via color-mix so no hex is restated here.
+
+:host {
+  display: contents;
+}
+
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--vultus-surface);
+
+  // App-entry exit — Stitch: 0.8s scale(1.05) + fade, cubic-bezier(.7,0,.3,1).
+  &--exiting {
+    pointer-events: none;
+    transform: scale(1.05);
+    opacity: 0;
+    transition:
+      transform 800ms cubic-bezier(0.7, 0, 0.3, 1),
+      opacity 800ms ease;
+  }
+}
+
+// --- Background cinematic stills (opacity-5, blur-sm, scale-110, gap-4) ----
+
+.splash__backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  gap: 16px;
+  opacity: 0.05;
+  pointer-events: none;
+  transform: scale(1.1);
+  filter: blur(4px);
+}
+
+.splash__still {
+  flex: 1;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+
+  &--metropolis {
+    background-image: url('/assets/splash/backdrop-metropolis.png');
+  }
+
+  // Second still is md+ only in the design (hidden md:block).
+  &--projector {
+    display: none;
+    background-image: url('/assets/splash/backdrop-projector.png');
+
+    @media (min-width: 768px) {
+      display: block;
+    }
+  }
+}
+
+// --- Vignette (radial, transparent 20% → surface @ 80%) --------------------
+
+.splash__vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(
+    circle,
+    transparent 20%,
+    color-mix(in srgb, var(--vultus-surface) 80%, transparent) 100%
+  );
+}
+
+// --- Logo & branding --------------------------------------------------------
+
+.splash__content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-inline: 16px; // px-margin-mobile
+}
+
+.splash__logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px; // space-y-6
+  animation: splash-logo-float 4s ease-in-out infinite;
+}
+
+.splash__icon {
+  position: relative;
+  width: 96px; // w-24
+  height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px; // rounded-2xl
+  background: color-mix(in srgb, var(--vultus-primary) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--vultus-primary) 20%, transparent);
+  backdrop-filter: blur(4px); // backdrop-blur-sm
+  // shadow-[0_0_40px_rgba(78,222,163,0.15)] = primary @ 15%
+  box-shadow: 0 0 40px
+    color-mix(in srgb, var(--vultus-primary) 15%, transparent);
+}
+
+.splash__glyph {
+  width: 56px; // text-[56px]
+  height: 56px;
+  color: var(--vultus-primary);
+}
+
+.splash__corner {
+  position: absolute;
+  width: 8px; // w-2 h-2
+  height: 8px;
+  border: 0 solid color-mix(in srgb, var(--vultus-primary) 40%, transparent);
+
+  &--tl {
+    top: 8px;
+    left: 8px;
+    border-top-width: 2px;
+    border-left-width: 2px;
+  }
+
+  &--tr {
+    top: 8px;
+    right: 8px;
+    border-top-width: 2px;
+    border-right-width: 2px;
+  }
+
+  &--bl {
+    bottom: 8px;
+    left: 8px;
+    border-bottom-width: 2px;
+    border-left-width: 2px;
+  }
+
+  &--br {
+    bottom: 8px;
+    right: 8px;
+    border-bottom-width: 2px;
+    border-right-width: 2px;
+  }
+}
+
+.splash__brand {
+  text-align: center;
+}
+
+.splash__title {
+  margin: 0;
+  // display-lg-mobile: 28px/36px w700; tracking-tight (-0.025em) from markup.
+  font-size: 28px;
+  line-height: 36px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--vultus-primary);
+
+  // md:text-display-lg: 32px/40px.
+  @media (min-width: 768px) {
+    font-size: 32px;
+    line-height: 40px;
+  }
+}
+
+.splash__flicker {
+  animation: splash-flicker 3s linear infinite;
+}
+
+.splash__tagline {
+  // label-md: 12px/16px w600; uppercase tracking-[0.3em] mt-2 opacity-60.
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--vultus-on-surface-variant);
+  opacity: 0.6;
+}
+
+// --- Bottom progress indicator (fixed bottom-16, 200px × 2px track) --------
+
+.splash__footer {
+  position: absolute;
+  bottom: 64px; // bottom-16
+  left: 0;
+  right: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-inline: 48px; // px-12
+
+  @media (min-width: 768px) {
+    padding-inline: 0; // md:px-0
+  }
+}
+
+.splash__track {
+  width: 100%;
+  max-width: 200px;
+  height: 2px;
+  border-radius: 9999px;
+  overflow: hidden;
+  background: color-mix(
+    in srgb,
+    var(--vultus-outline-variant) 30%,
+    transparent
+  );
+}
+
+.splash__bar {
+  height: 100%;
+  border-radius: 9999px;
+  background: var(--vultus-primary);
+  animation: splash-progress 2.5s ease-in-out infinite;
+}
+
+.splash__status {
+  // label-sm: 11px/16px w500; on-surface-variant @ 50%; 700ms fade (Stitch
+  // script swaps the message mid-fade).
+  margin: 16px 0 0; // mt-4
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--vultus-on-surface-variant) 50%, transparent);
+  transition: opacity 700ms;
+
+  &--faded {
+    opacity: 0;
+  }
+}
+
+// --- Scanline overlay (CRT effect, opacity .03) -----------------------------
+
+.splash__scanlines {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  opacity: 0.03;
+  background:
+    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+    linear-gradient(
+      90deg,
+      rgba(255, 0, 0, 0.06),
+      rgba(0, 255, 0, 0.02),
+      rgba(0, 0, 255, 0.06)
+    );
+  background-size:
+    100% 2px,
+    3px 100%;
+}
+
+// --- Keyframes (verbatim from the Stitch screen) ----------------------------
+
+@keyframes splash-progress {
+  0% {
+    width: 0%;
+    opacity: 0.3;
+  }
+  50% {
+    width: 70%;
+    opacity: 1;
+  }
+  100% {
+    width: 100%;
+    opacity: 0.3;
+  }
+}
+
+@keyframes splash-logo-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes splash-flicker {
+  0%,
+  19.999%,
+  22%,
+  62.999%,
+  64%,
+  64.999%,
+  70%,
+  100% {
+    opacity: 1;
+  }
+  20%,
+  21.999%,
+  63%,
+  63.999%,
+  65%,
+  69.999% {
+    opacity: 0.4;
+  }
+}
+
+// Accessibility: honor reduced motion — the splash stays static (the exit
+// fade keeps its transition so dismissal still reads as a state change).
+@media (prefers-reduced-motion: reduce) {
+  .splash__logo,
+  .splash__flicker,
+  .splash__bar {
+    animation: none;
+  }
+}
