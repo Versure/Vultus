@@ -119,44 +119,45 @@ around them rather than being surprised.
   | `apps/mobile/src/environments/environment.generated.ts` | prod build `fileReplacements` (specs 0026/0038)              |
   | `android/app/google-services.json`                      | Firebase Android config (Gradle/Capacitor, `--check-native`) |
 
-  Reuse the `$root` and `$wt` variables already computed above — do **not**
-  re-derive the paths a different way. Use the following PowerShell pattern (exact
-  phrasing may vary; the behavior is the contract):
+  Reuse the `$root` and `$wt` variables already computed above. Seed via the
+  committed, allow-listed script (spec 0068) — a single narrowly-permitted
+  invocation, **not** an inline `Copy-Item` (the old substring `Copy-Item` allow was
+  broad enough to also auto-approve chained exfiltration in the same call):
 
   ```powershell
-  $seed = @(
-    '.env.local',
-    'apps/mobile/src/environments/environment.generated.ts',
-    'android/app/google-services.json'
-  )
-  $seedWarnings = @()
-  foreach ($rel in $seed) {
-    $src = Join-Path $root $rel
-    $dst = Join-Path $wt   $rel
-    if (Test-Path -LiteralPath $src) {
-      try {
-        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
-        Copy-Item -LiteralPath $src -Destination $dst -Force
-      } catch {
-        $seedWarnings += "⚠ Failed to copy $rel — worktree may not build: $_"
-      }
-    } else {
-      $seedWarnings += "⚠ $rel not found in primary checkout — app may not build in this worktree"
-    }
-  }
+  # Run as a standalone call so cwd is the primary checkout root; the script also
+  # derives its own source root from its file location, so cwd is not load-bearing.
+  node tools/scripts/seed-worktree.mjs "$wt"
   ```
 
+  The script (`tools/scripts/seed-worktree.mjs`) copies the fixed three files
+  (below) from the primary checkout into `$wt`. Its CLI contract: exactly one
+  argument (the absolute `$wt`); **exit 1** on a missing argument or a destination
+  that does not resolve to a **descendant** of the sibling `../Vultus-worktrees/`
+  root (a resolved-path containment check that rejects `..`-traversal and symlink
+  escape — the copy never runs); **exit 0** on success even when some sources are
+  missing (warnings only). It creates parent dirs, overwrites on reuse, and
+  **skips-and-warns (never aborts) on a missing source**, printing the same
+  `⚠ …`-shaped lines this step used to build in `$seedWarnings` — capture the
+  script's warning output for Step 9's report. `.claude/settings.json` allow-lists
+  **only** this invocation (`Bash(node tools/scripts/seed-worktree.mjs:*)`); the
+  three broad `Copy-Item` allows are gone, and it adds `deny` rules for reading the
+  three secret files (a `Read`-tool deny — the reliable half — plus a best-effort
+  `Bash` `cat`/`Get-Content` deny that **cannot** enumerate every read path, so it
+  is defense-in-depth, not a guarantee; `deny` overrides `allow`). Residual risk
+  (documented, accepted): an agent could edit the script before running it — the
+  control removes arbitrary destinations and command chaining but is not
+  tamper-proof.
+
   Rules:
-  - **Create the destination's parent directory first** (`New-Item -ItemType
-Directory -Force`) — required for brand-new worktrees where
-    `apps/mobile/src/environments/` and `android/app/` do not yet exist. The flag
-    is a no-op when the directory already exists, so worktree reuse is safe.
-  - **`Copy-Item -Force`** overwrites a stale seeded file on reuse so the
-    worktree tracks the primary checkout's current values.
-  - **On a missing source** (or a copy error): **skip it** — do **not** throw or
-    abort. Record a warning string in `$seedWarnings` (or equivalent) to be
-    **surfaced in Step 9's report** so a worktree that cannot build is flagged to
-    the user, not silently broken.
+  - The script **creates the destination parent directory** and **overwrites on
+    reuse** — required for brand-new worktrees (where `apps/mobile/src/environments/`
+    and `android/app/` do not yet exist) and safe for worktree reuse (the copy
+    tracks the primary checkout's current values).
+  - **On a missing source** (or a copy error) the script **skips it** — it does
+    **not** throw or abort. It records a warning string to be **surfaced in Step
+    9's report** so a worktree that cannot build is flagged to the user, not
+    silently broken.
   - The seeded files are **gitignored and remain gitignored** in the worktree —
     they are copied as opaque local files and are **never read, logged, staged, or
     committed**. A reviewer must not "improve" this step by printing or templating
@@ -168,10 +169,11 @@ Directory -Force`) — required for brand-new worktrees where
     e2e paths do **not** need `.env.local` (only `serve-prod-debug` / `serve-prod` /
     `android-usb` do), so a blocked seed is **not** a blocker for the DoD gates — it
     only blocks on-device / real-prod manual testing. If the classifier
-    **persistently** blocks the copy, surface to the user the **manual fallback**:
-    run the three `Copy-Item` copies once in their own terminal. (The classifier's
-    LLM judgment sits above the settings allowlist — see the "Known environment
-    behaviors" section on poisoning.)
+    **persistently** blocks the seed, surface to the user the **manual fallback**:
+    run `node tools/scripts/seed-worktree.mjs "$wt"` (or the three file copies)
+    once in their own terminal. (The classifier's LLM judgment sits above the
+    settings allowlist — see the "Known environment behaviors" section on
+    poisoning.)
 
 - **Bootstrap dependencies in the worktree (spec 0065).** A fresh worktree has
   **no `node_modules`** (gitignored — git only populates committed files), yet
