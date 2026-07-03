@@ -150,6 +150,23 @@ export function parseSpecFrontmatter(markdown, label = '<spec>') {
     }
   }
 
+  // Guard: filename↔number (NUMERIC compare). When the `label` looks like a
+  // spec filename (`NNNN-…`), the frontmatter `number` must equal the filename
+  // prefix. The comparison is numeric on BOTH sides so an unpadded but correct
+  // `number: 42` under `0042-…md` passes (a padded-string compare would
+  // spuriously fail it). Skip when the label carries no leading 4-digit prefix
+  // (the default `<spec>` label and non-filename callers).
+  const prefixMatch = /^(\d{4})/.exec(label);
+  if (prefixMatch) {
+    const filenameNumber = Number(prefixMatch[1]);
+    const frontmatterNumber = Number(raw.number);
+    if (frontmatterNumber !== filenameNumber) {
+      throw new Error(
+        `${label}: frontmatter number ${frontmatterNumber} does not match filename NNNN ${filenameNumber}`,
+      );
+    }
+  }
+
   return {
     number: Number(raw.number),
     slug: String(raw.slug),
@@ -241,18 +258,42 @@ export function renderStatusMarkdown(entries) {
 }
 
 /**
+ * Cross-file integrity guard: assert no two spec entries share the same
+ * `Number(number)`. The per-file `parseSpecFrontmatter` cannot see siblings, so
+ * this pure helper runs over the whole parsed set. Throws a clear error naming
+ * the duplicated number and the two conflicting slugs. PURE.
+ */
+export function assertSpecIntegrity(entries) {
+  const seen = new Map();
+  for (const entry of entries) {
+    const num = Number(entry.number);
+    const prior = seen.get(num);
+    if (prior !== undefined) {
+      throw new Error(
+        `duplicate spec number ${num}: \`${prior}\` and \`${entry.slug}\` share the same number`,
+      );
+    }
+    seen.set(num, entry.slug);
+  }
+}
+
+/**
  * List, read, and parse every spec file matching SPEC_GLOB in `specsDir`. Impure
  * (reads the filesystem). Returns entries in a stable order (sorted by basename),
  * each parsed through `parseSpecFrontmatter` with the filename as the error label.
+ * Runs `assertSpecIntegrity` over the parsed set so both the write and `--check`
+ * paths reject a cross-file duplicate-number collision.
  */
 export function readAllSpecs(specsDir) {
   const files = readdirSync(specsDir)
     .filter((name) => SPEC_BASENAME_RE.test(name))
     .sort();
-  return files.map((name) => {
+  const entries = files.map((name) => {
     const markdown = readFileSync(join(specsDir, name), 'utf8');
     return parseSpecFrontmatter(markdown, name);
   });
+  assertSpecIntegrity(entries);
+  return entries;
 }
 
 const STATUS_RELATIVE = join('docs', 'specs', 'STATUS.md');

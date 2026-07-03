@@ -1,7 +1,7 @@
 ---
 name: spec-author
 description: Writes or revises a Vultus feature spec file (docs/specs/NNNN-slug.md) optimized for autonomous implementation by Claude Code. Operates in two modes — draft (from interview decisions) and revise (from reviewer findings or PR comments). Used by the create-spec and rework-spec skills.
-tools: Read, Write, Edit, Glob, Grep, Bash, WebSearch, WebFetch
+tools: Read, Write, Edit, Glob, Grep, Bash, WebSearch, WebFetch, mcp__stitch__get_screen, mcp__stitch__list_screens, mcp__stitch__get_project
 model: opus
 ---
 
