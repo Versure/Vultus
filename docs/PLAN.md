@@ -38,22 +38,22 @@ day one so multi-user is a UI change later, not a migration.
 
 ## 2. Architecture decisions
 
-| Decision           | Choice                                                | Rationale                                                            |
-| ------------------ | ----------------------------------------------------- | -------------------------------------------------------------------- |
-| Frontend           | Ionic + Angular (Capacitor)                           | Stated constraint. Native Android via Capacitor.                     |
-| Monorepo           | Nx workspace                                          | Stated constraint. Shared types between mobile + functions.          |
-| Architecture style | Vertical slice (Nx-enforced via Sheriff)              | Each feature owns its UI, state, data, and types.                    |
-| Backend            | Firebase (Firestore + Auth + Cloud Functions + FCM)   | Single integrated platform; .NET dropped.                            |
-| Functions runtime  | TypeScript                                            | End-to-end TS enables shared types via `libs/shared/domain`.         |
-| Database           | Firestore                                             | Free tier covers personal use ~1000x over; real-time sync to client. |
-| Auth               | Firebase Auth (anonymous in v1, email/password later) | Userid scoping from day one.                                         |
-| Push               | FCM directly (Android only)                           | Free, full control, simplest stack.                                  |
-| Daily sync trigger | GitHub Actions cron → HTTP Cloud Function             | Stays on Spark plan, no credit card.                                 |
-| Manual refresh     | App calls same HTTP Cloud Function (rate-limited)     | Single code path for sync logic.                                     |
-| Region scope       | Multi-region from day one                             | Trivial in data model, painful to add later.                         |
-| Data sources       | TMDB (metadata + watch providers) + Trakt (calendar)  | Both free for non-commercial; complementary.                         |
-| UI design source   | Google Stitch — "Vultus Android App Design"           | Canonical screens + design system; accessed via Stitch MCP.          |
-| Hosting cost       | €0/month                                              | Firebase Spark + GitHub Actions free tier + TMDB/Trakt free tier.    |
+| Decision           | Choice                                                | Rationale                                                                                                        |
+| ------------------ | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Frontend           | Ionic + Angular (Capacitor)                           | Stated constraint. Native Android via Capacitor.                                                                 |
+| Monorepo           | Nx workspace                                          | Stated constraint. Shared types between mobile + functions.                                                      |
+| Architecture style | Vertical slice (Nx-enforced via Sheriff)              | Each feature owns its UI, state, data, and types.                                                                |
+| Backend            | Firebase (Firestore + Auth + Cloud Functions + FCM)   | Single integrated platform; .NET dropped.                                                                        |
+| Functions runtime  | TypeScript                                            | End-to-end TS enables shared types via `libs/shared/domain`.                                                     |
+| Database           | Firestore                                             | Free tier covers personal use ~1000x over; real-time sync to client.                                             |
+| Auth               | Firebase Auth (anonymous in v1, email/password later) | Userid scoping from day one.                                                                                     |
+| Push               | FCM directly (Android only)                           | Free, full control, simplest stack.                                                                              |
+| Daily sync trigger | GitHub Actions cron → HTTP Cloud Function             | Keeps sync outside Cloud Functions; deployed on Blaze (free tier).                                               |
+| Manual refresh     | App calls same HTTP Cloud Function (rate-limited)     | Single code path for sync logic.                                                                                 |
+| Region scope       | Multi-region from day one                             | Trivial in data model, painful to add later.                                                                     |
+| Data sources       | TMDB (metadata + watch providers) + Trakt (calendar)  | Both free for non-commercial; complementary.                                                                     |
+| UI design source   | Google Stitch — "Vultus Android App Design"           | Canonical screens + design system; accessed via Stitch MCP.                                                      |
+| Hosting cost       | ~€0/month within free tier                            | Firebase Blaze (pay-as-you-go, free tier covers personal use) + GitHub Actions free tier + TMDB/Trakt free tier. |
 
 ### Why the .NET backend was dropped
 
@@ -128,8 +128,14 @@ Stitch design system as the contract for `shared/ui-kit` theming.
 
 Vertical slice within Nx. Each slice owns its UI, state, data access, and
 types. Cross-slice imports are forbidden by Sheriff. Things move into
-`shared/` only when 2+ slices need them; premature sharing is the failure
+`shared/` only when 3+ slices need them; premature sharing is the failure
 mode to avoid.
+
+The tree below is **illustrative, not exhaustive**: every subfolder under
+`libs/mobile/*` and `libs/functions/*` is one slice lib, and slices are added
+over time. The **authoritative, current slice list lives in
+`sheriff.config.ts`** (its tag definitions) — do not treat any hand-enumerated
+list here as complete.
 
 ```
 movie-tracker/
@@ -141,14 +147,13 @@ movie-tracker/
 │   │   ├── domain/                       # Show, Movie, Episode, WatchProvider, Region
 │   │   ├── firestore-schema/             # Collection paths, converters
 │   │   └── ui-kit/                       # Truly shared Ionic components (atoms)
-│   ├── mobile/
-│   │   ├── watchlist/                    # Slice
+│   ├── mobile/                           # One slice lib per subfolder (see below)
+│   │   ├── watchlist/                    # Slice (illustrative — not the full set)
 │   │   ├── search/                       # Slice
-│   │   ├── title-detail/                 # Slice (episodes, providers, mark watched)
-│   │   └── settings/                     # Slice (region, notification prefs)
-│   └── functions/
+│   │   └── …                             # + onboarding, notifications, title-detail, settings, …
+│   └── functions/                        # One slice lib per subfolder (see below)
 │       ├── sync-titles/                  # Slice: TMDB+Trakt clients, sync, HTTP handler
-│       └── dispatch-notifications/       # Slice: Firestore trigger, FCM, dispatch
+│       └── …                             # + dispatch-notifications, sync-episodes, …
 ├── docs/
 │   ├── PLAN.md                           # This document
 │   └── specs/                            # Spec-file workflow unit of work (see §5)
@@ -170,8 +175,11 @@ Each lib gets exactly one scope tag and zero or more type tags.
 - `scope:shared` — anything in `libs/shared/*`. Importable by anyone.
 - `scope:mobile` — `apps/mobile` and `libs/mobile/*`.
 - `scope:functions` — `apps/functions` and `libs/functions/*`.
-- `slice:watchlist`, `slice:search`, `slice:title-detail`, `slice:settings`,
-  `slice:sync-titles`, `slice:dispatch-notifications` — one per slice lib.
+- `slice:<name>` — exactly one per slice lib under `libs/mobile/*` and
+  `libs/functions/*` (e.g. `slice:watchlist`, `slice:sync-titles`). The
+  authoritative, current set of `slice:` tags is defined in
+  `sheriff.config.ts`, not enumerated here (the list grows with each new
+  slice).
 
 Rules:
 
@@ -322,8 +330,7 @@ A PR is mergeable only when _all_ of:
       rendering tied to logic).
 - [ ] e2e tests pass for affected critical flows.
 - [ ] Build passes for all affected projects.
-- [ ] PR description is filled out per template.
-- [ ] Design note exists for non-trivial work.
+- [ ] PR references the merged spec.
 
 ### Test layering — the pyramid
 
@@ -487,8 +494,6 @@ These you have to do yourself; Claude Code can't.
       and **commit it** (it is public client config, not a secret — no private
       key; committing is the standard Firebase Android setup). Without this file
       the app boots but Firebase + FCM will not initialise on-device.
-- [ ] Add a credit card test: confirm you do _not_ want to enable Blaze.
-      Spark plan + GitHub Actions cron is the chosen path.
 
 ---
 

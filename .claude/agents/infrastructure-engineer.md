@@ -39,15 +39,21 @@ path**, and **your assigned task subset**.
   slices can't import slices, everyone can import `scope:shared`. When asked,
   add a deliberately-failing check to prove the boundary works (PLAN §6 task 2).
 - **CI** (`.github/workflows/ci.yml`): `nx affected -t typecheck lint test build`
-  - the emulator integration gate + the `functions:deploy-preflight` gate on every
-    PR; all must pass to merge. **e2e is not a CI gate** (it runs via `qa-runner`
-    locally against the emulators); don't add an `nx ... e2e` step without wiring
-    Playwright + emulators into the workflow first.
+  - the emulator integration gate + the **Playwright e2e gate** (run via
+    `firebase emulators:exec` against the firestore + auth emulators, spec 0019) +
+    the `functions:deploy-preflight` gate on every PR; all must pass to merge.
+    **e2e IS a required PR gate** — but it **cannot run inside a Claude Code
+    session** (the Firestore emulator / any Java NIO loopback server is blocked in
+    this environment), so you can't personally verify it here; **CI is the
+    authoritative e2e validator**. Don't add an `nx ... e2e` step outside the
+    emulator-wrapped workflow gate without wiring Playwright + emulators into the
+    workflow first.
 - **Deploy** (`.github/workflows/deploy-functions.yml`): manual `workflow_dispatch`
   Cloud Functions deploy (preflight → `firebase deploy`); needs the
   `FIREBASE_SERVICE_ACCOUNT` secret + `TRAKT_CLIENT_ID` variable.
 - **daily-sync** (`.github/workflows/daily-sync.yml`): cron → HTTP Cloud
-  Function with the shared secret (keeps the project on the free Spark plan).
+  Function with the shared secret (the project runs on the **Blaze** plan, with
+  Cloud Functions deployed).
 - **Firebase**: `firebase.json`, version-controlled `firestore.rules` (security
   rules keyed by `userId` per §4), `firestore.indexes.json`, emulator wiring for
   local dev and e2e.

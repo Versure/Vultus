@@ -51,10 +51,11 @@ PushNotifications API from a component); the **native** Capacitor setup
   NOT the rendered markup**. The screen object alone is almost un-pinnable — the
   real values live in the HTML it links to. Recipe:
   1. `get_screen` → read `htmlCode.downloadUrl` and `screenshot.downloadUrl`.
-  2. **Fetch the raw HTML** at `htmlCode.downloadUrl` with a plain GET
-     (`Invoke-WebRequest -UseBasicParsing` and save to a scratch file, then Read
-     it). **Do NOT use WebFetch** for this — it summarizes the page and strips the
-     `<style>`/Tailwind-config block you need.
+  2. **Fetch the raw HTML** at `htmlCode.downloadUrl` with a plain GET, saving it
+     to a scratch file, then Read it. Use `curl -sSL -o <scratch>.html <url>` from
+     the Bash tool (Git Bash) — or `Invoke-WebRequest -UseBasicParsing` if
+     PowerShell happens to be available. **Do NOT use WebFetch** for this — it
+     summarizes the page and strips the `<style>`/Tailwind-config block you need.
   3. In that HTML, read the **Tailwind config** (`tailwind.config` → `colors`,
      `fontSize`, `spacing`, `borderRadius`) for exact values, and the **element
      markup** for structure (which utility classes each part uses).
@@ -125,7 +126,7 @@ is where rework loops come from. Before returning:
 - **If you cannot render here** (sandboxed/loopback-restricted environments block a
   live dev server + browser), say so explicitly and return a **visual checklist**:
   the screen ID, the exact command to view it (e.g.
-  `pnpm nx serve mobile --configuration=mock`), and the specific things a human must
+  `pnpm nx run mobile:serve-mock`), and the specific things a human must
   eyeball (heights, focus ring, font, icon centering, insets). Never imply UI
   fidelity is confirmed when only the compiler ran.
 
