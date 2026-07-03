@@ -15,10 +15,16 @@ branches, architecture — are in `CLAUDE.md`.)
 - Specs: `docs/specs/NNNN-slug.md` (zero-padded). Spec branch `spec/NNNN-slug`,
   PR targets `main`. Status lifecycle `draft → approved → implementing → done`
   (no `in-review`; the open spec PR _is_ the review).
-- Next number: scan **both** `docs/specs/*` on `main` **and** open spec PRs
-  (`gh pr list --label spec --json headRefName`) for the highest `NNNN`, +1
-  (start at `0001`). Truly simultaneous runs can still collide — serialize bulk
-  spec creation.
+- Next number: enumerate the highest `NNNN` from the **union of three sources**
+  and take `max + 1` (start at `0001`):
+  1. `docs/specs/*.md` filenames on `main` (the `NNNN` prefix);
+  2. every **open PR head branch** matching `spec/NNNN-*` **or** `feat/NNNN-*`
+     — `gh pr list --state open --json headRefName` with **no `--label` filter**;
+  3. local + remote branches matching the same patterns (`git branch -a`).
+     The `spec` label is **cosmetic only and must never gate the scan** — the label
+     is applied best-effort/silent-on-failure (step 5), so a label-filtered scan can
+     miss an unlabeled open spec PR and reuse its number. Truly simultaneous runs can
+     still collide — serialize bulk spec creation.
 - Auto-review↔rework loop bounded to **2** (override via `$ARGUMENTS`); state
   "Attempt N/2" before each retry. On exhaustion, open the PR as a **draft** with
   a `needs-human` label and unresolved findings at the top of the body.

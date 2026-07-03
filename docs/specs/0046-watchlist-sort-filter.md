@@ -1,5 +1,5 @@
 ---
-number: 0043
+number: 0046
 slug: watchlist-sort-filter
 title: Add sort, status filter, text search, and provider filter to the watchlist
 status: done
@@ -598,7 +598,7 @@ Green gate is **typecheck + lint/Sheriff + unit + component + build** (what CI
 runs); e2e is not required (decision 8).
 
 - [ ] `pnpm nx run-many -t lint test typecheck -p mobile-watchlist mobile-search
-  shared-domain shared-firestore-schema` passes **with Sheriff active**: the
+shared-domain shared-firestore-schema` passes **with Sheriff active**: the
       additive `releaseDate` field compiles in both slices; **no cross-slice import**
       (watchlist ↔ search), no `apps/mobile` deep import, no `scope:functions`
       import; the new helpers stay slice-local; the uid is obtained only via

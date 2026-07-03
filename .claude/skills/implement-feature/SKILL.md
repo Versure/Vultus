@@ -38,7 +38,7 @@ Sheriff is an import linter — it does **not** make files disjoint. Therefore:
   `package.json`+lockfile, `nx.json`, `tsconfig*.json`, `project.json`,
   `firestore.rules`/`indexes`, `.github/workflows/*`, registration barrels, and
   the `apps/*` route/export registration. Edit these **sequentially**. Run all
-  `npm install` / `nx generate` yourself, serially (they race the lockfile + Nx
+  `pnpm install` / `pnpm add` / `nx generate` yourself, serially (they race the lockfile + Nx
   cache). **Populating a shared lib** (`shared/domain`, `shared/firestore-schema`,
   `shared/ui-kit`) — its source _and_ barrel — is foundation work, run by one
   agent alone, never fanned out.

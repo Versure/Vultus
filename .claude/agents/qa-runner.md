@@ -34,8 +34,9 @@ scoped to the change over running the whole repo.
    emulators. If the loopback constraint is in effect, mark e2e as
    `UNRUNNABLE IN SESSION (R4)` — do NOT mark it `SKIPPED`; CI (`firebase
 emulators:exec` gate) is the authoritative validator. Report the CI URL.
-7. **Smoke / boots** — when feasible, launch the app via `nx serve` (background),
-   confirm it starts without console errors, then stop it.
+7. **Smoke / boots** — when feasible, launch the app via
+   `pnpm nx run mobile:serve-mock` (background), confirm it starts without
+   console errors, then stop it.
 8. **Visual fidelity (UI slices)** — typecheck/lint/test/build **cannot** confirm
    a UI matches the design; that blind spot is what drives repeated UI-rework
    passes. For a `scope:mobile` UI change, **attempt a visual check**: render the
@@ -44,7 +45,7 @@ emulators:exec` gate) is the authoritative validator. Report the CI URL.
    just named), icon alignment, sibling insets. If the environment blocks a live
    dev server + browser (loopback-restricted sandboxes often do), report
    `SKIPPED (visual unverified — needs human eyeball)` with the exact view command
-   (e.g. `nx serve mobile --configuration=mock`) and a per-item checklist.
+   (e.g. `pnpm nx run mobile:serve-mock`) and a per-item checklist.
    **Never report `PASS` for a UI change that was only compiled** — surface it so
    the orchestrator routes a human eyeball; this is not a silent skip.
 
