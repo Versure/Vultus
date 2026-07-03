@@ -34,9 +34,12 @@ the spec PR lands it as `approved` on `main` whether or not `/rework-spec` ran
   reveals a merged spec is wrong, open a **new spec PR editing that file** (run
   `/create-spec` referencing it, or edit + PR directly) and re-review — there's
   no automated "kick an approved spec back to draft."
-- **Spec numbering** scans `main` + open `spec/*` PRs for the next `NNNN`; truly
-  simultaneous `/create-spec` runs could still pick the same number — serialize
-  them if you spec in bulk.
+- **Spec numbering** — the next `NNNN` is the max over `main`'s `docs/specs/*`
+  filenames **plus** open `spec/*` and `feat/*` PR branches **plus** local/remote
+  branches matching those patterns, `+1`. The `spec` label is **cosmetic and does
+  not gate allocation** (it's applied best-effort, so a label-filtered scan can
+  miss an unlabeled PR). Truly simultaneous `/create-spec` runs could still pick
+  the same number — serialize them if you spec in bulk.
 
 ## File naming
 
