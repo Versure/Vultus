@@ -1,0 +1,73 @@
+@if (!hidden()) {
+  <div class="splash" [class.splash--exiting]="exiting()">
+    <!-- Background cinematic stills (subtle parallax layer) -->
+    <div class="splash__backdrop" aria-hidden="true">
+      <div class="splash__still splash__still--metropolis"></div>
+      <div class="splash__still splash__still--projector"></div>
+    </div>
+
+    <!-- Cinematic vignette overlay -->
+    <div class="splash__vignette" aria-hidden="true"></div>
+
+    <!-- Logo & branding -->
+    <div class="splash__content">
+      <div class="splash__logo">
+        <div class="splash__icon">
+          <!-- Material Symbols Outlined "movie_filter", FILL 1
+               (fonts.gstatic.com short-term release SVG, inlined so the glyph
+               needs no icon-font load on the boot path) -->
+          <svg
+            class="splash__glyph"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 -960 960 960"
+            aria-hidden="true"
+          >
+            <path
+              fill="currentColor"
+              d="m366-518-34 78-78 34 78 34 34 78 34-78 78-34-78-34-34-78Zm266-12-25 54-54 25 54 25 25 54 25-54 54-25-54-25-25-54ZM140-800l74 152h130l-74-152h89l74 152h130l-74-152h89l74 152h130l-74-152h112q24 0 42 18t18 42v520q0 24-18 42t-42 18H140q-24 0-42-18t-18-42v-520q0-24 18-42t42-18Z"
+            />
+          </svg>
+          <span
+            class="splash__corner splash__corner--tl"
+            aria-hidden="true"
+          ></span>
+          <span
+            class="splash__corner splash__corner--tr"
+            aria-hidden="true"
+          ></span>
+          <span
+            class="splash__corner splash__corner--bl"
+            aria-hidden="true"
+          ></span>
+          <span
+            class="splash__corner splash__corner--br"
+            aria-hidden="true"
+          ></span>
+        </div>
+        <div class="splash__brand">
+          <h1 class="splash__title">
+            V<span class="splash__flicker">u</span>ltus
+          </h1>
+          <p class="splash__tagline">High Fidelity Media Tracking</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom progress indicator -->
+    <div class="splash__footer">
+      <div class="splash__track">
+        <div class="splash__bar"></div>
+      </div>
+      <p
+        class="splash__status"
+        [class.splash__status--faded]="!statusVisible()"
+        role="status"
+      >
+        {{ statusText() }}
+      </p>
+    </div>
+
+    <!-- Subtle scanline effect -->
+    <div class="splash__scanlines" aria-hidden="true"></div>
+  </div>
+}

@@ -32,6 +32,13 @@ vi.mock('@capacitor/app', () => ({
   App: { addListener: vi.fn() },
 }));
 
+// App renders the boot SplashComponent, which imports @capacitor/splash-screen.
+// Off-native its guard never calls hide(), but stub the module so no native
+// bridge is touched when the import graph loads.
+vi.mock('@capacitor/splash-screen', () => ({
+  SplashScreen: { hide: vi.fn().mockResolvedValue(undefined) },
+}));
+
 // App now imports NotificationHandlerService, whose module pulls in
 // @angular/fire/firestore (→ rxfire, an ESM-in-CJS package Vitest can't load)
 // and @capacitor/push-notifications. Stub both so the App module graph loads
@@ -96,6 +103,13 @@ describe('App', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('ion-app')).toBeTruthy();
     expect(compiled.querySelector('ion-router-outlet')).toBeTruthy();
+  });
+
+  it('renders the boot splash overlay above the router outlet', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.querySelector('app-splash .splash')).toBeTruthy();
   });
 
   it('does not invoke StatusBar native calls off-device (guard no-ops)', async () => {

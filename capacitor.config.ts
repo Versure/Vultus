@@ -9,8 +9,10 @@ const config: CapacitorConfig = {
   backgroundColor: '#0b1326',
   plugins: {
     SplashScreen: {
-      launchShowDuration: 500,
-      launchAutoHide: true,
+      // The static native splash stays up until the app shell's animated web
+      // splash (SplashComponent) renders and calls SplashScreen.hide() — a
+      // same-color handoff into the Stitch splash screen animations.
+      launchAutoHide: false,
       backgroundColor: '#0b1326',
       showSpinner: false,
       androidSplashResourceName: 'splash',
