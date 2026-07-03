@@ -13,7 +13,8 @@
 Total specs: 72
 
 - done: 69
-- approved: 3
+- approved: 2
+- implementing: 1
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -87,5 +88,5 @@ Total specs: 72
 | 68 | ai-setup-security-hardening | Harden the AI setup — narrow secret-copy allows, add deny rules, treat external text as untrusted, tighten CI | done | — | — |
 | 69 | guard-hook-robustness | Harden the slice-edit guard hook — crash-safety, self-test, exemptions, and documented bypass | done | — | — |
 | 70 | audit-docs-accuracy | Fix the audit-docs skill — stale "must-detect" example and the phantom scheduled runner | done | — | — |
-| 71 | normative-text-dedup | De-duplicate copy-pasted normative rules (Stitch recipe, worktree snippet, design hexes, Windows E-notes) | approved | — | — |
+| 71 | normative-text-dedup | De-duplicate copy-pasted normative rules (Stitch recipe, worktree snippet, design hexes, Windows E-notes) | implementing | — | — |
 | 72 | plan-accuracy-refresh | Refresh docs/PLAN.md to eliminate accumulated drift against the shipped codebase | approved | — | — |

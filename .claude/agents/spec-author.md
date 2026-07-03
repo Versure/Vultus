@@ -89,13 +89,12 @@ Body sections, in this order — keep each tight and concrete:
    screen plus the in-repo design system. **The authoritative tokens live at
    `docs/design/vultus-design-system.md`** — reference that file, do **not**
    reprint hex values in the spec (a hand-copied palette is how stale tokens
-   propagate; primary is `#4edea3`, **not** `#10B981`). **Actually pull the
-   screen** and read its real markup: `get_screen` returns only metadata +
-   download URLs, so the spec must point the implementer at the screen's
-   `htmlCode.downloadUrl` (fetched raw, not via WebFetch) for the concrete values,
-   and **reference the screen ID**. If the MCP errors, **retry** before giving up;
-   if genuinely unreachable, record "Stitch screen NOT captured" as a **blocking
-   open item** rather than shipping a prose-only section. Make the section a
+   propagate; primary is `#4edea3`, **not** `#10B981`). **Actually pull the screen** and read its real markup — the canonical fetch
+   recipe (`get_screen` → `htmlCode.downloadUrl` → raw GET, **not** WebFetch →
+   retry) lives in **CLAUDE.md → "UI fidelity is a contract"**; follow it and
+   **reference the screen ID** in the spec. If genuinely unreachable, record
+   "Stitch screen NOT captured" as a **blocking open item** rather than shipping a
+   prose-only section. Make the section a
    **checkable contract, not prose**: pin concrete values the implementer can't
    misread — element **dimensions** (control/input heights, not "taller"),
    spacing/insets (which must agree across sibling elements, e.g. list items

@@ -26,8 +26,11 @@ in `CLAUDE.md`.)
   and ask which.
 - Resolve the absolute worktree path (`$wt`, dir `spec-NNNN-slug`):
   ```powershell
-  $root = (git rev-parse --path-format=absolute --git-common-dir) -replace '\.git$',''
-  $wt   = [System.IO.Path]::GetFullPath("$root/../Vultus-worktrees/spec-NNNN-slug")
+  # Single deriver of $root/$wt (tools/scripts/resolve-worktree.mjs, spec 0071).
+  # Prints two lines: $root (primary checkout) then $wt (this worktree).
+  $resolved = node tools/scripts/resolve-worktree.mjs spec-NNNN-slug
+  $root = $resolved[0]
+  $wt   = $resolved[1]
   ```
   `git worktree prune`; if `$wt` is registered, reuse it
   (`git -C $wt checkout spec/NNNN-slug; git -C $wt pull`); elif the branch exists,

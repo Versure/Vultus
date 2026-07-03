@@ -92,8 +92,11 @@ around them rather than being surprised.
 
 - Branch→dir `/`→`-`. Resolve an absolute, worktree-invariant path:
   ```powershell
-  $root = (git rev-parse --path-format=absolute --git-common-dir) -replace '\.git$',''
-  $wt   = [System.IO.Path]::GetFullPath("$root/../Vultus-worktrees/feat-NNNN-slug")
+  # Single deriver of $root/$wt (tools/scripts/resolve-worktree.mjs, spec 0071).
+  # Prints two lines: $root (primary checkout) then $wt (this worktree).
+  $resolved = node tools/scripts/resolve-worktree.mjs feat-NNNN-slug
+  $root = $resolved[0]
+  $wt   = $resolved[1]
   ```
   `git worktree prune`; if `$wt` registered → reuse; elif branch exists →
   `git worktree add --force $wt feat/NNNN-slug`; else
@@ -119,7 +122,9 @@ around them rather than being surprised.
   | `apps/mobile/src/environments/environment.generated.ts` | prod build `fileReplacements` (specs 0026/0038)              |
   | `android/app/google-services.json`                      | Firebase Android config (Gradle/Capacitor, `--check-native`) |
 
-  Reuse the `$root` and `$wt` variables already computed above. Seed via the
+  Reuse the `$root` and `$wt` variables already computed above —
+  `tools/scripts/resolve-worktree.mjs` is the single deriver of `$root`/`$wt`;
+  call it, don't re-derive the paths a different way. Seed via the
   committed, allow-listed script (spec 0068) — a single narrowly-permitted
   invocation, **not** an inline `Copy-Item` (the old substring `Copy-Item` allow was
   broad enough to also auto-approve chained exfiltration in the same call):
@@ -287,13 +292,10 @@ around them rather than being surprised.
   its manifest: re-dispatch any slice whose agent failed/returned null or
   reported success but wrote nothing. (A global `git status` can't attribute
   files per slice or catch a clobber — trust the manifests + reported lists.)
-- **Normalize line endings before staging (group E2).** On Windows the `Edit`/
-  `Write` tools write CRLF, which trips Prettier's `endOfLine: lf` (`prettier
---check`) and produces a phantom whole-file CRLF diff. After **any** `Edit`/`Write`
-  on a source file (including the orchestrator's own foundation edits), run
-  `pnpm exec prettier --write <changed files>` — **only the changed files** —
-  **before** staging. No whole-file EOL churn, and **no** `.gitattributes`
-  renormalization.
+- **Normalize line endings before staging (group E2).** **Apply CLAUDE.md E2** —
+  this includes the orchestrator's **own foundation edits**: after any such
+  `Edit`/`Write`, run `pnpm exec prettier --write <changed files>` (changed files
+  only) **before** staging, with no `.gitattributes` renormalization.
 - **The orchestrator commits at fan-in (group B) — implementers do not
   self-commit.** After reconciling each agent's reported file list against its
   manifest (and E2-normalizing), the orchestrator **commits all implemented work**
@@ -303,7 +305,8 @@ around them rather than being surprised.
   computes `git -C $wt diff main...HEAD`, so it **must run against a committed
   diff**; if the working tree is dirty at Step 5, commit first.
 - **First commit of a cold/fresh worktree needs a long/backgrounded timeout
-  (group C).** On the **first commit of a fresh worktree**, husky + lint-staged
+  (group C; cf. CLAUDE.md's cold-hook note).** On the **first commit of a fresh
+  worktree**, husky + lint-staged
   (eslint `--fix`, prettier `--write`, `gen-spec-status --check`) run cold and can
   far exceed the default 2-min Bash timeout, SIGKILLing `git commit` (exit 143)
   mid-hook. For that first commit use a **long timeout — `600000` ms (the Bash
@@ -344,12 +347,9 @@ around them rather than being surprised.
   `SKIPPED` is a **blocking** unmet DoD gate, not an acceptable skip (only
   genuinely-not-bootstrapped tooling is an OK skip). For `FAIL`/unmet, dispatch
   the relevant specialist with details, re-run QA, up to the bound.
-- **`cap sync` on Windows (group E1).** Use `pnpm exec cap sync android` (not
-  `npx cap …` — `npx` can't resolve the `cap` binary in the pnpm workspace).
-  `cap sync`'s copy step **aborts without a prior web build** ("Could not find the
-  web assets directory: `dist/apps/mobile/browser`"), so when a spec's DoD requires
-  `cap sync`, run **`pnpm nx build mobile` first**, then `pnpm exec cap sync
-android` (or `pnpm exec cap copy android`).
+- **`cap sync` on Windows (group E1).** **Apply CLAUDE.md E1.** As a QA step: when
+  a spec's DoD requires `cap sync`, run **`pnpm nx build mobile` first**, then
+  `pnpm exec cap sync android` (or `pnpm exec cap copy android`).
 - **UI fidelity is not provable by the green gates.** typecheck/lint/test/build
   passing says nothing about whether a `scope:mobile` change _looks_ like the
   Stitch screen — that blind spot is what causes round-trip UI-rework passes. If
