@@ -13,7 +13,8 @@
 Total specs: 66
 
 - done: 63
-- approved: 3
+- approved: 2
+- implementing: 1
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -60,9 +61,9 @@ Total specs: 66
 | 41 | notification-deep-links | Display FCM push notifications and deep-link taps to the title-detail page | done | slice:title-detail | scope:mobile, scope:functions |
 | 42 | notifications-inbox | Add an in-app notifications inbox slice and a watchlist-header bell entry point | done | slice:notifications, slice:watchlist | scope:mobile |
 | 43 | fix-media-type-hint-navigation | Fix: thread media-type hint through navigation to prevent wrong-title TMDB collision | done | slice:search, slice:watchlist, slice:title-detail | scope:mobile |
-| 43 | watchlist-sort-filter | Add sort, status filter, text search, and provider filter to the watchlist | done | slice:watchlist, slice:search | scope:mobile, scope:shared |
 | 44 | fix-triggersync-cors | Add explicit CORS origins to the triggerSync Gen2 callable so browser-origin invocations are not preflight-blocked | done | — | scope:functions |
 | 45 | android-display-cutout | Draw under the camera notch on Android (display-cutout mode) | done | — | scope:mobile |
+| 46 | watchlist-sort-filter | Add sort, status filter, text search, and provider filter to the watchlist | done | slice:watchlist, slice:search | scope:mobile, scope:shared |
 | 47 | sync-episodes | Sync TV episodes from TMDB into the per-user episodes subcollection | done | slice:sync-episodes | scope:functions, scope:shared |
 | 48 | fix-triggersync-500 | Make the triggerSync callable surface diagnosable errors instead of an opaque INTERNAL 500 | done | — | scope:functions |
 | 49 | sync-health | Surface the daily sync's last-run status in the settings slice (sync-runs) | done | slice:settings | scope:shared, scope:functions, scope:mobile |
@@ -82,4 +83,4 @@ Total specs: 66
 | 63 | implement-feature-hardening | Harden the implement-feature workflow against observed friction (specs 0060/0062) | done | — | — |
 | 64 | android-cutout-viewport-fit | Extend the WebView under the Android display cutout via viewport-fit=cover, with a dark window background fallback | done | — | scope:mobile |
 | 65 | worktree-dependency-bootstrap | Bootstrap dependencies in the implement-feature worktree (fresh worktrees have no node_modules) | approved | — | — |
-| 66 | spec-numbering-integrity | Fix spec-number allocation (branch-based scan), repair the landed 0043/0046 collision, and guard against recurrence | approved | — | — |
+| 66 | spec-numbering-integrity | Fix spec-number allocation (branch-based scan), repair the landed 0043/0046 collision, and guard against recurrence | implementing | — | — |
