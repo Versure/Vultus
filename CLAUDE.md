@@ -80,6 +80,13 @@ architecture and decisions; read it before non-trivial work.
   **cold** and can exceed the default tool timeout — run the first `git commit`
   with a long timeout (the Bash-tool max, `600000` ms) and consider backgrounding
   it, rather than treating the timeout as a failure.
+- **Fresh feature worktree has no `node_modules`** (gitignored). For a
+  **code-bearing** spec, install in the worktree — `pnpm install`, and on the
+  Windows firebase-tools `semver` bin-link failure re-run with
+  `--config.bin-links=false` (~11 min). For a **docs-only** spec, skip the install
+  and run prettier / `gen-spec-status` via the primary checkout's tooling
+  (`worktree-no-node-modules-commit`). **Never junction the primary `node_modules`
+  into a worktree** — `pnpm exec` can purge it.
 - **Cloud Functions deploy gate.** CI validates the monorepo but the deployable
   artifact is the **pruned `dist/apps/functions`**, installed by Cloud Build with
   pnpm — a different beast. Any change to `apps/functions` deps or build **must**
