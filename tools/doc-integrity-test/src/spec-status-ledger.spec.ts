@@ -10,6 +10,7 @@ import {
   parseSpecFrontmatter,
   renderStatusMarkdown,
   readAllSpecs,
+  assertSpecIntegrity,
 } from '../../scripts/gen-spec-status.mjs';
 
 /**
@@ -233,6 +234,77 @@ describe('renderStatusMarkdown — determinism', () => {
     expect(renderStatusMarkdown(fixtureEntries)).toBe(
       renderStatusMarkdown(fixtureEntries),
     );
+  });
+});
+
+describe('Numbering integrity — filename↔number guard (spec 0066)', () => {
+  const mdWithNumber = (n: string) =>
+    [
+      '---',
+      `number: ${n}`,
+      'slug: some-slug',
+      'title: Some spec',
+      'status: draft',
+      '---',
+    ].join('\n');
+
+  it('(a) throws when frontmatter number disagrees with the filename NNNN', () => {
+    // 0046-… file carrying `number: 43` — the exact landed collision shape.
+    const md = mdWithNumber('0043');
+    expect(() =>
+      parseSpecFrontmatter(md, '0046-watchlist-sort-filter.md'),
+    ).toThrow(/0046-watchlist-sort-filter\.md/);
+  });
+
+  it('(a2) does NOT throw for a correct but UNPADDED number (numeric compare)', () => {
+    // `0042-notifications-inbox.md` legitimately carries `number: 42`; a
+    // padded-string compare ("42" === "0042") would spuriously fail here.
+    const md = mdWithNumber('42');
+    expect(() =>
+      parseSpecFrontmatter(md, '0042-notifications-inbox.md'),
+    ).not.toThrow();
+  });
+
+  it('skips the filename check when the label has no leading 4-digit prefix', () => {
+    // Default `<spec>` label / non-filename callers: number mismatch is NOT a
+    // filename mismatch, so no throw from this guard.
+    const md = mdWithNumber('7');
+    expect(() => parseSpecFrontmatter(md, '<spec>')).not.toThrow();
+  });
+});
+
+describe('Numbering integrity — cross-file uniqueness guard (spec 0066)', () => {
+  const entry = (number: number, slug: string) => ({
+    number,
+    slug,
+    title: `Spec ${slug}`,
+    status: 'done',
+    slices: [],
+    scopes: [],
+  });
+
+  it('(b) throws when two entries share the same Number(number)', () => {
+    const entries = [
+      entry(43, 'fix-media-type-hint-navigation'),
+      entry(43, 'watchlist-sort-filter'),
+    ];
+    expect(() => assertSpecIntegrity(entries)).toThrow(/43/);
+    expect(() => assertSpecIntegrity(entries)).toThrow(/watchlist-sort-filter/);
+  });
+
+  it('does not throw when every number is unique', () => {
+    const entries = [entry(43, 'a'), entry(46, 'b'), entry(66, 'c')];
+    expect(() => assertSpecIntegrity(entries)).not.toThrow();
+  });
+});
+
+describe('Numbering integrity — real docs/specs tree (spec 0066)', () => {
+  // (c) The live tree must parse without a filename↔number mismatch or a
+  // duplicate-number collision. This is EXPECTED RED until a sibling task fixes
+  // `0046-watchlist-sort-filter.md` (which currently carries `number: 0043`,
+  // colliding with 0043) — the guard catching the live collision is the point.
+  it('readAllSpecs over docs/specs passes the integrity guards', () => {
+    expect(() => readAllSpecs(specsDir)).not.toThrow();
   });
 });
 
