@@ -36,8 +36,20 @@
       </p>
       <div class="code-box">
         <span class="code-value">{{ link.code() ?? '····' }}</span>
+        <button
+          type="button"
+          class="copy-button"
+          aria-label="Copy code"
+          (click)="copyCode()"
+        >
+          <ion-icon name="copy-outline" slot="icon-only"></ion-icon>
+        </button>
       </div>
-      @if (link.stage() === 'error') {
+      @if (copied()) {
+      <p class="copied-feedback" role="status" data-test="copied-feedback">
+        Copied
+      </p>
+      } @if (link.stage() === 'error') {
       <p class="code-expiry code-expiry--expired" data-test="code-expired">
         Code expired
       </p>
