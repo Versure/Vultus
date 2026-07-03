@@ -10,10 +10,10 @@
 
 # Spec status ledger
 
-Total specs: 65
+Total specs: 68
 
 - done: 63
-- approved: 2
+- approved: 5
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -81,4 +81,7 @@ Total specs: 65
 | 62 | android-webview-cutout-background | Paint the Android WebView background behind the camera cutout via Capacitor's top-level backgroundColor config | done | — | scope:mobile |
 | 63 | implement-feature-hardening | Harden the implement-feature workflow against observed friction (specs 0060/0062) | done | — | — |
 | 64 | android-cutout-viewport-fit | Extend the WebView under the Android display cutout via viewport-fit=cover, with a dark window background fallback | done | — | scope:mobile |
+| 65 | worktree-dependency-bootstrap | Bootstrap dependencies in the implement-feature worktree (fresh worktrees have no node_modules) | approved | — | — |
+| 66 | spec-numbering-integrity | Fix spec-number allocation (branch-based scan), repair the landed 0043/0046 collision, and guard against recurrence | approved | — | — |
+| 67 | ai-setup-instruction-corrections | Correct drifted/incorrect standing-instruction content in agents, PLAN.md, and CLAUDE.md | approved | — | — |
 | 69 | guard-hook-robustness | Harden the slice-edit guard hook — crash-safety, self-test, exemptions, and documented bypass | approved | — | — |
