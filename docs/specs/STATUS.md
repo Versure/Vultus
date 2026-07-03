@@ -10,10 +10,10 @@
 
 # Spec status ledger
 
-Total specs: 66
+Total specs: 67
 
 - done: 63
-- approved: 3
+- approved: 4
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -83,3 +83,4 @@ Total specs: 66
 | 64 | android-cutout-viewport-fit | Extend the WebView under the Android display cutout via viewport-fit=cover, with a dark window background fallback | done | — | scope:mobile |
 | 65 | worktree-dependency-bootstrap | Bootstrap dependencies in the implement-feature worktree (fresh worktrees have no node_modules) | approved | — | — |
 | 66 | spec-numbering-integrity | Fix spec-number allocation (branch-based scan), repair the landed 0043/0046 collision, and guard against recurrence | approved | — | — |
+| 67 | ai-setup-instruction-corrections | Correct drifted/incorrect standing-instruction content in agents, PLAN.md, and CLAUDE.md | approved | — | — |
