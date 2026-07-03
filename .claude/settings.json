@@ -16,10 +16,24 @@
     ]
   },
   "permissions": {
-    "allow": [
-      "Bash(*Copy-Item*google-services.json*)",
-      "Bash(*Copy-Item*.env.local*)",
-      "Bash(*Copy-Item*environment.generated.ts*)"
-    ]
+    "deny": [
+      "Read(.env.local)",
+      "Read(**/.env.local)",
+      "Read(apps/mobile/src/environments/environment.generated.ts)",
+      "Read(**/environment.generated.ts)",
+      "Read(android/app/google-services.json)",
+      "Read(**/google-services.json)",
+      "Bash(cat *.env.local*)",
+      "Bash(type *.env.local*)",
+      "Bash(*Get-Content*.env.local*)",
+      "Bash(*gc *.env.local*)",
+      "Bash(cat *environment.generated.ts*)",
+      "Bash(*Get-Content*environment.generated.ts*)",
+      "Bash(*gc *environment.generated.ts*)",
+      "Bash(cat *google-services.json*)",
+      "Bash(*Get-Content*google-services.json*)",
+      "Bash(*gc *google-services.json*)"
+    ],
+    "allow": ["Bash(node tools/scripts/seed-worktree.mjs:*)"]
   }
 }

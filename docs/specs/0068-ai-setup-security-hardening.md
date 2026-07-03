@@ -2,7 +2,7 @@
 number: 0068
 slug: ai-setup-security-hardening
 title: Harden the AI setup — narrow secret-copy allows, add deny rules, treat external text as untrusted, tighten CI
-status: approved # draft | approved | implementing | done
+status: done # draft | approved | implementing | done
 slices: []
 scopes: []
 created: 2026-07-02
