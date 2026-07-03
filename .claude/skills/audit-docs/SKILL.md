@@ -1,6 +1,6 @@
 ---
 name: audit-docs
-description: Audit Vultus documentation for drift against the codebase. Runs spec 0058's deterministic doc-integrity guards as a floor, then adds an LLM-judgment pass over PLAN.md, libs/** READMEs, and CLAUDE.md for stale code references and PLAN-narrative-vs-reality contradictions. Report-only — never edits docs. Interactive runs print the report; headless/scheduled runs open a draft PR with the report only when drift is found. Use when the user wants to audit/verify documentation, check for doc drift, or on a scheduled documentation-health routine.
+description: Audit Vultus documentation for drift against the codebase. Runs spec 0058's deterministic doc-integrity guards as a floor, then adds an LLM-judgment pass over PLAN.md, libs/** READMEs, and CLAUDE.md for stale code references and PLAN-narrative-vs-reality contradictions. Report-only — never edits docs. Interactive runs print the report; when run headless, opens a draft PR with the report only when drift is found. Invocation is manual (`/audit-docs`). Use when the user wants to audit/verify documentation or check for doc drift.
 ---
 
 # Audit Docs
@@ -19,8 +19,9 @@ Invocation:
 /audit-docs [--mode <interactive|headless>] [--scope <all|plan|readmes|claude>]
 ```
 
-- **`--mode`** (optional) — forces delivery mode, overriding auto-detection. The
-  scheduled routine passes `--mode headless`. Absent → auto-detect.
+- **`--mode`** (optional) — forces delivery mode, overriding auto-detection. A
+  headless run (e.g. a not-yet-wired scheduled routine) passes `--mode headless`.
+  Absent → auto-detect.
 - **`--scope`** (optional, default `all`) — limits the **judgment layer** to PLAN
   only / READMEs only / CLAUDE.md only. The **deterministic floor always runs**
   regardless of `--scope`.
@@ -43,8 +44,8 @@ Invocation:
 - **Headless-safety hard constraints — MUST hold (requirements, not choices):**
   - **MUST be model-invocable** — this frontmatter does **not** set
     `disable-model-invocation`. A scheduled routine only fires skills Claude may
-    invoke on its own; disabling model invocation would break the scheduled use
-    case.
+    invoke on its own, so the skill remains invocable by a future/not-yet-wired
+    scheduled routine; disabling model invocation would break that use case.
   - **MUST NOT** use `AskUserQuestion` or any interactive prompt in the
     **headless path** — there is no human to answer. Reading `AskUserQuestion`
     availability as a mode signal (step 4) is **not** prompting; the skill never
@@ -53,8 +54,9 @@ Invocation:
     git + file reads (+ `gh` for the PR) only, so the skill survives a fresh
     headless cloud run. No Stitch, no design-system fetch.
   - **MUST NOT** read or write secrets or `.env.local` (CLAUDE.md).
-    (Background: scheduled routines run headless from a fresh clone; committed
-    `.claude/skills/` and committed docs are the only durable state.)
+    (Background: a headless run — such as a not-yet-wired scheduled routine —
+    runs from a fresh clone; committed `.claude/skills/` and committed docs are
+    the only durable state.)
 - **Branch / label conventions (headless drift path).** Branch
   `claude/audit-docs-<YYYYMMDD>` (UTC), off current `main`; on same-day collision
   reuse and overwrite. Draft PR titled
@@ -91,9 +93,10 @@ Invocation:
      `docs/specs/README.md`, the specs, and code; record each contradiction
      (PLAN section + quoted prose + higher-authority source + the contradiction).
      Type: prescriptive/needs-a-decision, severity HIGH. Report the drift
-     confidently — **do not rewrite PLAN**. The canonical PLAN §5–§6 issue-vs-
-     spec-workflow contradiction (the retained obsolete body content, not a
-     missing annotation) is the expected entry against the current repo.
+     confidently — **do not rewrite PLAN**. (For a worked illustration of the
+     class, see `CHECKLIST.md` §3's historical PLAN §5–§6 issue-vs-spec-workflow
+     example — fixed 2026-07-01, so **not** expected against the current repo;
+     it shows the shape of a class-2 finding, not an instance to look for today.)
 
 ### 3. Assemble the report
 
