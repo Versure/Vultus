@@ -2,7 +2,7 @@
 number: 0071
 slug: normative-text-dedup
 title: De-duplicate copy-pasted normative rules (Stitch recipe, worktree snippet, design hexes, Windows E-notes)
-status: implementing # draft | approved | implementing | done
+status: done # draft | approved | implementing | done
 slices: []
 scopes: []
 created: 2026-07-02
