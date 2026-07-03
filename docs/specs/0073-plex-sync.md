@@ -2,7 +2,7 @@
 number: 0073
 slug: plex-sync
 title: One-way Plex → Vultus sync (library additions + watch status)
-status: implementing
+status: done
 slices: [slice:settings]
 scopes: [scope:mobile, scope:shared]
 created: 2026-07-03
