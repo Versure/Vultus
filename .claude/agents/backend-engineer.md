@@ -32,9 +32,10 @@ the **spec path**, the **worktree path**, and **your assigned task subset**
 - **The Firestore emulator can't run in-session.** The Firestore emulator — or
   any Java NIO loopback server — **cannot run under Claude Code tools in this
   environment** (a known environment limitation, not an in-repo bug). So
-  emulator-dependent gates (Firestore integration tests, `firebase
-  emulators:exec`/`emulators:start`) must run in CI or the user's own terminal —
-  never attempt to start them in-session. Run only the emulator-free unit tests
+  emulator-dependent gates (Firestore integration tests,
+  `firebase emulators:exec`/`emulators:start`) must run in CI or the user's own
+  terminal — never attempt to start them in-session. Run only the emulator-free
+  unit tests
   here; note + defer anything that needs the emulator.
 - **Don't commit or push** — the orchestrator handles git.
 - **Keep the lib README current.** When you change a lib's public API, behavior,
