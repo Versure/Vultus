@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+      Android 12+ (API 31+) system splash. The base values/styles.xml launch
+      theme only sets the legacy android:background, which the platform ignores
+      on API 31+ — so the OS fell back to the launcher adaptive icon (the bare
+      "V"), producing a first "V logo" splash before the animated web splash
+      (github.com/Versure/Vultus/issues/196). Here we drive the system splash
+      with the SAME movie_filter glyph + #0b1326 surface as the web splash, so
+      the native -> web handoff reads as one continuous splash.
+    -->
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <item name="android:windowSplashScreenBackground">#0b1326</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
+    </style>
+</resources>
