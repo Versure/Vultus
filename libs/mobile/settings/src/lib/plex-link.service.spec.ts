@@ -6,6 +6,7 @@ import type { PlexClient, PlexServer } from '@vultus/shared/domain';
 import { userPath } from '@vultus/shared/firestore-schema';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PlexLinkService } from './plex-link.service';
+import { PlexPinGoneError } from './plex-errors';
 
 // --- AngularFire mock ---
 interface Ref {
@@ -149,7 +150,7 @@ describe('PlexLinkService', () => {
     }
   });
 
-  it('pin expiry with no auth → error stage', async () => {
+  it('pin expiry with no auth → error stage with reason "expired"', async () => {
     const client = makeClient({
       checkPin: vi
         .fn()
@@ -161,7 +162,77 @@ describe('PlexLinkService', () => {
     await vi.advanceTimersByTimeAsync(15 * 60 * 1000 + 1000);
 
     expect(service.stage()).toBe('error');
+    expect(service.errorReason()).toBe('expired');
     expect(service.expiresInSeconds()).toBe(0);
+  });
+
+  it('checkPin PlexPinGoneError (plex.tv 404) → error stage with reason "expired"', async () => {
+    const client = makeClient({
+      checkPin: vi.fn().mockRejectedValue(new PlexPinGoneError()),
+    });
+    const service = makeService(client);
+    await service.requestCode();
+    await flush();
+
+    expect(service.stage()).toBe('error');
+    expect(service.errorReason()).toBe('expired');
+  });
+
+  it('requestPin throwing → error stage with reason "network"', async () => {
+    const client = makeClient({
+      requestPin: vi.fn().mockRejectedValue(new Error('offline')),
+    });
+    const service = makeService(client);
+    await service.requestCode();
+
+    expect(service.stage()).toBe('error');
+    expect(service.errorReason()).toBe('network');
+  });
+
+  it('discoverServer throwing → error stage with reason "network", token NOT persisted', async () => {
+    const client = makeClient({
+      discoverServer: vi.fn().mockRejectedValue(new Error('http 401')),
+    });
+    const service = makeService(client);
+    await service.requestCode();
+    await flush();
+
+    expect(service.stage()).toBe('error');
+    expect(service.errorReason()).toBe('network');
+    // Discovery runs BEFORE token persistence, so nothing was stored.
+    expect(prefsSetMock).not.toHaveBeenCalled();
+    expect(service.linked()).toBe(false);
+  });
+
+  it('poll tolerates a transient checkPin failure, then completes on the next tick', async () => {
+    const checkPin = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('socket killed'))
+      .mockResolvedValue({ id: 1, code: 'H7X2', authToken: 'tok' });
+    const client = makeClient({ checkPin });
+    const service = makeService(client);
+    await service.requestCode();
+    // First tick (t=0) rejects; the flow must NOT error — it reschedules.
+    await flush();
+    expect(service.stage()).toBe('waiting');
+    // Next tick (t=2000ms) succeeds → connected.
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(service.stage()).toBe('connected');
+    expect(checkPin).toHaveBeenCalledTimes(2);
+  });
+
+  it('poll gives up after repeated checkPin failures → error stage with reason "network"', async () => {
+    const client = makeClient({
+      checkPin: vi.fn().mockRejectedValue(new Error('offline')),
+    });
+    const service = makeService(client);
+    await service.requestCode();
+    // 5 consecutive failures at t=0,2000,...,8000ms → give up.
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(service.stage()).toBe('error');
+    expect(service.errorReason()).toBe('network');
   });
 
   it('regenerateCode requests a fresh pin', async () => {
@@ -182,7 +253,7 @@ describe('PlexLinkService', () => {
     service.cancel();
   });
 
-  it('discoverServer returning null → error stage (no local server found)', async () => {
+  it('discoverServer returning null → error "no-server", token NOT persisted (no half-link)', async () => {
     const client = makeClient({
       discoverServer: vi.fn().mockResolvedValue(null),
     });
@@ -191,6 +262,50 @@ describe('PlexLinkService', () => {
     await flush();
 
     expect(service.stage()).toBe('error');
+    expect(service.errorReason()).toBe('no-server');
+    // The token must NOT be persisted when discovery fails — otherwise the
+    // Settings card would show "Connected" to a server that was never found.
+    expect(prefsSetMock).not.toHaveBeenCalled();
+    expect(service.linked()).toBe(false);
+  });
+
+  it('Firestore write failing after discovery rolls the token back (no half-link)', async () => {
+    updateDocMock.mockRejectedValueOnce(new Error('permission-denied'));
+    const service = makeService(makeClient());
+    await service.requestCode();
+    await flush();
+
+    expect(service.stage()).toBe('error');
+    expect(service.errorReason()).toBe('network');
+    // Token was persisted then rolled back so the device is not half-linked.
+    expect(prefsSetMock).toHaveBeenCalledTimes(1);
+    expect(prefsRemoveMock).toHaveBeenCalledTimes(1);
+    expect(service.linked()).toBe(false);
+  });
+
+  it('loadState self-heals a half-linked device: token present but no plexSync → drops token', async () => {
+    prefsGetMock.mockResolvedValue({ value: 'orphan-token' });
+    getDocMock.mockResolvedValue(
+      snap({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+          deliveryHour: null,
+        },
+        fcmTokens: [],
+        myProviderIds: [],
+        hasPlex: true,
+        // No plexSync — the account is not linked (e.g. unlinked elsewhere).
+      }),
+    );
+    const service = makeService(makeClient());
+    await service.loadState();
+
+    expect(prefsRemoveMock).toHaveBeenCalledTimes(1);
+    expect(service.linked()).toBe(false);
+    expect(service.serverName()).toBeNull();
   });
 
   it('unlink clears the Preferences token + writes plexSync deleteField(), keeps hasPlex, no watchlist/episode write', async () => {

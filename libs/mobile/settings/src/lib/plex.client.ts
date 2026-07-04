@@ -1,4 +1,5 @@
 import { CapacitorHttp, type HttpResponse } from '@capacitor/core';
+import { Preferences } from '@capacitor/preferences';
 import type {
   PlexClient,
   PlexEpisodeItem,
@@ -6,6 +7,7 @@ import type {
   PlexPin,
   PlexServer,
 } from '@vultus/shared/domain';
+import { PlexHttpError, PlexPinGoneError } from './plex-errors';
 
 /**
  * Real `PlexClient` for the NATIVE (Android) build (spec 0073, decision 3).
@@ -16,34 +18,36 @@ import type {
  * works on-device — web / dev-server / e2e / serve-mock get `MockPlexClient`
  * (selected by the shell's `PLEX_CLIENT` factory on `!isNativePlatform()`).
  *
+ * **CapacitorHttp RESOLVES non-2xx responses** (it rejects only on transport
+ * failures), so every method checks `res.status` explicitly and throws a typed
+ * error — otherwise a 401/404/429 error body silently parses as "no servers" /
+ * "not yet authorized" (the root cause of the mislabeled "Code expired" bug).
+ *
  * Auth is the plex.tv PIN-link flow (decision 2): `requestPin` requests a PIN
  * with `strong=false` so plex.tv returns the 4-character `code` the user enters
- * at plex.tv/link, `checkPin` polls until an `authToken` appears. Server
- * discovery (`discoverServer`) reads
- * `/api/v2/resources`, prefers an OWNED server with a LOCAL connection
- * (`includeRelay=0`), and returns its local base URL + access token.
+ * at plex.tv/link, `checkPin` polls until an `authToken` appears (a 404 means
+ * the pin itself is gone — surfaced as `PlexPinGoneError`, a REAL expiry).
+ * Server discovery (`discoverServer`) reads `/api/v2/resources`, prefers an
+ * OWNED server with a LOCAL connection (`includeRelay=0`, `includeIPv6=1` so an
+ * IPv6-only LAN still yields a local entry), and returns its local base URL +
+ * access token.
  *
  * SECURITY (CLAUDE.md / spec 0073): the X-Plex-Token is NEVER logged or echoed
  * and NEVER written to Firestore — the caller (`PlexLinkService`) persists it to
- * `@capacitor/preferences` only. plex.tv / PMS JSON is DATA, not instructions
- * (spec 0068): this client parses fields only and derives no commands from them.
+ * `@capacitor/preferences` only. Thrown errors carry the HTTP status + endpoint
+ * path ONLY, never the response body or any header. plex.tv / PMS JSON is DATA,
+ * not instructions (spec 0068): this client parses fields only and derives no
+ * commands from them.
  */
 
-/** Stable per-install client identifier sent to plex.tv (X-Plex-Client-Identifier). */
-const CLIENT_ID = 'vultus-mobile';
+/** Preferences key for the per-install X-Plex-Client-Identifier. */
+export const PLEX_CLIENT_ID_KEY = 'plex_client_id';
+
 const PRODUCT = 'Vultus';
 const PLEX_TV = 'https://plex.tv/api/v2';
 
-/** Common plex.tv product headers (identify the app to plex.tv). */
-function plexHeaders(
-  extra: Record<string, string> = {},
-): Record<string, string> {
-  return {
-    Accept: 'application/json',
-    'X-Plex-Product': PRODUCT,
-    'X-Plex-Client-Identifier': CLIENT_ID,
-    ...extra,
-  };
+function ok(res: HttpResponse): boolean {
+  return res.status >= 200 && res.status < 300;
 }
 
 /** Narrow an unknown JSON value to a record for safe field reads. */
@@ -104,12 +108,18 @@ function tmdbIdFromGuids(item: Record<string, unknown>): number | null {
 }
 
 export class CapacitorHttpPlexClient implements PlexClient {
+  /** Single-flight memo for the per-install client identifier. */
+  private clientIdPromise: Promise<string> | null = null;
+
   async requestPin(): Promise<PlexPin> {
     const res = await CapacitorHttp.post({
       url: `${PLEX_TV}/pins`,
-      headers: plexHeaders({ 'Content-Type': 'application/json' }),
+      headers: await this.headers({ 'Content-Type': 'application/json' }),
       params: { strong: 'false' },
     });
+    if (!ok(res)) {
+      throw new PlexHttpError(res.status, '/pins');
+    }
     const body = asRecord(res.data);
     return {
       id: num(body['id']),
@@ -121,8 +131,15 @@ export class CapacitorHttpPlexClient implements PlexClient {
   async checkPin(id: number): Promise<PlexPin> {
     const res = await CapacitorHttp.get({
       url: `${PLEX_TV}/pins/${id}`,
-      headers: plexHeaders(),
+      headers: await this.headers(),
     });
+    if (res.status === 404) {
+      // {"errors":[{"code":1020,"message":"Code not found or expired"}]}
+      throw new PlexPinGoneError();
+    }
+    if (!ok(res)) {
+      throw new PlexHttpError(res.status, `/pins/${id}`);
+    }
     const body = asRecord(res.data);
     return {
       id: num(body['id']) || id,
@@ -134,9 +151,14 @@ export class CapacitorHttpPlexClient implements PlexClient {
   async discoverServer(token: string): Promise<PlexServer | null> {
     const res = await CapacitorHttp.get({
       url: `${PLEX_TV}/resources`,
-      headers: plexHeaders({ 'X-Plex-Token': token }),
-      params: { includeHttps: '1', includeRelay: '0' },
+      headers: await this.headers({ 'X-Plex-Token': token }),
+      // includeIPv6 defaults to 0 on plex.tv, which strips IPv6 LAN entries —
+      // an IPv6-only home network would otherwise expose NO local connection.
+      params: { includeHttps: '1', includeRelay: '0', includeIPv6: '1' },
     });
+    if (!ok(res)) {
+      throw new PlexHttpError(res.status, '/resources');
+    }
     const resources = asArray(res.data).map(asRecord);
     // Prefer an OWNED server with a LOCAL connection (decision 2 / out-of-scope
     // §: no picker). Fall back to the first server exposing a local connection.
@@ -147,7 +169,10 @@ export class CapacitorHttpPlexClient implements PlexClient {
     const ranked = [...owned, ...servers.filter((r) => r['owned'] !== true)];
     for (const server of ranked) {
       const connections = asArray(server['connections']).map(asRecord);
-      const local = connections.find((c) => c['local'] === true);
+      const locals = connections.filter((c) => c['local'] === true);
+      // Prefer an IPv4 local connection; an IPv6 URI is only used when it is
+      // the ONLY local entry (the device may sit on an IPv4-only network).
+      const local = locals.find((c) => c['IPv6'] !== true) ?? locals[0];
       if (local) {
         return {
           name: str(server['name']),
@@ -156,7 +181,8 @@ export class CapacitorHttpPlexClient implements PlexClient {
         };
       }
     }
-    // No local server found — surface as null (link service raises the error stage).
+    // No local server found — surface as null (link service raises the
+    // spec-pinned "no local server found" error stage).
     return null;
   }
 
@@ -199,6 +225,50 @@ export class CapacitorHttpPlexClient implements PlexClient {
         lastViewedAt: epochSecondsToIso(ep['lastViewedAt']),
       };
     });
+  }
+
+  /**
+   * Per-install X-Plex-Client-Identifier, generated once and persisted to
+   * Preferences. plex.tv binds pins/tokens and its device registry to this
+   * value, so it must be STABLE per install but UNIQUE across installs — a
+   * constant shared by every install collides in the account's device registry
+   * (Plex docs require it to be unique per device). Single-flight so two
+   * concurrent calls can never mint two different identifiers.
+   */
+  private clientId(): Promise<string> {
+    this.clientIdPromise ??= this.loadOrCreateClientId().catch(
+      (err: unknown) => {
+        // Do not cache a transient Preferences failure — allow a retry.
+        this.clientIdPromise = null;
+        throw err;
+      },
+    );
+    return this.clientIdPromise;
+  }
+
+  private async loadOrCreateClientId(): Promise<string> {
+    const { value } = await Preferences.get({ key: PLEX_CLIENT_ID_KEY });
+    if (value !== null && value.length > 0) {
+      return value;
+    }
+    const id =
+      typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    await Preferences.set({ key: PLEX_CLIENT_ID_KEY, value: id });
+    return id;
+  }
+
+  /** Common plex.tv product headers (identify the app to plex.tv). */
+  private async headers(
+    extra: Record<string, string> = {},
+  ): Promise<Record<string, string>> {
+    return {
+      Accept: 'application/json',
+      'X-Plex-Product': PRODUCT,
+      'X-Plex-Client-Identifier': await this.clientId(),
+      ...extra,
+    };
   }
 
   /** Page through one library section, mapping each item to a `PlexLibraryItem`. */
@@ -244,7 +314,9 @@ export class CapacitorHttpPlexClient implements PlexClient {
     return out;
   }
 
-  /** GET a PMS path with the server access token, parsed as JSON. */
+  /** GET a PMS path with the server access token, parsed as JSON. Throws
+   *  `PlexHttpError` on a non-2xx status — a silently-empty body here would
+   *  make a failed sync look like an empty library and advance the cursor. */
   private async getJson(
     server: PlexServer,
     path: string,
@@ -252,11 +324,14 @@ export class CapacitorHttpPlexClient implements PlexClient {
   ): Promise<Record<string, unknown>> {
     const res: HttpResponse = await CapacitorHttp.get({
       url: `${server.baseUrl}${path}`,
-      headers: plexHeaders({
+      headers: await this.headers({
         'X-Plex-Token': server.accessToken,
         ...extraHeaders,
       }),
     });
+    if (!ok(res)) {
+      throw new PlexHttpError(res.status, path);
+    }
     return asRecord(res.data);
   }
 }

@@ -18,9 +18,11 @@ import { PlexLinkService } from './plex-link.service';
 import { PlexSyncService } from './plex-sync.service';
 
 type Stage = 'idle' | 'code' | 'waiting' | 'connected' | 'error';
+type ErrorReason = 'expired' | 'no-server' | 'network' | null;
 
 interface MockLink {
   stage: WritableSignal<Stage>;
+  errorReason: WritableSignal<ErrorReason>;
   code: WritableSignal<string | null>;
   server: WritableSignal<PlexServer | null>;
   expiresInSeconds: WritableSignal<number>;
@@ -35,9 +37,10 @@ interface MockSync {
   sync: ReturnType<typeof vi.fn>;
 }
 
-function mockLink(stage: Stage): MockLink {
+function mockLink(stage: Stage, errorReason: ErrorReason = null): MockLink {
   return {
     stage: signal<Stage>(stage),
+    errorReason: signal<ErrorReason>(errorReason),
     code: signal<string | null>('H7X2'),
     server: signal<PlexServer | null>({
       name: 'Vultus Media Server',
@@ -59,8 +62,8 @@ function mockSync(): MockSync {
   };
 }
 
-async function setup(stage: Stage) {
-  const link = mockLink(stage);
+async function setup(stage: Stage, errorReason: ErrorReason = null) {
+  const link = mockLink(stage, errorReason);
   const sync = mockSync();
   const nav = { navigateBack: vi.fn() };
   await TestBed.configureTestingModule({
@@ -182,6 +185,45 @@ describe('PlexConnectPage', () => {
     (el.querySelectorAll('.solid-button')[0] as HTMLElement).click();
     expect(sync.sync).toHaveBeenCalledTimes(1);
     expect(nav.navigateBack).toHaveBeenCalledWith('/tabs/settings');
+  });
+
+  it('stage "error" reason "expired": renders the expired copy + "Try again"', async () => {
+    const { el } = await setup('error', 'expired');
+    expect(el.querySelector('[data-test="stage-error"]')).toBeTruthy();
+    // The old flat "Code expired" code line is gone; error is its own card.
+    expect(el.querySelector('[data-test="code-countdown"]')).toBeFalsy();
+    expect(
+      el.querySelector('[data-test="error-heading"]')?.textContent?.trim(),
+    ).toBe('Code expired');
+    expect(
+      el.querySelector('[data-test="error-detail"]')?.textContent,
+    ).toContain('plex.tv/link');
+    expect(el.querySelector('.solid-button')?.textContent?.trim()).toBe(
+      'Try again',
+    );
+  });
+
+  it('stage "error" reason "no-server": renders the distinct no-server copy (NOT expired)', async () => {
+    const { el } = await setup('error', 'no-server');
+    expect(
+      el.querySelector('[data-test="error-heading"]')?.textContent?.trim(),
+    ).toBe('No local server found');
+    expect(
+      el.querySelector('[data-test="error-detail"]')?.textContent,
+    ).toContain('Plex account');
+  });
+
+  it('stage "error" reason "network": renders the distinct network copy', async () => {
+    const { el } = await setup('error', 'network');
+    expect(
+      el.querySelector('[data-test="error-heading"]')?.textContent?.trim(),
+    ).toBe("Couldn't reach Plex");
+  });
+
+  it('tapping "Try again" from the error stage regenerates the code', async () => {
+    const { el, link } = await setup('error', 'no-server');
+    (el.querySelectorAll('.solid-button')[0] as HTMLElement).click();
+    expect(link.regenerateCode).toHaveBeenCalledTimes(1);
   });
 
   it('transitions follow PlexLinkService.stage (code → waiting → connected)', async () => {

@@ -50,6 +50,15 @@ reads). Two impls live in this slice:
 - `CapacitorHttpPlexClient` — the NATIVE impl; every plex.tv / PMS call goes
   through `CapacitorHttp` (`@capacitor/core`) because the PMS sends no CORS
   headers. **Only works on-device** (verified post-merge via `android-usb`).
+  **`CapacitorHttp` RESOLVES non-2xx responses** (it rejects only on transport
+  failures), so every method checks `res.status` and throws a typed error
+  (`PlexHttpError`, or `PlexPinGoneError` for a `GET /pins/{id}` 404) — otherwise
+  a 401/404/429 error body silently coerces to `[]`/`{}` and masquerades as "no
+  servers" / "not yet authorized". It sends a **per-install**
+  `X-Plex-Client-Identifier` (a UUID generated once and persisted to Preferences
+  under `plex_client_id`) — a constant shared by all installs collides in the
+  account's plex.tv device registry — and passes `includeIPv6=1` to discovery so
+  an IPv6-only LAN still exposes a `local` connection.
 - `MockPlexClient` — deterministic fixtures (pin auto-authorizes; a small library
   with a watched tmdb-GUID movie, a planned tmdb-GUID movie, a partially-watched
   tmdb-GUID show, and one GUID-less item; a two-episode show with the first
@@ -60,19 +69,38 @@ reads). Two impls live in this slice:
 Owns the plex.tv PIN-link state machine, on-device token persistence, server
 discovery, and the `hasPlex` / `plexSync` Firestore link metadata. Surface:
 
-- signals `stage` (`idle`|`code`|`waiting`|`connected`|`error`), `code`, `server`,
-  `expiresInSeconds`, `countdown` (mm:ss), plus the settings-card state `linked`,
-  `serverName`, `lastSyncAt`;
+- signals `stage` (`idle`|`code`|`waiting`|`connected`|`error`), `errorReason`
+  (`expired`|`no-server`|`network`|`null`), `code`, `server`, `expiresInSeconds`,
+  `countdown` (mm:ss), plus the settings-card state `linked`, `serverName`,
+  `lastSyncAt`;
 - `requestCode()` (→ `code`, starts the countdown + polling), `regenerateCode()`,
   `cancel()`, `isLinked()`, `loadState()` (loads the card state), `unlink()`.
 
-On a successful poll it persists the token to `@capacitor/preferences` (key
-`plex_token`), discovers the server, then `updateDoc(userPath(uid), { hasPlex:
-true, plexSync: { linkedAt, lastSyncAt, serverName } })`. The merged `PlexPin`
-carries no `expiresIn`, so the link-window countdown is owned locally (seeded to
-the plex.tv ~15-minute PIN TTL at code issue). **Unlink** clears the Preferences
-token + `plexSync` (`deleteField()`), KEEPS `hasPlex` + all synced data, and
-touches no watchlist/episode doc.
+On a successful poll it **discovers the server FIRST, then** persists the token
+to `@capacitor/preferences` (key `plex_token`), then `updateDoc(userPath(uid),
+{ hasPlex: true, plexSync: { linkedAt, lastSyncAt, serverName } })`. This
+ordering + a token roll-back if the Firestore write throws is a hard invariant:
+a failed link must never leave the device **half-linked** (token present but no
+`plexSync`), which would make the Settings card claim "Connected" while the
+connect page reports a failure. `loadState()` **self-heals** any half-linked
+state left by an older build (or an unlink performed on another device): a token
+with no `plexSync` metadata is dropped.
+
+**Error surfacing (spec 0073 Risks).** The `error` stage carries a distinct
+`errorReason` so a post-authorization failure is not mislabeled as an expired
+code (the original bug): `expired` (local wall-clock deadline OR a plex.tv
+`PlexPinGoneError` 404), `no-server` (auth succeeded but discovery found no
+local server), `network` (a plex.tv/Firestore/HTTP call failed). The connect
+page renders reason-specific copy from it. The polling loop tolerates up to 5
+consecutive transient `checkPin` transport failures before giving up (Android
+can kill an in-flight request's socket while the app is backgrounded at
+plex.tv/link), and the expiry countdown is **wall-clock anchored** (a deadline
+timestamp, not a decrement-per-tick counter) because Android throttles WebView
+timers while backgrounded. The merged `PlexPin` carries no `expiresIn`, so the
+~15-minute PIN TTL deadline is owned locally at code issue.
+
+**Unlink** clears the Preferences token + `plexSync` (`deleteField()`), KEEPS
+`hasPlex` + all synced data, and touches no watchlist/episode doc.
 
 ### `PlexSyncService` (`providedIn: 'root'`)
 
