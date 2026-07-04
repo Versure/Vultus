@@ -209,8 +209,39 @@ ion-content {
   color: var(--vultus-on-surface-variant);
 }
 
-.code-expiry--expired {
+// Error stage — a 48x48 round tile at error colour (10% alpha) holding an alert
+// icon, a heading, and a detail line, matching the connected card's rhythm.
+.error-tile {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--vultus-error) 10%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--vultus-space-md);
+}
+
+.error-icon {
+  font-size: 32px;
   color: var(--vultus-error);
+}
+
+.error-heading {
+  margin: 0 0 var(--vultus-space-sm);
+  font-size: var(--vultus-text-body-lg-size);
+  font-weight: 700;
+  line-height: var(--vultus-text-body-lg-line);
+  color: var(--vultus-on-surface);
+}
+
+.error-detail {
+  margin: 0 0 var(--vultus-space-lg);
+  max-width: 280px;
+  font-size: var(--vultus-text-body-md-size);
+  font-weight: var(--vultus-text-body-md-weight);
+  line-height: var(--vultus-text-body-md-line);
+  color: var(--vultus-on-surface-variant);
 }
 
 // Waiting row — 48x48 spinner ring + label + Cancel, stacked, 16px below.

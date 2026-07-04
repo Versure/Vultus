@@ -22,10 +22,8 @@
 <ion-content>
   <main class="connect-main">
     <!-- Stage: LINK CODE (+ WAITING). The code + countdown + "Get a new code"
-         and the waiting spinner are reachable across the 'code'/'waiting'/'error'
-         stages. -->
-    @if (link.stage() === 'code' || link.stage() === 'waiting' || link.stage()
-    === 'error') {
+         and the waiting spinner render while entering/polling the code. -->
+    @if (link.stage() === 'code' || link.stage() === 'waiting') {
     <section class="stage-card" data-test="stage-code">
       <div class="plex-tile plex-tile--lg" aria-hidden="true">
         <img src="/assets/plex-logo.svg" alt="Plex" />
@@ -49,15 +47,10 @@
       <p class="copied-feedback" role="status" data-test="copied-feedback">
         Copied
       </p>
-      } @if (link.stage() === 'error') {
-      <p class="code-expiry code-expiry--expired" data-test="code-expired">
-        Code expired
-      </p>
-      } @else {
+      }
       <p class="code-expiry" data-test="code-countdown">
         Code expires in {{ link.countdown() }}
       </p>
-      }
 
       <!-- Waiting indicator, shown alongside the code while polling. -->
       @if (link.stage() === 'waiting') {
@@ -75,6 +68,24 @@
 
       <button type="button" class="solid-button" (click)="regenerate()">
         Get a new code
+      </button>
+    </section>
+    }
+
+    <!-- Stage: ERROR. ONE card with reason-specific copy (spec 0073 Risks): an
+         expired code, a linked-but-no-local-server result, and a network/HTTP
+         failure are distinct outcomes — never all "Code expired". -->
+    @if (link.stage() === 'error') {
+    <section class="stage-card" data-test="stage-error">
+      <div class="error-tile" aria-hidden="true">
+        <ion-icon name="alert-circle" class="error-icon"></ion-icon>
+      </div>
+      <h3 class="error-heading" data-test="error-heading">
+        {{ errorHeading() }}
+      </h3>
+      <p class="error-detail" data-test="error-detail">{{ errorDetail() }}</p>
+      <button type="button" class="solid-button" (click)="regenerate()">
+        Try again
       </button>
     </section>
     }

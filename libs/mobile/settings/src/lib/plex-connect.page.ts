@@ -2,6 +2,7 @@ import {
   Component,
   type OnDestroy,
   type OnInit,
+  computed,
   inject,
   signal,
 } from '@angular/core';
@@ -17,6 +18,7 @@ import {
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
 import {
+  alertCircle,
   arrowBack,
   checkmarkCircle,
   copyOutline,
@@ -62,8 +64,39 @@ export class PlexConnectPage implements OnInit, OnDestroy {
   protected readonly copied = signal(false);
   private copiedTimer: ReturnType<typeof setTimeout> | null = null;
 
+  /** Error-stage heading, chosen by `PlexLinkService.errorReason` so a
+   *  post-authorization failure is NOT mislabeled as an expired code. */
+  protected readonly errorHeading = computed(() => {
+    switch (this.link.errorReason()) {
+      case 'no-server':
+        return 'No local server found';
+      case 'network':
+        return "Couldn't reach Plex";
+      default:
+        return 'Code expired';
+    }
+  });
+
+  /** Error-stage detail line, paired with `errorHeading`. */
+  protected readonly errorDetail = computed(() => {
+    switch (this.link.errorReason()) {
+      case 'no-server':
+        return 'Your account is linked, but no Plex Media Server was found on this network. Make sure your server is running and signed in to the same Plex account, then try again.';
+      case 'network':
+        return 'Something went wrong reaching Plex. Check your connection and try again.';
+      default:
+        return 'This link code timed out before it was entered. Get a new code and enter it at plex.tv/link.';
+    }
+  });
+
   constructor() {
-    addIcons({ arrowBack, checkmarkCircle, copyOutline, shieldCheckmark });
+    addIcons({
+      alertCircle,
+      arrowBack,
+      checkmarkCircle,
+      copyOutline,
+      shieldCheckmark,
+    });
   }
 
   ngOnInit(): void {

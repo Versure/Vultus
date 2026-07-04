@@ -196,6 +196,9 @@ class MockPlexLinkServiceImpl {
   private readonly _stage = signal<
     'idle' | 'code' | 'waiting' | 'connected' | 'error'
   >('idle');
+  private readonly _errorReason = signal<
+    'expired' | 'no-server' | 'network' | null
+  >(null);
   private readonly _code = signal<string | null>(null);
   private readonly _server = signal<PlexServer | null>(null);
   private readonly _expiresInSeconds = signal<number>(0);
@@ -206,6 +209,7 @@ class MockPlexLinkServiceImpl {
   );
 
   readonly stage = this._stage.asReadonly();
+  readonly errorReason = this._errorReason.asReadonly();
   readonly code = this._code.asReadonly();
   readonly server = this._server.asReadonly();
   readonly expiresInSeconds = this._expiresInSeconds.asReadonly();
