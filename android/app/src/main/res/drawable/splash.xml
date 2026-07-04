@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Capacitor native splash (capacitor.config.ts androidSplashResourceName:'splash';
+  also the pre-API-31 launch theme background). Density-independent layer-list —
+  #0b1326 surface + the centered movie_filter glyph — matching the animated web
+  splash's first frame, so holding it (launchAutoHide:false) until the web splash
+  paints is an invisible handoff. Replaces the old raster "V + Vultus" splash.png
+  set that clashed with the web splash (issues/196).
+
+  NOTE: `@capacitor/assets` would regenerate raster splash.png variants from
+  apps/mobile/resources/splash.png and clobber this file — re-apply this drawable
+  (and delete the regenerated PNGs) if that generator is ever re-run.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#0b1326" />
+        </shape>
+    </item>
+    <item
+        android:width="120dp"
+        android:height="120dp"
+        android:drawable="@drawable/ic_splash"
+        android:gravity="center" />
+</layer-list>
