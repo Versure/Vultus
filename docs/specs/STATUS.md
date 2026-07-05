@@ -10,10 +10,10 @@
 
 # Spec status ledger
 
-Total specs: 75
+Total specs: 76
 
 - done: 72
-- approved: 3
+- approved: 4
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -92,3 +92,4 @@ Total specs: 75
 | 73 | plex-sync | One-way Plex → Vultus sync (library additions + watch status) | done | slice:settings | scope:mobile, scope:shared |
 | 74 | revert-completed-to-watching | Revert a Completed TV show to Watching when it has unwatched episodes again | approved | slice:title-detail | scope:mobile, scope:functions |
 | 75 | settings-provider-list-fixes | Fix "N of 0 selected" providers on Settings entry + make the provider list collapsible | approved | slice:settings | scope:mobile |
+| 76 | consolidate-plex-provider-entry | Exclude the real TMDB "Plex" provider from the Settings catalog so only the manual Plex chip shows | approved | — | scope:functions |
