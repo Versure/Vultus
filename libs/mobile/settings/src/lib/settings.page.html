@@ -74,7 +74,19 @@
         one an outline-variant border at 60% opacity. NOT an ion-segment/select.
       -->
       <div class="settings-card">
-        <div class="settings-row settings-row--header">
+        <!--
+          #166: the header is a tappable disclosure <button> that collapses/
+          expands the chip grid (default COLLAPSED). `aria-expanded` reflects the
+          in-memory `providersExpanded` signal; the trailing chevron rotates 180°
+          when expanded. No `aria-controls` — the grid is gated OUT of the DOM
+          when collapsed (matches the title-detail season-collapse idiom).
+        -->
+        <button
+          type="button"
+          class="settings-row settings-row--header"
+          (click)="toggleProviders()"
+          [attr.aria-expanded]="providersExpanded()"
+        >
           <div class="settings-row__icon" aria-hidden="true">
             <ion-icon name="albums-outline"></ion-icon>
           </div>
@@ -84,14 +96,20 @@
               Subscriptions used to check availability
             </p>
           </div>
-        </div>
+          <ion-icon
+            name="chevron-down-outline"
+            class="providers-chevron"
+            [class.expanded]="providersExpanded()"
+            aria-hidden="true"
+          ></ion-icon>
+        </button>
 
         @if (service.catalogLoading()) {
         <div class="providers-loading" aria-live="polite">
           <ion-spinner name="crescent"></ion-spinner>
           <span class="providers-loading__label">Loading providers…</span>
         </div>
-        } @else {
+        } @else { @if (providersExpanded()) {
         <div class="provider-grid" role="group" aria-label="My providers">
           @for (provider of service.providerCatalog(); track
           provider.providerId) { @let selected =
@@ -155,6 +173,13 @@
             <span class="provider-chip__caption">Manual</span>
           </button>
         </div>
+        }
+        <!--
+          #166 (B3): footer on ONE line with NO interior template whitespace, so
+          its rendered textContent is exactly "N of M selected · Region: X" (the
+          F3 exact-string assertion). Sits inside the loaded (@else) branch but
+          OUTSIDE the expanded gate, so the count shows in BOTH states.
+        -->
         <p class="provider-footer">
           {{ service.myProviderIds().length }} of {{
           service.providerCatalog().length }} selected · Region: {{

@@ -1,4 +1,4 @@
-import { Component, type OnInit, effect, inject } from '@angular/core';
+import { Component, type OnInit, effect, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import {
   AlertController,
@@ -22,6 +22,7 @@ import { addIcons } from 'ionicons';
 import {
   albumsOutline,
   checkmarkCircle,
+  chevronDownOutline,
   chevronForward,
   filmOutline,
   globeOutline,
@@ -75,6 +76,14 @@ export class SettingsPage implements OnInit {
   private readonly alertController = inject(AlertController);
   private readonly router = inject(Router);
 
+  /**
+   * #166: whether the "My Providers" chip grid is expanded. In-memory only
+   * (ephemeral) — the card is COLLAPSED by default and resets to collapsed on
+   * every visit; no persistence (spec 0075). Replicates the title-detail
+   * season-collapse idiom in-slice (not imported from `slice:title-detail`).
+   */
+  protected readonly providersExpanded = signal(false);
+
   constructor() {
     addIcons({
       globeOutline,
@@ -85,6 +94,7 @@ export class SettingsPage implements OnInit {
       albumsOutline,
       checkmarkCircle,
       chevronForward,
+      chevronDownOutline,
     });
 
     // Raise a toast whenever a region change prunes ≥1 provider from the user's
@@ -99,8 +109,9 @@ export class SettingsPage implements OnInit {
   }
 
   ngOnInit(): void {
+    // #165: `load()` now chains the provider-catalog fetch itself once the region
+    // resolves, so no eager (racy, null-region) `loadProviderCatalog()` here.
     void this.service.load();
-    void this.service.loadProviderCatalog();
     // Load the Plex link state so the card renders the correct (dis)connected
     // block (spec 0073). Fire-and-forget; the card defaults to disconnected.
     void this.plexLink.loadState();
@@ -156,6 +167,11 @@ export class SettingsPage implements OnInit {
 
   protected onRegionChange(event: CustomEvent): void {
     void this.service.setRegion((event.detail as { value: Region }).value);
+  }
+
+  /** #166: expands/collapses the "My Providers" chip grid (in-memory only). */
+  protected toggleProviders(): void {
+    this.providersExpanded.update((v) => !v);
   }
 
   /** Toggles one provider chip's membership in `myProviderIds` (spec 0060). */
