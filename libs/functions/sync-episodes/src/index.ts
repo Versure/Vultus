@@ -19,4 +19,5 @@ export type {
   WatchlistTvSource,
   WatchlistTvShow,
   WatchlistDocRef,
+  WatchlistStatusStore,
 } from './lib/ports';

@@ -1244,6 +1244,136 @@ describe('TitleDetailService', () => {
     });
   });
 
+  // --- spec 0074: completed → watching revert on uncheck (D2/D3) ---
+
+  describe('autoUpdateStatus completed → watching revert (spec 0074)', () => {
+    it('completed + uncheck one of several watched episodes (watchedCount < total, total > 0) → updateDoc { status: watching }', async () => {
+      // 3 episodes, one now unwatched (the uncheck target) → not all-watched.
+      getDocsMock.mockResolvedValue(
+        docsSnap([
+          { id: 's01e01', season: 1, episode: 1, title: 'a', watched: true },
+          { id: 's01e02', season: 1, episode: 2, title: 'b', watched: false },
+          { id: 's01e03', season: 1, episode: 3, title: 'c', watched: true },
+        ]),
+      );
+      getDocMock.mockResolvedValue(watchlistSnap('completed'));
+      const service = createService(UID);
+      await service.setEpisodeWatched(2, 's01e02', false);
+      const statusCalls = updateDocMock.mock.calls.filter(
+        (c) => c[0].path === watchlistItemPath(UID, '2'),
+      );
+      expect(statusCalls.length).toBe(1);
+      expect(statusCalls[0][1]).toEqual({ status: 'watching' });
+    });
+
+    it('completed + uncheck ALL episodes (watchedCount === 0, total > 0) → { status: watching } NOT planned', async () => {
+      getDocsMock.mockResolvedValue(
+        docsSnap([
+          { id: 's01e01', season: 1, episode: 1, title: 'a', watched: false },
+          { id: 's01e02', season: 1, episode: 2, title: 'b', watched: false },
+        ]),
+      );
+      getDocMock.mockResolvedValue(watchlistSnap('completed'));
+      const service = createService(UID);
+      await service.setEpisodeWatched(2, 's01e01', false);
+      const statusCalls = updateDocMock.mock.calls.filter(
+        (c) => c[0].path === watchlistItemPath(UID, '2'),
+      );
+      expect(statusCalls.length).toBe(1);
+      expect(statusCalls[0][1]).toEqual({ status: 'watching' });
+      // Must NOT be planned (the new branch precedes Step 3).
+      expect(statusCalls[0][1]).not.toEqual({ status: 'planned' });
+    });
+
+    it('completed + uncheck ALL episodes with autoSetWatching memory TRUE (auto-advanced lineage) → watching, NOT planned (new branch precedes Step 3)', async () => {
+      const service = createService(UID);
+      // 1) planned + first watch → the slice auto-sets watching (memory := true).
+      getDocMock.mockResolvedValue(watchlistSnap('planned'));
+      getDocsMock.mockResolvedValue(
+        docsSnap([
+          { id: 's01e01', season: 1, episode: 1, title: 'a', watched: true },
+        ]),
+      );
+      await service.setEpisodeWatched(2, 's01e01', true);
+      // The single episode being watched also advances watching→completed in that
+      // same pass; the autoSetWatching memory for tmdbId 2 remains true.
+
+      // 2) Now the show is 'completed' (auto-advanced lineage) and the user
+      // unchecks the only episode → watchedCount === 0, total > 0.
+      updateDocMock.mockClear();
+      getDocMock.mockResolvedValue(watchlistSnap('completed'));
+      getDocsMock.mockResolvedValue(
+        docsSnap([
+          { id: 's01e01', season: 1, episode: 1, title: 'a', watched: false },
+        ]),
+      );
+      await service.setEpisodeWatched(2, 's01e01', false);
+      const statusCalls = updateDocMock.mock.calls.filter(
+        (c) => c[0].path === watchlistItemPath(UID, '2'),
+      );
+      // The new completed→watching branch fires FIRST and short-circuits the
+      // Step 3 zero-watched → planned branch, even with memory still true.
+      expect(statusCalls.length).toBe(1);
+      expect(statusCalls[0][1]).toEqual({ status: 'watching' });
+    });
+
+    it('completed + empty subcollection (total === 0) → NO status write (total > 0 guard)', async () => {
+      getDocsMock.mockResolvedValue(docsSnap([]));
+      getDocMock.mockResolvedValue(watchlistSnap('completed'));
+      const service = createService(UID);
+      await service.setEpisodeWatched(2, 's01e01', false);
+      const statusCalls = updateDocMock.mock.calls.filter(
+        (c) => c[0].path === watchlistItemPath(UID, '2'),
+      );
+      expect(statusCalls.length).toBe(0);
+    });
+
+    it('completed + uncheck a season (setSeasonWatched false) leaving some unwatched → { status: watching }', async () => {
+      getDocsMock
+        // first getDocs: setSeasonWatched reads season 1's docs
+        .mockResolvedValueOnce(
+          docsSnap([
+            { id: 's01e01', season: 1, episode: 1, title: 'a', watched: true },
+            { id: 's01e02', season: 1, episode: 2, title: 'b', watched: true },
+          ]),
+        )
+        // second getDocs: autoUpdateStatus reads ALL episodes (season 1 now
+        // unwatched, season 2 still watched) → not all-watched.
+        .mockResolvedValueOnce(
+          docsSnap([
+            { id: 's01e01', season: 1, episode: 1, title: 'a', watched: false },
+            { id: 's01e02', season: 1, episode: 2, title: 'b', watched: false },
+            { id: 's02e01', season: 2, episode: 1, title: 'c', watched: true },
+          ]),
+        );
+      getDocMock.mockResolvedValue(watchlistSnap('completed'));
+      const service = createService(UID);
+      await service.setSeasonWatched(2, 1, false);
+      const statusCalls = updateDocMock.mock.calls.filter(
+        (c) => c[0].path === watchlistItemPath(UID, '2'),
+      );
+      expect(statusCalls.length).toBe(1);
+      expect(statusCalls[0][1]).toEqual({ status: 'watching' });
+    });
+
+    it('completed + still all-watched (re-mark watched) → NO revert (branch needs watchedCount < total)', async () => {
+      getDocsMock.mockResolvedValue(
+        docsSnap([
+          { id: 's01e01', season: 1, episode: 1, title: 'a', watched: true },
+          { id: 's01e02', season: 1, episode: 2, title: 'b', watched: true },
+        ]),
+      );
+      getDocMock.mockResolvedValue(watchlistSnap('completed'));
+      const service = createService(UID);
+      await service.setEpisodeWatched(2, 's01e01', true);
+      const statusCalls = updateDocMock.mock.calls.filter(
+        (c) => c[0].path === watchlistItemPath(UID, '2'),
+      );
+      // Already completed + still all-watched → no status write (existing 0050 case).
+      expect(statusCalls.length).toBe(0);
+    });
+  });
+
   describe('revertIfNewEpisodes', () => {
     it('completed TV + ≥1 unwatched episode → writes watching', async () => {
       getDocMock.mockResolvedValue(watchlistSnap('completed'));

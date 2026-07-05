@@ -131,13 +131,30 @@ no-op (no sync, no toast) — the refresher spinner is always dismissed via
   shows; an empty subcollection shows "Episodes will appear after the next sync."
 - **Movie titles** render a **Mark as watched** toggle in the action area
   (completed ↔ watching; disabled when the title is `dropped`).
-- **Auto status** (service-derived after each episode/season write): first episode
-  watched while `planned` → `watching` (advance evaluated first); all episodes
-  watched **while status is `'watching'`** → `completed` (spec 0050 refinement —
-  `completed` is only reached from `'watching'`, never directly from `'planned'`);
-  walking back to zero watched → `planned` **only if this slice auto-set
-  `watching`** (a manually chosen status is never clobbered). A `dropped` title is
-  never auto-changed.
+- **Auto status** (service-derived after each episode/season write): the
+  `completed → watching` revert (spec 0074) is evaluated **first**; then first
+  episode watched while `planned` → `watching` (advance evaluated first); all
+  episodes watched **while status is `'watching'`** → `completed` (spec 0050
+  refinement — `completed` is only reached from `'watching'`, never directly from
+  `'planned'`); walking back to zero watched → `planned` **only if this slice
+  auto-set `watching`** (a manually chosen status is never clobbered). A `dropped`
+  title is never auto-changed.
+- **Revert on uncheck — completed → watching** (spec 0074, D2/D3): after an
+  episode/season write on a `'completed'` **TV** show, if the show is no longer
+  all-watched (`total > 0 && watchedCount < total`) the status is reverted to
+  `'watching'`. This new branch is evaluated **first** in `autoUpdateStatus`
+  (before the spec-0034/0050 Step 1/2/3) and always lands on `'watching'` — **even
+  when the user unchecks every episode** (`watchedCount === 0`), where it
+  deliberately short-circuits the Step 3 zero-watched → `planned` branch so a
+  fully-unchecked auto-advanced show (whose auto-set-`watching` memory may still be
+  set) becomes `'watching'`, not `'planned'`. It does **not** touch that
+  auto-set-`watching` memory map. The `total > 0` guard means an empty / not-yet-
+  synced subcollection never triggers a revert. Fires for both
+  `setEpisodeWatched(..., false)` and `setSeasonWatched(..., false)` (both route
+  through `autoUpdateStatus`). This is the client counterpart to the sync engine's
+  source-of-truth revert (spec 0074 Task B, `slice:sync-episodes`) and complements
+  the spec-0050 page-init `revertIfNewEpisodes` (defense-in-depth). The status
+  badge re-renders reactively off `tracked$` — no template change.
 - **Manually completing a TV show marks all episodes watched** (spec 0053, issue
   #131): when the user sets a **TV** show's status to `'completed'` via the
   title-detail status action sheet, every currently-**unwatched** episode under

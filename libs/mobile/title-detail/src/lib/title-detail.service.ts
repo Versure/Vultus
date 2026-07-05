@@ -564,10 +564,16 @@ export class TitleDetailService {
 
   /**
    * Re-derive the watchlist status from the episodes' current watched-state
-   * after an episode/season write (spec 0034, refined by spec 0050). NEVER
+   * after an episode/season write (spec 0034, refined by specs 0050/0074). NEVER
    * touches a `dropped` title. The advance order matters (spec 0050 decision 3):
    * `planned → watching` is evaluated FIRST, so `completed` is only ever reached
    * from an effective `'watching'` status, never directly from `'planned'`.
+   * - **completed → watching (spec 0074, D2/D3)**: a `'completed'` show that is no
+   *   longer all-watched (`total > 0 && watchedCount < total`) reverts to
+   *   `'watching'`. Evaluated FIRST, ALWAYS lands on `'watching'` (even at
+   *   `watchedCount === 0`), and short-circuits Step 3 — so a fully-unchecked
+   *   auto-advanced show (whose `autoSetWatching` memory may still be `true`) goes
+   *   to `'watching'`, not `'planned'`. Does NOT touch the `autoSetWatching` map.
    * - first episode watched while `planned` → `watching` (and remember WE did it)
    * - all episodes watched (total > 0) WHILE effective status is `'watching'` →
    *   `completed` (a `planned` title marked all-at-once converges in one pass:
@@ -595,6 +601,15 @@ export class TitleDetailService {
       if (ep.watched) {
         watchedCount += 1;
       }
+    }
+
+    // NEW (spec 0074, D2/D3) — evaluate FIRST, before Step 1/2/3.
+    // A Completed show that is no longer all-watched reverts to 'watching'
+    // (ALWAYS 'watching', even at watchedCount === 0 — D3), short-circuiting the
+    // Step 3 zero-watched → planned branch. Does NOT touch the autoSetWatching map.
+    if (status === 'completed' && total > 0 && watchedCount < total) {
+      await this.updateStatus(tmdbId, 'watching', 'tv');
+      return;
     }
 
     // Step 1: planned → watching (evaluate FIRST so completed comes via watching).
