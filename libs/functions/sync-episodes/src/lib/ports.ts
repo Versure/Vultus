@@ -3,7 +3,12 @@
 // that satisfy them live in `apps/functions`. Keeping these abstract is what
 // lets the lib stay Firebase-free and free of any `slice:sync-titles` import.
 
-import type { Episode, EpisodeDoc, TitleType } from '@vultus/shared/domain';
+import type {
+  Episode,
+  EpisodeDoc,
+  TitleType,
+  WatchStatus,
+} from '@vultus/shared/domain';
 
 /** A single TV show pulled from the global watchlist for the daily pass (entry
  *  point B). Not deduped by `tmdbId` — episodes are written per (uid, titleId). */
@@ -49,4 +54,13 @@ export interface EpisodeStore {
     titleId: string,
     docs: { id: string; doc: EpisodeDoc }[],
   ): Promise<void>;
+}
+
+/** Reads and updates the watchlist doc's `status` for a (uid, titleId). Used by
+ *  the daily pass to revert a `'completed'` show to `'watching'` when new
+ *  episodes are inserted (spec 0074). Admin-SDK-backed in apps/functions; faked
+ *  in tests. Firebase-free interface. */
+export interface WatchlistStatusStore {
+  getStatus(uid: string, titleId: string): Promise<WatchStatus | null>;
+  setStatus(uid: string, titleId: string, status: WatchStatus): Promise<void>;
 }

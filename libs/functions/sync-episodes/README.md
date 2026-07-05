@@ -18,10 +18,11 @@ user's `users/{uid}/watchlist/{titleId}/episodes` subcollection, and inserts
 - `createEpisodeSyncEngine(config)` → `EpisodeSyncEngine` with
   `syncOne(uid, titleId, tmdbId)` and `syncAll()`.
 - `EpisodeSyncEngine`, `EpisodeSyncConfig`, `EpisodeUpsertResult` — contract
-  types.
+  types. `EpisodeSyncConfig` carries an optional `watchlistStatus` port and
+  `EpisodeUpsertResult` an optional `statusRevertedToWatching` flag (spec 0074).
 - `episodeId(season, episode)` / `newEpisodeDoc(ep)` — id + doc helpers.
 - Ports: `TmdbEpisodeSource`, `EpisodeStore`, `WatchlistTvSource`,
-  `WatchlistTvShow`, `WatchlistDocRef`.
+  `WatchlistTvShow`, `WatchlistDocRef`, `WatchlistStatusStore`.
 
 ## Usage
 
@@ -61,6 +62,22 @@ the only place where the Admin SDK and `@vultus/functions/sync-titles` enter.
   silently drops that one season but the rest of the show still upserts.
 - **Per-show error isolation in `syncAll`.** A thrown error for one show is
   captured as `{ outcome: 'error', reason }`; `syncAll` never rejects.
+- **Completed → Watching source-of-truth revert (spec 0074).** The optional
+  `watchlistStatus` port (`WatchlistStatusStore`, backed by the Admin SDK in
+  `apps/functions`) lets the engine fix a stale `'completed'` status at the
+  source. In `syncOne`, **after** `writeEpisodes`, when **≥1 new episode was
+  inserted this run** (`toWrite.length > 0`) **and** the port is present **and**
+  the show's current status is `'completed'`, the engine calls
+  `setStatus(uid, titleId, 'watching')` and sets
+  `statusRevertedToWatching: true` on the `'synced'` result. This is a
+  **separate watchlist-doc write** — episode docs are never touched, so the
+  insert-only invariant above still holds. It fixes every surface (Watchlist
+  tab, detail page, notifications) without the user re-opening the detail page.
+  - **Entry point A (on-add trigger) omits the port by design.** A freshly-added
+    show never needs a completed→watching revert, so the on-add trigger wires
+    only `tmdb` + `episodes`; the engine no-ops the revert safely when
+    `watchlistStatus` is absent (and `statusRevertedToWatching` is `false`).
+    Only the daily pass (entry point B) wires `watchlistStatus`.
 
 ## Sheriff boundaries
 

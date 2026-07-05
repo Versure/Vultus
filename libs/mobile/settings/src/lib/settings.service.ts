@@ -182,6 +182,12 @@ export class SettingsService {
       this._myProviderIds.set(user.myProviderIds);
       this._hasPlex.set(user.hasPlex);
       this._loaded.set(true);
+      // #165: now that the region has resolved, load the provider catalog so the
+      // "My Providers" footer reads "N of M" (never "N of 0") on the FIRST visit,
+      // without needing a region switch. Fire-and-forget — a catalog failure must
+      // not fail `load()` (the page's core render-gate); the guard is claimed
+      // synchronously so a later same-region caller can't double-fetch (spec 0075).
+      void this.loadProviderCatalog();
     } catch (error) {
       // Surface the failure as an error state. `_loaded` stays false; the
       // template checks `loadFailed` first, so the skeleton never hangs.
@@ -257,6 +263,15 @@ export class SettingsService {
    * No-op (and does not touch `catalogLoading`) when there is no resolved region
    * yet. Propagates the thunk's rejection to the caller (so `setRegion` can skip
    * the prune) but always clears `catalogLoading`.
+   *
+   * IN-FLIGHT GUARD (spec 0075 B1): the region is claimed synchronously (into
+   * `loadedCatalogRegion`) BEFORE the `await`, so a second same-region caller
+   * that enters while the first fetch is still in flight short-circuits on the
+   * already-claimed guard instead of double-fetching. This matters because
+   * `load()` now chains an un-awaited `void this.loadProviderCatalog()` that can
+   * race a later explicit / `setRegion()` call for the same region. On a fetch
+   * FAILURE the claim is RESET to `null` (and the error re-thrown so `setRegion`
+   * still skips its prune) so a failed catalog fetch stays retryable.
    */
   async loadProviderCatalog(): Promise<void> {
     const region = this._region();
@@ -267,11 +282,19 @@ export class SettingsService {
       return;
     }
 
+    // Claim the region synchronously BEFORE the await so a concurrent same-region
+    // caller (the un-awaited load()-chained call racing a later setRegion()) short-
+    // circuits on the guard instead of double-fetching (spec 0075 B1).
+    this.loadedCatalogRegion = region;
     this._catalogLoading.set(true);
     try {
       const providers = await this.getWatchProviders(region);
       this._providerCatalog.set(providers);
-      this.loadedCatalogRegion = region;
+    } catch (error) {
+      // Reset the guard so a failed fetch stays retryable; re-throw so setRegion
+      // still skips its prune.
+      this.loadedCatalogRegion = null;
+      throw error;
     } finally {
       this._catalogLoading.set(false);
     }

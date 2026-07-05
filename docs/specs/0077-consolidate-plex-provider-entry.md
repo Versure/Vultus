@@ -1,5 +1,5 @@
 ---
-number: 0076
+number: 0077
 slug: consolidate-plex-provider-entry
 title: Exclude the real TMDB "Plex" provider from the Settings catalog so only the manual Plex chip shows
 status: approved
@@ -176,7 +176,7 @@ early `continue` inside the existing `for (const entry of [...movie, ...tv])`
 loop, before the `byId.has(...)` dedup check:
 
 ```ts
-// spec 0076 (#195): exclude the real TMDB "Plex" provider so the Settings
+// spec 0077 (#195): exclude the real TMDB "Plex" provider so the Settings
 // catalog never collides with the manual "I use Plex" chip (spec 0061). Match by
 // NAME (case-insensitive, trimmed) — TMDB assigns no stable, verified Plex id we
 // can hardcode, so a name match is the safer predicate.
@@ -212,7 +212,7 @@ new-slice generation, no fan-out — there is nothing to parallelise.
   of the `for (const entry of [...movie, ...tv])` loop, **before** the
   `byId.has(entry.provider_id)` dedup check, so a Plex entry from either list is
   skipped and never enters `byId`. Update the function's leading comment
-  (`:90-93`) to mention the Plex exclusion (spec 0076 / #195).
+  (`:90-93`) to mention the Plex exclusion (spec 0077 / #195).
 - `tmdb-mappers.spec.ts`: extend the existing
   `describe('mergeCatalogProviders (spec 0060)')` block
   (`libs/functions/sync-titles/src/lib/tmdb/tmdb-mappers.spec.ts:50-133`) with the
@@ -220,7 +220,7 @@ new-slice generation, no fan-out — there is nothing to parallelise.
   merge/dedup/logo/sort/empty cases must all still pass unchanged.
 - `libs/functions/sync-titles/README.md`: if it documents `mergeCatalogProviders`'
   behaviour, add a one-line note that "Plex" (case-insensitive) is excluded from
-  the merged catalog (spec 0076); if the README does not mention this function,
+  the merged catalog (spec 0077); if the README does not mention this function,
   no README change is required.
 - **File manifest:** `libs/functions/sync-titles/src/lib/tmdb/tmdb-mappers.ts`,
   `libs/functions/sync-titles/src/lib/tmdb/tmdb-mappers.spec.ts`,
