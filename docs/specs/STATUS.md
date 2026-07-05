@@ -10,10 +10,10 @@
 
 # Spec status ledger
 
-Total specs: 73
+Total specs: 74
 
 - done: 72
-- approved: 1
+- approved: 2
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -90,3 +90,4 @@ Total specs: 73
 | 71 | normative-text-dedup | De-duplicate copy-pasted normative rules (Stitch recipe, worktree snippet, design hexes, Windows E-notes) | done | — | — |
 | 72 | plan-accuracy-refresh | Refresh docs/PLAN.md to eliminate accumulated drift against the shipped codebase | done | — | — |
 | 73 | plex-sync | One-way Plex → Vultus sync (library additions + watch status) | done | slice:settings | scope:mobile, scope:shared |
+| 75 | settings-provider-list-fixes | Fix "N of 0 selected" providers on Settings entry + make the provider list collapsible | approved | slice:settings | scope:mobile |
