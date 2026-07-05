@@ -10,10 +10,10 @@
 
 # Spec status ledger
 
-Total specs: 75
+Total specs: 76
 
 - done: 74
-- approved: 1
+- approved: 2
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -92,3 +92,4 @@ Total specs: 75
 | 73 | plex-sync | One-way Plex → Vultus sync (library additions + watch status) | done | slice:settings | scope:mobile, scope:shared |
 | 74 | revert-completed-to-watching | Revert a Completed TV show to Watching when it has unwatched episodes again | done | slice:title-detail | scope:mobile, scope:functions |
 | 75 | settings-provider-list-fixes | Fix "N of 0 selected" providers on Settings entry + make the provider list collapsible | done | slice:settings | scope:mobile |
+| 76 | empty-state-centering | Center the empty/error state and stop the stray scroll on the Watchlist and Search pages | approved | slice:watchlist, slice:search | scope:mobile |
