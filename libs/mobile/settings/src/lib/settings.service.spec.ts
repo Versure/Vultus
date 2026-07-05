@@ -728,6 +728,36 @@ describe('SettingsService', () => {
     expect(getWatchProvidersMock).not.toHaveBeenCalled();
   });
 
+  it('load() chains the catalog fetch on entry (#165): catalog loads without a setRegion', async () => {
+    // A resolved uid + a user doc carrying a region and a non-empty selection.
+    getDocMock.mockResolvedValue(
+      existingDoc({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+        },
+        myProviderIds: [8, 337],
+      }),
+    );
+    getWatchProvidersMock.mockResolvedValue([NETFLIX, DISNEY]);
+    const service = createService(UID);
+
+    await service.load();
+    // `load()` kicks `void loadProviderCatalog()` (not awaited inside load), so
+    // drain the microtasks for the chained fetch to settle.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // The catalog loaded once, for the loaded region, with NO region switch.
+    expect(getWatchProvidersMock).toHaveBeenCalledTimes(1);
+    expect(getWatchProvidersMock).toHaveBeenCalledWith('NL');
+    expect(updateDocMock).not.toHaveBeenCalled();
+    expect(service.providerCatalog()).toEqual([NETFLIX, DISNEY]);
+    expect(service.catalogLoading()).toBe(false);
+  });
+
   it('setRegion prunes myProviderIds to the new catalog and reports the dropped count', async () => {
     getDocMock.mockResolvedValue(
       existingDoc({

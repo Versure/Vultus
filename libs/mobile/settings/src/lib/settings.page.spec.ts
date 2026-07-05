@@ -1,5 +1,5 @@
 import { signal, type WritableSignal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
+import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import {
   AlertController,
@@ -193,6 +193,18 @@ async function setup(loaded: boolean, loadFailed = false) {
   return setupWithService(mockService(loaded, loadFailed));
 }
 
+// #166: the "My Providers" grid is COLLAPSED by default. Tests that assert on the
+// chip grid must first expand the card by tapping the disclosure header.
+function expandProviders(
+  fixture: ComponentFixture<SettingsPage>,
+  el: HTMLElement,
+): void {
+  (
+    el.querySelectorAll('button.settings-row--header')[0] as HTMLElement
+  ).click();
+  fixture.detectChanges();
+}
+
 describe('SettingsPage', () => {
   beforeEach(() => {
     TestBed.resetTestingModule();
@@ -295,15 +307,39 @@ describe('SettingsPage', () => {
     expect(service.setNotificationsEnabled).toHaveBeenCalledWith(false);
   });
 
-  // ── My Providers card (spec 0060) ────────────────────────────────────────
+  // ── My Providers card (spec 0060 + 0075 #166) ────────────────────────────
 
-  it('calls loadProviderCatalog() on init', async () => {
-    const { service } = await setup(true);
-    expect(service.loadProviderCatalog).toHaveBeenCalledTimes(1);
+  it('#166: collapsed by default — grid absent, header aria-expanded="false"', async () => {
+    const { el } = await setup(true);
+    expect(el.querySelector('.provider-grid')).toBeFalsy();
+    const header = el.querySelector('button.settings-row--header');
+    expect(header).toBeTruthy();
+    expect(header?.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('#166: tapping the header expands — grid present, aria-expanded="true", chevron rotated', async () => {
+    const { el, fixture } = await setup(true);
+    expandProviders(fixture, el);
+    expect(el.querySelector('.provider-grid')).toBeTruthy();
+    const header = el.querySelector('button.settings-row--header');
+    expect(header?.getAttribute('aria-expanded')).toBe('true');
+    const chevron = el.querySelector('ion-icon.providers-chevron');
+    expect(chevron?.classList.contains('expanded')).toBe(true);
+  });
+
+  it('#166: footer is visible in BOTH collapsed and expanded states', async () => {
+    const { el, fixture } = await setup(true);
+    // Collapsed (default): footer present even though the grid is not.
+    expect(el.querySelector('.provider-footer')).toBeTruthy();
+    expect(el.querySelector('.provider-grid')).toBeFalsy();
+    // Expanded: footer still present.
+    expandProviders(fixture, el);
+    expect(el.querySelector('.provider-footer')).toBeTruthy();
   });
 
   it('renders a chip per provider in the catalog (plus the Plex chip)', async () => {
-    const { el } = await setup(true);
+    const { el, fixture } = await setup(true);
+    expandProviders(fixture, el);
     // The Plex chip (spec 0061) is also a `.provider-chip`; exclude it to count
     // only the TMDB catalog chips.
     const catalogChips = el.querySelectorAll(
@@ -313,7 +349,8 @@ describe('SettingsPage', () => {
   });
 
   it('marks the selected chip (id in myProviderIds) with aria-pressed and the selected class', async () => {
-    const { el } = await setup(true); // myProviderIds seeded [8] = Netflix
+    const { el, fixture } = await setup(true); // myProviderIds seeded [8] = Netflix
+    expandProviders(fixture, el);
     const chips = Array.from(el.querySelectorAll('.provider-chip'));
     // Netflix (id 8) is the first catalog entry and is selected.
     const netflix = chips[0];
@@ -327,7 +364,8 @@ describe('SettingsPage', () => {
   });
 
   it('tapping a chip calls onProviderToggle → toggleProvider with the provider id', async () => {
-    const { el, service } = await setup(true);
+    const { el, service, fixture } = await setup(true);
+    expandProviders(fixture, el);
     const disney = el.querySelectorAll('.provider-chip')[1] as HTMLElement;
     disney.click();
     expect(service.toggleProvider).toHaveBeenCalledWith(337);
@@ -336,9 +374,8 @@ describe('SettingsPage', () => {
   it('renders the footer count "N of M selected · Region: {region}"', async () => {
     const { el } = await setup(true);
     const footer = el.querySelector('.provider-footer');
-    expect(footer?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
-      '1 of 3 selected · Region: NL',
-    );
+    // #166 (F3): exact rendered string, single .trim() only — no \s+ collapse.
+    expect(footer?.textContent?.trim()).toBe('1 of 3 selected · Region: NL');
   });
 
   it('shows a spinner (not chips) while the catalog is loading', async () => {
@@ -350,7 +387,8 @@ describe('SettingsPage', () => {
   });
 
   it('falls back to a letter tile when a provider has no logo path', async () => {
-    const { el } = await setup(true);
+    const { el, fixture } = await setup(true);
+    expandProviders(fixture, el);
     // Max (id 1899, logoPath null) is the third chip.
     const max = el.querySelectorAll('.provider-chip')[2] as HTMLElement;
     expect(
@@ -385,7 +423,8 @@ describe('SettingsPage', () => {
   // ── Plex chip (spec 0061) ────────────────────────────────────────────────
 
   it('renders the Plex chip as the last chip in the grid', async () => {
-    const { el } = await setup(true);
+    const { el, fixture } = await setup(true);
+    expandProviders(fixture, el);
     const grid = el.querySelector('.provider-grid');
     const chips = Array.from(grid?.querySelectorAll('.provider-chip') ?? []);
     const plex = grid?.querySelector('.provider-chip--plex');
@@ -401,7 +440,8 @@ describe('SettingsPage', () => {
   });
 
   it('renders the Plex-only "Manual" secondary caption', async () => {
-    const { el } = await setup(true);
+    const { el, fixture } = await setup(true);
+    expandProviders(fixture, el);
     const plex = el.querySelector('.provider-chip--plex');
     expect(plex?.querySelector('.provider-chip__caption')?.textContent).toBe(
       'Manual',
@@ -416,7 +456,8 @@ describe('SettingsPage', () => {
   it('renders the Plex chip selected (badge + aria-pressed) when hasPlex is true', async () => {
     const service = mockService(true);
     service.hasPlex.set(true);
-    const { el } = await setupWithService(service);
+    const { el, fixture } = await setupWithService(service);
+    expandProviders(fixture, el);
     const plex = el.querySelector('.provider-chip--plex');
     expect(plex?.getAttribute('aria-pressed')).toBe('true');
     expect(plex?.classList.contains('provider-chip--selected')).toBe(true);
@@ -426,7 +467,8 @@ describe('SettingsPage', () => {
   it('renders the Plex chip unselected (no badge) when hasPlex is false', async () => {
     const service = mockService(true);
     service.hasPlex.set(false);
-    const { el } = await setupWithService(service);
+    const { el, fixture } = await setupWithService(service);
+    expandProviders(fixture, el);
     const plex = el.querySelector('.provider-chip--plex');
     expect(plex?.getAttribute('aria-pressed')).toBe('false');
     expect(plex?.classList.contains('provider-chip--selected')).toBe(false);
@@ -434,7 +476,8 @@ describe('SettingsPage', () => {
   });
 
   it('tapping the Plex chip calls onPlexToggle → toggleHasPlex', async () => {
-    const { el, service } = await setup(true);
+    const { el, service, fixture } = await setup(true);
+    expandProviders(fixture, el);
     const plex = el.querySelectorAll('.provider-chip--plex')[0] as HTMLElement;
     plex.click();
     expect(service.toggleHasPlex).toHaveBeenCalledTimes(1);

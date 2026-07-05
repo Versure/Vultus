@@ -195,11 +195,56 @@ ion-content {
   color: var(--vultus-on-surface-variant);
 }
 
-// ── My Providers card (spec 0060) ─────────────────────────────────────────
-// Header row of this card is a static icon-tile + title + subtitle (no
-// trailing control), matching the Stitch fork; the chip grid + footer follow.
+// ── My Providers card (spec 0060 + 0075 #166) ─────────────────────────────
+// The header row is a tappable disclosure <button> (icon-tile + title + subtitle
+// + trailing chevron) that collapses/expands the chip grid. Reset the default
+// button chrome and preserve the shared `.settings-row` flex layout; the body
+// (flex 1) pushes the trailing chevron to the trailing edge. Interactive states
+// mirror the sibling `.plex-connect-row` (hover tint / focus ring / press).
+// Do NOT clip the focus ring (no `overflow: hidden`).
 .settings-row--header {
   align-items: center;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 150ms ease-in-out;
+
+  &:hover {
+    background: color-mix(
+      in srgb,
+      var(--vultus-surface-container-highest) 30%,
+      transparent
+    );
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--ion-color-primary);
+    outline-offset: -2px;
+  }
+
+  &:active {
+    background: color-mix(
+      in srgb,
+      var(--ion-color-primary) 5%,
+      var(--vultus-surface-container)
+    );
+  }
+}
+
+// Trailing disclosure chevron — base points DOWN (collapsed); `.expanded`
+// rotates it 180° to point UP. Colour + size match the sibling row chevrons.
+// Replicates the title-detail season chevron idiom (rotate on `.expanded`).
+.providers-chevron {
+  flex: 0 0 auto;
+  font-size: 22px;
+  color: var(--vultus-on-surface-variant);
+  transition: transform 200ms ease;
+
+  &.expanded {
+    transform: rotate(180deg);
+  }
 }
 
 // Plain-text card title (`body-lg`/600) — the other cards derive their title

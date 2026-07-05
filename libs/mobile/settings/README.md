@@ -232,6 +232,14 @@ The page exposes:
   Stitch reference:
   `projects/13590348714018893783/screens/cebdfd02c7d44023b0e0019dd4907d48`
   ("Settings - My Providers - Vultus").
+  - **Collapsible (spec 0075 #166).** The card header is a tappable disclosure
+    `<button>` (`aria-expanded`, rotating `chevron-down-outline`); the chip grid
+    is **collapsed by default** and gated out of the DOM (`@if`) until expanded.
+    The expand state is an **in-memory, ephemeral** `providersExpanded` signal on
+    the page — it resets to collapsed on every visit and is **not persisted**
+    (no localStorage / Preferences / Firestore). The **footer count is visible
+    in both states** (collapsed and expanded), gated only by `!catalogLoading()`.
+    Collapsed screen: `projects/13590348714018893783/screens/7daf6b0bf7d44447bae3217b36dbcb49`.
 - a **Plex** chip (spec 0061) — the 7th chip in the same "My Providers" grid,
   rendered from its OWN template block (not a member of `providerCatalog()`) and
   backed by the SEPARATE `hasPlex` boolean (NOT `myProviderIds` — Plex has no
@@ -256,7 +264,17 @@ converter). `SettingsService`:
   `scope:shared` `GET_WATCH_PROVIDERS` token (a thunk over the `getWatchProviders`
   callable, provided by the shell — this slice never imports
   `@angular/fire/functions`). It no-ops when the catalog is already loaded for the
-  current region;
+  current region. **In-flight guard (spec 0075 #165 B1):** the region is claimed
+  synchronously (into `loadedCatalogRegion`) **before** the `await`, so a
+  concurrent same-region caller short-circuits instead of double-fetching; on a
+  fetch **failure** the claim is reset to `null` and the error re-thrown, so a
+  failed fetch stays retryable and `setRegion` still skips its prune;
+- **Load-on-entry (spec 0075 #165).** `load()` chains
+  `void this.loadProviderCatalog()` at the end of its success branch (after the
+  region resolves), so the catalog loads on the **first** Settings visit — the
+  footer reads "N of M" (never "N of 0") **without** a region switch. The page's
+  `ngOnInit` no longer calls `loadProviderCatalog()` eagerly (that raced the
+  not-yet-resolved `null` region and never fetched);
 - `toggleProvider(id)` adds/removes one id and persists the WHOLE array;
 - `setRegion(region)` performs **two sequential** `users/{uid}` writes — first
   the region, then (once the new region's catalog loads) the pruned
