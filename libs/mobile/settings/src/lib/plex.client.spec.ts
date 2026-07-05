@@ -170,6 +170,57 @@ describe('CapacitorHttpPlexClient', () => {
     });
   });
 
+  describe('listLibrary', () => {
+    const SERVER = {
+      name: 'My PMS',
+      baseUrl: 'http://192.168.1.20:32400',
+      accessToken: 'srv-token',
+    };
+
+    it('sends includeGuids=1 on the section listing and parses tmdb + legacy themoviedb guids', async () => {
+      httpGet.mockImplementation((opts: HttpCall) => {
+        if (opts.url.endsWith('/library/sections')) {
+          return Promise.resolve(
+            res(200, {
+              MediaContainer: { Directory: [{ type: 'show', key: '1' }] },
+            }),
+          );
+        }
+        if (opts.url.includes('/library/sections/1/all')) {
+          return Promise.resolve(
+            res(200, {
+              MediaContainer: {
+                totalSize: 2,
+                Metadata: [
+                  {
+                    title: 'New Agent',
+                    ratingKey: '10',
+                    Guid: [{ id: 'tmdb://1396' }],
+                  },
+                  {
+                    title: 'Legacy Agent',
+                    ratingKey: '11',
+                    guid: 'com.plexapp.agents.themoviedb://999?lang=en',
+                  },
+                ],
+              },
+            }),
+          );
+        }
+        return Promise.resolve(res(200, {}));
+      });
+
+      const items = await new CapacitorHttpPlexClient().listLibrary(SERVER);
+
+      // The `/all` listing MUST request includeGuids=1 — without it Plex omits
+      // the external Guid[] and every tmdbId is null (the original sync bug).
+      const allCall = httpGet.mock.calls.find(([o]) => o.url.includes('/all'));
+      expect(allCall?.[0].params).toMatchObject({ includeGuids: '1' });
+      // Both the new-agent tmdb:// GUID and the legacy themoviedb:// GUID parse.
+      expect(items.map((i) => i.tmdbId)).toEqual([1396, 999]);
+    });
+  });
+
   describe('client identifier', () => {
     it('sends the persisted per-install X-Plex-Client-Identifier', async () => {
       httpPost.mockResolvedValue(

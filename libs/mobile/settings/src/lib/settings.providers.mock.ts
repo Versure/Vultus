@@ -7,7 +7,7 @@ import {
   type SyncRun,
 } from '@vultus/shared/domain';
 import { PlexLinkService } from './plex-link.service';
-import { PlexSyncService, type PlexSyncSummary } from './plex-sync.service';
+import { PlexSyncService, type PlexSyncResult } from './plex-sync.service';
 import { SettingsService } from './settings.service';
 import { SyncStatusService } from './sync-status.service';
 
@@ -268,19 +268,19 @@ class MockPlexLinkServiceImpl {
 
 /**
  * Mock `PlexSyncService` mirror (spec 0073) — no Firebase / plex.tv. `sync()`
- * flips `running` briefly then resolves an empty summary so `mobile:serve-mock`
- * can exercise the "Sync now" spinner/disabled state.
+ * flips `running` briefly then resolves an `ok` result so `mobile:serve-mock`
+ * can exercise the "Sync now" spinner/disabled state + the completion toast.
  */
 @Injectable()
 class MockPlexSyncServiceImpl {
   private readonly _running = signal<boolean>(false);
   readonly running = this._running.asReadonly();
 
-  async sync(): Promise<PlexSyncSummary> {
+  async sync(): Promise<PlexSyncResult> {
     this._running.set(true);
     await new Promise((resolve) => setTimeout(resolve, 800));
     this._running.set(false);
-    return { added: 0, updated: 0, skipped: 0 };
+    return { status: 'ok', summary: { added: 0, updated: 0, skipped: 0 } };
   }
 }
 
