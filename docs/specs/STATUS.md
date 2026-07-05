@@ -10,10 +10,10 @@
 
 # Spec status ledger
 
-Total specs: 76
+Total specs: 77
 
 - done: 74
-- approved: 2
+- approved: 3
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -93,3 +93,4 @@ Total specs: 76
 | 74 | revert-completed-to-watching | Revert a Completed TV show to Watching when it has unwatched episodes again | done | slice:title-detail | scope:mobile, scope:functions |
 | 75 | settings-provider-list-fixes | Fix "N of 0 selected" providers on Settings entry + make the provider list collapsible | done | slice:settings | scope:mobile |
 | 76 | empty-state-centering | Center the empty/error state and stop the stray scroll on the Watchlist and Search pages | approved | slice:watchlist, slice:search | scope:mobile |
+| 77 | consolidate-plex-provider-entry | Exclude the real TMDB "Plex" provider from the Settings catalog so only the manual Plex chip shows | approved | — | scope:functions |
