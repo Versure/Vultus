@@ -114,7 +114,10 @@ function mockPlexLink(linked: boolean): MockPlexLink {
 function mockPlexSync(): MockPlexSync {
   return {
     running: signal<boolean>(false),
-    sync: vi.fn().mockResolvedValue({ added: 0, updated: 0, skipped: 0 }),
+    sync: vi.fn().mockResolvedValue({
+      status: 'ok',
+      summary: { added: 0, updated: 0, skipped: 0 },
+    }),
   };
 }
 

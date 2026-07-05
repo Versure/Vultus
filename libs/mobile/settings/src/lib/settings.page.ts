@@ -32,6 +32,7 @@ import {
 } from 'ionicons/icons';
 import { PlexLinkService } from './plex-link.service';
 import { PlexSyncService } from './plex-sync.service';
+import type { PlexSyncResult } from './plex-sync.service';
 import { SETTINGS_PROVIDERS } from './settings.providers';
 import { SettingsService } from './settings.service';
 import { SyncStatusCardComponent } from './sync-status-card.component';
@@ -122,9 +123,46 @@ export class SettingsPage implements OnInit {
     void this.router.navigate(['/tabs/settings/plex']);
   }
 
-  /** Run one Plex sync (connected "Sync now"). No-op guarded in the service. */
-  protected syncPlexNow(): void {
-    void this.plexSync.sync().then(() => this.plexLink.loadState());
+  /**
+   * Run one Plex sync (connected "Sync now") and give the user feedback via a
+   * toast — success (with counts), a benign no-op, or a failure. Without this the
+   * sync was invisible: a silent skip and a hard failure looked identical.
+   * Refreshes the card's "Last synced" label only when the pass actually ran.
+   */
+  protected async syncPlexNow(): Promise<void> {
+    const result = await this.plexSync.sync();
+    if (result.status === 'ok') {
+      await this.plexLink.loadState();
+    }
+    await this.presentSyncToast(result);
+  }
+
+  /** Toast copy for each `PlexSyncResult`. A `busy` skip stays silent (another
+   *  sync is already surfacing its own outcome). */
+  private async presentSyncToast(result: PlexSyncResult): Promise<void> {
+    let message: string;
+    if (result.status === 'ok') {
+      const { added, updated } = result.summary;
+      message =
+        added + updated > 0
+          ? `Plex sync complete — ${added} added, ${updated} updated`
+          : 'Plex sync complete — already up to date';
+    } else if (result.status === 'error') {
+      message = "Couldn't reach Plex — check your server and connection";
+    } else if (result.reason === 'no-server') {
+      message = "Couldn't find your Plex server on this network";
+    } else if (result.reason === 'not-linked') {
+      message = 'Connect Plex before syncing';
+    } else {
+      // 'busy' — a sync is already running; don't double-toast.
+      return;
+    }
+    const toast = await this.toastController.create({
+      message,
+      duration: 4000,
+      position: 'bottom',
+    });
+    await toast.present();
   }
 
   /**

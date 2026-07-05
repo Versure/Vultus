@@ -39,6 +39,21 @@ export interface PlexSyncSummary {
 }
 
 /**
+ * Discriminated outcome of a `sync()` call, so the caller can give the user real
+ * feedback (spec 0073 follow-up). Previously `sync()` returned only a summary
+ * and swallowed every failure, so a silent no-op (not linked / no server) and a
+ * hard failure (a PMS/plex.tv call throwing) looked identical to the UI.
+ * - `ok`: the pass ran; `summary` carries the add/update/skip counts;
+ * - `skipped`: a benign no-op — `busy` (a sync already running), `not-linked`
+ *   (no uid / no on-device token), or `no-server` (discovery found none);
+ * - `error`: a plex.tv/PMS/Firestore call threw (network / HTTP / timeout).
+ */
+export type PlexSyncResult =
+  | { status: 'ok'; summary: PlexSyncSummary }
+  | { status: 'skipped'; reason: 'busy' | 'not-linked' | 'no-server' }
+  | { status: 'error' };
+
+/**
  * Deterministic episode document id: `s{SS}e{EEE}` — season padded to 2 digits,
  * episode padded to 3 (e.g. `s01e001`). This REPLICATES
  * `libs/functions/sync-episodes/.../episode-id.ts` (a `scope:functions` lib the
@@ -92,30 +107,33 @@ export class PlexSyncService {
   readonly running = this._running.asReadonly();
 
   /**
-   * Run one full sync. Returns an outcome summary. No-op (empty summary) when
-   * uid null, not linked, or already running.
+   * Run one full sync. Returns a discriminated `PlexSyncResult` so the caller can
+   * surface real feedback: `skipped` for a benign no-op (uid null / not linked /
+   * already running / no server discovered), `error` when a plex.tv/PMS/Firestore
+   * call throws, `ok` with the summary otherwise. NEVER throws — every failure is
+   * mapped to a result here (the boot/resume trigger ignores it; the settings
+   * page toasts it).
    */
-  async sync(): Promise<PlexSyncSummary> {
-    const empty: PlexSyncSummary = { added: 0, updated: 0, skipped: 0 };
+  async sync(): Promise<PlexSyncResult> {
     const uid = this.uid();
     if (uid === null) {
-      return empty;
+      return { status: 'skipped', reason: 'not-linked' };
     }
     // Concurrent-sync guard: a second call while one runs is a no-op. Claim the
     // running flag SYNCHRONOUSLY (before any await) so a resume that arrives
     // before the first sync's first await still no-ops (no double writes).
     if (this._running()) {
-      return empty;
+      return { status: 'skipped', reason: 'busy' };
     }
     this._running.set(true);
     try {
       const { value: token } = await Preferences.get({ key: PLEX_TOKEN_KEY });
       if (token === null || token.length === 0) {
-        return empty;
+        return { status: 'skipped', reason: 'not-linked' };
       }
       const server = await this.client.discoverServer(token);
       if (server === null) {
-        return empty;
+        return { status: 'skipped', reason: 'no-server' };
       }
       const cursor = await this.readCursor(uid);
       const library = await this.client.listLibrary(server);
@@ -125,7 +143,11 @@ export class PlexSyncService {
       await updateDoc(doc(this.firestore, userPath(uid)), {
         'plexSync.lastSyncAt': new Date().toISOString(),
       });
-      return summary;
+      return { status: 'ok', summary };
+    } catch {
+      // A plex.tv/PMS/Firestore call threw (network / HTTP / timeout). Never log
+      // the error object (may echo secrets); surface a generic error result.
+      return { status: 'error' };
     } finally {
       this._running.set(false);
     }
