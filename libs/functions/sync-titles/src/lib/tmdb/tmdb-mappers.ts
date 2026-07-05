@@ -91,12 +91,19 @@ export function mapWatchProviders(
 // deterministic CatalogProvider[] (spec 0060): concat both sides, map each entry
 // (`logoPath: logo_path ?? null`), dedupe by providerId (first occurrence wins),
 // and sort by name (stable, case-insensitive) so the UI has a stable order.
+// Also excludes the real TMDB "Plex" provider (spec 0077 / #195) so the Settings
+// catalog never collides with the manual "I use Plex" chip (spec 0061).
 export function mergeCatalogProviders(
   movie: TmdbWatchProviderListEntry[],
   tv: TmdbWatchProviderListEntry[],
 ): CatalogProvider[] {
   const byId = new Map<number, CatalogProvider>();
   for (const entry of [...movie, ...tv]) {
+    // spec 0077 (#195): exclude the real TMDB "Plex" provider so the Settings
+    // catalog never collides with the manual "I use Plex" chip (spec 0061). Match by
+    // NAME (case-insensitive, trimmed) — TMDB assigns no stable, verified Plex id we
+    // can hardcode, so a name match is the safer predicate.
+    if (entry.provider_name.trim().toLowerCase() === 'plex') continue;
     if (byId.has(entry.provider_id)) continue; // first occurrence wins
     byId.set(entry.provider_id, {
       providerId: entry.provider_id,
