@@ -155,6 +155,9 @@ test.fixme('toggling a provider chip in Settings flips the watchlist pill', asyn
   await page.locator('ion-tab-button[tab="settings"]').click();
   await page.waitForURL(/\/tabs\/settings$/);
 
+  // #166: the "My Providers" grid is collapsed by default — expand it before the chip is in the DOM.
+  await page.locator('button.settings-row--header').click();
+
   const netflixChip = page
     .locator('.provider-chip')
     .filter({ hasText: 'Netflix' });
