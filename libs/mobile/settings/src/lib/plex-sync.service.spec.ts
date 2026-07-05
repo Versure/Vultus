@@ -14,7 +14,11 @@ import {
   watchlistItemPath,
 } from '@vultus/shared/firestore-schema';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { PlexSyncService, plexEpisodeId } from './plex-sync.service';
+import {
+  PlexSyncService,
+  plexEpisodeId,
+  type PlexSyncSummary,
+} from './plex-sync.service';
 
 // --- AngularFire mock (echo path on doc()/collection(); per-test doc store) ---
 interface Ref {
@@ -186,6 +190,13 @@ function makeService(client: PlexClient, uid: string | null = UID) {
   return TestBed.inject(PlexSyncService);
 }
 
+/** Run a sync expected to succeed and return its summary (asserts `ok`). */
+async function syncOk(service: PlexSyncService): Promise<PlexSyncSummary> {
+  const result = await service.sync();
+  expect(result.status).toBe('ok');
+  return (result as { status: 'ok'; summary: PlexSyncSummary }).summary;
+}
+
 /** dataToWatchlistItem reads `status`; the read-data shape only needs it here. */
 function movieItem(
   tmdbId: number,
@@ -236,7 +247,7 @@ describe('PlexSyncService', () => {
   it('adds a new unwatched library movie as planned, watchingViaPlex, traktId null', async () => {
     seedFirestore({});
     const service = makeService(mockClient([movieItem(550)]));
-    const summary = await service.sync();
+    const summary = await syncOk(service);
 
     expect(summary.added).toBe(1);
     const call = setDocMock.mock.calls.find(
@@ -258,7 +269,7 @@ describe('PlexSyncService', () => {
     const service = makeService(
       mockClient([movieItem(550, { addedAt: BEFORE_CURSOR })]),
     );
-    const summary = await service.sync();
+    const summary = await syncOk(service);
 
     expect(summary.added).toBe(0);
     expect(summary.skipped).toBeGreaterThanOrEqual(1);
@@ -274,7 +285,7 @@ describe('PlexSyncService', () => {
     const service = makeService(
       mockClient([movieItem(0, { tmdbId: null, viewCount: 1 })]),
     );
-    const summary = await service.sync();
+    const summary = await syncOk(service);
 
     expect(summary.skipped).toBe(1);
     expect(summary.added).toBe(0);
@@ -284,7 +295,7 @@ describe('PlexSyncService', () => {
   it('watch-implies-add: a watched, untracked movie is added completed', async () => {
     seedFirestore({});
     const service = makeService(mockClient([movieItem(603, { viewCount: 1 })]));
-    const summary = await service.sync();
+    const summary = await syncOk(service);
 
     expect(summary.added).toBe(1);
     const call = setDocMock.mock.calls.find(
@@ -302,7 +313,7 @@ describe('PlexSyncService', () => {
         ],
       }),
     );
-    const summary = await service.sync();
+    const summary = await syncOk(service);
 
     expect(summary.added).toBe(1);
     const call = setDocMock.mock.calls.find(
@@ -314,7 +325,7 @@ describe('PlexSyncService', () => {
   it('status mapping: a watched movie already tracked (planned) flips to completed', async () => {
     seedFirestore({ watchlist: { '550': 'planned' } });
     const service = makeService(mockClient([movieItem(550, { viewCount: 1 })]));
-    const summary = await service.sync();
+    const summary = await syncOk(service);
 
     expect(summary.updated).toBe(1);
     const call = updateDocMock.mock.calls.find(
@@ -339,7 +350,7 @@ describe('PlexSyncService', () => {
         ],
       }),
     );
-    const summary = await service.sync();
+    const summary = await syncOk(service);
 
     // Episode mirror wrote s01e001 watched.
     const epWrite = updateDocMock.mock.calls.find(
@@ -370,7 +381,7 @@ describe('PlexSyncService', () => {
         ],
       }),
     );
-    const summary = await service.sync();
+    const summary = await syncOk(service);
 
     // Both episodes mirrored watched, so status → completed.
     expect(summary.updated).toBe(1);
@@ -392,7 +403,7 @@ describe('PlexSyncService', () => {
         ],
       }),
     );
-    const summary = await service.sync();
+    const summary = await syncOk(service);
 
     // Episode mirror STILL wrote the episode doc.
     const epWrite = updateDocMock.mock.calls.find(
@@ -491,7 +502,7 @@ describe('PlexSyncService', () => {
     // While the first sync is mid-flight (gated on listLibrary), a second call
     // is a no-op — no duplicate work, no double writes.
     const second = await service.sync();
-    expect(second).toEqual({ added: 0, updated: 0, skipped: 0 });
+    expect(second).toEqual({ status: 'skipped', reason: 'busy' });
 
     release([]);
     await first;
@@ -515,23 +526,63 @@ describe('PlexSyncService', () => {
     expect(cursorWrite).toBeTruthy();
   });
 
-  it('no-op when uid is null (no writes)', async () => {
+  it('no-op when uid is null (skipped not-linked, no writes)', async () => {
     seedFirestore({});
     const service = makeService(mockClient([movieItem(550)]), null);
-    const summary = await service.sync();
+    const result = await service.sync();
 
-    expect(summary).toEqual({ added: 0, updated: 0, skipped: 0 });
+    expect(result).toEqual({ status: 'skipped', reason: 'not-linked' });
     expect(setDocMock).not.toHaveBeenCalled();
     expect(updateDocMock).not.toHaveBeenCalled();
   });
 
-  it('no-op when not linked (no Preferences token)', async () => {
+  it('no-op when not linked (no Preferences token → skipped not-linked)', async () => {
     seedFirestore({});
     prefsGetMock.mockResolvedValue({ value: null });
     const service = makeService(mockClient([movieItem(550)]));
-    const summary = await service.sync();
+    const result = await service.sync();
 
-    expect(summary).toEqual({ added: 0, updated: 0, skipped: 0 });
+    expect(result).toEqual({ status: 'skipped', reason: 'not-linked' });
     expect(setDocMock).not.toHaveBeenCalled();
+  });
+
+  it('skipped no-server when discovery finds none (no writes)', async () => {
+    seedFirestore({});
+    const client = mockClient([movieItem(550)]);
+    client.discoverServer = vi.fn().mockResolvedValue(null);
+    const service = makeService(client);
+    const result = await service.sync();
+
+    expect(result).toEqual({ status: 'skipped', reason: 'no-server' });
+    expect(setDocMock).not.toHaveBeenCalled();
+    // The cursor is NOT advanced on a no-op.
+    expect(
+      updateDocMock.mock.calls.some(([ref]) => ref.path === userPath(UID)),
+    ).toBe(false);
+  });
+
+  it('error result when discoverServer throws (never throws out of sync)', async () => {
+    seedFirestore({});
+    const client = mockClient([movieItem(550)]);
+    client.discoverServer = vi.fn().mockRejectedValue(new Error('http 401'));
+    const service = makeService(client);
+    const result = await service.sync();
+
+    expect(result).toEqual({ status: 'error' });
+    expect(service.running()).toBe(false);
+  });
+
+  it('error result when listLibrary throws (PMS unreachable)', async () => {
+    seedFirestore({});
+    const client = mockClient([]);
+    client.listLibrary = vi.fn().mockRejectedValue(new Error('timeout'));
+    const service = makeService(client);
+    const result = await service.sync();
+
+    expect(result).toEqual({ status: 'error' });
+    // The cursor is NOT advanced on a failed pass.
+    expect(
+      updateDocMock.mock.calls.some(([ref]) => ref.path === userPath(UID)),
+    ).toBe(false);
   });
 });

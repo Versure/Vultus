@@ -58,7 +58,14 @@ reads). Two impls live in this slice:
   `X-Plex-Client-Identifier` (a UUID generated once and persisted to Preferences
   under `plex_client_id`) — a constant shared by all installs collides in the
   account's plex.tv device registry — and passes `includeIPv6=1` to discovery so
-  an IPv6-only LAN still exposes a `local` connection.
+  an IPv6-only LAN still exposes a `local` connection. The library listing
+  (`/library/sections/{id}/all`) is fetched with **`includeGuids=1`** — WITHOUT
+  it Plex omits the external `Guid[]` (`tmdb://`) and every `tmdbId` parses as
+  `null`, so every item is skipped and nothing ever syncs (the original
+  episodes-not-marked bug); `tmdbIdFromGuids` also accepts the legacy
+  `themoviedb://<id>` agent GUID. Every native call carries a connect/read
+  **timeout** so a stale/black-holed local connection URI can't hang the request
+  and wedge the sync's `running` guard.
 - `MockPlexClient` — deterministic fixtures (pin auto-authorizes; a small library
   with a watched tmdb-GUID movie, a planned tmdb-GUID movie, a partially-watched
   tmdb-GUID show, and one GUID-less item; a two-episode show with the first
@@ -107,8 +114,17 @@ timers while backgrounded. The merged `PlexPin` carries no `expiresIn`, so the
 `sync()` runs one-way import: an **additions** pass (cursor-gated on
 `plexSync.lastSyncAt ?? linkedAt`) + a **watched-mirror** pass (full mirror for
 matched titles), then advances `plexSync.lastSyncAt`. `running` (signal) drives
-the "Sync now" spinner/disabled state. No-op when uid null, not linked (no
-Preferences token), or already running (concurrent guard, claimed synchronously).
+the "Sync now" spinner/disabled state.
+
+`sync()` returns a discriminated **`PlexSyncResult`** and **never throws** — so
+the caller can give real feedback (the settings page toasts it; the boot/resume
+trigger ignores it): `ok` (with the `{ added, updated, skipped }` summary),
+`skipped` with a reason (`busy` = a sync already running, `not-linked` = uid null
+or no Preferences token, `no-server` = discovery found none), or `error` (a
+plex.tv/PMS/Firestore call threw — network / HTTP / timeout). Previously it
+returned only a summary and swallowed every failure, so a silent skip and a hard
+failure were indistinguishable and the "Sync now" button gave no feedback. The
+cursor is advanced ONLY on `ok`.
 
 Key invariants:
 

@@ -46,6 +46,11 @@ export const PLEX_CLIENT_ID_KEY = 'plex_client_id';
 const PRODUCT = 'Vultus';
 const PLEX_TV = 'https://plex.tv/api/v2';
 
+/** Connect/read timeout (ms) applied to EVERY native HTTP call. Without it a
+ *  black-holed LAN address (a stale local connection URI) can hang the request
+ *  indefinitely, wedging the sync's `running` guard so later syncs no-op. */
+const REQUEST_TIMEOUT_MS = 15000;
+
 function ok(res: HttpResponse): boolean {
   return res.status >= 200 && res.status < 300;
 }
@@ -84,7 +89,10 @@ function epochSecondsToIso(value: unknown): string | null {
   return new Date(seconds * 1000).toISOString();
 }
 
-/** Parse a TMDB id from a Plex GUID list; null when no `tmdb://` GUID present. */
+/** Parse a TMDB id from a Plex GUID list; null when no TMDB GUID present.
+ *  Matches BOTH the new Plex agent's external GUID `tmdb://<id>` (returned only
+ *  when the section listing is fetched with `includeGuids=1`) AND the legacy
+ *  agent's `com.plexapp.agents.themoviedb://<id>?lang=en` form. */
 function tmdbIdFromGuids(item: Record<string, unknown>): number | null {
   // PMS returns either a top-level `guid` string or a `Guid[]` of `{ id }`.
   const candidates: string[] = [];
@@ -99,7 +107,7 @@ function tmdbIdFromGuids(item: Record<string, unknown>): number | null {
     }
   }
   for (const guid of candidates) {
-    const match = /tmdb:\/\/(\d+)/.exec(guid);
+    const match = /(?:tmdb|themoviedb):\/\/(\d+)/.exec(guid);
     if (match) {
       return Number(match[1]);
     }
@@ -116,6 +124,8 @@ export class CapacitorHttpPlexClient implements PlexClient {
       url: `${PLEX_TV}/pins`,
       headers: await this.headers({ 'Content-Type': 'application/json' }),
       params: { strong: 'false' },
+      connectTimeout: REQUEST_TIMEOUT_MS,
+      readTimeout: REQUEST_TIMEOUT_MS,
     });
     if (!ok(res)) {
       throw new PlexHttpError(res.status, '/pins');
@@ -132,6 +142,8 @@ export class CapacitorHttpPlexClient implements PlexClient {
     const res = await CapacitorHttp.get({
       url: `${PLEX_TV}/pins/${id}`,
       headers: await this.headers(),
+      connectTimeout: REQUEST_TIMEOUT_MS,
+      readTimeout: REQUEST_TIMEOUT_MS,
     });
     if (res.status === 404) {
       // {"errors":[{"code":1020,"message":"Code not found or expired"}]}
@@ -155,6 +167,8 @@ export class CapacitorHttpPlexClient implements PlexClient {
       // includeIPv6 defaults to 0 on plex.tv, which strips IPv6 LAN entries —
       // an IPv6-only home network would otherwise expose NO local connection.
       params: { includeHttps: '1', includeRelay: '0', includeIPv6: '1' },
+      connectTimeout: REQUEST_TIMEOUT_MS,
+      readTimeout: REQUEST_TIMEOUT_MS,
     });
     if (!ok(res)) {
       throw new PlexHttpError(res.status, '/resources');
@@ -289,6 +303,11 @@ export class CapacitorHttpPlexClient implements PlexClient {
           'X-Plex-Container-Start': String(start),
           'X-Plex-Container-Size': String(pageSize),
         },
+        // includeGuids=1 is REQUIRED for the `/all` listing to include the
+        // external `Guid[]` (tmdb://, imdb://, tvdb://). Without it items carry
+        // only the internal `plex://` guid, so tmdbId is always null and EVERY
+        // item is skipped — nothing ever syncs (the original bug).
+        { includeGuids: '1' },
       );
       const container = asRecord(body['MediaContainer']);
       const metadata = asArray(container['Metadata']);
@@ -321,6 +340,7 @@ export class CapacitorHttpPlexClient implements PlexClient {
     server: PlexServer,
     path: string,
     extraHeaders: Record<string, string> = {},
+    params: Record<string, string> = {},
   ): Promise<Record<string, unknown>> {
     const res: HttpResponse = await CapacitorHttp.get({
       url: `${server.baseUrl}${path}`,
@@ -328,6 +348,9 @@ export class CapacitorHttpPlexClient implements PlexClient {
         'X-Plex-Token': server.accessToken,
         ...extraHeaders,
       }),
+      params,
+      connectTimeout: REQUEST_TIMEOUT_MS,
+      readTimeout: REQUEST_TIMEOUT_MS,
     });
     if (!ok(res)) {
       throw new PlexHttpError(res.status, path);
