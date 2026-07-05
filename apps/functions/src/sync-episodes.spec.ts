@@ -4,11 +4,16 @@ import type {
   EpisodeSyncEngine,
   EpisodeUpsertResult,
 } from '@vultus/functions/sync-episodes';
-import { episodePath, episodeToData } from '@vultus/shared/firestore-schema';
-import type { EpisodeDoc } from '@vultus/shared/domain';
+import {
+  episodePath,
+  episodeToData,
+  watchlistItemPath,
+} from '@vultus/shared/firestore-schema';
+import type { EpisodeDoc, WatchStatus } from '@vultus/shared/domain';
 import {
   handleWatchlistCreate,
   createEpisodeUpsertStore,
+  createWatchlistStatusStoreAdapter,
   type WatchlistCreateEvent,
 } from './sync-episodes';
 
@@ -180,5 +185,69 @@ describe('createEpisodeUpsertStore', () => {
     await store.writeEpisodes('u1', 'title-1', many);
     expect(sets).toHaveLength(501);
     expect(commits()).toBe(2); // 500 + 1
+  });
+});
+
+// --- createWatchlistStatusStoreAdapter (Admin-SDK adapter, spec 0074) -----
+
+interface RecordedUpdate {
+  path: string;
+  data: unknown;
+}
+
+/** A fake Firestore backing a SINGLE watchlist doc: `get()` returns `docData`,
+ *  and `update()` records the path + patch so the test can assert the write. */
+function fakeStatusDb(docData: Record<string, unknown> | undefined) {
+  const gets: string[] = [];
+  const updates: RecordedUpdate[] = [];
+
+  const db = {
+    doc: (path: string) => ({
+      get: () => {
+        gets.push(path);
+        return Promise.resolve({ data: () => docData });
+      },
+      update: (data: unknown) => {
+        updates.push({ path, data });
+        return Promise.resolve();
+      },
+    }),
+  };
+
+  return { db: db as unknown as Firestore, gets, updates };
+}
+
+describe('createWatchlistStatusStoreAdapter', () => {
+  it('getStatus reads `status` from the watchlist doc at watchlistItemPath', async () => {
+    const { db, gets } = fakeStatusDb({ status: 'completed' });
+    const store = createWatchlistStatusStoreAdapter(db);
+    const status = await store.getStatus('u1', 'title-1');
+    expect(status).toBe('completed');
+    expect(gets).toEqual([watchlistItemPath('u1', 'title-1')]);
+  });
+
+  it('getStatus returns null when the `status` field is absent', async () => {
+    const { db } = fakeStatusDb({ tmdbId: 1396 });
+    const store = createWatchlistStatusStoreAdapter(db);
+    expect(await store.getStatus('u1', 'title-1')).toBeNull();
+  });
+
+  it('getStatus returns null when the doc does not exist (undefined data)', async () => {
+    const { db } = fakeStatusDb(undefined);
+    const store = createWatchlistStatusStoreAdapter(db);
+    expect(await store.getStatus('u1', 'title-1')).toBeNull();
+  });
+
+  it('setStatus calls .update({ status }) on the doc at watchlistItemPath', async () => {
+    const { db, updates } = fakeStatusDb({ status: 'completed' });
+    const store = createWatchlistStatusStoreAdapter(db);
+    const next: WatchStatus = 'watching';
+    await store.setStatus('u1', 'title-1', next);
+    expect(updates).toEqual([
+      {
+        path: watchlistItemPath('u1', 'title-1'),
+        data: { status: 'watching' },
+      },
+    ]);
   });
 });

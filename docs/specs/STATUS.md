@@ -13,7 +13,8 @@
 Total specs: 74
 
 - done: 72
-- approved: 2
+- approved: 1
+- implementing: 1
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -90,4 +91,4 @@ Total specs: 74
 | 71 | normative-text-dedup | De-duplicate copy-pasted normative rules (Stitch recipe, worktree snippet, design hexes, Windows E-notes) | done | — | — |
 | 72 | plan-accuracy-refresh | Refresh docs/PLAN.md to eliminate accumulated drift against the shipped codebase | done | — | — |
 | 73 | plex-sync | One-way Plex → Vultus sync (library additions + watch status) | done | slice:settings | scope:mobile, scope:shared |
-| 74 | revert-completed-to-watching | Revert a Completed TV show to Watching when it has unwatched episodes again | approved | slice:title-detail | scope:mobile, scope:functions |
+| 74 | revert-completed-to-watching | Revert a Completed TV show to Watching when it has unwatched episodes again | implementing | slice:title-detail | scope:mobile, scope:functions |

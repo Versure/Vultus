@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Episode, EpisodeDoc } from '@vultus/shared/domain';
+import type { Episode, EpisodeDoc, WatchStatus } from '@vultus/shared/domain';
 import { createEpisodeSyncEngine } from './episode-sync-engine';
 import type {
   EpisodeStore,
   TmdbEpisodeSource,
+  WatchlistStatusStore,
   WatchlistTvShow,
   WatchlistTvSource,
 } from '../ports';
@@ -67,6 +68,16 @@ function fakeEpisodeStore(existing: string[] = []) {
 
 function fakeWatchlist(shows: WatchlistTvShow[]): WatchlistTvSource {
   return { listAllTvShows: vi.fn(() => Promise.resolve(shows)) };
+}
+
+/** A watchlist-status store seeded with a current status; records setStatus. */
+function fakeStatusStore(current: WatchStatus | null) {
+  const getStatus = vi.fn(
+    (): Promise<WatchStatus | null> => Promise.resolve(current),
+  );
+  const setStatus = vi.fn((): Promise<void> => Promise.resolve());
+  const store: WatchlistStatusStore = { getStatus, setStatus };
+  return { store, getStatus, setStatus };
 }
 
 // --- syncOne -------------------------------------------------------------
@@ -185,6 +196,105 @@ describe('createEpisodeSyncEngine.syncOne', () => {
     for (const { doc } of writes[0].docs) {
       expect(doc.watchedAt).toBeNull();
     }
+  });
+});
+
+// --- syncOne: completed → watching revert (spec 0074) --------------------
+
+describe('createEpisodeSyncEngine.syncOne — completed → watching revert', () => {
+  it('inserts ≥1 new episode into a completed show → setStatus(watching), statusRevertedToWatching true', async () => {
+    const tmdb = fakeTmdb({ count: 1, seasons: { 1: [ep(1, 1), ep(1, 2)] } });
+    const { store } = fakeEpisodeStore(['s01e001']); // s01e002 is new
+    const {
+      store: statusStore,
+      getStatus,
+      setStatus,
+    } = fakeStatusStore('completed');
+    const engine = createEpisodeSyncEngine({
+      tmdb,
+      episodes: store,
+      watchlistStatus: statusStore,
+    });
+
+    const result = await engine.syncOne('u1', 'title-1', 100);
+
+    expect(result.episodesWritten).toBe(1);
+    expect(getStatus).toHaveBeenCalledWith('u1', 'title-1');
+    expect(setStatus).toHaveBeenCalledTimes(1);
+    expect(setStatus).toHaveBeenCalledWith('u1', 'title-1', 'watching');
+    expect(result.statusRevertedToWatching).toBe(true);
+  });
+
+  it.each<WatchStatus | null>(['watching', 'planned', 'dropped', null])(
+    'inserts ≥1 new episode but status is %s → NO setStatus, no revert',
+    async (current) => {
+      const tmdb = fakeTmdb({ count: 1, seasons: { 1: [ep(1, 1), ep(1, 2)] } });
+      const { store } = fakeEpisodeStore(['s01e001']); // s01e002 is new
+      const { store: statusStore, setStatus } = fakeStatusStore(current);
+      const engine = createEpisodeSyncEngine({
+        tmdb,
+        episodes: store,
+        watchlistStatus: statusStore,
+      });
+
+      const result = await engine.syncOne('u1', 'title-1', 100);
+
+      expect(result.episodesWritten).toBe(1);
+      expect(setStatus).not.toHaveBeenCalled();
+      expect(result.statusRevertedToWatching).toBe(false);
+    },
+  );
+
+  it('inserts ZERO new episodes (all already existed) → NO getStatus/setStatus even for a completed show', async () => {
+    const tmdb = fakeTmdb({ count: 1, seasons: { 1: [ep(1, 1), ep(1, 2)] } });
+    const { store } = fakeEpisodeStore(['s01e001', 's01e002']); // nothing new
+    const {
+      store: statusStore,
+      getStatus,
+      setStatus,
+    } = fakeStatusStore('completed');
+    const engine = createEpisodeSyncEngine({
+      tmdb,
+      episodes: store,
+      watchlistStatus: statusStore,
+    });
+
+    const result = await engine.syncOne('u1', 'title-1', 100);
+
+    expect(result.episodesWritten).toBe(0);
+    expect(getStatus).not.toHaveBeenCalled();
+    expect(setStatus).not.toHaveBeenCalled();
+    expect(result.statusRevertedToWatching).toBe(false);
+  });
+
+  it('watchlistStatus port ABSENT (entry-point-A shape) → no revert, no throw, statusRevertedToWatching false', async () => {
+    const tmdb = fakeTmdb({ count: 1, seasons: { 1: [ep(1, 1), ep(1, 2)] } });
+    const { store } = fakeEpisodeStore(['s01e001']); // s01e002 is new
+    const engine = createEpisodeSyncEngine({ tmdb, episodes: store });
+
+    const result = await engine.syncOne('u1', 'title-1', 100);
+
+    expect(result.outcome).toBe('synced');
+    expect(result.episodesWritten).toBe(1);
+    expect(result.statusRevertedToWatching).toBe(false);
+  });
+
+  it('insert-only invariant unchanged — the revert never touches episode docs (only new ids written)', async () => {
+    const tmdb = fakeTmdb({ count: 1, seasons: { 1: [ep(1, 1), ep(1, 2)] } });
+    const { store, writes } = fakeEpisodeStore(['s01e001']);
+    const { store: statusStore } = fakeStatusStore('completed');
+    const engine = createEpisodeSyncEngine({
+      tmdb,
+      episodes: store,
+      watchlistStatus: statusStore,
+    });
+
+    await engine.syncOne('u1', 'title-1', 100);
+
+    // writeEpisodes still receives ONLY the new id; the status revert is a
+    // separate watchlist write that does not affect the episode payload.
+    expect(writes[0].docs.map((d) => d.id)).toEqual(['s01e002']);
+    expect(writes[0].docs.map((d) => d.id)).not.toContain('s01e001');
   });
 });
 
