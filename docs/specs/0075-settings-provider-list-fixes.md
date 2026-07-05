@@ -2,7 +2,7 @@
 number: 0075
 slug: settings-provider-list-fixes
 title: Fix "N of 0 selected" providers on Settings entry + make the provider list collapsible
-status: implementing
+status: done
 slices: [slice:settings]
 scopes: [scope:mobile]
 created: 2026-07-05
