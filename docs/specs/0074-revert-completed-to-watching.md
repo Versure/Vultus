@@ -2,7 +2,7 @@
 number: 0074
 slug: revert-completed-to-watching
 title: Revert a Completed TV show to Watching when it has unwatched episodes again
-status: implementing
+status: done
 slices: [slice:title-detail]
 scopes: [scope:mobile, scope:functions]
 created: 2026-07-05
