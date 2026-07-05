@@ -2,7 +2,7 @@
 number: 0076
 slug: empty-state-centering
 title: Center the empty/error state and stop the stray scroll on the Watchlist and Search pages
-status: approved
+status: implementing
 slices: [slice:watchlist, slice:search]
 scopes: [scope:mobile]
 created: 2026-07-05
