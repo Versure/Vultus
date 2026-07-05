@@ -20,6 +20,7 @@ import {
   type EpisodeStore,
   type EpisodeSyncEngine,
   type TmdbEpisodeSource,
+  type WatchlistStatusStore,
   type WatchlistTvShow,
   type WatchlistTvSource,
 } from '@vultus/functions/sync-episodes';
@@ -27,7 +28,9 @@ import {
   episodePath,
   episodesPath,
   episodeToData,
+  watchlistItemPath,
 } from '@vultus/shared/firestore-schema';
+import type { WatchStatus } from '@vultus/shared/domain';
 
 // `TMDB_READ_TOKEN` is a singleton-by-name param: declaring it here with the
 // same name as in `main.ts` references the SAME secret (Firebase de-dupes by
@@ -110,6 +113,30 @@ export function createWatchlistTvSourceAdapter(
         });
       }
       return shows;
+    },
+  };
+}
+
+/**
+ * Reads/updates the watchlist doc's `status` for a (uid, titleId) over
+ * `users/{uid}/watchlist/{titleId}` (via `watchlistItemPath`). Backs the
+ * daily-pass `completed → watching` revert (spec 0074, D5): the engine calls
+ * `getStatus` after inserting new episodes and, if the show is `'completed'`,
+ * `setStatus(..., 'watching')`. Admin SDK enters ONLY here; the engine stays
+ * Firebase-free. Wired into entry point B (main.ts) only — NOT the on-add
+ * trigger (entry point A), which needs no revert for a freshly-added show.
+ */
+export function createWatchlistStatusStoreAdapter(
+  db: Firestore,
+): WatchlistStatusStore {
+  return {
+    async getStatus(uid, titleId): Promise<WatchStatus | null> {
+      const snap = await db.doc(watchlistItemPath(uid, titleId)).get();
+      const data = snap.data() as { status?: WatchStatus } | undefined;
+      return data?.status ?? null;
+    },
+    async setStatus(uid, titleId, status): Promise<void> {
+      await db.doc(watchlistItemPath(uid, titleId)).update({ status });
     },
   };
 }

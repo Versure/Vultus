@@ -47,6 +47,7 @@ import {
   createTmdbEpisodeSourceAdapter,
   createEpisodeUpsertStore,
   createWatchlistTvSourceAdapter,
+  createWatchlistStatusStoreAdapter,
 } from './sync-episodes';
 import { classifyAuth } from './lib/auth';
 import type { VerifyToken } from './lib/auth';
@@ -235,9 +236,13 @@ export async function runSync(
       const episodesErrored = episodeResults.filter(
         (r) => r.outcome === 'error',
       ).length;
+      const revertedToWatching = episodeResults.filter(
+        (r) => r.statusRevertedToWatching,
+      ).length;
       logger.info('episode sync pass complete', {
         episodesSynced,
         episodesErrored,
+        revertedToWatching,
       });
     } catch (err) {
       logger.error('episode sync pass failed (best-effort, continuing)', err);
@@ -324,6 +329,7 @@ export const syncTitles = onRequest(
             ),
             episodes: createEpisodeUpsertStore(firestore),
             watchlist: createWatchlistTvSourceAdapter(firestore),
+            watchlistStatus: createWatchlistStatusStoreAdapter(firestore), // NEW (spec 0074, D5)
           }),
         verifyToken: verifyIdToken,
         secret: SYNC_SHARED_SECRET.value(),

@@ -3,6 +3,7 @@
 import type {
   EpisodeStore,
   TmdbEpisodeSource,
+  WatchlistStatusStore,
   WatchlistTvSource,
 } from '../ports';
 
@@ -12,6 +13,10 @@ export interface EpisodeSyncConfig {
   /** Required only for `syncAll` (entry point B). Omitted by the on-add trigger
    *  (entry point A), which only ever calls `syncOne`. */
   watchlist?: WatchlistTvSource;
+  /** Present only for the daily pass (entry point B). When present, `syncOne`
+   *  reverts a `'completed'` show to `'watching'` after inserting ≥1 new episode
+   *  (spec 0074). Omitted by the on-add trigger (entry point A). */
+  watchlistStatus?: WatchlistStatusStore;
 }
 
 export interface EpisodeUpsertResult {
@@ -25,6 +30,9 @@ export interface EpisodeUpsertResult {
   outcome: 'synced' | 'skipped' | 'error';
   /** Human-readable detail for 'skipped'/'error'; absent on 'synced'. */
   reason?: string;
+  /** True when this run reverted the show from 'completed' to 'watching'
+   *  (spec 0074). Optional — absent/false on runs that did not revert. */
+  statusRevertedToWatching?: boolean;
 }
 
 export interface EpisodeSyncEngine {
