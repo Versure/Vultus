@@ -14,7 +14,7 @@ import type {
 export function createEpisodeSyncEngine(
   config: EpisodeSyncConfig,
 ): EpisodeSyncEngine {
-  const { tmdb, episodes, watchlist } = config;
+  const { tmdb, episodes, watchlist, watchlistStatus } = config;
 
   async function syncOne(
     uid: string,
@@ -53,6 +53,21 @@ export function createEpisodeSyncEngine(
 
     await episodes.writeEpisodes(uid, titleId, toWrite);
 
+    // Source-of-truth revert (spec 0074, D4): the daily pass (entry point B)
+    // wires `watchlistStatus`; when ≥1 NEW episode was inserted this run and the
+    // show's watchlist status is 'completed', revert it to 'watching' so every
+    // surface (Watchlist tab, detail page, notifications) is correct without the
+    // user re-opening the detail page. This is a SEPARATE watchlist-doc write —
+    // episode docs are never touched (insert-only invariant of spec 0047).
+    let statusRevertedToWatching = false;
+    if (toWrite.length > 0 && watchlistStatus) {
+      const current = await watchlistStatus.getStatus(uid, titleId);
+      if (current === 'completed') {
+        await watchlistStatus.setStatus(uid, titleId, 'watching');
+        statusRevertedToWatching = true;
+      }
+    }
+
     return {
       uid,
       titleId,
@@ -60,6 +75,7 @@ export function createEpisodeSyncEngine(
       seasonsFetched: count,
       episodesWritten: toWrite.length,
       outcome: 'synced',
+      statusRevertedToWatching,
     };
   }
 

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { logger } from 'firebase-functions';
 import type {
   SyncEngine,
   SyncResult,
@@ -414,6 +415,75 @@ describe('runSync handler wiring', () => {
         'trigger',
       ].sort(),
     );
+  });
+
+  it('logs revertedToWatching = count of results with statusRevertedToWatching in the episode-sync-pass-complete line (spec 0074)', async () => {
+    const { db } = createFakeDb({
+      watchlist: [{ tmdbId: 1396, type: 'tv' }],
+    });
+    const episodeEngine: EpisodeSyncEngine = {
+      syncOne: vi.fn(),
+      syncAll: vi.fn(
+        (): Promise<EpisodeUpsertResult[]> =>
+          Promise.resolve([
+            {
+              uid: 'u1',
+              titleId: 't1',
+              tmdbId: 1396,
+              seasonsFetched: 1,
+              episodesWritten: 2,
+              outcome: 'synced',
+              statusRevertedToWatching: true,
+            },
+            {
+              uid: 'u1',
+              titleId: 't2',
+              tmdbId: 1400,
+              seasonsFetched: 1,
+              episodesWritten: 1,
+              outcome: 'synced',
+              statusRevertedToWatching: true,
+            },
+            {
+              uid: 'u1',
+              titleId: 't3',
+              tmdbId: 1500,
+              seasonsFetched: 1,
+              episodesWritten: 0,
+              outcome: 'synced',
+            },
+          ]),
+      ),
+    };
+
+    const infoSpy = vi
+      .spyOn(logger, 'info')
+      .mockImplementation(() => undefined);
+    try {
+      await runSync(
+        baseDeps({
+          db,
+          createEngine,
+          createEpisodeEngine: () => episodeEngine,
+        }),
+        req({
+          headers: { 'x-vultus-sync-secret': SECRET },
+          body: { force: true },
+        }),
+      );
+
+      const passLog = infoSpy.mock.calls.find(
+        (c) => c[0] === 'episode sync pass complete',
+      );
+      expect(passLog).toBeDefined();
+      expect(passLog?.[1]).toMatchObject({
+        episodesSynced: 3,
+        episodesErrored: 0,
+        revertedToWatching: 2,
+      });
+    } finally {
+      infoSpy.mockRestore();
+    }
   });
 
   it('BEST-EFFORT: an episode-pass failure (syncAll rejects) does NOT fail the run — SyncRunResponse shape is unchanged and system/sync is still written (R9 / DoD e)', async () => {

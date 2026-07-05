@@ -227,6 +227,56 @@ test.describe('title-detail F4 — watchlist-to-detail-correct-title (spec 0037)
       await expect(seasonCounts.nth(i)).toHaveText(/^(\d+)\/\1$/);
     }
   });
+
+  // -------------------------------------------------------------------------
+  // Spec 0074 — reverting a Completed TV show to Watching on uncheck.
+  // Un-skip blocker: the Firestore emulator cannot run under Claude Code tools
+  // (project memory) — this flow asserts against the live emulator stream, so it
+  // must run in the user's own terminal or the CI emulator gate. Seed data is
+  // already sufficient: the spec-0034 seed provides three unwatched S1 episodes
+  // for tmdbId 2 (apps/mobile-e2e/emulator-data/seeded/docs.json, all
+  // "watched": false); the Completed state is established via the UI (set
+  // Completed -> batch-marks every episode watched -> auto-advances to
+  // Completed), so no docs.json change is required to un-skip.
+  // -------------------------------------------------------------------------
+  test.fixme('revert-completed-to-watching: unchecking an episode of a Completed TV show reverts status to Watching', async ({
+    page,
+  }) => {
+    await bootAndSeed(page);
+
+    // Open the seeded TV title (tmdbId 2, Breaking Bad) detail page.
+    await page.goto('/tabs/title-detail/2');
+    await expect(page).toHaveURL(/\/tabs\/title-detail\/2\?type=tv/);
+
+    // Establish the Completed state via the UI: set the status to "Completed"
+    // through the title-detail status action sheet (actionSheetButtons ->
+    // TitleDetailService.updateStatus(2, 'completed', 'tv')). The completed + tv
+    // branch batch-marks every unwatched episode { watched: true, watchedAt } and
+    // advances the watchlist doc to `completed` (spec 0053).
+    const statusControl = page.locator('[data-test="status-control"]');
+    await statusControl.click();
+
+    const sheet = page.locator('ion-action-sheet[header="Set status"]');
+    await expect(sheet).toBeVisible();
+    await sheet.locator('button', { hasText: 'Completed' }).first().click();
+
+    // The status control now reflects the Completed state (all episodes watched).
+    await expect(statusControl).toHaveText(/^Completed$/);
+
+    // Uncheck exactly ONE episode toggle. setEpisodeWatched(..., false) ->
+    // autoUpdateStatus sees the show is no longer all-watched (watchedCount <
+    // total, total > 0) and reverts `completed` -> `watching` (spec 0074, D2/D3).
+    const episodesSection = page.locator('[data-test="episodes-section"]');
+    await expect(episodesSection).toBeVisible();
+    await episodesSection
+      .locator('[data-test="episode-watched-toggle"]')
+      .first()
+      .click();
+
+    // The realtime `tracked$` stream re-renders the badge from Completed to
+    // Watching (ALWAYS Watching — even at watchedCount === 0, per D3).
+    await expect(statusControl).toHaveText(/^Watching$/);
+  });
 });
 
 // ---------------------------------------------------------------------------
