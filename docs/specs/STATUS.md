@@ -12,9 +12,8 @@
 
 Total specs: 77
 
-- done: 74
+- done: 75
 - approved: 2
-- implementing: 1
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -93,5 +92,5 @@ Total specs: 77
 | 73 | plex-sync | One-way Plex → Vultus sync (library additions + watch status) | done | slice:settings | scope:mobile, scope:shared |
 | 74 | revert-completed-to-watching | Revert a Completed TV show to Watching when it has unwatched episodes again | done | slice:title-detail | scope:mobile, scope:functions |
 | 75 | settings-provider-list-fixes | Fix "N of 0 selected" providers on Settings entry + make the provider list collapsible | done | slice:settings | scope:mobile |
-| 76 | empty-state-centering | Center the empty/error state and stop the stray scroll on the Watchlist and Search pages | implementing | slice:watchlist, slice:search | scope:mobile |
+| 76 | empty-state-centering | Center the empty/error state and stop the stray scroll on the Watchlist and Search pages | done | slice:watchlist, slice:search | scope:mobile |
 | 77 | consolidate-plex-provider-entry | Exclude the real TMDB "Plex" provider from the Settings catalog so only the manual Plex chip shows | approved | — | scope:functions |
