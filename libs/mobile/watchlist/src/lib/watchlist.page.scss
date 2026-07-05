@@ -58,6 +58,35 @@ ion-header {
 
 ion-content {
   --background: var(--vultus-surface);
+
+  // Lay the scroll container out as a flex column so the persistent controls
+  // (status chips / type tabs / search row) stack at the top and a single
+  // flex-fill child (the empty/error state) can absorb the remaining space and
+  // center in it. `scroll` is ion-content's documented shadow part on the inner
+  // `.inner-scroll` element (the actual scroll viewport, verified against
+  // @ionic/core 8.8.10 content.js) — the natural-height list still scrolls.
+  &::part(scroll) {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Empty / error state centering (spec 0076, issue #159).
+// The shared vultus-empty-state / vultus-error-state atoms set
+// `:host { min-height: 100% }`, which only centers when the state is the SOLE
+// child of ion-content. Here they render BELOW persistent siblings, so 100%
+// overflows → stray scroll + off-center box. The `fill-state` marker class
+// (element+class specificity 0,1,1 beats the emulated `:host` 0,1,0 — no
+// `!important`) overrides ONLY `min-height` to 0 and lets the state flex-fill
+// the space below the controls; the atom's own justify/align-center then
+// centers the box. The atom's other :host box props (max-width/margin/padding)
+// are deliberately left untouched.
+// -----------------------------------------------------------------------------
+vultus-empty-state.fill-state,
+vultus-error-state.fill-state {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 // -----------------------------------------------------------------------------

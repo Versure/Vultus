@@ -34,6 +34,28 @@ ion-header {
 
 ion-content {
   --background: var(--vultus-surface);
+
+  // Make the scrollable container a flex column so the persistent searchbar
+  // lays out at the top and the empty/error state below can absorb the
+  // remaining height (see .fill-state). `scroll` is the documented Ionic
+  // shadow part for ion-content's scrollable element. A long results list
+  // still scrolls normally (natural-height siblings, fill only on state).
+  &::part(scroll) {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+// Let the empty/error state fill the space below the searchbar and center via
+// the shared components' own justify/align-center. This overrides ONLY the
+// shared `:host { min-height: 100% }` — element+class (0,1,1) beats the
+// emulated :host (0,1,0) without !important. max-width/margin/padding from the
+// shared :host are deliberately left untouched. The loading skeleton is NOT
+// given this class (it keeps its natural block height at the top).
+vultus-empty-state.fill-state,
+vultus-error-state.fill-state {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .search-container {

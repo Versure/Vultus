@@ -118,6 +118,16 @@ states, rendered with the shared atoms from **`@vultus/shared/ui-kit`** (spec
   registered in this page via `addIcons`).
 - **populated** → the status-grouped sections.
 
+The empty and error states carry a page-local **`fill-state`** marker class
+(spec 0076, issue #159): `ion-content::part(scroll)` is a flex column and
+`vultus-empty-state.fill-state` / `vultus-error-state.fill-state` set
+`flex: 1 1 auto; min-height: 0`, so the state fills the space **below** the
+persistent status chips / type tabs / search row and centers there (the shared
+atom's own `justify/align-center` does the centering; only its
+`:host { min-height: 100% }` is overridden — via element+class specificity, no
+`!important`). The skeleton keeps its natural block height and does **not** carry
+the class. This class is slice-local (not shared/importable — spec 0076 D1).
+
 The slice-local grouping/filtering/sort helpers (`groupByStatus`, `filterByType`,
 `sortItems`, `getAvailableProviders`, the `WatchlistSort` type,
 `STATUS_DISPLAY_ORDER`, `STATUS_LABELS`, `StatusGroup`) live in
