@@ -130,6 +130,93 @@ describe('mergeCatalogProviders (spec 0060)', () => {
   it('returns [] for two empty inputs', () => {
     expect(mergeCatalogProviders([], [])).toEqual([]);
   });
+
+  // spec 0077 (#195): exclude the real TMDB "Plex" provider from the merged
+  // catalog so it never collides with the manual "I use Plex" chip (spec 0061).
+  describe('excludes the real TMDB "Plex" provider (spec 0077 / #195)', () => {
+    const plexVariants: { label: string; name: string }[] = [
+      { label: 'exact "Plex"', name: 'Plex' },
+      { label: 'lowercase "plex"', name: 'plex' },
+      { label: 'whitespace-padded " Plex "', name: ' Plex ' },
+    ];
+
+    for (const { label, name } of plexVariants) {
+      it(`drops a Plex entry (${label}) on the movie side, Netflix passes through`, () => {
+        const plex: TmdbWatchProviderListEntry = {
+          provider_id: 999,
+          provider_name: name,
+          logo_path: '/plex.jpg',
+        };
+        const result = mergeCatalogProviders([netflix, plex], []);
+        const names = result.map((p) => p.name.trim().toLowerCase());
+        expect(names).not.toContain('plex');
+        expect(result.map((p) => p.name)).toContain('Netflix');
+      });
+
+      it(`drops a Plex entry (${label}) on the tv side, Netflix passes through`, () => {
+        const plex: TmdbWatchProviderListEntry = {
+          provider_id: 999,
+          provider_name: name,
+          logo_path: '/plex.jpg',
+        };
+        const result = mergeCatalogProviders([], [netflix, plex]);
+        const names = result.map((p) => p.name.trim().toLowerCase());
+        expect(names).not.toContain('plex');
+        expect(result.map((p) => p.name)).toContain('Netflix');
+      });
+    }
+
+    it('does NOT exclude a non-exact name like "Plex Premium" (no over-matching)', () => {
+      const plexPremium: TmdbWatchProviderListEntry = {
+        provider_id: 1001,
+        provider_name: 'Plex Premium',
+        logo_path: null,
+      };
+      const plexus: TmdbWatchProviderListEntry = {
+        provider_id: 1002,
+        provider_name: 'Plexus',
+        logo_path: null,
+      };
+      const result = mergeCatalogProviders([plexPremium, plexus], []);
+      expect(result.map((p) => p.name)).toEqual(['Plex Premium', 'Plexus']);
+    });
+
+    it('still dedupes by id (first wins) with the Plex filter present', () => {
+      const movieNetflix = { ...netflix, logo_path: '/movie-logo.jpg' };
+      const tvNetflix = { ...netflix, logo_path: '/tv-logo.jpg' };
+      const plex: TmdbWatchProviderListEntry = {
+        provider_id: 999,
+        provider_name: 'Plex',
+        logo_path: '/plex.jpg',
+      };
+      const result = mergeCatalogProviders([movieNetflix, plex], [tvNetflix]);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({
+        providerId: 8,
+        name: 'Netflix',
+        logoPath: '/movie-logo.jpg',
+      });
+    });
+
+    it('still sorts by name (case-insensitive) with the Plex filter present', () => {
+      const lower: TmdbWatchProviderListEntry = {
+        provider_id: 3,
+        provider_name: 'apple tv',
+        logo_path: null,
+      };
+      const upper: TmdbWatchProviderListEntry = {
+        provider_id: 4,
+        provider_name: 'Zee5',
+        logo_path: null,
+      };
+      const result = mergeCatalogProviders([upper, lower], [netflix]);
+      expect(result.map((p) => p.name)).toEqual([
+        'apple tv',
+        'Netflix',
+        'Zee5',
+      ]);
+    });
+  });
 });
 
 describe('mapSeasonEpisodes (spec 0047)', () => {
