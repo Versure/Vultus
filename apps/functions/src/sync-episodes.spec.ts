@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Firestore } from 'firebase-admin/firestore';
 import type {
   EpisodeSyncEngine,
@@ -16,6 +16,82 @@ import {
   createWatchlistStatusStoreAdapter,
   type WatchlistCreateEvent,
 } from './sync-episodes';
+
+// --- Wiring-shape seam (spec 0074) ---------------------------------------
+//
+// The two deployed entry points both build their engine by calling
+// `createEpisodeSyncEngine(config)`; the ONLY intended difference is that the
+// daily pass (entry point B, `syncTitles.createEpisodeEngine` in main.ts)
+// supplies a `watchlistStatus` port (so the engine can revert completed → watching)
+// while the on-add trigger (entry point A, `syncWatchlistEpisodes` here) does NOT.
+// That config object is an inline literal inside each SDK-wrapped handler, so the
+// only seam to observe its shape is `createEpisodeSyncEngine` itself. We spy on
+// it (keeping every other barrel export real via `importOriginal`) and record the
+// config each entry point passes, then invoke each real handler and assert the
+// presence/absence of `watchlistStatus`. Existing tests never call
+// `createEpisodeSyncEngine`, so the spy is inert for them.
+const { engineConfigSpy } = vi.hoisted(() => ({
+  engineConfigSpy: vi.fn<
+    (config: Record<string, unknown>) => EpisodeSyncEngine
+  >(
+    (): EpisodeSyncEngine => ({
+      syncOne: vi.fn(() => Promise.resolve({}) as never),
+      syncAll: vi.fn(() => Promise.resolve([])),
+    }),
+  ),
+}));
+
+vi.mock('@vultus/functions/sync-episodes', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@vultus/functions/sync-episodes')>();
+  return { ...actual, createEpisodeSyncEngine: engineConfigSpy };
+});
+
+// Neutralize the SDK surface the handler modules touch at load / invoke time so
+// the handlers run in-process without a live Firebase environment or secrets.
+vi.mock('@vultus/functions/sync-titles', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@vultus/functions/sync-titles')>();
+  return {
+    ...actual,
+    createTmdbClient: vi.fn(() => ({}) as never),
+    createTraktClient: vi.fn(() => ({}) as never),
+    createSyncEngine: vi.fn(
+      () => ({ sync: () => Promise.resolve([]) }) as never,
+    ),
+  };
+});
+
+vi.mock('firebase-admin/app', () => ({
+  getApps: vi.fn(() => [{}]),
+  initializeApp: vi.fn(),
+}));
+
+vi.mock('firebase-admin/firestore', () => ({
+  getFirestore: vi.fn(
+    () =>
+      ({
+        // The cron path enumerates the global watchlist union (empty here).
+        collectionGroup: () => ({ get: () => Promise.resolve({ docs: [] }) }),
+      }) as never,
+  ),
+}));
+
+vi.mock('firebase-functions/params', () => ({
+  defineSecret: vi.fn(() => ({ value: () => 'test-secret', name: 'X' })),
+  defineString: vi.fn(() => ({ value: () => 'test-string', name: 'X' })),
+}));
+
+vi.mock('./lib/firestore-io', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./lib/firestore-io')>();
+  return {
+    ...actual,
+    verifyIdToken: vi.fn(() => Promise.resolve({ uid: 'u1' })),
+    readSyncState: vi.fn(() => Promise.resolve({ lastRunAt: null })),
+    writeSyncState: vi.fn(() => Promise.resolve()),
+    writeSyncRun: vi.fn(() => Promise.resolve()),
+  };
+});
 
 // --- Fake engine ---------------------------------------------------------
 
@@ -249,5 +325,75 @@ describe('createWatchlistStatusStoreAdapter', () => {
         data: { status: 'watching' },
       },
     ]);
+  });
+});
+
+// --- Entry-point engine wiring shape (spec 0074, Test plan) --------------
+//
+// Closes the named "Unit — apps/functions adapter" assertion: entry-point-B
+// `createEpisodeEngine` config includes `watchlistStatus`; entry-point-A
+// `syncWatchlistEpisodes` config does NOT. Each real, SDK-wrapped handler is
+// invoked (A via its CloudFunction `.run(event)`, B by calling the `onRequest`
+// callable directly) and we assert the shape of the config it hands to
+// `createEpisodeSyncEngine` via `engineConfigSpy`.
+describe('entry-point engine config shape (spec 0074)', () => {
+  beforeEach(() => engineConfigSpy.mockClear());
+
+  /** The config object the handler passed to `createEpisodeSyncEngine`. */
+  function capturedConfig(): Record<string, unknown> {
+    expect(engineConfigSpy).toHaveBeenCalledTimes(1);
+    return engineConfigSpy.mock.calls[0][0];
+  }
+
+  it('entry point A (syncWatchlistEpisodes) builds the engine WITHOUT a watchlistStatus port', async () => {
+    const { syncWatchlistEpisodes } = await import('./sync-episodes');
+    // v2 firestore triggers expose the raw user handler as `.run`.
+    const run = (
+      syncWatchlistEpisodes as unknown as {
+        run: (event: unknown) => Promise<void>;
+      }
+    ).run;
+
+    await run({
+      params: { uid: 'u1', titleId: 'title-1' },
+      data: { data: () => ({ type: 'tv', tmdbId: 1399 }) },
+    });
+
+    const config = capturedConfig();
+    // The revert port is deliberately absent on the on-add trigger.
+    expect('watchlistStatus' in config).toBe(false);
+    expect(config.watchlistStatus).toBeUndefined();
+    // Sanity: it DOES wire the ports the on-add backfill needs.
+    expect(config.tmdb).toBeDefined();
+    expect(config.episodes).toBeDefined();
+  });
+
+  it('entry point B (syncTitles.createEpisodeEngine) builds the engine WITH a watchlistStatus port', async () => {
+    const { syncTitles } = await import('./main');
+
+    const res = {
+      status: () => res,
+      json: () => res,
+      send: () => res,
+      headersSent: false,
+    };
+    const req = {
+      method: 'POST',
+      // Matches the mocked SYNC_SHARED_SECRET.value() so the cron path runs.
+      headers: { 'x-vultus-sync-secret': 'test-secret' },
+      body: { force: true },
+    };
+
+    await (
+      syncTitles as unknown as (rq: unknown, rs: unknown) => Promise<void>
+    )(req, res);
+
+    const config = capturedConfig();
+    // The daily pass supplies the revert port (spec 0074, D5).
+    expect('watchlistStatus' in config).toBe(true);
+    expect(config.watchlistStatus).toBeDefined();
+    // And the shared episode-backfill ports it has in common with entry point A.
+    expect(config.tmdb).toBeDefined();
+    expect(config.episodes).toBeDefined();
   });
 });
