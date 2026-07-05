@@ -114,6 +114,7 @@
 
   @if ((vm$ | async); as vm) { @if (vm.error) {
   <vultus-error-state
+    class="fill-state"
     message="Couldn't load your watchlist."
     (retry)="onRetry()"
   />
@@ -121,6 +122,7 @@
   <vultus-skeleton-card [count]="5" />
   } @else if (vm.groups.length === 0) {
   <vultus-empty-state
+    class="fill-state"
     icon="film-outline"
     title="Your watchlist is empty"
     subtitle="Search for a title to get started"

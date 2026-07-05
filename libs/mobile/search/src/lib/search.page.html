@@ -25,6 +25,7 @@
   <!-- Prompt state -->
   @if (service.viewState() === 'prompt') {
   <vultus-empty-state
+    class="fill-state"
     icon="film-outline"
     title="Search for movies and TV shows"
   />
@@ -38,6 +39,7 @@
   <!-- No results state -->
   @if (service.viewState() === 'no-results') {
   <vultus-empty-state
+    class="fill-state"
     icon="search"
     title="No results for '{{ service.lastQuery() }}'"
   />
@@ -45,7 +47,7 @@
 
   <!-- Error state -->
   @if (service.viewState() === 'error') {
-  <vultus-error-state (retry)="retry()" />
+  <vultus-error-state class="fill-state" (retry)="retry()" />
   }
 
   <!-- Results -->

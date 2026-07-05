@@ -58,6 +58,24 @@ ion-header {
 
 ion-content {
   --background: var(--vultus-surface);
+
+  // Flex-column scroll viewport so a single flex-fill child (empty/error state)
+  // centers below the persistent controls; the natural-height list still scrolls.
+  // `scroll` = ion-content's documented shadow part (@ionic/core 8.8.10).
+  &::part(scroll) {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+// Empty / error state centering (spec 0076, issue #159). The atoms set
+// `:host { min-height: 100% }`, which overflows when rendered below persistent
+// siblings. `fill-state` (specificity 0,1,1 beats `:host` 0,1,0 — no
+// `!important`) overrides only min-height so the state flex-fills + centers.
+vultus-empty-state.fill-state,
+vultus-error-state.fill-state {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 // -----------------------------------------------------------------------------
@@ -107,17 +125,17 @@ ion-content {
 // -----------------------------------------------------------------------------
 .status-filter {
   display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
   gap: var(--vultus-space-sm);
   padding: var(--vultus-space-md) var(--vultus-space-md) 0;
   margin-bottom: var(--vultus-space-lg);
   overflow-x: auto;
   scrollbar-width: none;
+}
 
-  &::-webkit-scrollbar {
-    display: none;
-  }
+// Shared WebKit scrollbar hide for the horizontally-scrolling control rows.
+.status-filter::-webkit-scrollbar,
+.type-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .status-chip-btn {
@@ -180,17 +198,12 @@ ion-content {
 // -----------------------------------------------------------------------------
 .type-tabs {
   display: flex;
-  flex-direction: row;
   gap: var(--vultus-space-md);
   padding: 0 var(--vultus-space-md);
   padding-bottom: var(--vultus-space-xs);
   margin-bottom: var(--vultus-space-lg);
   overflow-x: auto;
   scrollbar-width: none;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
 }
 
 .type-tab {
@@ -523,7 +536,6 @@ ion-content {
 // -----------------------------------------------------------------------------
 .watchlist-card {
   display: flex;
-  flex-direction: row;
   align-items: center;
   gap: var(--vultus-space-2);
   padding: var(--vultus-space-1);
@@ -594,10 +606,7 @@ ion-content {
   color: #bbcabf;
 }
 
-.meta-sep {
-  color: #bbcabf;
-}
-
+// .meta-sep inherits its color (#bbcabf) from .card-meta — no own rule needed.
 .meta-vote {
   color: #4edea3;
 }
@@ -712,7 +721,7 @@ ion-content {
   color: var(--vultus-status-dropped);
   font-size: 1.125rem;
   cursor: pointer;
-  align-self: center;
+  // Vertical centering comes from the card's own align-items: center.
 }
 
 // -----------------------------------------------------------------------------
@@ -755,7 +764,6 @@ ion-content {
     gap: 8px;
     border-top: 1px solid rgba(60, 74, 66, 0.25);
     display: flex;
-    flex-direction: row;
     justify-content: flex-end;
   }
 

@@ -429,6 +429,17 @@ describe('WatchlistPage', () => {
     expect(el.querySelector('.watchlist-card')).toBeFalsy();
   });
 
+  // Layout marker class (spec 0076, issue #159): the empty state carries the
+  // `fill-state` class so the page scss can flex-fill + center it below the
+  // persistent controls. jsdom has no layout engine, so this only asserts the
+  // marker class is present (the lever the CSS hangs off) — the actual centering
+  // + no-scroll is verified visually per the spec's Test plan.
+  it('empty state carries the fill-state marker class (spec 0076)', async () => {
+    const service = mockService([]);
+    const { el } = await setup(service);
+    expect(el.querySelector('vultus-empty-state.fill-state')).toBeTruthy();
+  });
+
   it('shows skeleton while loading, not the empty state', async () => {
     // A stream that never emits keeps loading=true past first change detection.
     const service = mockService([]);
@@ -436,6 +447,16 @@ describe('WatchlistPage', () => {
     const { el } = await setup(service);
     expect(el.querySelector('vultus-skeleton-card')).toBeTruthy();
     expect(el.textContent).not.toContain('Your watchlist is empty');
+  });
+
+  // The skeleton is natural block height (spec 0076) — it must NOT be flex-filled
+  // (it renders at the top), so it never carries the fill-state marker class.
+  it('skeleton does not carry the fill-state marker class (spec 0076)', async () => {
+    const service = mockService([]);
+    service.watchlist$ = vi.fn(() => NEVER);
+    const { el } = await setup(service);
+    expect(el.querySelector('vultus-skeleton-card')).toBeTruthy();
+    expect(el.querySelector('vultus-skeleton-card.fill-state')).toBeFalsy();
   });
 
   it('shows error state when the stream errors', async () => {
@@ -447,6 +468,18 @@ describe('WatchlistPage', () => {
     expect(el.querySelector('vultus-error-state')).toBeTruthy();
     expect(el.querySelector('vultus-skeleton-card')).toBeFalsy();
     expect(el.textContent).not.toContain('Your watchlist is empty');
+  });
+
+  // Layout marker class (spec 0076, issue #159): the error state carries the
+  // `fill-state` class for the same flex-fill + center treatment as the empty
+  // state. Marker-presence only (see the empty-state note above).
+  it('error state carries the fill-state marker class (spec 0076)', async () => {
+    const service = mockService([]);
+    service.watchlist$ = vi.fn(() =>
+      throwError(() => new Error('Firestore error')),
+    );
+    const { el } = await setup(service);
+    expect(el.querySelector('vultus-error-state.fill-state')).toBeTruthy();
   });
 
   it('openStatusSheet opens the action sheet; selecting a status calls updateStatus with the item type', async () => {

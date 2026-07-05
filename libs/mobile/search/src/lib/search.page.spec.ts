@@ -230,6 +230,39 @@ describe('SearchPage', () => {
     expect(el.querySelector('ion-spinner')).toBeFalsy();
   });
 
+  // --- Spec 0076: fill-state marker class for centered empty/error states ---
+  // jsdom has no layout engine, so these assert only the marker-class presence
+  // (the lever the page scss hangs the flex-fill centering off); actual
+  // centering + no-scroll is verified visually per the spec Test plan.
+
+  it('marks the prompt empty-state with fill-state', async () => {
+    const { fixture } = await setup({ viewState: 'prompt' });
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('vultus-empty-state.fill-state')).not.toBeNull();
+  });
+
+  it('marks the no-results empty-state with fill-state', async () => {
+    const { fixture } = await setup({
+      viewState: 'no-results',
+      lastQuery: 'xyzzy',
+    });
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('vultus-empty-state.fill-state')).not.toBeNull();
+  });
+
+  it('marks the error-state with fill-state', async () => {
+    const { fixture } = await setup({ viewState: 'error' });
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('vultus-error-state.fill-state')).not.toBeNull();
+  });
+
+  it('does not mark the loading skeleton with fill-state', async () => {
+    const { fixture } = await setup({ viewState: 'loading' });
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('vultus-skeleton-card')).toBeTruthy();
+    expect(el.querySelector('vultus-skeleton-card.fill-state')).toBeNull();
+  });
+
   it('shows error state and calls retrySearch on retry', async () => {
     const { fixture, svc } = await setup({ viewState: 'error' });
     const el = fixture.nativeElement as HTMLElement;
