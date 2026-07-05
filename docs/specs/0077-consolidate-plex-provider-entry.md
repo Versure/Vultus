@@ -2,7 +2,7 @@
 number: 0077
 slug: consolidate-plex-provider-entry
 title: Exclude the real TMDB "Plex" provider from the Settings catalog so only the manual Plex chip shows
-status: approved
+status: implementing
 slices: []
 scopes: [scope:functions]
 created: 2026-07-05
