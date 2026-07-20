@@ -58,7 +58,19 @@ reads). Two impls live in this slice:
   `X-Plex-Client-Identifier` (a UUID generated once and persisted to Preferences
   under `plex_client_id`) — a constant shared by all installs collides in the
   account's plex.tv device registry — and passes `includeIPv6=1` to discovery so
-  an IPv6-only LAN still exposes a `local` connection. The library listing
+  an IPv6-only LAN still exposes a `local` connection. Among a server's local
+  connections it prefers the **raw-IP plaintext `http`** URI (`http://<ip>:32400`)
+  over the `*.plex.direct` HTTPS one (`pickLocalConnection`): the secure URI
+  resolves the LAN IP via PUBLIC DNS, which **DNS-rebind-protected routers** (e.g.
+  a FritzBox) refuse to answer ("Unable to resolve host ….plex.direct"), so the
+  https local is a trap on those networks (issue #171). Reaching the raw-IP URI
+  needs **cleartext-to-LAN**, enabled by
+  `android/app/src/main/res/xml/network_security_config.xml` (base-config
+  `cleartextTrafficPermitted`, wired via the manifest's `networkSecurityConfig`);
+  all other traffic (Firebase / TMDB / plex.tv) stays HTTPS. If Plex is set to
+  "Secure connections: Required" only the `.plex.direct` local is advertised and
+  discovery falls back to it (that network still needs the router-side fix). The
+  library listing
   (`/library/sections/{id}/all`) is fetched with **`includeGuids=1`** — WITHOUT
   it Plex omits the external `Guid[]` (`tmdb://`) and every `tmdbId` parses as
   `null`, so every item is skipped and nothing ever syncs (the original

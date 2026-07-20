@@ -141,6 +141,52 @@ describe('CapacitorHttpPlexClient', () => {
       expect(server?.baseUrl).toBe('http://[fe80::1]:32400');
     });
 
+    it('prefers a raw-IP http local over the .plex.direct https local (issue #171)', async () => {
+      // Both connections are IPv4 + local; the secure one is a *.plex.direct
+      // hostname that a DNS-rebind-protected router cannot resolve, so the
+      // plaintext raw-IP connection must win regardless of array order.
+      httpGet.mockResolvedValue(
+        res(200, [
+          serverWith([
+            {
+              uri: 'https://192-168-178-195.abc123.plex.direct:32400',
+              protocol: 'https',
+              local: true,
+              IPv6: false,
+            },
+            {
+              uri: 'http://192.168.178.195:32400',
+              protocol: 'http',
+              local: true,
+              IPv6: false,
+            },
+          ]),
+        ]),
+      );
+      const server = await new CapacitorHttpPlexClient().discoverServer('tok');
+      expect(server?.baseUrl).toBe('http://192.168.178.195:32400');
+    });
+
+    it('falls back to the .plex.direct https local when no plaintext local exists', async () => {
+      // Plex "Secure connections: Required" advertises only the https local.
+      httpGet.mockResolvedValue(
+        res(200, [
+          serverWith([
+            {
+              uri: 'https://192-168-178-195.abc123.plex.direct:32400',
+              protocol: 'https',
+              local: true,
+              IPv6: false,
+            },
+          ]),
+        ]),
+      );
+      const server = await new CapacitorHttpPlexClient().discoverServer('tok');
+      expect(server?.baseUrl).toBe(
+        'https://192-168-178-195.abc123.plex.direct:32400',
+      );
+    });
+
     it('prefers an OWNED server over a shared one', async () => {
       httpGet.mockResolvedValue(
         res(200, [

@@ -30,7 +30,11 @@ import { PlexHttpError, PlexPinGoneError } from './plex-errors';
  * Server discovery (`discoverServer`) reads `/api/v2/resources`, prefers an
  * OWNED server with a LOCAL connection (`includeRelay=0`, `includeIPv6=1` so an
  * IPv6-only LAN still yields a local entry), and returns its local base URL +
- * access token.
+ * access token. Among local connections it prefers the raw-IP plaintext `http`
+ * URI over the `*.plex.direct` HTTPS one (`pickLocalConnection`): the secure URI
+ * resolves the LAN IP via PUBLIC DNS, which DNS-rebind-protected routers refuse
+ * to answer (issue #171). Reaching the raw-IP URI needs cleartext-to-LAN,
+ * enabled via `res/xml/network_security_config.xml`.
  *
  * SECURITY (CLAUDE.md / spec 0073): the X-Plex-Token is NEVER logged or echoed
  * and NEVER written to Firestore — the caller (`PlexLinkService`) persists it to
@@ -115,6 +119,30 @@ function tmdbIdFromGuids(item: Record<string, unknown>): number | null {
   return null;
 }
 
+/**
+ * Choose the best local connection to a PMS from its `/resources` list.
+ * Preference order (issue #171 — DNS-rebind protection):
+ *   1. IPv4 + plaintext `http` — a raw-IP URI (`http://<ip>:32400`), reachable
+ *      with NO DNS lookup. Plex's SECURE local URI is a `*.plex.direct` hostname
+ *      that resolves to the LAN IP via PUBLIC DNS, which routers with DNS-rebind
+ *      protection refuse to answer ("Unable to resolve host ….plex.direct") — so
+ *      the https local connection is a trap on those networks.
+ *   2. IPv4 + `https` (`.plex.direct`) — only when no plaintext local exists
+ *      (Plex "Secure connections: Required"); still needs working public DNS.
+ *   3. IPv6 (either scheme) — only on an IPv6-only LAN.
+ * A connection with no explicit `protocol` is treated as NOT https (ranks with
+ * the plaintext group). Reaching the raw-IP http URI requires the app to permit
+ * cleartext to the LAN (android/app/src/main/res/xml/network_security_config.xml).
+ */
+function pickLocalConnection(
+  locals: Record<string, unknown>[],
+): Record<string, unknown> | undefined {
+  const rank = (c: Record<string, unknown>): number =>
+    (c['IPv6'] === true ? 2 : 0) + (str(c['protocol']) === 'https' ? 1 : 0);
+  // Stable sort keeps the server's own ordering as the tie-break.
+  return [...locals].sort((a, b) => rank(a) - rank(b))[0];
+}
+
 export class CapacitorHttpPlexClient implements PlexClient {
   /** Single-flight memo for the per-install client identifier. */
   private clientIdPromise: Promise<string> | null = null;
@@ -184,9 +212,7 @@ export class CapacitorHttpPlexClient implements PlexClient {
     for (const server of ranked) {
       const connections = asArray(server['connections']).map(asRecord);
       const locals = connections.filter((c) => c['local'] === true);
-      // Prefer an IPv4 local connection; an IPv6 URI is only used when it is
-      // the ONLY local entry (the device may sit on an IPv4-only network).
-      const local = locals.find((c) => c['IPv6'] !== true) ?? locals[0];
+      const local = pickLocalConnection(locals);
       if (local) {
         return {
           name: str(server['name']),
