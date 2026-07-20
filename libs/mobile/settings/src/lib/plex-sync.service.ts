@@ -30,6 +30,7 @@ import type {
   WatchlistItemReadData,
 } from '@vultus/shared/firestore-schema';
 import { PLEX_TOKEN_KEY } from './plex-link.service';
+import { describePlexError } from './plex-errors';
 
 /** Small per-sync outcome summary (logging + the mock e2e assertions). */
 export interface PlexSyncSummary {
@@ -144,9 +145,12 @@ export class PlexSyncService {
         'plexSync.lastSyncAt': new Date().toISOString(),
       });
       return { status: 'ok', summary };
-    } catch {
-      // A plex.tv/PMS/Firestore call threw (network / HTTP / timeout). Never log
-      // the error object (may echo secrets); surface a generic error result.
+    } catch (err) {
+      // A plex.tv/PMS/Firestore call threw (network / HTTP / timeout). Log a
+      // REDACTED diagnostic (never the error object — may echo secrets) so the
+      // real cause is visible in logcat (issue #171), then surface the generic
+      // error result to the caller.
+      console.error('[plex-sync] sync failed:', describePlexError(err));
       return { status: 'error' };
     } finally {
       this._running.set(false);

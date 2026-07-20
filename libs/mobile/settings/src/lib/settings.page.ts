@@ -156,7 +156,8 @@ export class SettingsPage implements OnInit {
           ? `Plex sync complete — ${added} added, ${updated} updated`
           : 'Plex sync complete — already up to date';
     } else if (result.status === 'error') {
-      message = "Couldn't reach Plex — check your server and connection";
+      message =
+        "Couldn't reach Plex. Make sure your Plex server is running and on the same network as this device, then try again.";
     } else if (result.reason === 'no-server') {
       message = "Couldn't find your Plex server on this network";
     } else if (result.reason === 'not-linked') {

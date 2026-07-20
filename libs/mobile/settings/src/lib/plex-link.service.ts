@@ -11,7 +11,7 @@ import { AUTH_UID, PLEX_CLIENT } from '@vultus/shared/domain/tokens';
 import type { PlexServer } from '@vultus/shared/domain';
 import { dataToUser, userPath } from '@vultus/shared/firestore-schema';
 import type { UserReadData } from '@vultus/shared/firestore-schema';
-import { PlexPinGoneError } from './plex-errors';
+import { PlexPinGoneError, describePlexError } from './plex-errors';
 
 /** Preferences key for the on-device X-Plex-Token (NEVER in Firestore). */
 export const PLEX_TOKEN_KEY = 'plex_token';
@@ -170,8 +170,10 @@ export class PlexLinkService {
       this.startCountdown();
       this._stage.set('waiting');
       this.startPolling();
-    } catch {
-      // Never log the error object (may echo secrets); surface the error stage.
+    } catch (err) {
+      // Log a REDACTED diagnostic (never the error object — may echo secrets)
+      // so a failed requestPin is debuggable on-device (issue #171).
+      console.error('[plex-link] requestCode failed:', describePlexError(err));
       this.fail('network');
     }
   }
@@ -251,9 +253,13 @@ export class PlexLinkService {
         }
         // Transient transport failure (e.g. a socket killed while the app was
         // backgrounded at plex.tv/link): tolerate a few before giving up.
-        // Never log the error object (may echo secrets).
         failures += 1;
         if (failures >= MAX_POLL_FAILURES) {
+          // Redacted diagnostic only (issue #171) — never the error object.
+          console.error(
+            '[plex-link] checkPin gave up after repeated failures:',
+            describePlexError(err),
+          );
           this.fail('network');
           return;
         }
@@ -280,8 +286,12 @@ export class PlexLinkService {
     let server: PlexServer | null;
     try {
       server = await this.client.discoverServer(authToken);
-    } catch {
-      // Never log the error object (may echo secrets).
+    } catch (err) {
+      // Redacted diagnostic only (issue #171) — never the error object.
+      console.error(
+        '[plex-link] discoverServer failed:',
+        describePlexError(err),
+      );
       this.fail('network');
       return;
     }
@@ -305,7 +315,12 @@ export class PlexLinkService {
           },
         });
       }
-    } catch {
+    } catch (err) {
+      // Redacted diagnostic only (issue #171) — never the error object.
+      console.error(
+        '[plex-link] persist link metadata failed:',
+        describePlexError(err),
+      );
       // Roll the token back so the device is not left half-linked.
       try {
         await Preferences.remove({ key: PLEX_TOKEN_KEY });
