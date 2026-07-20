@@ -85,6 +85,19 @@ Body sections, in this order — keep each tight and concrete:
    list **every** affected slice in "Affected slices" (§3) — not just the
    obviously related ones. Widening a required field breaks any slice that
    constructs the type, including ones far from the feature (e.g. onboarding).
+   **When a spec adds a new field to the `User` domain type
+   (`@vultus/shared/domain`'s `documents.ts`) or changes the meaning/shape of an
+   existing one**, it must also explicitly resolve whether that preference belongs
+   in first-launch onboarding, in one of two ways: **(a) include in onboarding** —
+   the Scope/task graph carries the work to also collect it during first-launch
+   onboarding, **or** the Risks section names a follow-up spec (by number/
+   description) that will; **or (b) deliberately Settings-only** — a one-line
+   justification for why the preference should _not_ be part of first-launch
+   onboarding (a legitimate outcome; not everything belongs in onboarding). A spec
+   that changes a `User` field and says **nothing** about onboarding is not
+   compliant — silence is what let a persisted preference ship without onboarding
+   ever being asked about it, and it must fail review like an orphaned DoD item
+   does.
 6. **UI / Stitch screen refs** — for mobile slices only: the relevant Stitch
    screen plus the in-repo design system. **The authoritative tokens live at
    `docs/design/vultus-design-system.md`** — reference that file, do **not**
@@ -160,6 +173,14 @@ before finishing. Watch especially for the ones that are easy to leave in the Do
 prose but out of every manifest: **`firestore.rules`**,
 **`firestore.indexes.json`**, and **rules-tests**. A DoD requirement in no task
 manifest is a defect that escapes until final reconciliation.
+
+Likewise, do **not** finish a spec that adds a new field to the `User` domain
+type (`@vultus/shared/domain`'s `documents.ts`) or changes the meaning/shape of an
+existing one without one of the two onboarding resolutions present (see §5):
+either the Scope/task graph collects it at first-launch onboarding (or the Risks
+section names a follow-up spec that will), or an explicit one-line justification
+says why it is deliberately Settings-only. Silence about onboarding when a `User`
+field changes is a blocking review finding, just like an orphaned DoD item.
 
 ## Output
 

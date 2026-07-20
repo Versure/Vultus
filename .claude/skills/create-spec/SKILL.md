@@ -66,6 +66,15 @@ branches, architecture — are in `CLAUDE.md`.)
   and that component and e2e assertions stay **consistent** on the same text.
   Record this in the decision record so `spec-author` reflects it in the Test
   plan.
+- **Onboarding ↔ User-field parity probe (F4):** as acceptance criteria firm up,
+  if the feature adds a new field to the `User` domain type
+  (`@vultus/shared/domain`'s `documents.ts`) or changes the meaning/shape of an
+  existing one, ask the user (architect-interview style, via `AskUserQuestion` in
+  an interactive session) whether that preference belongs in **first-launch
+  onboarding** or is **deliberately Settings-only**. Record which — and, for
+  Settings-only, the one-line justification — in the decision record so
+  `spec-author` states the resolution explicitly (silence is a blocking
+  spec-reviewer finding).
 - If the feature is too big for one PR/session (PLAN §6), propose a split.
 - Record the decisions into a concise decision record for `spec-author`.
 
