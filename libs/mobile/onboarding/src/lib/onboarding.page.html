@@ -1,61 +1,348 @@
 <!--
-  Onboarding page (spec 0022).
+  Onboarding wizard (spec 0078). ONE Angular route (`/onboarding`) that renders
+  ONE of five steps from `service.currentStep()`:
+    1 Region → 2 My Providers → 3 Notifications → 4 Plex link → 5 Finish.
 
-  There is NO Stitch screen for onboarding in projects/13590348714018893783
-  (the project has Settings, Movie Detail, Splash, Search, Watchlist, and a
-  Media Tracker screen only). This layout is therefore built to the spec's
-  concrete UI contract — full-screen, header-less, dark surface — and MUST be
-  visually verified by a human (see the slice README / handoff notes). All
-  colours/typography/spacing/radius come from shared/ui-kit theme vars.
+  Step CONTENT is aligned to the in-repo Settings / Connect-Plex markup (already
+  Stitch-aligned): My Providers grid (screen cebdfd02c7d44023b0e0019dd4907d48),
+  notification controls (screen 81945ff3381e453dafcc4e5ce896fcfa), and the Plex
+  link stages (screen 398cde766832491e92e1c0c5cc09ab4e). The WIZARD CHROME
+  (progress indicator, Back, Skip) has NO Stitch screen — it is built to the
+  spec's token-only contract and is FLAGGED FOR HUMAN VISUAL VERIFICATION. All
+  colours/typography/spacing/radius come from the shared/ui-kit theme vars
+  (--vultus-* / --ion-*); NO hard-coded hex.
 -->
 <ion-content>
-  <div class="onboarding-container">
-    <!-- Header section -->
-    <div class="onboarding-header">
-      <h1 class="onboarding-title">Welcome to Vultus</h1>
-      <p class="onboarding-subtitle">Your high-fidelity media tracker</p>
-    </div>
-
-    <!-- Region picker -->
-    <div class="onboarding-card">
-      <ion-select
-        class="onboarding-select"
-        label="Region"
-        labelPlacement="start"
-        interface="popover"
-        [value]="selectedRegion()"
-        [disabled]="loading()"
-        (ionChange)="onRegionChange($event)"
+  <div class="wizard">
+    <!-- Step-progress chrome: identical top inset on every step so the content
+         doesn't jump vertically when navigating. -->
+    <div class="wizard-progress">
+      <p class="wizard-progress__label">
+        Step {{ service.currentStep() }} of 5
+      </p>
+      <div
+        class="wizard-progress__bar"
+        role="progressbar"
+        [attr.aria-valuenow]="service.currentStep()"
+        aria-valuemin="1"
+        aria-valuemax="5"
       >
-        @for (region of service.regions; track region) {
-        <ion-select-option [value]="region"
-          >{{ regionDisplayName(region) }}</ion-select-option
-        >
+        @for (i of [1, 2, 3, 4, 5]; track i) {
+        <span
+          class="wizard-progress__seg"
+          [class.wizard-progress__seg--done]="i <= service.currentStep()"
+        ></span>
         }
-      </ion-select>
-      <p class="onboarding-helper">
-        Content availability is based on this region.
-      </p>
+      </div>
     </div>
 
-    <!-- Notifications explanation -->
-    <div class="onboarding-card">
-      <p class="onboarding-notifications-text">
-        Vultus will ask for notification permission to alert you when new
-        episodes air or titles become available in your region.
-      </p>
-    </div>
+    @switch (service.currentStep()) {
+    <!-- ── Step 1: Region ─────────────────────────────────────────────── -->
+    @case (1) {
+    <div class="wizard-step">
+      <div class="wizard-heading">
+        <h1 class="wizard-title">Choose your region</h1>
+        <p class="wizard-subtitle">
+          Content availability is based on this region.
+        </p>
+      </div>
 
-    <!-- Get started button -->
-    <ion-button
-      class="onboarding-cta"
-      expand="block"
-      [disabled]="loading()"
-      (click)="onGetStarted()"
-    >
-      @if (loading()) {
-      <ion-spinner slot="start"></ion-spinner>
-      } Get started
-    </ion-button>
+      <div class="wizard-card">
+        <ion-select
+          class="wizard-select"
+          label="Region"
+          labelPlacement="start"
+          interface="popover"
+          [value]="selectedRegion()"
+          [disabled]="busy()"
+          (ionChange)="onRegionChange($event)"
+        >
+          @for (region of service.regions; track region) {
+          <ion-select-option [value]="region"
+            >{{ regionDisplayName(region) }}</ion-select-option
+          >
+          }
+        </ion-select>
+      </div>
+
+      <div class="wizard-actions">
+        <ion-button
+          class="wizard-cta"
+          expand="block"
+          [disabled]="busy()"
+          (click)="onContinueRegion()"
+        >
+          @if (busy()) {
+          <ion-spinner slot="start"></ion-spinner>
+          } Continue
+        </ion-button>
+      </div>
+    </div>
+    }
+
+    <!-- ── Step 2: My Providers ───────────────────────────────────────── -->
+    @case (2) {
+    <div class="wizard-step">
+      <div class="wizard-heading">
+        <h1 class="wizard-title">Your providers</h1>
+        <p class="wizard-subtitle">
+          Subscriptions used to check availability. You can change these later.
+        </p>
+      </div>
+
+      <div class="wizard-card">
+        @if (service.catalogLoading()) {
+        <div class="providers-loading" aria-live="polite">
+          <ion-spinner name="crescent"></ion-spinner>
+          <span class="providers-loading__label">Loading providers…</span>
+        </div>
+        } @else {
+        <div class="provider-grid" role="group" aria-label="My providers">
+          @for (provider of service.providerCatalog(); track
+          provider.providerId) { @let selected =
+          service.myProviderIds().includes(provider.providerId);
+          <button
+            type="button"
+            class="provider-chip"
+            [class.provider-chip--selected]="selected"
+            [attr.aria-pressed]="selected"
+            [attr.aria-label]="provider.name"
+            [disabled]="providerBusy()"
+            (click)="onProviderToggle(provider.providerId)"
+          >
+            <span class="provider-chip__logo">
+              @if (providerLogoUrl(provider); as logoUrl) {
+              <img [src]="logoUrl" [alt]="provider.name" loading="lazy" />
+              } @else {
+              <span class="provider-chip__logo-fallback" aria-hidden="true"
+                >{{ provider.name.charAt(0) }}</span
+              >
+              } @if (selected) {
+              <ion-icon
+                class="provider-chip__badge"
+                name="checkmark-circle"
+                aria-hidden="true"
+              ></ion-icon>
+              }
+            </span>
+            <span class="provider-chip__name">{{ provider.name }}</span>
+          </button>
+          }
+        </div>
+        <p class="provider-footer">
+          {{ service.myProviderIds().length }} of {{
+          service.providerCatalog().length }} selected
+        </p>
+        }
+      </div>
+
+      <div class="wizard-actions">
+        <ion-button class="wizard-cta" expand="block" (click)="service.next()">
+          Continue
+        </ion-button>
+        <ion-button class="wizard-back" fill="clear" (click)="onBack()">
+          Back
+        </ion-button>
+      </div>
+    </div>
+    }
+
+    <!-- ── Step 3: Notifications ──────────────────────────────────────── -->
+    @case (3) {
+    <div class="wizard-step">
+      <div class="wizard-heading">
+        <h1 class="wizard-title">Notifications</h1>
+        <p class="wizard-subtitle">
+          Alerts for new episodes and availability changes.
+        </p>
+      </div>
+
+      <div class="wizard-card">
+        <ion-toggle
+          class="wizard-toggle"
+          justify="space-between"
+          [checked]="service.notificationsEnabled()"
+          (ionChange)="onNotificationsChange($event)"
+        >
+          Notifications
+        </ion-toggle>
+      </div>
+
+      <div class="wizard-card">
+        <ion-select
+          class="wizard-select"
+          label="Notification time"
+          labelPlacement="start"
+          interface="popover"
+          [value]="service.deliveryHour()"
+          [disabled]="!service.notificationsEnabled()"
+          (ionChange)="onDeliveryHourChange($event)"
+        >
+          <ion-select-option [value]="null">Any time</ion-select-option>
+          @for (hour of service.deliveryHours; track hour) {
+          <ion-select-option [value]="hour"
+            >{{ formatHour(hour) }}</ion-select-option
+          >
+          }
+        </ion-select>
+        <p class="wizard-helper">
+          Pushes are only sent during this hour (UTC). Notifications still
+          appear in your inbox.
+        </p>
+      </div>
+
+      <div class="wizard-actions">
+        <ion-button class="wizard-cta" expand="block" (click)="service.next()">
+          Continue
+        </ion-button>
+        <ion-button class="wizard-back" fill="clear" (click)="onBack()">
+          Back
+        </ion-button>
+      </div>
+    </div>
+    }
+
+    <!-- ── Step 4: Plex link ──────────────────────────────────────────── -->
+    @case (4) {
+    <div class="wizard-step">
+      <div class="wizard-heading">
+        <h1 class="wizard-title">Connect Plex</h1>
+        <p class="wizard-subtitle">
+          Optionally link your Plex server to sync your library and watch
+          history. You can also do this later from Settings.
+        </p>
+      </div>
+
+      @if (plexLink.stage() === 'connected') {
+      <section class="stage-card" data-test="stage-connected">
+        <div class="check-tile" aria-hidden="true">
+          <ion-icon name="checkmark-circle" class="check-icon"></ion-icon>
+        </div>
+        <h3 class="connected-heading">Connected to Plex</h3>
+        @if (plexLink.server(); as server) {
+        <div class="server-row" data-test="server-row">
+          <div class="plex-tile" aria-hidden="true">
+            <img src="/assets/plex-logo.svg" alt="Plex" />
+          </div>
+          <div class="server-row__body">
+            <p class="server-row__name">{{ server.name }}</p>
+            <p class="server-row__caption">
+              Local network · {{ server.baseUrl }}
+            </p>
+          </div>
+          <ion-icon
+            name="shield-checkmark"
+            class="server-row__verified"
+            aria-hidden="true"
+          ></ion-icon>
+        </div>
+        }
+      </section>
+      } @else if (plexLink.stage() === 'error') {
+      <section class="stage-card" data-test="stage-error">
+        <div class="error-tile" aria-hidden="true">
+          <ion-icon name="alert-circle" class="error-icon"></ion-icon>
+        </div>
+        <h3 class="error-heading" data-test="error-heading">
+          {{ plexErrorHeading() }}
+        </h3>
+        <p class="error-detail" data-test="error-detail">
+          {{ plexErrorDetail() }}
+        </p>
+        <button type="button" class="solid-button" (click)="regenerate()">
+          Try again
+        </button>
+      </section>
+      } @else if (plexLink.stage() === 'code' || plexLink.stage() === 'waiting')
+      {
+      <section class="stage-card" data-test="stage-code">
+        <div class="plex-tile plex-tile--lg" aria-hidden="true">
+          <img src="/assets/plex-logo.svg" alt="Plex" />
+        </div>
+        <p class="stage-instruction">
+          Enter this code at plex.tv/link on any device signed in to your Plex
+          account
+        </p>
+        <div class="code-box">
+          <span class="code-value">{{ plexLink.code() ?? '····' }}</span>
+        </div>
+        <p class="code-expiry" data-test="code-countdown">
+          Code expires in {{ plexLink.countdown() }}
+        </p>
+        @if (plexLink.stage() === 'waiting') {
+        <div class="waiting-row" data-test="stage-waiting">
+          <ion-spinner name="crescent"></ion-spinner>
+          <p class="waiting-label">Waiting for authorization…</p>
+        </div>
+        }
+        <button type="button" class="solid-button" (click)="regenerate()">
+          Get a new code
+        </button>
+      </section>
+      } @else {
+      <section class="stage-card" data-test="stage-idle">
+        <div class="plex-tile plex-tile--lg" aria-hidden="true">
+          <img src="/assets/plex-logo.svg" alt="Plex" />
+        </div>
+        <p class="stage-instruction">
+          Link your Plex server to sync your library and watch history, or skip
+          and connect later from Settings.
+        </p>
+        <button type="button" class="solid-button" (click)="startLink()">
+          Connect Plex
+        </button>
+      </section>
+      }
+
+      <div class="wizard-actions">
+        @if (plexLink.stage() === 'connected') {
+        <ion-button class="wizard-cta" expand="block" (click)="service.next()">
+          Continue
+        </ion-button>
+        } @else {
+        <ion-button class="wizard-skip" fill="clear" (click)="onSkip()">
+          Skip for now
+        </ion-button>
+        }
+        <ion-button class="wizard-back" fill="clear" (click)="onBack()">
+          Back
+        </ion-button>
+      </div>
+    </div>
+    }
+
+    <!-- ── Step 5: Finish ─────────────────────────────────────────────── -->
+    @case (5) {
+    <div class="wizard-step">
+      <div class="wizard-heading">
+        <h1 class="wizard-title">You're all set</h1>
+        <p class="wizard-subtitle">
+          Vultus will ask for notification permission to alert you when new
+          episodes air or titles become available in your region.
+        </p>
+      </div>
+
+      <div class="wizard-actions">
+        <ion-button
+          class="wizard-cta"
+          expand="block"
+          [disabled]="busy()"
+          (click)="onGetStarted()"
+        >
+          @if (busy()) {
+          <ion-spinner slot="start"></ion-spinner>
+          } Get started
+        </ion-button>
+        <ion-button
+          class="wizard-back"
+          fill="clear"
+          [disabled]="busy()"
+          (click)="onBack()"
+        >
+          Back
+        </ion-button>
+      </div>
+    </div>
+    } }
   </div>
 </ion-content>
