@@ -150,7 +150,11 @@ test('watchlist alert remove: card -> empty state (F6 runnable part)', async ({
   await alert.locator('button', { hasText: 'Remove' }).first().click();
 
   // The realtime stream emits an empty list -> the watchlist empty state shows.
-  const emptyState = page.locator('vultus-empty-state');
+  // Scoped to lib-watchlist to avoid matching Today's empty state: `bootAndSeed`
+  // lands on Today before switching tabs, and Ionic keeps inactive tabs mounted
+  // in the DOM, so a bare `vultus-empty-state` resolves to 2 elements (strict-mode
+  // violation).
+  const emptyState = page.locator('lib-watchlist vultus-empty-state');
   await expect(emptyState).toBeVisible();
   await expect(emptyState).toContainText('Your watchlist is empty');
 });

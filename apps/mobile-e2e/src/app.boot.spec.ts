@@ -59,9 +59,16 @@ test('boots into anon auth and shows the empty watchlist', async ({ page }) => {
     /tab-selected/,
   );
 
-  // 4. The empty state shows once loading completes and there are zero groups
-  //    (watchlist.page.html: <vultus-empty-state> shared atom).
-  const emptyState = page.locator('vultus-empty-state');
+  // 4. Boot now lands on the Today tab (spec 0083), but this flow (F1) verifies
+  //    the WATCHLIST's own empty state — so switch to the Watchlist tab first.
+  await page.locator('ion-tab-button[tab="watchlist"]').click();
+  await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+
+  // 5. The empty state shows once loading completes and there are zero groups
+  //    (watchlist.page.html: <vultus-empty-state> shared atom). Scoped to
+  //    lib-watchlist to avoid matching Today's empty state (Ionic keeps inactive
+  //    tabs — including the now-visited Today tab — mounted in the DOM).
+  const emptyState = page.locator('lib-watchlist vultus-empty-state');
   await expect(emptyState).toBeVisible();
   await expect(emptyState).toContainText('Your watchlist is empty');
   await expect(emptyState).toContainText('Search for a title to get started');
