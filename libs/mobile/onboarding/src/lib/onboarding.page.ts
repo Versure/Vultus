@@ -124,7 +124,10 @@ export class OnboardingPage {
     effect(() => {
       const step = this.service.currentStep();
       if (step === 2) {
-        void this.service.loadProviderCatalog();
+        // Swallow a rejected catalog load (e.g. the GET_WATCH_PROVIDERS callable
+        // being unavailable, as in the e2e emulator harness) so it doesn't surface
+        // as an unhandled promise rejection / console noise.
+        this.service.loadProviderCatalog().catch(() => undefined);
       } else if (step === 4) {
         if (untracked(() => this.plexLink.stage()) === 'idle') {
           void this.plexLink.requestCode();

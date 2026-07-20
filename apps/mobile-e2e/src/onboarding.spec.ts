@@ -50,9 +50,14 @@ interface FsValue {
   mapValue?: { fields?: Record<string, FsValue> };
 }
 
-/** Assert the wizard is showing the given step via its progress indicator. */
+/**
+ * Assert the wizard is showing the given step via its progress indicator.
+ * Exact-text match (whitespace-normalized) on the same "Step {n} of 5" copy the
+ * component test asserts with `.toBe('Step {n} of 5')` — kept strict, not a
+ * loose `toContainText`, so e2e and component stay consistent on the exact copy.
+ */
 async function expectStep(page: Page, step: number): Promise<void> {
-  await expect(page.locator('.wizard-progress__label')).toContainText(
+  await expect(page.locator('.wizard-progress__label')).toHaveText(
     `Step ${step} of 5`,
   );
 }
@@ -285,12 +290,16 @@ test('F-onboard-5: skipping the Plex step writes no hasPlex:true / plexSync and 
   await expect(page).toHaveURL(/\/tabs\/watchlist$/, { timeout: 10000 });
 
   // users/{uid} has NO Plex link written by the skip path: hasPlex is not true
-  // (it stays at its create-with-defaults `false`) and plexSync is absent.
+  // (it stays at its create-with-defaults `false`) and no plexSync OBJECT was
+  // written. NB: the step-1 create-with-defaults write persists `plexSync: null`
+  // explicitly (userToData coalesces `plexSync ?? null`), which Firestore's REST
+  // API returns as `{ nullValue: null }` — NOT a missing key. The real intent of
+  // F-onboard-5 is "the skip path performs no Plex sync write", i.e. no mapValue.
   const doc = await readDocument(`users/${uid}`);
   expect(doc).not.toBeNull();
   const fields = doc as Record<string, FsValue>;
   expect(fields.hasPlex?.booleanValue).not.toBe(true);
-  expect(fields.plexSync).toBeUndefined();
+  expect(fields.plexSync?.mapValue).toBeUndefined();
 });
 
 // ---------------------------------------------------------------------------
