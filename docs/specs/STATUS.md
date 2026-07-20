@@ -10,10 +10,10 @@
 
 # Spec status ledger
 
-Total specs: 80
+Total specs: 81
 
 - done: 76
-- approved: 4
+- approved: 5
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -97,3 +97,4 @@ Total specs: 80
 | 78 | onboarding-full-settings | Expand onboarding into a multi-step wizard covering region, provider selection, notification settings, and Plex link | approved | slice:onboarding | scope:mobile |
 | 79 | fix-region-display-names | Display human-readable region names (endonyms) in Settings instead of raw ISO codes | approved | slice:settings, slice:onboarding | scope:shared, scope:mobile |
 | 80 | onboarding-settings-parity-rule | Add a standing Onboarding ↔ User-field parity rule (F4) to the spec-driven workflow | approved | — | — |
+| 82 | fix-watchlist-scroll-overflow | Stop the empty Watchlist page scrolling — clip the off-screen filter sheet | approved | slice:watchlist | scope:mobile |
