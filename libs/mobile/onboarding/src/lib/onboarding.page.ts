@@ -7,7 +7,7 @@ import {
   IonSelectOption,
   IonSpinner,
 } from '@ionic/angular/standalone';
-import type { Region } from '@vultus/shared/domain';
+import { regionDisplayName, type Region } from '@vultus/shared/domain';
 import { ONBOARDING_PROVIDERS } from './onboarding.providers';
 import { OnboardingService } from './onboarding.service';
 
@@ -34,6 +34,13 @@ export class OnboardingPage {
 
   protected readonly selectedRegion = signal<Region>('NL');
   protected readonly loading = signal<boolean>(false);
+
+  /**
+   * Presentation helper: maps a raw ISO `Region` code to its human-readable
+   * endonym for the option label (spec 0079). The persisted value stays the raw
+   * code via `[value]="region"` — this is display-only.
+   */
+  protected readonly regionDisplayName = regionDisplayName;
 
   protected onRegionChange(event: CustomEvent): void {
     this.selectedRegion.set((event.detail as { value: Region }).value);

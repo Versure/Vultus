@@ -13,7 +13,13 @@ The barrel (`src/index.ts`) re-exports:
 
 - **`./lib/enums`** — union types and their `as const` source arrays:
   `Region`/`REGIONS`, `WatchStatus`/`WATCH_STATUSES`,
-  `NotificationKind`/`NOTIFICATION_KINDS`, `TitleType`.
+  `NotificationKind`/`NOTIFICATION_KINDS`, `TitleType`. Also
+  `REGION_DISPLAY_NAMES: Record<Region, string>` and
+  `regionDisplayName(region: Region): string` (spec 0079) — the human-readable
+  native endonym for each region (`NL → Nederland`, `DE → Deutschland`,
+  `GB → United Kingdom`, …), for display only. The persisted `region` field keeps
+  the raw ISO code; the `Record<Region, string>` typing makes a future `REGIONS`
+  addition a compile error until its display name is added.
 - **`./lib/entities`** — non-document domain entities: `Title` (movie/tv
   discriminated union), `WatchProvider`, `CatalogProvider` (one provider in a
   region's TMDB watch-provider catalog — `providerId`, `name`, `logoPath`;

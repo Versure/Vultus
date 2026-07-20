@@ -207,7 +207,11 @@ downstream slices can assume it exists.
 The page exposes:
 
 - a **Region** `ion-select` over the shared `REGIONS` list, writing
-  `users/{uid}.region` on change;
+  `users/{uid}.region` on change. Each option's visible **label** is the region's
+  human-readable native endonym (`regionDisplayName` from `@vultus/shared/domain`,
+  e.g. `NL → Nederland`, spec 0079) while its `[value]` — the code persisted to
+  `users/{uid}.region` — stays the raw ISO `Region` code. The substitution is
+  presentation-only; no value use of `region` changes;
 - a global **Notifications** `ion-toggle` — a UI projection over the three
   `notificationPrefs` booleans (reads on when all three are true; writing sets
   all three at once). No `notificationsEnabled` field is persisted; per-type
@@ -226,7 +230,9 @@ The page exposes:
   in `myProviderIds`) gets a primary border + `checkmark-circle` badge + full
   opacity, an **unselected** one an outline-variant border at 60% opacity.
   Tapping a chip persists the toggled `users/{uid}.myProviderIds` array. A footer
-  reads "N of M selected · Region: {region}". While the catalog is fetching, a
+  reads "N of M selected · Region: {region}", where the region is shown by its
+  display-name endonym (`regionDisplayName`, spec 0079 — e.g. `Nederland`) while
+  the persisted value stays the raw ISO code. While the catalog is fetching, a
   spinner renders in place of the chips (never an empty card). The grid's LAST
   chip is the **Plex** chip (spec 0061 — see below); it is NOT a catalog entry.
   Stitch reference:
@@ -280,7 +286,9 @@ converter). `SettingsService`:
   the region, then (once the new region's catalog loads) the pruned
   `myProviderIds` (ids not in the new catalog are dropped). It reports the dropped
   count via `lastPrunedCount`; the page reacts to a `>0` value to raise a
-  `ToastController` toast. **Guard:** if the new catalog fails to load, the prune
+  `ToastController` toast that names the region by its display-name endonym
+  (`regionDisplayName`, spec 0079), not the raw ISO code. **Guard:** if the new
+  catalog fails to load, the prune
   is **skipped** (the provider list is never destroyed on a failed read) and
   `lastPrunedCount` stays 0.
 
