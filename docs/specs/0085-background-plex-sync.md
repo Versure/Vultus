@@ -2,7 +2,7 @@
 number: 0085
 slug: background-plex-sync
 title: Background Plex sync (periodic on-device sync while backgrounded)
-status: approved
+status: implementing
 slices: [slice:settings]
 scopes: [scope:mobile, scope:shared]
 created: 2026-07-20

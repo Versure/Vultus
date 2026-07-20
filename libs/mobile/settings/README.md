@@ -19,6 +19,12 @@ The barrel (`@vultus/mobile/settings`) exports:
   over `PlexSyncService.sync()` from the ROOT injector and both pages can share
   that instance. **Do NOT list them in `SETTINGS_PROVIDERS`** (page-scoping would
   fork the state from the boot/resume trigger's instance).
+- `PlexBackgroundService` (spec 0085) — **`providedIn: 'root'`** singleton for
+  periodic on-device background Plex sync (Android WorkManager via
+  `@transistorsoft/capacitor-background-fetch`). Exported so the shell's
+  `app.config.ts` can wire `PLEX_BACKGROUND_INIT` over `PlexBackgroundService.init()`
+  from the ROOT injector. **Do NOT list it in `SETTINGS_PROVIDERS`** (page-scoping
+  would fork it from the boot/link trigger). See the dedicated section below.
 - `CapacitorHttpPlexClient`, `MockPlexClient` (spec 0073) — the two `PlexClient`
   impls, exported so the shell's `PLEX_CLIENT` factory selects between them
   (`Capacitor.isNativePlatform()` → real, else mock). There is **no
@@ -164,6 +170,66 @@ watching` on ≥1 watched episode, `watching → completed` when all present
 The X-Plex-Token is stored ONLY in `@capacitor/preferences`, NEVER written to any
 Firestore path, and NEVER logged/echoed (CLAUDE.md secrets rule).
 
+### `PlexBackgroundService` (`providedIn: 'root'`, spec 0085)
+
+Adds the periodic **background** trigger missing from 0073 (which fires only on
+boot, foreground resume, and manual "Sync now"). Because the PMS lives on the
+user's LAN, the only place a periodic sync can run is on the phone while on the
+home Wi-Fi — so the OS (Android WorkManager, via the community
+`@transistorsoft/capacitor-background-fetch` plugin) wakes the app's JS on the
+user's interval and the plugin's `onFetch` callback reruns the **existing**
+`PlexSyncService.sync()`. **No sync logic is reimplemented** — this is purely a
+new trigger. **Android-only**; on iOS/web every plugin call is a native-guarded
+no-op.
+
+Public surface:
+
+- signals `enabled: Signal<boolean>` (default `true`) and
+  `intervalMinutes: Signal<number>` (default `60`), mirroring the device-local
+  config persisted in `@capacitor/preferences` (keys `plex_bg_enabled` /
+  `plex_bg_interval_min` — **not** Firestore; background execution is inherently
+  per-device);
+- `init()` — boot/link init: native-guard FIRST (off-native returns, so the
+  signals stay at defaults), then load the config and `BackgroundFetch.configure`
+  (`minimumFetchInterval` = interval; `NETWORK_TYPE_UNMETERED`; battery-not-low;
+  no charging requirement; `stopOnTerminate:false`, `startOnBoot:true`,
+  `enableHeadless:true`) + register `onFetch`/`onTimeout`. If disabled, stops the
+  plugin so nothing schedules;
+- `setEnabled(enabled)` / `setIntervalMinutes(min)` — persist the key
+  **unconditionally**, then (native only) reconfigure/start or stop. Interval
+  options are `[15, 30, 60, 180, 360]` minutes; any value `< 15` is clamped to 15
+  (the WorkManager floor);
+- `stop()` — clear both bg Preferences keys **unconditionally**, then (native
+  only) `BackgroundFetch.stop()`.
+
+**`onFetch` gating:** runs `sync()` only when `enabled()` AND the device is linked
+(a non-empty `plex_token` in Preferences); `sync()` failures are swallowed (fail
+quietly, reusing 0073's handling — no new error UI); the task is **always**
+finished in a `finally`.
+
+**Circular-DI avoidance (hard rule):** `PlexBackgroundService` **MUST NOT** inject
+`PlexLinkService` — the dependency is one-directional (`PlexLinkService →
+PlexBackgroundService`). It reads the on-device token key **directly** (importing
+the exported `PLEX_TOKEN_KEY`) for the linked check; a back-injection would cycle
+(`NG0200`, both being `providedIn: 'root'`). Only the token's **presence** is
+tested — the VALUE is never logged or exposed (CLAUDE.md secrets).
+
+**Reliability envelope (do NOT over-promise):** reliable while the app is
+alive/backgrounded and when Android relaunches the app in the background for a
+task. The fully-terminated / swiped-away path is **best-effort only** (a headless
+finishing stub in the shell's `main.ts`); meaningful terminated-state sync is
+on-device-verify-only.
+
+**Lifecycle integration:**
+
+- `PlexLinkService.unlink()` calls `PlexBackgroundService.stop()` — disconnecting
+  stops the scheduled task and clears the bg config.
+- `PlexConnectPage.done()` (on successful link) calls `PlexBackgroundService.init()`
+  (fire-and-forget) so a freshly-linked device schedules its periodic task
+  immediately (default ON) without waiting for the next boot.
+- The Settings connected Plex card renders a "Sync in background" toggle + a "Sync
+  frequency" interval `ion-select` (see the card section below).
+
 ### Plex Server card (in `SettingsPage`)
 
 Between "My Providers" and the Notification cards (spec 0073 §6A). Gated on
@@ -174,6 +240,15 @@ text button (disabled + "Syncing…" while `plexSync.running()`), and a
 "Disconnect" text button (confirm alert → `unlink()`). The logo tile uses a
 `--vultus-*` surface token; the Plex brand colour lives only in
 `/assets/plex-logo.svg`.
+
+The connected block also carries the background-sync controls (spec 0085),
+between the sync-row and the footer: a "Sync in background" `ion-toggle` bound to
+`plexBackground.enabled()` (→ `setEnabled`) and a "Sync frequency" `ion-select`
+bound to `plexBackground.intervalMinutes()` (→ `setIntervalMinutes`, disabled when
+the toggle is off), reusing the tokenized `settings-row*` classes (no new colours).
+`PlexBackgroundService` is the ROOT singleton (not a page-scoped mock), so on
+`serve-mock` (off-native) `init()` no-ops before loading Preferences and the
+controls render their DEFAULT values (enabled ON / "Every hour").
 
 The `mock` build profile provides page-scoped mock mirrors of the root
 `PlexLinkService` / `PlexSyncService` (seeded CONNECTED) so `mobile:serve-mock`

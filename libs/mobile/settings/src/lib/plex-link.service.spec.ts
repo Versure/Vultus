@@ -5,8 +5,19 @@ import { AUTH_UID, PLEX_CLIENT } from '@vultus/shared/domain/tokens';
 import type { PlexClient, PlexServer } from '@vultus/shared/domain';
 import { userPath } from '@vultus/shared/firestore-schema';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Mock the background service module so this spec stays off the plugin /
+// @capacitor import chain (spec 0085). The unlink lifecycle only needs a `stop`
+// spy; a bare class acts as the DI token, the instance is supplied via useValue.
+vi.mock('./plex-background.service', () => ({
+  PlexBackgroundService: class PlexBackgroundService {},
+}));
+
 import { PlexLinkService } from './plex-link.service';
+import { PlexBackgroundService } from './plex-background.service';
 import { PlexPinGoneError } from './plex-errors';
+
+const bgStopMock = vi.fn<() => Promise<void>>();
 
 // --- AngularFire mock ---
 interface Ref {
@@ -72,6 +83,7 @@ function makeService(client: PlexClient, uid: string | null = UID) {
       { provide: Firestore, useValue: {} },
       { provide: AUTH_UID, useValue: signal<string | null>(uid) },
       { provide: PLEX_CLIENT, useValue: client },
+      { provide: PlexBackgroundService, useValue: { stop: bgStopMock } },
     ],
   });
   return TestBed.inject(PlexLinkService);
@@ -89,6 +101,7 @@ describe('PlexLinkService', () => {
     TestBed.resetTestingModule();
     prefsGetMock.mockResolvedValue({ value: null });
     getDocMock.mockResolvedValue(snap(undefined));
+    bgStopMock.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -326,6 +339,13 @@ describe('PlexLinkService', () => {
       expect(ref.path).toBe(userPath(UID));
     }
     expect(service.linked()).toBe(false);
+  });
+
+  it('unlink stops the background sync task (spec 0085)', async () => {
+    const service = makeService(makeClient());
+    await service.unlink();
+
+    expect(bgStopMock).toHaveBeenCalledTimes(1);
   });
 
   it('unlink is null-uid guarded: clears Preferences but writes no Firestore doc', async () => {

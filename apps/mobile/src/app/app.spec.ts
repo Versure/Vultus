@@ -3,7 +3,11 @@ import { Route, provideRouter } from '@angular/router';
 import { provideIonicAngular } from '@ionic/angular/standalone';
 import { StatusBar } from '@capacitor/status-bar';
 import { Capacitor } from '@capacitor/core';
-import { PLEX_CLIENT, PLEX_SYNC_TRIGGER } from '@vultus/shared/domain/tokens';
+import {
+  PLEX_BACKGROUND_INIT,
+  PLEX_CLIENT,
+  PLEX_SYNC_TRIGGER,
+} from '@vultus/shared/domain/tokens';
 import {
   CapacitorHttpPlexClient,
   MockPlexClient,
@@ -78,11 +82,17 @@ const notificationInit = vi.fn().mockResolvedValue(undefined);
 // DI resolves and we can assert the boot trigger fires. The real thunk (native
 // guard + PlexSyncService.sync()) is exercised via the app.config factory.
 const plexSyncTrigger = vi.fn().mockResolvedValue(undefined);
+// The shell wires PLEX_BACKGROUND_INIT from ngOnInit (boot background-sync
+// init). Supply a spy so DI resolves and we can assert the boot init fires. The
+// real thunk (native guard + PlexBackgroundService.init()) is exercised via the
+// app.config factory.
+const plexBackgroundInit = vi.fn().mockResolvedValue(undefined);
 
 describe('App', () => {
   beforeEach(async () => {
     notificationInit.mockClear();
     plexSyncTrigger.mockClear();
+    plexBackgroundInit.mockClear();
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [
@@ -93,6 +103,7 @@ describe('App', () => {
           useValue: { init: notificationInit },
         },
         { provide: PLEX_SYNC_TRIGGER, useValue: plexSyncTrigger },
+        { provide: PLEX_BACKGROUND_INIT, useValue: plexBackgroundInit },
       ],
     }).compileComponents();
   });
@@ -133,6 +144,12 @@ describe('App', () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     expect(plexSyncTrigger).toHaveBeenCalledTimes(1);
+  });
+
+  it('fires the background Plex sync init on boot (ngOnInit)', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    expect(plexBackgroundInit).toHaveBeenCalledTimes(1);
   });
 });
 
