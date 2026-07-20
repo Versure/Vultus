@@ -104,7 +104,12 @@ can kill an in-flight request's socket while the app is backgrounded at
 plex.tv/link), and the expiry countdown is **wall-clock anchored** (a deadline
 timestamp, not a decrement-per-tick counter) because Android throttles WebView
 timers while backgrounded. The merged `PlexPin` carries no `expiresIn`, so the
-~15-minute PIN TTL deadline is owned locally at code issue.
+~15-minute PIN TTL deadline is owned locally at code issue. Every swallowed
+link/sync failure logs a **redacted diagnostic** via `describePlexError`
+(`plex-errors.ts`) to `console.error` (issue #171) — the HTTP status + endpoint
+path, or a transport error's `name`/`message`, **never** the error object or any
+header (the X-Plex-Token rides in a header, never the URL/message), so the real
+cause is visible in logcat without leaking the token.
 
 **Unlink** clears the Preferences token + `plexSync` (`deleteField()`), KEEPS
 `hasPlex` + all synced data, and touches no watchlist/episode doc.

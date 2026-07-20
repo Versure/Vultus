@@ -83,7 +83,7 @@ export class PlexConnectPage implements OnInit, OnDestroy {
       case 'no-server':
         return 'Your account is linked, but no Plex Media Server was found on this network. Make sure your server is running and signed in to the same Plex account, then try again.';
       case 'network':
-        return 'Something went wrong reaching Plex. Check your connection and try again.';
+        return 'Something went wrong reaching Plex. Make sure your Plex server is running and on the same network as this device, then try again.';
       default:
         return 'This link code timed out before it was entered. Get a new code and enter it at plex.tv/link.';
     }
