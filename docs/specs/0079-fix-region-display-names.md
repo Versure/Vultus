@@ -44,8 +44,7 @@ region-selection UI in the app). The `slice:settings` sites:
    mapping while keeping the exact-string-with-middot format intact.
 3. **Provider-prune toast** —
    `libs/mobile/settings/src/lib/settings.page.ts:234-239` (`presentPruneToast`):
-   `message: \`${dropped} ${noun} aren't available in ${region} and were removed\``
-   where `region = this.service.region()`. Must interpolate the display name, not
+   `message: \`${dropped} ${noun} aren't available in ${region} and were removed\``where`region = this.service.region()`. Must interpolate the display name, not
    the raw code.
 
 The `slice:onboarding` site — **identical bug**:
@@ -125,7 +124,7 @@ component + e2e). Enumerated in §5 and §8 below.
 **In scope:**
 
 - **`libs/shared/domain`** (`scope:shared`): add `REGION_DISPLAY_NAMES:
-  Record<Region, string>` + `regionDisplayName(region: Region): string` to
+Record<Region, string>` + `regionDisplayName(region: Region): string` to
   `enums.ts`; export both from the barrel; unit-test them; update the lib README.
 - **`libs/mobile/settings`** (`scope:mobile`, `slice:settings`): consume
   `regionDisplayName` in the 3 call sites (region `ion-select-option` label
@@ -160,12 +159,12 @@ component + e2e). Enumerated in §5 and §8 below.
 
 ## Affected slices & Sheriff tags
 
-| Project        | Path                   | Sheriff tags                     | Change                                                                                                                                                          |
-| -------------- | ---------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| shared-domain  | `libs/shared/domain`   | `scope:shared`                   | `enums.ts`: add `REGION_DISPLAY_NAMES` + `regionDisplayName`. `index.ts` already `export *`s `./lib/enums`, so the barrel re-exports them automatically. Unit test. README. |
-| mobile-settings| `libs/mobile/settings` | `scope:mobile`, `slice:settings` | `settings.page.ts`: import + expose `regionDisplayName`, use in prune toast. `settings.page.html`: use in option label + footer. `settings.page.spec.ts`: update assertions. README. |
-| mobile-onboarding| `libs/mobile/onboarding` | `scope:mobile`, `slice:onboarding` | `onboarding.page.html`: use `regionDisplayName` in option label (line 31), keep `[value]="region"`. `onboarding.page.spec.ts`: update option assertions. README (if applicable). |
-| mobile-e2e     | `apps/mobile-e2e`      | (e2e app)                        | `settings.spec.ts`: update `pickRegion` helper to match the display-name option row (`selectedRegion` reads `.value` and needs no change — see §8).             |
+| Project           | Path                     | Sheriff tags                       | Change                                                                                                                                                                               |
+| ----------------- | ------------------------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| shared-domain     | `libs/shared/domain`     | `scope:shared`                     | `enums.ts`: add `REGION_DISPLAY_NAMES` + `regionDisplayName`. `index.ts` already `export *`s `./lib/enums`, so the barrel re-exports them automatically. Unit test. README.          |
+| mobile-settings   | `libs/mobile/settings`   | `scope:mobile`, `slice:settings`   | `settings.page.ts`: import + expose `regionDisplayName`, use in prune toast. `settings.page.html`: use in option label + footer. `settings.page.spec.ts`: update assertions. README. |
+| mobile-onboarding | `libs/mobile/onboarding` | `scope:mobile`, `slice:onboarding` | `onboarding.page.html`: use `regionDisplayName` in option label (line 31), keep `[value]="region"`. `onboarding.page.spec.ts`: update option assertions. README (if applicable).     |
+| mobile-e2e        | `apps/mobile-e2e`        | (e2e app)                          | `settings.spec.ts`: update `pickRegion` helper to match the display-name option row (`selectedRegion` reads `.value` and needs no change — see §8).                                  |
 
 - **No cross-slice import.** Both `slice:settings` and `slice:onboarding` import
   the new helper from `scope:shared` (`@vultus/shared/domain`) — allowed by PLAN
@@ -249,8 +248,8 @@ structure changes).
   fixture (1 selected of 3, region NL): `1 of 3 selected · Region: Nederland`.
   The `·` middot and single spaces are preserved; no leading/trailing space.
 - Prune toast renders `{n} {provider|providers} aren't available in {displayName}
-  and were removed` — e.g. `2 providers aren't available in Deutschland and were
-  removed`.
+and were removed` — e.g. `2 providers aren't available in Deutschland and were
+removed`.
 - **Onboarding** region `ion-select-option` for each code renders its display-name
   label (e.g. the `NL` option shows exactly `Nederland`), while its `[value]`
   remains the raw code `NL`; the picker's collapsed (selected) display shows the
@@ -399,10 +398,8 @@ Analog):**
   shared helper, not a literal.
 - **"renders the footer count …" (lines 374-378):** currently asserts
   `'1 of 3 selected · Region: NL'`. Change to
-  `\`1 of 3 selected · Region: ${regionDisplayName('NL')}\`` (i.e.
-  `'1 of 3 selected · Region: Nederland'` — built from the shared helper, not a
-  re-hardcoded literal). **Keep the single `.trim()` only — do NOT introduce a
-  `\s+`-collapse**; the exact-string contract (no interior/leading/trailing stray
+  `\`1 of 3 selected · Region: ${regionDisplayName('NL')}\``(i.e.`'1 of 3 selected · Region: Nederland'`— built from the shared helper, not a
+re-hardcoded literal). **Keep the single`.trim()`only — do NOT introduce a`\s+`-collapse\*\*; the exact-string contract (no interior/leading/trailing stray
   whitespace) must be preserved.
 - **Prune toast (new coverage):** `presentPruneToast` (`settings.page.ts:234-243`)
   is **private**, so drive it through its public wiring and capture the built
@@ -542,5 +539,5 @@ Tailored from the PLAN §5 checklist. Every checkbox maps to a task above.
   describes (same pattern as `REGIONS`), consumed by one `scope:mobile` slice via
   `@vultus/shared/domain` (PLAN §3 rule 4). No data-model change (§4: `region`
   stays the ISO code). No cross-slice import, no over-DRY extraction.
-</content>
-</invoke>
+  </content>
+  </invoke>
