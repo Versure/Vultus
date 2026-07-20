@@ -14,10 +14,10 @@ permissions:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - name: Trigger daily sync
-        timeout-minutes: 5
+        timeout-minutes: 8
         env:
           SYNC_URL: ${{ vars.VULTUS_SYNC_URL }}
           SYNC_SECRET: ${{ secrets.SYNC_SHARED_SECRET }}
@@ -39,7 +39,7 @@ jobs:
           # 403 branching that this step exists for.
           status="$(curl --silent --show-error \
             --retry 3 --retry-all-errors --retry-delay 5 \
-            --max-time 240 \
+            --max-time 330 \
             -o "$body_file" -w '%{http_code}' \
             -X POST "$SYNC_URL" \
             -H "X-Vultus-Sync-Secret: $SYNC_SECRET" \
