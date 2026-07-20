@@ -429,6 +429,16 @@ describe('WatchlistPage', () => {
     expect(el.querySelector('.watchlist-card')).toBeFalsy();
   });
 
+  // Scroll-overflow clip (spec 0082, issue #159 follow-up): `.filter-sheet` now
+  // sets `overflow: hidden` so its closed off-screen panel (`translateY(100%)`)
+  // cannot leak scrollable overflow into `ion-content`'s flex-column scroll part.
+  // No new component-test assertion is meaningfully possible here — jsdom has no
+  // real layout engine (the same limitation spec 0076 documented, see below), so
+  // `scrollHeight`/`clientHeight` are always 0 and a scroll-overflow assertion
+  // would be fake. This fix is covered only by the D3 scripted visual
+  // verification on `serve-mock` (see the spec's Test plan). Do not add a jsdom
+  // layout assertion.
+
   // Layout marker class (spec 0076, issue #159): the empty state carries the
   // `fill-state` class so the page scss can flex-fill + center it below the
   // persistent controls. jsdom has no layout engine, so this only asserts the

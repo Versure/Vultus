@@ -132,6 +132,11 @@ atom's own `justify/align-center` does the centering; only its
 `:host { min-height: 100% }` is overridden — via element+class specificity, no
 `!important`). The skeleton keeps its natural block height and does **not** carry
 the class. This class is slice-local (not shared/importable — spec 0076 D1).
+Because that flex-column scroll part makes every light-DOM `ion-content` child a
+flex item, the closed "Sort & Filter" bottom sheet is now clipped with
+`overflow: hidden` on `.filter-sheet` (spec 0082) so its off-screen
+`translateY(100%)` panel cannot leak ~277px of scrollable overflow into
+`ion-content` and let the empty page scroll.
 
 The slice-local grouping/filtering/sort helpers (`groupByStatus`, `filterByType`,
 `sortItems`, `getAvailableProviders`, the `WatchlistSort` type,
