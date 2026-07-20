@@ -2,7 +2,7 @@
 number: 0078
 slug: onboarding-full-settings
 title: Expand onboarding into a multi-step wizard covering region, provider selection, notification settings, and Plex link
-status: implementing
+status: done
 slices: [slice:onboarding]
 scopes: [scope:mobile]
 created: 2026-07-20
