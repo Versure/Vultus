@@ -1,61 +1,235 @@
-import { Component, inject, signal } from '@angular/core';
+import {
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+} from '@angular/core';
 import { Router } from '@angular/router';
 import {
   IonButton,
   IonContent,
+  IonIcon,
   IonSelect,
   IonSelectOption,
   IonSpinner,
+  IonToggle,
 } from '@ionic/angular/standalone';
-import type { Region } from '@vultus/shared/domain';
+import type { CatalogProvider, Region } from '@vultus/shared/domain';
+import { addIcons } from 'ionicons';
+import { alertCircle, checkmarkCircle, shieldCheckmark } from 'ionicons/icons';
+import { OnboardingPlexLinkService } from './onboarding-plex-link.service';
 import { ONBOARDING_PROVIDERS } from './onboarding.providers';
 import { OnboardingService } from './onboarding.service';
 
+// TMDB logo path base for provider chips. `logoPath` on `CatalogProvider` is a
+// bare TMDB path (e.g. `/abc.jpg`); w92 is the smallest TMDB logo size, ample
+// for a ~48px chip tile. Slice-local copy of the same base the Settings slice
+// uses — NOT imported cross-slice (spec 0078 decision 5, 2 slices < 3+).
+const TMDB_LOGO_BASE = 'https://image.tmdb.org/t/p/w92';
+
 /**
- * First-launch onboarding page (spec 0022): pick a region, see the push-permission
- * explainer, and tap "Get started" to persist the user doc + completion flag and
- * enter the app.
+ * First-launch onboarding page (spec 0078; reworks spec 0022 into a wizard).
  *
- * NOTE: there is no Stitch screen for onboarding in the project — this layout is
- * built to the spec's UI contract and is flagged for human visual verification.
+ * A SINGLE Angular route (`/onboarding`, same guard, same barrel exports) that
+ * renders ONE of five ordered steps from `OnboardingService.currentStep()` —
+ * NO new Angular routes:
  *
- * SHERIFF: scope:mobile / slice:onboarding.
+ *   1. Region → 2. My Providers → 3. Notifications → 4. Plex link → 5. Finish
+ *
+ * Each step persists WRITE-AS-YOU-GO through `OnboardingService`
+ * (`users/{uid}`), so "Back" (steps 2-5) simply moves the step signal with the
+ * prior value still shown. Step 4 injects the onboarding-owned
+ * `OnboardingPlexLinkService` (its own class — NOT the `slice:settings`
+ * `PlexLinkService`) and renders one of its four stages; it carries a
+ * "Skip for now" affordance that stops the poll and advances without any
+ * `hasPlex`/`plexSync` write.
+ *
+ * DESIGN: step CONTENT is aligned to the in-repo Settings / Connect-Plex markup
+ * (already Stitch-aligned — My Providers `cebdfd02c7d44023b0e0019dd4907d48`,
+ * notification controls `81945ff3381e453dafcc4e5ce896fcfa`, Connect Plex
+ * `398cde766832491e92e1c0c5cc09ab4e`). The WIZARD CHROME (progress indicator,
+ * Back, Skip) has NO Stitch screen — it is built to the spec's token-only
+ * contract and is flagged for human visual verification.
+ *
+ * SHERIFF: scope:mobile / slice:onboarding. Imports only `@vultus/shared/*` +
+ * itself + third-party (Ionic, ionicons). No `slice:settings` import.
  */
 @Component({
   selector: 'lib-onboarding',
   providers: [...ONBOARDING_PROVIDERS],
-  imports: [IonContent, IonButton, IonSelect, IonSelectOption, IonSpinner],
+  imports: [
+    IonContent,
+    IonButton,
+    IonSelect,
+    IonSelectOption,
+    IonSpinner,
+    IonToggle,
+    IonIcon,
+  ],
   templateUrl: './onboarding.page.html',
   styleUrl: './onboarding.page.scss',
 })
 export class OnboardingPage {
   protected readonly service = inject(OnboardingService);
+  protected readonly plexLink = inject(OnboardingPlexLinkService);
   private readonly router = inject(Router);
 
+  /** Step-1 selection (defaults to `NL`); persisted via `setRegion` on Continue.
+   *  Held on the component so a Back-nav to step 1 still shows the prior pick. */
   protected readonly selectedRegion = signal<Region>('NL');
-  protected readonly loading = signal<boolean>(false);
 
+  /** True while a step's own async write (region create / `complete()`) is in
+   *  flight — disables that step's primary CTA so a double-tap can't double-fire. */
+  protected readonly busy = signal(false);
+
+  /** True while a single provider-chip toggle write is in flight (step 2). */
+  protected readonly providerBusy = signal(false);
+
+  /** Error-stage heading for step 4, chosen by the link service's reason so a
+   *  post-authorization failure is NOT mislabeled as an expired code. */
+  protected readonly plexErrorHeading = computed(() => {
+    switch (this.plexLink.errorReason()) {
+      case 'no-server':
+        return 'No local server found';
+      case 'network':
+        return "Couldn't reach Plex";
+      default:
+        return 'Code expired';
+    }
+  });
+
+  /** Error-stage detail line for step 4, paired with `plexErrorHeading`. */
+  protected readonly plexErrorDetail = computed(() => {
+    switch (this.plexLink.errorReason()) {
+      case 'no-server':
+        return 'Your account is linked, but no Plex Media Server was found on this network. Make sure your server is running and signed in to the same Plex account, then try again.';
+      case 'network':
+        return 'Something went wrong reaching Plex. Check your connection and try again.';
+      default:
+        return 'This link code timed out before it was entered. Get a new code and enter it at plex.tv/link.';
+    }
+  });
+
+  constructor() {
+    addIcons({ checkmarkCircle, alertCircle, shieldCheckmark });
+
+    // Step-entry side effects: load the provider catalog when the wizard reaches
+    // step 2, and request a fresh PIN when it reaches step 4 (only if idle, so a
+    // Back-and-forward doesn't stomp a live/connected flow). `loadProviderCatalog`
+    // no-ops when already loaded for the region; both reads of the link stage are
+    // `untracked` so this effect fires on the STEP change alone, never on the
+    // stage/catalog signals it triggers.
+    effect(() => {
+      const step = this.service.currentStep();
+      if (step === 2) {
+        void this.service.loadProviderCatalog();
+      } else if (step === 4) {
+        if (untracked(() => this.plexLink.stage()) === 'idle') {
+          void this.plexLink.requestCode();
+        }
+      }
+    });
+  }
+
+  // --- Step 1: region -------------------------------------------------------
   protected onRegionChange(event: CustomEvent): void {
     this.selectedRegion.set((event.detail as { value: Region }).value);
   }
 
-  protected async onGetStarted(): Promise<void> {
-    if (this.loading()) {
-      // Guard against a double-tap while the first completion is in flight.
+  /** Persist the chosen region (create-with-defaults on first write), then
+   *  advance. Guards against a double-tap while the write is in flight. */
+  protected async onContinueRegion(): Promise<void> {
+    if (this.busy()) {
       return;
     }
-    this.loading.set(true);
+    this.busy.set(true);
     try {
-      await this.service.complete(this.selectedRegion());
-      // `replaceUrl: true` drops `/onboarding` from the history stack so the
-      // Android hardware back button can't return to it (issue #65).
+      await this.service.setRegion(this.selectedRegion());
+      this.service.next();
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  // --- Step 2: providers ----------------------------------------------------
+  /** Toggle one provider chip (persists the whole `myProviderIds` array). */
+  protected async onProviderToggle(providerId: number): Promise<void> {
+    if (this.providerBusy()) {
+      return;
+    }
+    this.providerBusy.set(true);
+    try {
+      await this.service.toggleProvider(providerId);
+    } finally {
+      this.providerBusy.set(false);
+    }
+  }
+
+  /** Builds the full TMDB logo URL for a provider chip, or null when unknown. */
+  protected providerLogoUrl(provider: CatalogProvider): string | null {
+    return provider.logoPath ? `${TMDB_LOGO_BASE}${provider.logoPath}` : null;
+  }
+
+  // --- Step 3: notifications ------------------------------------------------
+  protected onNotificationsChange(event: CustomEvent): void {
+    void this.service.setNotificationsEnabled(
+      (event.detail as { checked: boolean }).checked,
+    );
+  }
+
+  protected onDeliveryHourChange(event: CustomEvent): void {
+    void this.service.setDeliveryHour(
+      (event.detail as { value: number | null }).value,
+    );
+  }
+
+  /** Zero-pads an hour to `HH:00 UTC` (DecimalPipe is not imported here). */
+  protected formatHour(hour: number): string {
+    return `${String(hour).padStart(2, '0')}:00 UTC`;
+  }
+
+  // --- Step 4: Plex link ----------------------------------------------------
+  /** "Get a new code" / "Try again" — request a fresh PIN. */
+  protected regenerate(): void {
+    void this.plexLink.regenerateCode();
+  }
+
+  /** "Skip for now" (step 4 only) — stop any live poll, then advance to step 5
+   *  WITHOUT any `hasPlex`/`plexSync` write. */
+  protected onSkip(): void {
+    this.plexLink.cancel();
+    this.service.next();
+  }
+
+  // --- Shared nav -----------------------------------------------------------
+  /** "Back" (steps 2-5). Leaving step 4 also cancels the link poll/countdown. */
+  protected onBack(): void {
+    if (this.service.currentStep() === 4) {
+      this.plexLink.cancel();
+    }
+    this.service.back();
+  }
+
+  // --- Step 5: finish -------------------------------------------------------
+  /** "Get started" — complete onboarding (push permission + flag LAST), then
+   *  navigate to the app with `replaceUrl` so the back button can't return to
+   *  onboarding (issue #65). Disabled + busy while in flight. */
+  protected async onGetStarted(): Promise<void> {
+    if (this.busy()) {
+      return;
+    }
+    this.busy.set(true);
+    try {
+      await this.service.complete();
       await this.router.navigate(['/tabs/watchlist'], { replaceUrl: true });
     } catch {
-      // Onboarding completion is best-effort; navigate anyway so the user is
-      // never stuck, but re-enable the button on an unexpected error. Still
-      // replaceUrl so the back button never lands on the stuck onboarding page.
+      // Completion is best-effort; navigate anyway so the user is never stuck,
+      // but re-enable the button on an unexpected error. Still `replaceUrl` so
+      // the back button never lands on the stuck onboarding page.
       await this.router.navigate(['/tabs/watchlist'], { replaceUrl: true });
-      this.loading.set(false);
+      this.busy.set(false);
     }
   }
 }
