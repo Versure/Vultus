@@ -10,10 +10,10 @@
 
 # Spec status ledger
 
-Total specs: 82
+Total specs: 83
 
 - done: 76
-- approved: 6
+- approved: 7
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -99,3 +99,4 @@ Total specs: 82
 | 80 | onboarding-settings-parity-rule | Add a standing Onboarding ↔ User-field parity rule (F4) to the spec-driven workflow | approved | — | — |
 | 81 | next-unwatched-episode-airdate | Track each TV show's next-unwatched-episode air date for watchability checks | approved | slice:sync-episodes, slice:title-detail, slice:watchlist, slice:search | scope:shared, scope:functions, scope:mobile |
 | 82 | fix-watchlist-scroll-overflow | Stop the empty Watchlist page scrolling — clip the off-screen filter sheet | approved | slice:watchlist | scope:mobile |
+| 83 | watch-today-tab | Add a Watch Today tab showing everything ready to watch right now | approved | slice:today, slice:onboarding | scope:mobile |
