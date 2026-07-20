@@ -29,9 +29,9 @@ test.beforeEach(async ({ page }) => {
 
 test('boots into anon auth and shows the empty watchlist', async ({ page }) => {
   // 1. Boot the app; it signs in anonymously against the Auth emulator and
-  //    lands on the default route ('' -> redirect 'full' -> 'tabs/watchlist').
+  //    lands on the default route ('' -> redirect 'full' -> 'tabs/today').
   await page.goto('/');
-  await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+  await expect(page).toHaveURL(/\/tabs\/today$/);
 
   // 2. Anon auth resolved: read the uid the SDK persisted to IndexedDB. A
   //    non-empty uid proves sign-in settled against the emulator (not a no-op).
@@ -43,13 +43,21 @@ test('boots into anon auth and shows the empty watchlist', async ({ page }) => {
   //    then reload so the watchlist subscribes to the now-seeded (empty) state.
   await seedFor(uid, 'empty');
   await page.reload();
-  await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+  await expect(page).toHaveURL(/\/tabs\/today$/);
 
-  // The three tab buttons render (Watchlist / Search / Settings).
-  await expect(page.locator('ion-tab-button')).toHaveCount(3);
+  // The four tab buttons render (Today / Watchlist / Search / Settings), with
+  // Today the new leftmost tab AND the default landing tab (spec 0083).
+  await expect(page.locator('ion-tab-button')).toHaveCount(4);
+  await expect(page.locator('ion-tab-button[tab="today"]')).toBeVisible();
   await expect(page.locator('ion-tab-button[tab="watchlist"]')).toBeVisible();
   await expect(page.locator('ion-tab-button[tab="search"]')).toBeVisible();
   await expect(page.locator('ion-tab-button[tab="settings"]')).toBeVisible();
+
+  // Today is the selected tab on the default landing route (Ionic marks the
+  // active tab button with the `tab-selected` class).
+  await expect(page.locator('ion-tab-button[tab="today"]')).toHaveClass(
+    /tab-selected/,
+  );
 
   // 4. The empty state shows once loading completes and there are zero groups
   //    (watchlist.page.html: <vultus-empty-state> shared atom).

@@ -49,14 +49,14 @@ async function bootAndSeed(
   page: import('@playwright/test').Page,
 ): Promise<string> {
   await page.goto('/');
-  await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+  await expect(page).toHaveURL(/\/tabs\/today$/);
 
   const uid = await resolveAnonUid(page);
   expect(uid).toBeTruthy();
 
   await seedFor(uid, 'seeded');
   await page.reload();
-  await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+  await expect(page).toHaveURL(/\/tabs\/today$/);
 
   // Verify the seeded entry rendered for THIS uid (guards the R3 owner-mismatch
   // failure mode — an empty list here means the seed uid != the session uid).

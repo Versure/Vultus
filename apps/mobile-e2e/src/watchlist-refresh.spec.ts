@@ -66,8 +66,8 @@ async function bootSeededWatchlist(page: import('@playwright/test').Page) {
   // Reload so the freshly-seeded docs are picked up by the watchlist stream.
   await page.reload();
 
-  // Land on Watchlist and confirm the seeded card rendered before refreshing.
-  await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+  // Land on the default tab and confirm the seeded card rendered before refreshing.
+  await expect(page).toHaveURL(/\/tabs\/today$/);
   await expect(page.locator('.watchlist-card')).toHaveCount(1);
   await expect(page.locator('.watchlist-card')).toContainText(SEEDED_TITLE);
   return uid;

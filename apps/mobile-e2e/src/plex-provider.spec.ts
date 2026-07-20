@@ -70,7 +70,7 @@ test('manual Plex tagging shows alongside provider availability', async ({
 }) => {
   // Boot; the app signs in anonymously against the Auth emulator.
   await page.goto('/');
-  await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+  await expect(page).toHaveURL(/\/tabs\/today$/);
 
   // Resolve the LIVE anon uid so the seeded docs line up with the session (R3).
   const uid = await resolveAnonUid(page);
@@ -82,7 +82,7 @@ test('manual Plex tagging shows alongside provider availability', async ({
 
   // Reload so the watchlist stream picks up the freshly-seeded docs.
   await page.reload();
-  await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+  await expect(page).toHaveURL(/\/tabs\/today$/);
 
   // The seeded card renders (guards the R3 owner-mismatch empty-list trap).
   const card = page.locator('.watchlist-card', { hasText: SEEDED_TITLE });

@@ -38,7 +38,7 @@ test.describe('manual-sync-trigger', () => {
     await seedFor(uid, 'seeded');
     await page.reload();
 
-    await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+    await expect(page).toHaveURL(/\/tabs\/today$/);
     // Confirm the seeded card rendered before we test the refresh button.
     await expect(page.locator('.watchlist-card')).toHaveCount(1);
 

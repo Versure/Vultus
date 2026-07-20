@@ -96,7 +96,7 @@ describe('reverseOnboardingGuard', () => {
     createUrlTreeMock.mockClear();
   });
 
-  it('flag true -> returns UrlTree to /tabs/watchlist', async () => {
+  it('flag true -> returns UrlTree to /tabs/today', async () => {
     preferencesGetMock.mockResolvedValue({ value: 'true' });
 
     const result = await runReverseGuard();
@@ -105,7 +105,7 @@ describe('reverseOnboardingGuard', () => {
     expect(preferencesGetMock).toHaveBeenCalledWith({
       key: ONBOARDING_DONE_KEY,
     });
-    expect(createUrlTreeMock).toHaveBeenCalledWith(['/tabs/watchlist']);
+    expect(createUrlTreeMock).toHaveBeenCalledWith(['/tabs/today']);
   });
 
   it('flag null -> returns true (allows onboarding)', async () => {

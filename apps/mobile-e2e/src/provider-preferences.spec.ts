@@ -88,7 +88,7 @@ test('shows on-your-provider vs also-on framing', async ({ page }) => {
 
   // Reload so the watchlist stream picks up the freshly-seeded docs.
   await page.reload();
-  await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+  await expect(page).toHaveURL(/\/tabs\/today$/);
 
   // Both seeded cards render (guards the R3 owner-mismatch empty-list trap).
   const mineCard = page.locator('.watchlist-card', { hasText: MINE_TITLE });

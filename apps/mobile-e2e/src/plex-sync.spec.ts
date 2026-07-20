@@ -70,7 +70,7 @@ test.beforeEach(async ({ page }) => {
 test('connect flow', async ({ page }) => {
   // Boot; the app signs in anonymously against the Auth emulator.
   await page.goto('/');
-  await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+  await expect(page).toHaveURL(/\/tabs\/today$/);
 
   // Resolve the LIVE anon uid so the seeded docs line up with the session (R3).
   const uid = await resolveAnonUid(page);
@@ -81,7 +81,7 @@ test('connect flow', async ({ page }) => {
   // then reload so the app reads it.
   await seedFor(uid, 'seeded');
   await page.reload();
-  await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+  await expect(page).toHaveURL(/\/tabs\/today$/);
 
   // Go to the Settings tab. The page is render-gated on `service.loaded()` (a
   // one-shot users/{uid} read), so wait for the region select before asserting.
@@ -169,7 +169,7 @@ test('sync outcome', async ({ page }) => {
 
   // Boot; the app signs in anonymously against the Auth emulator.
   await page.goto('/');
-  await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+  await expect(page).toHaveURL(/\/tabs\/today$/);
 
   // Resolve the LIVE anon uid so the seeded docs line up with the session (R3).
   const uid = await resolveAnonUid(page);
@@ -219,7 +219,7 @@ test('sync outcome', async ({ page }) => {
 
   // Reload so the app reads the seeded pre-linked state.
   await page.reload();
-  await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+  await expect(page).toHaveURL(/\/tabs\/today$/);
 
   // Go to Settings; the connected block renders (token present). Wait for the
   // page to load (region select) then for the connected block.

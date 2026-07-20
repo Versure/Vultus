@@ -1,0 +1,319 @@
+// Watch Today tab styles (spec 0083). Pinned from the primary Stitch screen
+// `812340847a604f8a968021183690bf54` ("Watch Today - Vultus"): header h-16,
+// hero mb-10, sections mb-10, card h-44 / w-32 poster / p-4 body, availability
+// pill, "Ready to watch" tag. All colors/type/spacing consume the `--vultus-*` /
+// `--ion-*` theme vars (shared/ui-kit theme.scss / docs/design/vultus-design-system.md)
+// — NO hand-transcribed hex.
+
+// Shared keyboard-focus ring — a 2px primary-Emerald outline at ~50% opacity
+// (mirrors watchlist's `%vultus-focus-ring`).
+%vultus-focus-ring {
+  outline: none;
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--vultus-primary) 50%, transparent);
+}
+
+// -----------------------------------------------------------------------------
+// Header — h-16 (64px), `--vultus-surface` bg, 1px bottom border
+// `--vultus-outline-variant`, 16px horizontal inset. Brand mark + a single
+// non-interactive account button (mirrors the existing watchlist header for
+// cross-tab consistency; the screen's brand uses `movie_filter` / display-lg —
+// we keep `film-outline` + watchlist's brand scale, see PR notes).
+// -----------------------------------------------------------------------------
+ion-header {
+  ion-toolbar {
+    --background: var(--vultus-surface);
+    --border-width: 0 0 1px 0;
+    --border-color: var(--vultus-outline-variant);
+    --border-style: solid;
+    --box-shadow: none;
+    --min-height: 64px;
+
+    ion-title {
+      padding-inline: 16px;
+    }
+  }
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--vultus-space-sm);
+  color: var(--vultus-primary);
+  font-family: var(--vultus-font-family);
+  font-weight: 700;
+  font-size: 1.125rem;
+}
+
+.brand-icon {
+  font-size: 1.25rem;
+  color: var(--vultus-primary);
+  flex-shrink: 0;
+  position: relative;
+  top: -1px;
+}
+
+// -----------------------------------------------------------------------------
+// Content canvas + state centering.
+// -----------------------------------------------------------------------------
+ion-content {
+  --background: var(--vultus-surface);
+
+  // Flex-column scroll viewport so a single flex-fill child (empty/error state)
+  // centers. `scroll` = ion-content's documented shadow part.
+  &::part(scroll) {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+// Empty / error state centering (spec 0076 pattern). The atoms set
+// `:host { min-height: 100% }`; `fill-state` (higher specificity, no
+// `!important`) overrides only min-height so the state flex-fills + centers.
+vultus-empty-state.fill-state,
+vultus-error-state.fill-state {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+// Main scroll content — screen `main` is `px-margin-mobile py-8` (16px sides,
+// 32px top/bottom).
+.today-main {
+  padding: var(--vultus-space-4) var(--vultus-space-md);
+}
+
+// -----------------------------------------------------------------------------
+// Hero — `mb-10` (40px). Title display-lg-mobile (28px/700); subtitle body-lg
+// (16px/400) on-surface-variant.
+// -----------------------------------------------------------------------------
+.hero {
+  margin-bottom: var(--vultus-space-5);
+}
+
+.hero-title {
+  margin: 0 0 var(--vultus-space-xs);
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-display-lg-mobile-size);
+  font-weight: var(--vultus-text-display-lg-weight);
+  line-height: var(--vultus-text-display-lg-mobile-line);
+  color: var(--vultus-on-surface);
+}
+
+.hero-subtitle {
+  margin: 0;
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-body-lg-size);
+  font-weight: var(--vultus-text-body-lg-weight);
+  line-height: var(--vultus-text-body-lg-line);
+  color: var(--vultus-on-surface-variant);
+}
+
+// -----------------------------------------------------------------------------
+// Section — `mb-10` (40px). Header row (flex space-between mb-4); title label-md
+// (12px/600), uppercase, wide tracking (screen `tracking-widest`),
+// on-surface-variant. NO "View All" (D2 — intentionally omitted vs the screen).
+// -----------------------------------------------------------------------------
+.today-section {
+  margin-bottom: var(--vultus-space-5);
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--vultus-space-md);
+}
+
+.section-title {
+  margin: 0;
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-label-md-size);
+  font-weight: var(--vultus-text-label-md-weight);
+  line-height: var(--vultus-text-label-md-line);
+  text-transform: uppercase;
+  letter-spacing: 0.1em; // screen `tracking-widest`
+  color: var(--vultus-on-surface-variant);
+}
+
+// Card list — vertical stack, 16px gap (`space-y-4`).
+.card-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vultus-space-md);
+}
+
+// -----------------------------------------------------------------------------
+// Card — h-44 (176px), surface-container-low bg, 1px outline-variant border,
+// rounded-xl (0.75rem), flex row items-stretch overflow-hidden. Interactive
+// (role="button" / tabindex=0): hover → surface-container; active/press →
+// scale(0.98) ~0.1s ease (screen's mousedown micro-interaction); focus-visible
+// → primary ring; Enter navigates (template handler).
+// -----------------------------------------------------------------------------
+.today-card {
+  display: flex;
+  align-items: stretch;
+  height: 176px;
+  overflow: hidden;
+  border: 1px solid var(--vultus-outline-variant);
+  border-radius: var(--vultus-radius-md);
+  background: var(--vultus-surface-container-low);
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    transform 100ms ease;
+
+  &:hover {
+    background: var(--vultus-surface-container);
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+
+  &:focus-visible {
+    @extend %vultus-focus-ring;
+  }
+}
+
+.poster {
+  position: relative;
+  flex: 0 0 auto;
+  width: 128px;
+  overflow: hidden;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .poster-fallback {
+    width: 100%;
+    height: 100%;
+    background: var(--vultus-surface-container-highest);
+  }
+}
+
+.card-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: var(--vultus-space-md);
+}
+
+// Meta row — type label + availability pill (flex, 8px gap, 4px bottom margin).
+.meta-row {
+  display: flex;
+  align-items: center;
+  gap: var(--vultus-space-sm);
+  margin-bottom: var(--vultus-space-xs);
+}
+
+// Type label — label-sm (11px/500), uppercase, on-surface-variant.
+.meta-type {
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-label-sm-size);
+  font-weight: var(--vultus-text-label-sm-weight);
+  line-height: var(--vultus-text-label-sm-line);
+  text-transform: uppercase;
+  letter-spacing: 0.05em; // screen `tracking-wider`
+  color: var(--vultus-on-surface-variant);
+}
+
+// Title — headline-sm (20px/600), on-surface. Movie card mb-2 (8px); TV mb-0.5.
+.card-title {
+  margin: 0 0 var(--vultus-space-sm);
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-headline-sm-size);
+  font-weight: var(--vultus-text-headline-sm-weight);
+  line-height: var(--vultus-text-headline-sm-line);
+  color: var(--vultus-on-surface);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &--tv {
+    margin-bottom: 2px;
+  }
+}
+
+// TV episode label — body-md (14px/400), on-surface-variant.
+.episode-label {
+  margin: 0;
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-body-md-size);
+  font-weight: var(--vultus-text-body-md-weight);
+  line-height: var(--vultus-text-body-md-line);
+  color: var(--vultus-on-surface-variant);
+}
+
+// -----------------------------------------------------------------------------
+// "Ready to watch" tag (bottom of every card — every shown card IS watchable).
+// Screen: flex gap-2, text-status-completed, font-semibold; filled play_circle
+// icon + label-md text.
+// -----------------------------------------------------------------------------
+.ready-tag {
+  display: flex;
+  align-items: center;
+  gap: var(--vultus-space-sm);
+  color: var(--vultus-status-completed);
+}
+
+.ready-tag__icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.ready-tag__text {
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-label-md-size);
+  font-weight: var(--vultus-text-label-md-weight);
+  line-height: var(--vultus-text-label-md-line);
+  letter-spacing: var(--vultus-text-label-md-spacing);
+}
+
+// -----------------------------------------------------------------------------
+// Availability pill (D3) — a SINGLE partitioned pill per card. Presentational /
+// non-interactive (the card is the tap target). Screen: `px-2 py-0.5
+// rounded-full text-xs font-semibold gap-1`.
+//   mine (.is-mine)     = primary-container ~20% alpha fill, status-completed
+//                         text + leading filled check-circle icon → "On {name}".
+//   elsewhere (default) = surface-container-highest ~40% alpha fill,
+//                         on-surface-variant text, NO icon → "Also on {name}".
+// (Mirrors watchlist's pill treatment — deliberate 2-slice duplication, D3.)
+// -----------------------------------------------------------------------------
+.availability-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--vultus-space-xs);
+  padding: 2px 8px;
+  border-radius: var(--vultus-radius-pill);
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-label-md-size);
+  font-weight: var(--vultus-text-label-md-weight);
+  line-height: var(--vultus-text-label-md-line);
+  white-space: nowrap;
+  background: color-mix(
+    in srgb,
+    var(--vultus-surface-container-highest) 40%,
+    transparent
+  );
+  color: var(--vultus-on-surface-variant);
+
+  &.is-mine {
+    background: color-mix(
+      in srgb,
+      var(--vultus-primary-container) 20%,
+      transparent
+    );
+    color: var(--vultus-status-completed);
+  }
+
+  .availability-pill__icon {
+    font-size: 0.875rem;
+    flex-shrink: 0;
+  }
+}

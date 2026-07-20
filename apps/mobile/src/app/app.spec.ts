@@ -152,7 +152,7 @@ describe('app routes — Plex connect sub-page (spec 0073)', () => {
     const children = tabs?.children ?? [];
     const last = children[children.length - 1];
     expect(last?.path).toBe('');
-    expect(last?.redirectTo).toBe('watchlist');
+    expect(last?.redirectTo).toBe('today');
   });
 });
 

@@ -2,7 +2,7 @@
 number: 0083
 slug: watch-today-tab
 title: Add a Watch Today tab showing everything ready to watch right now
-status: approved
+status: implementing
 slices: [slice:today, slice:onboarding]
 scopes: [scope:mobile]
 created: 2026-07-20

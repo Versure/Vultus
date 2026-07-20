@@ -327,7 +327,7 @@ describe('OnboardingPage (5-step wizard)', () => {
     await fixture.whenStable();
     // replaceUrl drops /onboarding from history so the Android back button can't
     // return to it (issue #65).
-    expect(navigateMock).toHaveBeenCalledWith(['/tabs/watchlist'], {
+    expect(navigateMock).toHaveBeenCalledWith(['/tabs/today'], {
       replaceUrl: true,
     });
   });
@@ -359,7 +359,7 @@ describe('OnboardingPage (5-step wizard)', () => {
     button?.dispatchEvent(new CustomEvent('click'));
     await fixture.whenStable();
 
-    expect(navigateMock).toHaveBeenCalledWith(['/tabs/watchlist'], {
+    expect(navigateMock).toHaveBeenCalledWith(['/tabs/today'], {
       replaceUrl: true,
     });
   });
