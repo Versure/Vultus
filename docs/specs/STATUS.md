@@ -10,10 +10,10 @@
 
 # Spec status ledger
 
-Total specs: 77
+Total specs: 78
 
 - done: 76
-- approved: 1
+- approved: 2
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -94,3 +94,4 @@ Total specs: 77
 | 75 | settings-provider-list-fixes | Fix "N of 0 selected" providers on Settings entry + make the provider list collapsible | done | slice:settings | scope:mobile |
 | 76 | empty-state-centering | Center the empty/error state and stop the stray scroll on the Watchlist and Search pages | done | slice:watchlist, slice:search | scope:mobile |
 | 77 | consolidate-plex-provider-entry | Exclude the real TMDB "Plex" provider from the Settings catalog so only the manual Plex chip shows | done | — | scope:functions |
+| 79 | fix-region-display-names | Display human-readable region names (endonyms) in Settings instead of raw ISO codes | approved | slice:settings, slice:onboarding | scope:shared, scope:mobile |
