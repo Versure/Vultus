@@ -49,7 +49,7 @@ test.describe('search (F2–F3)', () => {
     await routeTmdb(page);
 
     await page.goto('/');
-    await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+    await expect(page).toHaveURL(/\/tabs\/today$/);
 
     // Resolve the live anon uid and seed the `empty` fixture under it (keeps the
     // app's session — `seedFor` does not clear Auth).
@@ -91,7 +91,7 @@ test.describe('search (F2–F3)', () => {
     await routeTmdb(page);
 
     await page.goto('/');
-    await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+    await expect(page).toHaveURL(/\/tabs\/today$/);
 
     const uid = await resolveAnonUid(page);
     await seedFor(uid, 'empty');
@@ -159,7 +159,7 @@ test.describe('search (F2–F3)', () => {
     await routeTmdbDiscriminated(page, 'tmdb-movie-detail-603.json');
 
     await page.goto('/');
-    await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+    await expect(page).toHaveURL(/\/tabs\/today$/);
 
     const uid = await resolveAnonUid(page);
     await seedFor(uid, 'empty');
@@ -202,7 +202,7 @@ test.describe('search (F2–F3)', () => {
     await routeTmdbTV(page, 1396, 'tmdb-tv-detail-1396.json');
 
     await page.goto('/');
-    await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+    await expect(page).toHaveURL(/\/tabs\/today$/);
 
     const uid = await resolveAnonUid(page);
     await seedFor(uid, 'empty');

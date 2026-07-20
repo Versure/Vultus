@@ -246,12 +246,12 @@ export class OnboardingPage {
     this.busy.set(true);
     try {
       await this.service.complete();
-      await this.router.navigate(['/tabs/watchlist'], { replaceUrl: true });
+      await this.router.navigate(['/tabs/today'], { replaceUrl: true });
     } catch {
       // Completion is best-effort; navigate anyway so the user is never stuck,
       // but re-enable the button on an unexpected error. Still `replaceUrl` so
       // the back button never lands on the stuck onboarding page.
-      await this.router.navigate(['/tabs/watchlist'], { replaceUrl: true });
+      await this.router.navigate(['/tabs/today'], { replaceUrl: true });
       this.busy.set(false);
     }
   }

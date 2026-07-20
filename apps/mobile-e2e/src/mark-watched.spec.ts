@@ -79,7 +79,7 @@ test.describe('mark as watched from search (spec 0056)', () => {
     await routeTmdbDiscriminated(page, 'tmdb-movie-detail-603.json');
 
     await page.goto('/');
-    await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+    await expect(page).toHaveURL(/\/tabs\/today$/);
 
     // Seed the `empty` fixture under the resolved anon uid (keeps the app's
     // session; the watchlist starts clean so the added title is unambiguous).
@@ -153,7 +153,7 @@ test.describe('mark as watched from search (spec 0056)', () => {
     await routeTmdbTV(page, 1396, 'tmdb-tv-detail-1396.json');
 
     await page.goto('/');
-    await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+    await expect(page).toHaveURL(/\/tabs\/today$/);
 
     const uid = await resolveAnonUid(page);
     await seedFor(uid, 'empty');

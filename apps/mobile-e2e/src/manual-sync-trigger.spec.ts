@@ -38,6 +38,10 @@ test.describe('manual-sync-trigger', () => {
     await seedFor(uid, 'seeded');
     await page.reload();
 
+    await expect(page).toHaveURL(/\/tabs\/today$/);
+    // Boot now lands on the Today tab (spec 0083); the watchlist card + toolbar
+    // refresh button live on the Watchlist tab, so switch there first.
+    await page.locator('ion-tab-button[tab="watchlist"]').click();
     await expect(page).toHaveURL(/\/tabs\/watchlist$/);
     // Confirm the seeded card rendered before we test the refresh button.
     await expect(page.locator('.watchlist-card')).toHaveCount(1);

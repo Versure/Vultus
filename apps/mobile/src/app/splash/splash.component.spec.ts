@@ -24,7 +24,7 @@ describe('SplashComponent', () => {
   };
 
   const emitNavigationEnd = () => {
-    routerEvents.next(new NavigationEnd(1, '/', '/tabs/watchlist'));
+    routerEvents.next(new NavigationEnd(1, '/', '/tabs/today'));
   };
 
   beforeEach(async () => {

@@ -146,14 +146,14 @@ test('F-onboard-1: first launch redirects to /onboarding and renders step 1 (reg
  * F-onboard-2 — walk all 5 steps and complete: region DE → step 2 (advance with
  * an EMPTY provider selection — navigation only, NOT gated by the step-2 fixme)
  * → step 3 (toggle notifications OFF) → step 4 (Skip for now) → step 5
- * (Get started) → /tabs/watchlist. Assert users/{uid} reflects the mid-wizard
+ * (Get started) → /tabs/today. Assert users/{uid} reflects the mid-wizard
  * choices (region:'DE', myProviderIds:[], notificationPrefs all false) and the
  * completion flag is set.
  *
  * The native FCM path (permission dialog + token write) is device-only and NOT
  * asserted — the browser harness has no native runtime.
  */
-test('F-onboard-2: walk all 5 steps (region DE, empty providers, notifications off, skip Plex) → /tabs/watchlist; user doc reflects choices; flag set', async ({
+test('F-onboard-2: walk all 5 steps (region DE, empty providers, notifications off, skip Plex) → /tabs/today; user doc reflects choices; flag set', async ({
   page,
 }) => {
   await page.goto('/');
@@ -192,7 +192,7 @@ test('F-onboard-2: walk all 5 steps (region DE, empty providers, notifications o
   // --- Step 5: Get started → complete + navigate to the app. -------------------
   await expectStep(page, 5);
   await page.locator('.wizard-cta').click();
-  await expect(page).toHaveURL(/\/tabs\/watchlist$/, { timeout: 10000 });
+  await expect(page).toHaveURL(/\/tabs\/today$/, { timeout: 10000 });
 
   // Completion flag is now set in localStorage (the LAST write of the wizard).
   const flag = await page.evaluate(
@@ -221,11 +221,12 @@ test('F-onboard-2: walk all 5 steps (region DE, empty providers, notifications o
 });
 
 /**
- * F-onboard-3 — flag pre-set: boot → /tabs/watchlist directly; no onboarding
- * redirect; the tab bar renders. (Unchanged from spec 0022; verifies the guard
- * still passes through with the reworked page in place.)
+ * F-onboard-3 — flag pre-set: boot → /tabs/today directly; no onboarding
+ * redirect; the tab bar renders. (Default landing route is now /tabs/today per
+ * spec 0083; verifies the guard still passes through with the reworked page in
+ * place.)
  */
-test('F-onboard-3: flag pre-set → boot lands on /tabs/watchlist without redirect', async ({
+test('F-onboard-3: flag pre-set → boot lands on /tabs/today without redirect', async ({
   page,
 }) => {
   // Set the completion flag BEFORE navigation so the guard sees it on first load.
@@ -235,11 +236,11 @@ test('F-onboard-3: flag pre-set → boot lands on /tabs/watchlist without redire
 
   await page.goto('/');
 
-  // Guard sees flag → passes through to tabs.
-  await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+  // Guard sees flag → passes through to tabs (default landing tab is Today).
+  await expect(page).toHaveURL(/\/tabs\/today$/);
 
-  // Tab bar renders (we're in the tabs shell, not onboarding).
-  await expect(page.locator('ion-tab-button')).toHaveCount(3);
+  // Tab bar renders all four tabs (we're in the tabs shell, not onboarding).
+  await expect(page.locator('ion-tab-button')).toHaveCount(4);
 });
 
 /**
@@ -289,7 +290,7 @@ test('F-onboard-4: back navigation from step 2 returns to step 1 with the picked
 
 /**
  * F-onboard-5 (new) — Plex skip performs NO Plex write: reach step 4, tap
- * "Skip for now" → step 5 → complete → /tabs/watchlist. The skip path calls the
+ * "Skip for now" → step 5 → complete → /tabs/today. The skip path calls the
  * link service's cancel() and advances WITHOUT any hasPlex:true / plexSync write.
  * The create-with-defaults (step 1) sets hasPlex:false, so assert it is NOT true
  * and that plexSync was never written.
@@ -325,7 +326,7 @@ test('F-onboard-5: skipping the Plex step writes no hasPlex:true / plexSync and 
   // Step 5: complete → land on the app.
   await expectStep(page, 5);
   await page.locator('.wizard-cta').click();
-  await expect(page).toHaveURL(/\/tabs\/watchlist$/, { timeout: 10000 });
+  await expect(page).toHaveURL(/\/tabs\/today$/, { timeout: 10000 });
 
   // users/{uid} has NO Plex link written by the skip path: hasPlex is not true
   // (it stays at its create-with-defaults `false`) and no plexSync OBJECT was

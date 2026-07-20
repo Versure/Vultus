@@ -20,7 +20,7 @@ exports, same shapes, same `/onboarding` route wiring (the shell needs no edit):
   when the `onboarding_done` flag is `'true'`, otherwise a `UrlTree` redirect to
   `/onboarding`.
 - **`reverseOnboardingGuard`** — a `CanActivateFn` for the `/onboarding` route
-  (issue #65). Returns a `UrlTree` redirect to `/tabs/watchlist` when the flag is
+  (issue #65). Returns a `UrlTree` redirect to `/tabs/today` when the flag is
   already `'true'`, otherwise `true`.
 
 `ONBOARDING_DONE_KEY` (the Preferences key) is exported from
@@ -72,7 +72,7 @@ whole-object).
 - **Step 5 — Finish:** "Get started" calls `complete()` — on a native platform it
   requests OS push permission and, on grant, registers + `arrayUnion`s one FCM
   token; then it sets `onboarding_done = 'true'` **last**. A denied/failed push
-  never blocks completion. On resolve it navigates to `/tabs/watchlist` with
+  never blocks completion. On resolve it navigates to `/tabs/today` with
   `{ replaceUrl: true }` (issue #65) so the back button can't return to
   onboarding.
 

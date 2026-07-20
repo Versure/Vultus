@@ -114,11 +114,12 @@ describe('lib-README guard', () => {
   describe('live assertion — every real libs/**/README.md passes', () => {
     const readmePaths = findLibReadmes(join(workspaceRoot, 'libs')).sort();
 
-    it('finds the full set of lib READMEs (sanity: > 0, expected 12)', () => {
+    it('finds the full set of lib READMEs (sanity: > 0, expected 13)', () => {
       expect(readmePaths.length).toBeGreaterThan(0);
-      // There are 12 lib READMEs at the time of writing (§8). Asserting the
-      // exact count guards against a broken glob silently checking nothing.
-      expect(readmePaths.length).toBe(12);
+      // There are 13 lib READMEs at the time of writing (§8, spec 0083 added
+      // libs/mobile/today). Asserting the exact count guards against a broken
+      // glob silently checking nothing.
+      expect(readmePaths.length).toBe(13);
     });
 
     it.each(readmePaths)(

@@ -11,17 +11,17 @@ describe('TabsPage', () => {
     }).compileComponents();
   });
 
-  it('renders an ion-tabs with three tab buttons', async () => {
+  it('renders an ion-tabs with four tab buttons', async () => {
     const fixture = TestBed.createComponent(TabsPage);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
 
     expect(compiled.querySelector('ion-tabs')).toBeTruthy();
     const buttons = compiled.querySelectorAll('ion-tab-button');
-    expect(buttons.length).toBe(3);
+    expect(buttons.length).toBe(4);
   });
 
-  it('targets the watchlist / search / settings routes in order', async () => {
+  it('targets the today / watchlist / search / settings routes in order', async () => {
     const fixture = TestBed.createComponent(TabsPage);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
@@ -29,10 +29,10 @@ describe('TabsPage', () => {
     const tabs = Array.from(compiled.querySelectorAll('ion-tab-button')).map(
       (b) => b.getAttribute('tab'),
     );
-    expect(tabs).toEqual(['watchlist', 'search', 'settings']);
+    expect(tabs).toEqual(['today', 'watchlist', 'search', 'settings']);
   });
 
-  it('labels the tabs Watchlist / Search / Settings', async () => {
+  it('labels the tabs Today / Watchlist / Search / Settings', async () => {
     const fixture = TestBed.createComponent(TabsPage);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
@@ -40,6 +40,6 @@ describe('TabsPage', () => {
     const labels = Array.from(compiled.querySelectorAll('ion-label')).map((l) =>
       l.textContent?.trim(),
     );
-    expect(labels).toEqual(['Watchlist', 'Search', 'Settings']);
+    expect(labels).toEqual(['Today', 'Watchlist', 'Search', 'Settings']);
   });
 });
