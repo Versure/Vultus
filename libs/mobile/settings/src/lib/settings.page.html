@@ -53,7 +53,7 @@
             >
               @for (region of service.regions; track region) {
               <ion-select-option [value]="region"
-                >{{ region }}</ion-select-option
+                >{{ regionDisplayName(region) }}</ion-select-option
               >
               }
             </ion-select>
@@ -183,7 +183,7 @@
         <p class="provider-footer">
           {{ service.myProviderIds().length }} of {{
           service.providerCatalog().length }} selected · Region: {{
-          service.region() }}
+          regionDisplayName(service.region()!) }}
         </p>
         }
       </div>
