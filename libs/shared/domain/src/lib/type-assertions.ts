@@ -141,6 +141,7 @@ const _watchlistItem = {
   title: 'Game of Thrones',
   addedAt: '2026-06-18T10:00:00.000Z',
   status: 'watching',
+  nextUnwatchedEpisodeAirDate: null,
   watchingViaPlex: false,
 } satisfies WatchlistItem;
 

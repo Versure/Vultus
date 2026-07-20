@@ -14,7 +14,7 @@ import type {
 export function createEpisodeSyncEngine(
   config: EpisodeSyncConfig,
 ): EpisodeSyncEngine {
-  const { tmdb, episodes, watchlist, watchlistStatus } = config;
+  const { tmdb, episodes, watchlist, watchlistStatus, nextWatchable } = config;
 
   async function syncOne(
     uid: string,
@@ -66,6 +66,24 @@ export function createEpisodeSyncEngine(
         await watchlistStatus.setStatus(uid, titleId, 'watching');
         statusRevertedToWatching = true;
       }
+    }
+
+    // Denormalized "earliest unwatched air date" recompute (spec 0081). Wired
+    // into BOTH entry points (deviation from 0074's entry-A omission — a fresh
+    // TV add must get this field on its first sync). Independent of the
+    // watchlistStatus block above (both may fire in the same run). Reads full
+    // watch-state AFTER writeEpisodes so it sees pre-existing docs' real watched
+    // state plus the just-inserted (watched: false) docs — getExistingEpisodeIds
+    // (ids only) can't supply that.
+    if (toWrite.length > 0 && nextWatchable) {
+      const eps = await nextWatchable.readEpisodeWatchState(uid, titleId);
+      const unwatched = eps.filter((e) => !e.watched).map((e) => e.airDate);
+      // Min via ISO lexical comparison (the transitions.ts idiom); null when none.
+      const next =
+        unwatched.length > 0
+          ? unwatched.reduce((min, d) => (d < min ? d : min))
+          : null;
+      await nextWatchable.setNextUnwatchedEpisodeAirDate(uid, titleId, next);
     }
 
     return {

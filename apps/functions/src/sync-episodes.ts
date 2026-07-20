@@ -20,16 +20,19 @@ import {
   type EpisodeStore,
   type EpisodeSyncEngine,
   type TmdbEpisodeSource,
+  type WatchlistNextWatchableStore,
   type WatchlistStatusStore,
   type WatchlistTvShow,
   type WatchlistTvSource,
 } from '@vultus/functions/sync-episodes';
 import {
+  dataToEpisode,
   episodePath,
   episodesPath,
   episodeToData,
   watchlistItemPath,
 } from '@vultus/shared/firestore-schema';
+import type { EpisodeReadData } from '@vultus/shared/firestore-schema';
 import type { WatchStatus } from '@vultus/shared/domain';
 
 // `TMDB_READ_TOKEN` is a singleton-by-name param: declaring it here with the
@@ -141,6 +144,38 @@ export function createWatchlistStatusStoreAdapter(
   };
 }
 
+/**
+ * Reads full episode watch-state and writes the parent watchlist doc's
+ * `nextUnwatchedEpisodeAirDate` for a (uid, titleId), backing the sync-episodes
+ * `WatchlistNextWatchableStore` port (spec 0081). Admin SDK enters ONLY here; the
+ * engine stays Firebase-free. `readEpisodeWatchState` does a fresh full read over
+ * the episodes subcollection AFTER `writeEpisodes`, so it sees pre-existing docs'
+ * real `watched` state PLUS the just-inserted docs (the id-only
+ * `getExistingEpisodeIds` cannot report watched state). Reuses `dataToEpisode` to
+ * convert the stored `airDate` Timestamp → ISO string. Wired into BOTH entry
+ * points (deliberate deviation from spec 0074's entry-A omission): a freshly-added
+ * TV show must get its field set on first sync (entry A) as well as on the daily
+ * pass (entry B).
+ */
+export function createNextWatchableStoreAdapter(
+  db: Firestore,
+): WatchlistNextWatchableStore {
+  return {
+    async readEpisodeWatchState(uid, titleId) {
+      const snap = await db.collection(episodesPath(uid, titleId)).get();
+      return snap.docs.map((d) => {
+        const ep = dataToEpisode(d.data() as EpisodeReadData);
+        return { airDate: ep.airDate, watched: ep.watched };
+      });
+    },
+    async setNextUnwatchedEpisodeAirDate(uid, titleId, airDate) {
+      await db
+        .doc(watchlistItemPath(uid, titleId))
+        .update({ nextUnwatchedEpisodeAirDate: airDate });
+    },
+  };
+}
+
 // --- Entry point A: on-add trigger --------------------------------------
 
 /** The minimal created-doc event shape the core consumes — satisfied by the
@@ -185,6 +220,10 @@ export const syncWatchlistEpisodes = onDocumentCreated(
         createTmdbClient({ readAccessToken: TMDB_READ_TOKEN.value() }),
       ),
       episodes: createEpisodeUpsertStore(db),
+      // Wired on the on-add trigger too (spec 0081 — deliberate deviation from
+      // 0074's entry-A omission): a freshly-added TV show must get its
+      // nextUnwatchedEpisodeAirDate set on its first episode sync, not 24h later.
+      nextWatchable: createNextWatchableStoreAdapter(db),
     });
     const snap = event.data;
     await handleWatchlistCreate(

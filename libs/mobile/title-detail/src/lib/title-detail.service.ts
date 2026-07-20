@@ -343,6 +343,12 @@ export class TitleDetailService {
       status,
       posterPath: detail.posterPath,
       voteAverage: detail.voteAverage,
+      // Denormalized earliest-unwatched-episode air date (spec 0081). Always
+      // initialized null on add: a `'planned'` add has nothing watched yet (the
+      // Cloud Functions on-add trigger populates the real value once episodes
+      // sync), a `'completed'` TV add batch-marks every episode watched (nothing
+      // unwatched → null), and a movie never has episodes (always null).
+      nextUnwatchedEpisodeAirDate: null,
       // A freshly added title is never yet tagged as watched via Plex (spec
       // 0061); the flag is toggled later from the "Personal Tracking" subsection.
       watchingViaPlex: false,
@@ -391,9 +397,18 @@ export class TitleDetailService {
     if (status === 'completed' && type === 'tv') {
       await this.markAllEpisodesWatched(uid, tmdbId);
     }
+    // Completing a TV show batch-marks every episode watched → nothing remains
+    // unwatched, so the denormalized earliest-unwatched air date is null (spec
+    // 0081). This direct action-sheet path does NOT route through
+    // `autoUpdateStatus`, so it must clear the field itself. Movies / non-
+    // completed statuses write status only (movies never have this field set).
+    const payload =
+      status === 'completed' && type === 'tv'
+        ? { status, nextUnwatchedEpisodeAirDate: null }
+        : { status };
     await updateDoc(
       doc(this.firestore, watchlistItemPath(uid, String(tmdbId))),
-      { status },
+      payload,
     );
   }
 
@@ -595,13 +610,34 @@ export class TitleDetailService {
     );
     let total = 0;
     let watchedCount = 0;
+    // spec 0081: min airDate (ISO lexical compare) over the still-unwatched
+    // episodes, derived from the SAME snapshot — no second read. null when every
+    // episode is watched (or the subcollection is empty).
+    let nextUnwatchedAirDate: string | null = null;
     for (const docSnap of snap.docs) {
       const ep = dataToEpisode(docSnap.data() as EpisodeReadData);
       total += 1;
       if (ep.watched) {
         watchedCount += 1;
+      } else if (
+        nextUnwatchedAirDate === null ||
+        ep.airDate < nextUnwatchedAirDate
+      ) {
+        nextUnwatchedAirDate = ep.airDate;
       }
     }
+
+    // spec 0081: keep the denormalized earliest-unwatched air date correct after
+    // the user's own mark-watched action. This MUST run BEFORE the early-
+    // returning status-transition branches below — the `completed → watching`
+    // revert and the `→ completed` branch both `return`, so a write appended at
+    // the END of the method would be skipped on exactly the "unwatch a completed
+    // show" case, leaving a stale value. (Sits AFTER the null/dropped early-
+    // return above: a dropped show is not recomputed client-side — accepted gap.)
+    await updateDoc(
+      doc(this.firestore, watchlistItemPath(uid, String(tmdbId))),
+      { nextUnwatchedEpisodeAirDate: nextUnwatchedAirDate },
+    );
 
     // NEW (spec 0074, D2/D3) — evaluate FIRST, before Step 1/2/3.
     // A Completed show that is no longer all-watched reverts to 'watching'

@@ -65,7 +65,7 @@ Poster thumbnails are omitted from mock data (placeholder shown). Firebase still
 ## Data access
 
 - **Reads:** `users/{uid}/watchlist` (collection snapshot) — to compute the already-added set.
-- **Writes:** `users/{uid}/watchlist/{titleId}` (set doc) — `status: 'planned'`, `traktId: null`, `titleId = String(tmdbId)`, plus `posterPath`, `voteAverage`, and `releaseDate` (raw TMDB `release_date`/`first_air_date`, or `null`).
+- **Writes:** `users/{uid}/watchlist/{titleId}` (set doc) — `status: 'planned'`, `traktId: null`, `titleId = String(tmdbId)`, plus `posterPath`, `voteAverage`, and `releaseDate` (raw TMDB `release_date`/`first_air_date`, or `null`). The new item literal also initializes `nextUnwatchedEpisodeAirDate: null` (spec 0081) — belt-and-suspenders (the converter coalesces `?? null` regardless); the Cloud Functions on-add trigger populates the real value shortly after for TV shows.
 - Uses `watchlistPath`, `watchlistItemPath`, `watchlistItemToData` from `@vultus/shared/firestore-schema`.
 - Does **not** touch `episodes`, `title-cache`, or the `users/{uid}` root doc.
 

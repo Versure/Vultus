@@ -176,6 +176,41 @@ no-op (no sync, no toast) — the refresher spinner is always dismissed via
   design is derived from the in-repo design system (`docs/design/vultus-design-system.md`)
   and is **flagged for human visual verification**.
 
+## Next-unwatched-episode air date recompute (spec 0081)
+
+The watchlist doc carries a denormalized
+`WatchlistItem.nextUnwatchedEpisodeAirDate` — the air date (ISO 8601 string, or
+`null`) of the **earliest currently-unwatched** episode of a TV show, consumed by
+the follow-up "Watch Today" feature. It is written server-side on sync (Cloud
+Functions, `slice:sync-episodes`) but must also be kept correct whenever the
+user's own mark-watched actions change what is unwatched. This slice owns those
+client-side recomputes:
+
+- **`autoUpdateStatus`** (reached from `setEpisodeWatched` / `setSeasonWatched`,
+  both directions): from the **same** one-shot episodes snapshot it already reads
+  to derive `total`/`watchedCount` (no extra read), it computes the min air date
+  (ISO **lexical** comparison) over the still-`watched: false` episodes — or `null`
+  when every episode is watched / the subcollection is empty — and `updateDoc`s it
+  onto the watchlist doc. This write happens **before** the early-returning
+  status-transition branches (the spec-0074 `completed → watching` revert and the
+  `→ completed` advance both `return`), so "unwatch a completed show" still
+  recomputes the field rather than leaving a stale value. It sits **after** the
+  existing `null`/`dropped` early-return: a `dropped` show is deliberately **not**
+  recomputed client-side (accepted gap — a dropped show is not "watchable today"
+  and self-heals on the next daily sync).
+- **`updateStatus(..., 'completed', 'tv')`** (the direct action-sheet path, which
+  does not route through `autoUpdateStatus`): the status write is merged to
+  `{ status: 'completed', nextUnwatchedEpisodeAirDate: null }` — completing a show
+  batch-marks every episode watched, so nothing is unwatched.
+- **`add`** initializes `nextUnwatchedEpisodeAirDate: null` in the new
+  `WatchlistItem` literal (correct for a `'planned'` add — the on-add trigger sets
+  the real value once episodes sync — and for a `'completed'` TV add, which
+  batch-marks everything watched).
+
+**Movies never get this field set** — `setMovieWatched` and the movie branch of
+`updateStatus`/`add` read no episodes and write no non-null value; it stays `null`
+for `type === 'movie'`.
+
 ## Untracked "Mark as Watched" one-step add (spec 0056)
 
 When a title is **not yet tracked** (`vm.tracked === null` — the state on arriving
@@ -311,7 +346,8 @@ retry trigger (`onRetry()`).
 'planned'`, or `'completed'` for the spec-0056 "Mark as Watched" add, with
   denormalized `posterPath` + `voteAverage`), `updateStatus`, `removeTitle`,
   `toggleWatchingViaPlex` (spec 0061 — single-field `{ watchingViaPlex }`), plus
-  the auto-status re-derivation after an episode/season write.
+  the auto-status re-derivation after an episode/season write and the spec-0081
+  `nextUnwatchedEpisodeAirDate` recompute (see below).
 - **Writes** `users/{uid}/watchlist/{titleId}/episodes/{episodeId}`: only the
   `{ watched, watchedAt }` fields, via **`updateDoc` / `writeBatch` (never
   `setDoc`)** — episode docs are created by the sync engine and must pre-exist.

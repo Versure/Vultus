@@ -64,3 +64,27 @@ export interface WatchlistStatusStore {
   getStatus(uid: string, titleId: string): Promise<WatchStatus | null>;
   setStatus(uid: string, titleId: string, status: WatchStatus): Promise<void>;
 }
+
+/** Reads episode watch-state and writes the parent watchlist doc's
+ *  `nextUnwatchedEpisodeAirDate` for a (uid, titleId). Used by `syncOne` after
+ *  inserting new episodes to keep the denormalized "earliest unwatched air date"
+ *  correct on BOTH the on-add trigger (entry A) and the daily pass (entry B)
+ *  (spec 0081). Admin-SDK-backed in apps/functions; faked in tests. Firebase-free
+ *  interface. */
+export interface WatchlistNextWatchableStore {
+  /** Reads (airDate, watched) for every episode under
+   *  users/{uid}/watchlist/{titleId}/episodes. Called AFTER writeEpisodes so it
+   *  sees pre-existing docs' real watched state PLUS the just-inserted docs.
+   *  `airDate` is an ISO 8601 string. */
+  readEpisodeWatchState(
+    uid: string,
+    titleId: string,
+  ): Promise<{ airDate: string; watched: boolean }[]>;
+  /** Writes nextUnwatchedEpisodeAirDate (plain ISO string, or null) onto
+   *  users/{uid}/watchlist/{titleId}. */
+  setNextUnwatchedEpisodeAirDate(
+    uid: string,
+    titleId: string,
+    airDate: string | null,
+  ): Promise<void>;
+}

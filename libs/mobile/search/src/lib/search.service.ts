@@ -137,6 +137,10 @@ export class SearchService {
       posterPath: result.posterPath ?? null,
       voteAverage: result.voteAverage ?? null,
       releaseDate: result.releaseDate ?? null,
+      // Belt-and-suspenders init (spec 0081): the converter coalesces `?? null`
+      // anyway, and the Cloud Functions on-add trigger populates the real value
+      // shortly after for TV shows.
+      nextUnwatchedEpisodeAirDate: null,
       watchingViaPlex: false,
     };
 

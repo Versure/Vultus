@@ -113,16 +113,29 @@ interface EpFixture {
   episode: number;
   title: string | null;
   watched: boolean;
+  // ISO date; defaults to a fixed fixture date. Overridden per-episode by the
+  // spec-0081 min-airDate tests, which need distinct air dates.
+  airDate?: string;
 }
 function epReadData(e: EpFixture) {
   return {
     season: e.season,
     episode: e.episode,
     title: e.title,
-    airDate: fakeTs(new Date('2008-01-20T00:00:00Z')),
+    airDate: fakeTs(new Date(e.airDate ?? '2008-01-20T00:00:00Z')),
     watched: e.watched,
     watchedAt: e.watched ? fakeTs(new Date('2026-06-24T10:00:00Z')) : null,
   };
+}
+/** The ISO string a given fixture airDate round-trips to via dataToEpisode. */
+function iso(airDate: string): string {
+  return new Date(airDate).toISOString();
+}
+/** spec 0081: updateDoc calls carrying the denormalized next-unwatched field. */
+function fieldWrites() {
+  return updateDocMock.mock.calls.filter(
+    (c) => 'nextUnwatchedEpisodeAirDate' in (c[1] as Record<string, unknown>),
+  );
 }
 /** A getDocs() snapshot: { docs: [{ id, ref, data() }] }. */
 function docsSnap(eps: EpFixture[]) {
@@ -935,7 +948,9 @@ describe('TitleDetailService', () => {
     const service = createService(UID);
     await service.setEpisodeWatched(2, 's01e01', true);
     const statusCall = updateDocMock.mock.calls.find(
-      (c) => c[0].path === watchlistItemPath(UID, '2'),
+      (c) =>
+        c[0].path === watchlistItemPath(UID, '2') &&
+        'status' in (c[1] as Record<string, unknown>),
     );
     expect(statusCall?.[1]).toEqual({ status: 'watching' });
   });
@@ -951,9 +966,15 @@ describe('TitleDetailService', () => {
     const service = createService(UID);
     await service.setEpisodeWatched(2, 's01e02', true);
     const statusCall = updateDocMock.mock.calls.find(
-      (c) => c[0].path === watchlistItemPath(UID, '2'),
+      (c) =>
+        c[0].path === watchlistItemPath(UID, '2') &&
+        'status' in (c[1] as Record<string, unknown>),
     );
-    expect(statusCall?.[1]).toEqual({ status: 'completed' });
+    // spec 0081: the advance-to-completed write also clears the field.
+    expect(statusCall?.[1]).toEqual({
+      status: 'completed',
+      nextUnwatchedEpisodeAirDate: null,
+    });
   });
 
   it('auto-status: back to 0 watched after a slice auto-set watching → updateStatus planned', async () => {
@@ -979,7 +1000,9 @@ describe('TitleDetailService', () => {
     );
     await service.setEpisodeWatched(2, 's01e01', false);
     const statusCall = updateDocMock.mock.calls.find(
-      (c) => c[0].path === watchlistItemPath(UID, '2'),
+      (c) =>
+        c[0].path === watchlistItemPath(UID, '2') &&
+        'status' in (c[1] as Record<string, unknown>),
     );
     expect(statusCall?.[1]).toEqual({ status: 'planned' });
   });
@@ -995,7 +1018,9 @@ describe('TitleDetailService', () => {
     const service = createService(UID);
     await service.setEpisodeWatched(2, 's01e02', true);
     const statusCall = updateDocMock.mock.calls.find(
-      (c) => c[0].path === watchlistItemPath(UID, '2'),
+      (c) =>
+        c[0].path === watchlistItemPath(UID, '2') &&
+        'status' in (c[1] as Record<string, unknown>),
     );
     expect(statusCall).toBeUndefined();
   });
@@ -1046,12 +1071,18 @@ describe('TitleDetailService', () => {
     const service = createService(UID);
     await service.setEpisodeWatched(2, 's01e01', true);
     const statusCalls = updateDocMock.mock.calls.filter(
-      (c) => c[0].path === watchlistItemPath(UID, '2'),
+      (c) =>
+        c[0].path === watchlistItemPath(UID, '2') &&
+        'status' in (c[1] as Record<string, unknown>),
     );
     // Both writes happen in a single autoUpdateStatus pass: watching, then completed.
     expect(statusCalls.length).toBe(2);
     expect(statusCalls[0][1]).toEqual({ status: 'watching' });
-    expect(statusCalls[1][1]).toEqual({ status: 'completed' });
+    // spec 0081: the completed write also clears the denormalized field.
+    expect(statusCalls[1][1]).toEqual({
+      status: 'completed',
+      nextUnwatchedEpisodeAirDate: null,
+    });
   });
 
   it('auto-status: planned + only one of multiple episodes marked → watching (NOT completed)', async () => {
@@ -1065,7 +1096,9 @@ describe('TitleDetailService', () => {
     const service = createService(UID);
     await service.setEpisodeWatched(2, 's01e01', true);
     const statusCalls = updateDocMock.mock.calls.filter(
-      (c) => c[0].path === watchlistItemPath(UID, '2'),
+      (c) =>
+        c[0].path === watchlistItemPath(UID, '2') &&
+        'status' in (c[1] as Record<string, unknown>),
     );
     // Only watching, not completed.
     expect(statusCalls.length).toBe(1);
@@ -1083,7 +1116,9 @@ describe('TitleDetailService', () => {
     const service = createService(UID);
     await service.setEpisodeWatched(2, 's01e01', true);
     const statusCalls = updateDocMock.mock.calls.filter(
-      (c) => c[0].path === watchlistItemPath(UID, '2'),
+      (c) =>
+        c[0].path === watchlistItemPath(UID, '2') &&
+        'status' in (c[1] as Record<string, unknown>),
     );
     expect(statusCalls.length).toBe(0);
   });
@@ -1094,7 +1129,9 @@ describe('TitleDetailService', () => {
     const service = createService(UID);
     await service.setEpisodeWatched(2, 's01e01', true);
     const statusCalls = updateDocMock.mock.calls.filter(
-      (c) => c[0].path === watchlistItemPath(UID, '2'),
+      (c) =>
+        c[0].path === watchlistItemPath(UID, '2') &&
+        'status' in (c[1] as Record<string, unknown>),
     );
     expect(statusCalls.length).toBe(0);
   });
@@ -1130,10 +1167,10 @@ describe('TitleDetailService', () => {
       }
       expect(batchCommitMock).toHaveBeenCalledTimes(1);
 
-      // Status write still happens.
+      // Status write still happens (spec 0081: TV-completed also clears the field).
       expect(updateDocMock).toHaveBeenCalledWith(
         { path: watchlistItemPath(UID, '2') },
-        { status: 'completed' },
+        { status: 'completed', nextUnwatchedEpisodeAirDate: null },
       );
     });
 
@@ -1150,7 +1187,7 @@ describe('TitleDetailService', () => {
       expect(batchCommitMock).not.toHaveBeenCalled();
       expect(updateDocMock).toHaveBeenCalledWith(
         { path: watchlistItemPath(UID, '2') },
-        { status: 'completed' },
+        { status: 'completed', nextUnwatchedEpisodeAirDate: null },
       );
     });
 
@@ -1162,7 +1199,7 @@ describe('TitleDetailService', () => {
       expect(batchCommitMock).not.toHaveBeenCalled();
       expect(updateDocMock).toHaveBeenCalledWith(
         { path: watchlistItemPath(UID, '2') },
-        { status: 'completed' },
+        { status: 'completed', nextUnwatchedEpisodeAirDate: null },
       );
     });
 
@@ -1231,10 +1268,16 @@ describe('TitleDetailService', () => {
 
       // Status advanced to completed exactly once.
       const statusCalls = updateDocMock.mock.calls.filter(
-        (c) => c[0].path === watchlistItemPath(UID, '2'),
+        (c) =>
+          c[0].path === watchlistItemPath(UID, '2') &&
+          'status' in (c[1] as Record<string, unknown>),
       );
       expect(statusCalls.length).toBe(1);
-      expect(statusCalls[0][1]).toEqual({ status: 'completed' });
+      // spec 0081: the completed write also clears the denormalized field.
+      expect(statusCalls[0][1]).toEqual({
+        status: 'completed',
+        nextUnwatchedEpisodeAirDate: null,
+      });
 
       // The completed path's helper found zero unwatched → no batch write/commit.
       // (Proof there is no double-batch-write and no recursion/loop.) The helper
@@ -1260,7 +1303,9 @@ describe('TitleDetailService', () => {
       const service = createService(UID);
       await service.setEpisodeWatched(2, 's01e02', false);
       const statusCalls = updateDocMock.mock.calls.filter(
-        (c) => c[0].path === watchlistItemPath(UID, '2'),
+        (c) =>
+          c[0].path === watchlistItemPath(UID, '2') &&
+          'status' in (c[1] as Record<string, unknown>),
       );
       expect(statusCalls.length).toBe(1);
       expect(statusCalls[0][1]).toEqual({ status: 'watching' });
@@ -1277,7 +1322,9 @@ describe('TitleDetailService', () => {
       const service = createService(UID);
       await service.setEpisodeWatched(2, 's01e01', false);
       const statusCalls = updateDocMock.mock.calls.filter(
-        (c) => c[0].path === watchlistItemPath(UID, '2'),
+        (c) =>
+          c[0].path === watchlistItemPath(UID, '2') &&
+          'status' in (c[1] as Record<string, unknown>),
       );
       expect(statusCalls.length).toBe(1);
       expect(statusCalls[0][1]).toEqual({ status: 'watching' });
@@ -1309,7 +1356,9 @@ describe('TitleDetailService', () => {
       );
       await service.setEpisodeWatched(2, 's01e01', false);
       const statusCalls = updateDocMock.mock.calls.filter(
-        (c) => c[0].path === watchlistItemPath(UID, '2'),
+        (c) =>
+          c[0].path === watchlistItemPath(UID, '2') &&
+          'status' in (c[1] as Record<string, unknown>),
       );
       // The new completed→watching branch fires FIRST and short-circuits the
       // Step 3 zero-watched → planned branch, even with memory still true.
@@ -1323,7 +1372,9 @@ describe('TitleDetailService', () => {
       const service = createService(UID);
       await service.setEpisodeWatched(2, 's01e01', false);
       const statusCalls = updateDocMock.mock.calls.filter(
-        (c) => c[0].path === watchlistItemPath(UID, '2'),
+        (c) =>
+          c[0].path === watchlistItemPath(UID, '2') &&
+          'status' in (c[1] as Record<string, unknown>),
       );
       expect(statusCalls.length).toBe(0);
     });
@@ -1350,7 +1401,9 @@ describe('TitleDetailService', () => {
       const service = createService(UID);
       await service.setSeasonWatched(2, 1, false);
       const statusCalls = updateDocMock.mock.calls.filter(
-        (c) => c[0].path === watchlistItemPath(UID, '2'),
+        (c) =>
+          c[0].path === watchlistItemPath(UID, '2') &&
+          'status' in (c[1] as Record<string, unknown>),
       );
       expect(statusCalls.length).toBe(1);
       expect(statusCalls[0][1]).toEqual({ status: 'watching' });
@@ -1367,7 +1420,9 @@ describe('TitleDetailService', () => {
       const service = createService(UID);
       await service.setEpisodeWatched(2, 's01e01', true);
       const statusCalls = updateDocMock.mock.calls.filter(
-        (c) => c[0].path === watchlistItemPath(UID, '2'),
+        (c) =>
+          c[0].path === watchlistItemPath(UID, '2') &&
+          'status' in (c[1] as Record<string, unknown>),
       );
       // Already completed + still all-watched → no status write (existing 0050 case).
       expect(statusCalls.length).toBe(0);
@@ -1466,6 +1521,233 @@ describe('TitleDetailService', () => {
         expect(ref.path).not.toContain('episodes');
         expect(ref.path).not.toContain('title-cache');
       }
+    });
+  });
+
+  // --- spec 0081: denormalized nextUnwatchedEpisodeAirDate recompute ---
+
+  describe('nextUnwatchedEpisodeAirDate recompute (spec 0081)', () => {
+    it('marking the LAST unwatched episode watched → a watchlist write clears the field to null', async () => {
+      // Post-uncheck-mark snapshot autoUpdateStatus reads: every episode watched.
+      getDocsMock.mockResolvedValue(
+        docsSnap([
+          { id: 's01e01', season: 1, episode: 1, title: 'a', watched: true },
+          { id: 's01e02', season: 1, episode: 2, title: 'b', watched: true },
+        ]),
+      );
+      getDocMock.mockResolvedValue(watchlistSnap('watching'));
+      const service = createService(UID);
+      await service.setEpisodeWatched(2, 's01e02', true);
+
+      // The recompute writes null (nothing unwatched) to the watchlist doc.
+      expect(updateDocMock).toHaveBeenCalledWith(
+        { path: watchlistItemPath(UID, '2') },
+        { nextUnwatchedEpisodeAirDate: null },
+      );
+      // Every field write in this pass is null (advance-to-completed also null).
+      for (const c of fieldWrites()) {
+        expect(
+          (c[1] as Record<string, unknown>)['nextUnwatchedEpisodeAirDate'],
+        ).toBeNull();
+      }
+    });
+
+    it('unchecking a watched episode on an otherwise fully-watched show → field becomes that episode air date', async () => {
+      // After the uncheck, only s01e02 (airDate 2021-05-05) is unwatched.
+      getDocsMock.mockResolvedValue(
+        docsSnap([
+          { id: 's01e01', season: 1, episode: 1, title: 'a', watched: true },
+          {
+            id: 's01e02',
+            season: 1,
+            episode: 2,
+            title: 'b',
+            watched: false,
+            airDate: '2021-05-05T00:00:00Z',
+          },
+        ]),
+      );
+      getDocMock.mockResolvedValue(watchlistSnap('completed'));
+      const service = createService(UID);
+      await service.setEpisodeWatched(2, 's01e02', false);
+
+      // The single now-unwatched episode's air date is the min → written.
+      expect(updateDocMock).toHaveBeenCalledWith(
+        { path: watchlistItemPath(UID, '2') },
+        { nextUnwatchedEpisodeAirDate: iso('2021-05-05T00:00:00Z') },
+      );
+    });
+
+    it('marking one of several unwatched episodes → field is the MIN air date of the REMAINING unwatched (not the one just marked)', async () => {
+      // s01e02 (2019 — the earliest) is the one just marked watched; the
+      // remaining unwatched are s01e01 (2020) and s01e03 (2021) → min is 2020.
+      getDocsMock.mockResolvedValue(
+        docsSnap([
+          {
+            id: 's01e01',
+            season: 1,
+            episode: 1,
+            title: 'a',
+            watched: false,
+            airDate: '2020-01-01T00:00:00Z',
+          },
+          {
+            id: 's01e02',
+            season: 1,
+            episode: 2,
+            title: 'b',
+            watched: true,
+            airDate: '2019-01-01T00:00:00Z',
+          },
+          {
+            id: 's01e03',
+            season: 1,
+            episode: 3,
+            title: 'c',
+            watched: false,
+            airDate: '2021-01-01T00:00:00Z',
+          },
+        ]),
+      );
+      getDocMock.mockResolvedValue(watchlistSnap('watching'));
+      const service = createService(UID);
+      await service.setEpisodeWatched(2, 's01e02', true);
+
+      const fw = fieldWrites();
+      expect(fw.length).toBe(1);
+      const value = (fw[0][1] as Record<string, unknown>)[
+        'nextUnwatchedEpisodeAirDate'
+      ];
+      expect(value).toBe(iso('2020-01-01T00:00:00Z'));
+      // NOT the earliest overall (that episode is now watched).
+      expect(value).not.toBe(iso('2019-01-01T00:00:00Z'));
+    });
+
+    it('setSeasonWatched(true) drives the recompute → clears the field to null when everything is watched', async () => {
+      getDocsMock
+        // 1) setSeasonWatched reads the season's docs for the batch
+        .mockResolvedValueOnce(
+          docsSnap([
+            { id: 's01e01', season: 1, episode: 1, title: 'a', watched: false },
+            { id: 's01e02', season: 1, episode: 2, title: 'b', watched: false },
+          ]),
+        )
+        // 2) autoUpdateStatus reads ALL episodes (now all watched)
+        .mockResolvedValueOnce(
+          docsSnap([
+            { id: 's01e01', season: 1, episode: 1, title: 'a', watched: true },
+            { id: 's01e02', season: 1, episode: 2, title: 'b', watched: true },
+          ]),
+        )
+        // 3) the completed-path helper re-reads (all watched, nothing to batch)
+        .mockResolvedValueOnce(
+          docsSnap([
+            { id: 's01e01', season: 1, episode: 1, title: 'a', watched: true },
+            { id: 's01e02', season: 1, episode: 2, title: 'b', watched: true },
+          ]),
+        );
+      getDocMock.mockResolvedValue(watchlistSnap('watching'));
+      const service = createService(UID);
+      await service.setSeasonWatched(2, 1, true);
+      expect(updateDocMock).toHaveBeenCalledWith(
+        { path: watchlistItemPath(UID, '2') },
+        { nextUnwatchedEpisodeAirDate: null },
+      );
+    });
+
+    it('setSeasonWatched(false) drives the recompute → field becomes the min unwatched air date', async () => {
+      getDocsMock
+        // 1) setSeasonWatched reads season 1's docs for the batch
+        .mockResolvedValueOnce(
+          docsSnap([
+            { id: 's01e01', season: 1, episode: 1, title: 'a', watched: true },
+            { id: 's01e02', season: 1, episode: 2, title: 'b', watched: true },
+          ]),
+        )
+        // 2) autoUpdateStatus reads ALL episodes (season 1 now unwatched,
+        //    season 2 still watched) → min unwatched is s01e01 (2020).
+        .mockResolvedValueOnce(
+          docsSnap([
+            {
+              id: 's01e01',
+              season: 1,
+              episode: 1,
+              title: 'a',
+              watched: false,
+              airDate: '2020-01-01T00:00:00Z',
+            },
+            {
+              id: 's01e02',
+              season: 1,
+              episode: 2,
+              title: 'b',
+              watched: false,
+              airDate: '2020-02-02T00:00:00Z',
+            },
+            {
+              id: 's02e01',
+              season: 2,
+              episode: 1,
+              title: 'c',
+              watched: true,
+              airDate: '2021-01-01T00:00:00Z',
+            },
+          ]),
+        );
+      getDocMock.mockResolvedValue(watchlistSnap('completed'));
+      const service = createService(UID);
+      await service.setSeasonWatched(2, 1, false);
+      expect(updateDocMock).toHaveBeenCalledWith(
+        { path: watchlistItemPath(UID, '2') },
+        { nextUnwatchedEpisodeAirDate: iso('2020-01-01T00:00:00Z') },
+      );
+    });
+
+    it('updateStatus(tmdbId, "completed", "tv") direct → status write also clears the field to null', async () => {
+      getDocsMock.mockResolvedValue(
+        docsSnap([
+          { id: 's01e01', season: 1, episode: 1, title: 'a', watched: false },
+        ]),
+      );
+      const service = createService(UID);
+      await service.updateStatus(2, 'completed', 'tv');
+      expect(updateDocMock).toHaveBeenCalledWith(
+        { path: watchlistItemPath(UID, '2') },
+        { status: 'completed', nextUnwatchedEpisodeAirDate: null },
+      );
+    });
+
+    it('dropped show → NO recompute write (accepted client-side gap)', async () => {
+      getDocsMock.mockResolvedValue(
+        docsSnap([
+          { id: 's01e01', season: 1, episode: 1, title: 'a', watched: false },
+        ]),
+      );
+      getDocMock.mockResolvedValue(watchlistSnap('dropped'));
+      const service = createService(UID);
+      await service.setEpisodeWatched(2, 's01e01', true);
+      // Early-returns before the recompute; no field write.
+      expect(fieldWrites()).toHaveLength(0);
+    });
+
+    it('movie setMovieWatched → NO episode read, NO field write (stays null for movies)', async () => {
+      getDocMock.mockResolvedValue(watchlistSnap('watching'));
+      const service = createService(UID);
+      await service.setMovieWatched(2, true);
+      expect(getDocsMock).not.toHaveBeenCalled();
+      expect(fieldWrites()).toHaveLength(0);
+    });
+
+    it('movie updateStatus(..., "movie") → NO episode read, NO field write', async () => {
+      const service = createService(UID);
+      await service.updateStatus(27205, 'completed', 'movie');
+      expect(getDocsMock).not.toHaveBeenCalled();
+      expect(fieldWrites()).toHaveLength(0);
+      // Movie status write is bare status (no field key).
+      expect(updateDocMock).toHaveBeenCalledWith(
+        { path: watchlistItemPath(UID, '27205') },
+        { status: 'completed' },
+      );
     });
   });
 });
