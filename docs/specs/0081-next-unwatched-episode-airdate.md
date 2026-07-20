@@ -701,7 +701,7 @@ Tailored from PLAN §5. Every checkbox maps to a task above.
 - [ ] **Guardrail verifications (review-checked):** (a) the field is
       stored/written as a **plain ISO string, NOT a Timestamp** (like `releaseDate`);
       (b) the engine recompute fires **only** when `toWrite.length > 0 &&
-  nextWatchable`; (c) the new port is wired into **BOTH** entry A and entry B
+nextWatchable`; (c) the new port is wired into **BOTH** entry A and entry B
       (the deviation from 0074); (d) the min uses ISO **lexical** comparison; (e)
       movies never get a non-null value / no episode read; (f) insert-only episode
       invariant preserved (spec 0047 — no episode-doc overwrite); (g) **no secret

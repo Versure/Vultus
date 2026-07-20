@@ -484,21 +484,18 @@ pairwise-disjoint manifests** (`apps/mobile/**`, `libs/mobile/onboarding/**`,
   4. `app.spec.ts` (line ~155): `expect(last?.redirectTo).toBe('watchlist')` →
      `'today'`.
   5. `tabs.page.spec.ts` — **THREE breaking assertions** (verified against the real
-     file), all of which must flip, plus two stale test titles:
-     - **Line 21** (test `'renders an ion-tabs with three tab buttons'`, line 14):
-       `expect(buttons.length).toBe(3)` → `.toBe(4)`. Also update the now-stale test
-       title, e.g. `'renders an ion-tabs with four tab buttons'`.
-     - **Line 32** (test `'targets the watchlist / search / settings routes in order'`,
-       line 24): `expect(tabs).toEqual(['watchlist','search','settings'])` →
-       `['today','watchlist','search','settings']`. (Its title is also stale — update
-       to include `today`, e.g. `'targets the today / watchlist / search / settings
-routes in order'`.)
-     - **Line 43** (test `'labels the tabs Watchlist / Search / Settings'`, line 35):
-       `expect(labels).toEqual(['Watchlist', 'Search', 'Settings'])` must **prepend**
-       `'Today'` → `['Today', 'Watchlist', 'Search', 'Settings']`. Also update the
-       stale test title, e.g. `'labels the tabs Today / Watchlist / Search / Settings'`.
-       Leaving any of the three assertions on the old count/order/labels fails
-       `mobile`'s unit suite.
+     file), all of which must flip, plus two stale test titles: - **Line 21** (test `'renders an ion-tabs with three tab buttons'`, line 14):
+     `expect(buttons.length).toBe(3)` → `.toBe(4)`. Also update the now-stale test
+     title, e.g. `'renders an ion-tabs with four tab buttons'`. - **Line 32** (test `'targets the watchlist / search / settings routes in order'`,
+     line 24): `expect(tabs).toEqual(['watchlist','search','settings'])` →
+     `['today','watchlist','search','settings']`. (Its title is also stale — update
+     to include `today`, e.g. `'targets the today / watchlist / search / settings
+routes in order'`.) - **Line 43** (test `'labels the tabs Watchlist / Search / Settings'`, line 35):
+     `expect(labels).toEqual(['Watchlist', 'Search', 'Settings'])` must **prepend**
+     `'Today'` → `['Today', 'Watchlist', 'Search', 'Settings']`. Also update the
+     stale test title, e.g. `'labels the tabs Today / Watchlist / Search / Settings'`.
+     Leaving any of the three assertions on the old count/order/labels fails
+     `mobile`'s unit suite.
   6. (Optional) `apps/mobile/src/app/splash/splash.component.spec.ts:27` — the
      `new NavigationEnd(1, '/', '/tabs/watchlist')` payload is an **arbitrary
      sample URL, not a functional dependency** on the default route (verified); it
