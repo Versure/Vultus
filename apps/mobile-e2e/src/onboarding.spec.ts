@@ -40,6 +40,28 @@ import { clearAll, resolveAnonUid, readDocument } from './support';
 
 const STORAGE_KEY = 'CapacitorStorage.onboarding_done';
 
+/**
+ * Region code → display name (endonym), a SMALL LOCAL mirror of
+ * `REGION_DISPLAY_NAMES` in `@vultus/shared/domain` (spec 0079). Intentionally
+ * NOT imported from the shared barrel: keeping it local avoids taking on
+ * Playwright/tsconfig path-alias resolution for `mobile-e2e`, and a stale local
+ * entry fails LOUDLY here — `pickRegion` never finds the popover row and the
+ * test errors clearly — rather than silently matching the wrong text. Mirrors
+ * the same local-mirror convention already established in `settings.spec.ts`.
+ */
+const REGION_DISPLAY_NAMES: Record<string, string> = {
+  NL: 'Nederland',
+  DE: 'Deutschland',
+  GB: 'United Kingdom',
+  US: 'United States',
+  FR: 'France',
+  BE: 'België',
+  ES: 'España',
+  IT: 'Italia',
+  CA: 'Canada',
+  AU: 'Australia',
+};
+
 /** Minimal Firestore REST typed-value shape for the fields we read. */
 interface FsValue {
   stringValue?: string;
@@ -65,13 +87,18 @@ async function expectStep(page: Page, step: number): Promise<void> {
 /**
  * Step 1: open the region `ion-select` popover and pick the given region, then
  * wait for the popover to dismiss (interface="popover" closes on selection).
- * Mirrors the spec-0022 region-select interaction.
+ *
+ * Call sites pass the raw ISO CODE (e.g. `'DE'`); the popover option's VISIBLE
+ * TEXT is the endonym display name (spec 0079 renders `regionDisplayName(region)`
+ * as the label while `[value]` stays the raw code), so we filter by the mapped
+ * display name — the raw code no longer matches the option text.
  */
 async function pickRegion(page: Page, region: string): Promise<void> {
   await page.locator('ion-select').click();
+  const displayName = REGION_DISPLAY_NAMES[region];
   const option = page
     .locator('ion-popover ion-radio, ion-popover ion-item')
-    .filter({ hasText: new RegExp(`^\\s*${region}\\s*$`) })
+    .filter({ hasText: new RegExp(`^\\s*${displayName}\\s*$`) })
     .first();
   await expect(option).toBeVisible();
   await option.click();
@@ -136,7 +163,9 @@ test('F-onboard-2: walk all 5 steps (region DE, empty providers, notifications o
   const uid = await resolveAnonUid(page);
   expect(uid).toBeTruthy();
 
-  // --- Step 1: pick region DE, Continue (creates users/{uid} with defaults). --
+  // --- Step 1: pick region DE, Continue (creates users/{uid} with defaults).
+  //     `pickRegion` clicks the option by its endonym label ('Deutschland'),
+  //     while the underlying [value] stays the raw ISO code 'DE' (spec 0079). --
   await expectStep(page, 1);
   await pickRegion(page, 'DE');
   await page.locator('.wizard-cta').click();
@@ -239,8 +268,17 @@ test('F-onboard-4: back navigation from step 2 returns to step 1 with the picked
   await page.locator('.wizard-back').click();
 
   // Back on step 1 with DE still selected (persisted-state check, decision 3).
+  // Assert on the label-independent `value` property (the stable source of
+  // truth) — the select's VISIBLE TEXT is now the endonym 'Deutschland', not the
+  // raw code 'DE' (spec 0079). The raw ISO code is what persists.
   await expectStep(page, 1);
-  await expect(page.locator('ion-select')).toContainText('DE');
+  await expect
+    .poll(() =>
+      page
+        .locator('ion-select')
+        .evaluate((el) => (el as unknown as { value: string }).value),
+    )
+    .toBe('DE');
 
   // The region was already persisted write-as-you-go before the Back nav.
   const doc = await readDocument(`users/${uid}`);

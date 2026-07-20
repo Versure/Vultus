@@ -16,7 +16,11 @@ import {
   IonSpinner,
   IonToggle,
 } from '@ionic/angular/standalone';
-import type { CatalogProvider, Region } from '@vultus/shared/domain';
+import {
+  regionDisplayName,
+  type CatalogProvider,
+  type Region,
+} from '@vultus/shared/domain';
 import { addIcons } from 'ionicons';
 import { alertCircle, checkmarkCircle, shieldCheckmark } from 'ionicons/icons';
 import { OnboardingPlexLinkService } from './onboarding-plex-link.service';
@@ -79,6 +83,13 @@ export class OnboardingPage {
   /** Step-1 selection (defaults to `NL`); persisted via `setRegion` on Continue.
    *  Held on the component so a Back-nav to step 1 still shows the prior pick. */
   protected readonly selectedRegion = signal<Region>('NL');
+
+  /**
+   * Presentation helper: maps a raw ISO `Region` code to its human-readable
+   * endonym for the option label (spec 0079). The persisted value stays the raw
+   * code via `[value]="region"` — this is display-only.
+   */
+  protected readonly regionDisplayName = regionDisplayName;
 
   /** True while a step's own async write (region create / `complete()`) is in
    *  flight — disables that step's primary CTA so a double-tap can't double-fire. */

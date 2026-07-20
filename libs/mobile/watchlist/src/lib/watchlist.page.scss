@@ -324,6 +324,14 @@ vultus-error-state.fill-state {
   z-index: 60;
   visibility: hidden;
   pointer-events: none;
+  // Clip the closed panel within the sheet's own inset:0 box. The closed
+  // `.filter-sheet-panel` is `translateY(100%)` (~277px below its box); since
+  // spec 0076 made `ion-content::part(scroll)` a flex column, that off-screen
+  // panel otherwise leaks scrollable overflow into `ion-content` (visibility:hidden
+  // does NOT exclude an element from scrollable overflow — only ancestor clipping
+  // does), so the empty page scrolls. `overflow: hidden` stops that leak without
+  // affecting the open panel (translateY(0), within this box). Issue #159 follow-up.
+  overflow: hidden;
 
   &.open {
     visibility: visible;

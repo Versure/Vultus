@@ -3,10 +3,12 @@ import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import {
   AlertController,
+  ToastController,
   provideIonicAngular,
 } from '@ionic/angular/standalone';
 import {
   REGIONS,
+  regionDisplayName,
   type CatalogProvider,
   type Region,
 } from '@vultus/shared/domain';
@@ -231,7 +233,7 @@ describe('SettingsPage', () => {
     expect(card).toBeTruthy();
   });
 
-  it('lists the ten regions as select options', async () => {
+  it('lists the ten regions as select options — display-name labels, raw-code values', async () => {
     const { el } = await setup(true);
     // The region select is the FIRST ion-select; scope to it so the new
     // delivery-time select's options don't inflate the count.
@@ -239,6 +241,15 @@ describe('SettingsPage', () => {
     const options = regionSelect.querySelectorAll('ion-select-option');
     expect(options.length).toBe(10);
     expect(options.length).toBe(REGIONS.length);
+    // spec 0079: the VALUE stays the raw ISO code (what persists), while the
+    // visible LABEL is the human-readable endonym. Source expected text from the
+    // shared helper — never a re-hardcoded literal — so a future rename can't
+    // silently desync the test from source.
+    options.forEach((option, i) => {
+      const region = REGIONS[i];
+      expect((option as HTMLElement & { value: Region }).value).toBe(region);
+      expect(option.textContent?.trim()).toBe(regionDisplayName(region));
+    });
   });
 
   it('changing the select calls setRegion with the chosen region', async () => {
@@ -371,11 +382,59 @@ describe('SettingsPage', () => {
     expect(service.toggleProvider).toHaveBeenCalledWith(337);
   });
 
-  it('renders the footer count "N of M selected · Region: {region}"', async () => {
+  it('renders the footer count "N of M selected · Region: {displayName}"', async () => {
     const { el } = await setup(true);
     const footer = el.querySelector('.provider-footer');
     // #166 (F3): exact rendered string, single .trim() only — no \s+ collapse.
-    expect(footer?.textContent?.trim()).toBe('1 of 3 selected · Region: NL');
+    // spec 0079: the trailing region now renders its display name (endonym),
+    // sourced from the shared helper, not a re-hardcoded literal. The persisted
+    // value stays the raw ISO code (asserted in the options test above).
+    expect(footer?.textContent?.trim()).toBe(
+      `1 of 3 selected · Region: ${regionDisplayName('NL')}`,
+    );
+  });
+
+  it('prune toast: message names the region by its display name (endonym), not the raw code', async () => {
+    // `presentPruneToast` is private; drive it through its public wiring — the
+    // effect that fires when `lastPrunedCount > 0` (settings.page.ts) — and
+    // capture the built message via a mocked ToastController.create. Seed the
+    // count > 0 BEFORE first change detection so the effect's initial run fires.
+    const service = mockService(true); // region seeded 'NL'
+    service.lastPrunedCount.set(2);
+    const toastPresent = vi.fn().mockResolvedValue(undefined);
+    const toastController = {
+      create: vi.fn().mockResolvedValue({ present: toastPresent }),
+    };
+    await TestBed.configureTestingModule({
+      imports: [SettingsPage],
+      providers: [
+        provideIonicAngular(),
+        { provide: SettingsService, useValue: service },
+        { provide: PlexLinkService, useValue: mockPlexLink(false) },
+        { provide: PlexSyncService, useValue: mockPlexSync() },
+        { provide: Router, useValue: { navigate: vi.fn() } },
+        {
+          provide: AlertController,
+          useValue: { create: vi.fn().mockResolvedValue({ present: vi.fn() }) },
+        },
+        // Overrides the ToastController provideIonicAngular() registers.
+        { provide: ToastController, useValue: toastController },
+      ],
+    })
+      .overrideComponent(SettingsPage, { set: { providers: [] } })
+      .compileComponents();
+    const fixture = TestBed.createComponent(SettingsPage);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(toastController.create).toHaveBeenCalledTimes(1);
+    const arg = toastController.create.mock.calls[0][0] as { message: string };
+    // Exact substring from the shared helper — NL → its endonym, not "NL".
+    expect(arg.message).toContain(
+      `aren't available in ${regionDisplayName('NL')}`,
+    );
+    expect(arg.message).not.toContain("aren't available in NL");
+    expect(arg.message).toContain('2 providers');
   });
 
   it('shows a spinner (not chips) while the catalog is loading', async () => {

@@ -58,7 +58,9 @@
           (ionChange)="onRegionChange($event)"
         >
           @for (region of service.regions; track region) {
-          <ion-select-option [value]="region">{{ region }}</ion-select-option>
+          <ion-select-option [value]="region"
+            >{{ regionDisplayName(region) }}</ion-select-option
+          >
           }
         </ion-select>
       </div>

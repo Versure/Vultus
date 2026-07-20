@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { provideIonicAngular } from '@ionic/angular/standalone';
 import {
   REGIONS,
+  regionDisplayName,
   type CatalogProvider,
   type PlexServer,
   type Region,
@@ -214,6 +215,40 @@ describe('OnboardingPage (5-step wizard)', () => {
     fixture.detectChanges();
     expect(progressText(el)).toBe('Step 5 of 5');
     expect(titleText(el)).toBe("You're all set");
+  });
+
+  it('renders each option with the raw code as value and the endonym as label (spec 0079)', async () => {
+    const { el } = await setup();
+    const options = Array.from(
+      el.querySelectorAll('ion-select-option'),
+    ) as (HTMLElement & { value?: string })[];
+    // Every option keeps the raw ISO code as its [value] (what persists), while
+    // its rendered label is the human-readable display name — proving the
+    // value/label divergence. Expected text sourced from the shared helper.
+    for (const option of options) {
+      const value = (option.getAttribute('ng-reflect-value') ??
+        option.value) as Region;
+      expect(REGIONS).toContain(value);
+      expect(option.textContent?.trim()).toBe(regionDisplayName(value));
+    }
+    // Spot-check the issue's example so the divergence is explicit.
+    const nl = options.find(
+      (o) => (o.getAttribute('ng-reflect-value') ?? o.value) === 'NL',
+    );
+    expect(nl?.textContent?.trim()).toBe('Nederland');
+    expect(nl?.textContent?.trim()).not.toBe('NL');
+  });
+
+  it('changing region select updates internal state', async () => {
+    const { el, fixture, service } = await setup();
+    const select = el.querySelector('ion-select');
+    select?.dispatchEvent(
+      new CustomEvent('ionChange', { detail: { value: 'DE' } }),
+    );
+    // Region persists in step 1 (spec 0078); the picked value flows through on
+    // "Continue" via setRegion — complete() no longer takes the region.
+    await continueFromRegion(el, fixture);
+    expect(service.setRegion).toHaveBeenCalledWith('DE');
   });
 
   it('Back from step 2 returns to step 1 with the previously-picked region still selected', async () => {

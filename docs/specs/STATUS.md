@@ -10,10 +10,10 @@
 
 # Spec status ledger
 
-Total specs: 80
+Total specs: 83
 
-- done: 76
-- approved: 3
+- done: 78
+- approved: 4
 - implementing: 1
 
 | # | slug | title | status | slices | scopes |
@@ -96,5 +96,8 @@ Total specs: 80
 | 76 | empty-state-centering | Center the empty/error state and stop the stray scroll on the Watchlist and Search pages | done | slice:watchlist, slice:search | scope:mobile |
 | 77 | consolidate-plex-provider-entry | Exclude the real TMDB "Plex" provider from the Settings catalog so only the manual Plex chip shows | done | — | scope:functions |
 | 78 | onboarding-full-settings | Expand onboarding into a multi-step wizard covering region, provider selection, notification settings, and Plex link | implementing | slice:onboarding | scope:mobile |
-| 79 | fix-region-display-names | Display human-readable region names (endonyms) in Settings instead of raw ISO codes | approved | slice:settings, slice:onboarding | scope:shared, scope:mobile |
+| 79 | fix-region-display-names | Display human-readable region names (endonyms) in Settings instead of raw ISO codes | done | slice:settings, slice:onboarding | scope:shared, scope:mobile |
 | 80 | onboarding-settings-parity-rule | Add a standing Onboarding ↔ User-field parity rule (F4) to the spec-driven workflow | approved | — | — |
+| 81 | next-unwatched-episode-airdate | Track each TV show's next-unwatched-episode air date for watchability checks | approved | slice:sync-episodes, slice:title-detail, slice:watchlist, slice:search | scope:shared, scope:functions, scope:mobile |
+| 82 | fix-watchlist-scroll-overflow | Stop the empty Watchlist page scrolling — clip the off-screen filter sheet | done | slice:watchlist | scope:mobile |
+| 83 | watch-today-tab | Add a Watch Today tab showing everything ready to watch right now | approved | slice:today, slice:onboarding | scope:mobile |
