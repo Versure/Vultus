@@ -10,10 +10,10 @@
 
 # Spec status ledger
 
-Total specs: 83
+Total specs: 84
 
 - done: 81
-- approved: 2
+- approved: 3
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -100,3 +100,4 @@ Total specs: 83
 | 81 | next-unwatched-episode-airdate | Track each TV show's next-unwatched-episode air date for watchability checks | done | slice:sync-episodes, slice:title-detail, slice:watchlist, slice:search | scope:shared, scope:functions, scope:mobile |
 | 82 | fix-watchlist-scroll-overflow | Stop the empty Watchlist page scrolling — clip the off-screen filter sheet | done | slice:watchlist | scope:mobile |
 | 83 | watch-today-tab | Add a Watch Today tab showing everything ready to watch right now | done | slice:today, slice:onboarding | scope:mobile |
+| 86 | fix-plex-sync-posters | Fix Plex sync — fetch and denormalize posterPath/voteAverage on add + backfill | approved | slice:settings | scope:mobile |
