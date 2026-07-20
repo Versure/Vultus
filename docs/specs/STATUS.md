@@ -12,8 +12,8 @@
 
 Total specs: 85
 
-- done: 82
-- approved: 3
+- done: 83
+- approved: 2
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
