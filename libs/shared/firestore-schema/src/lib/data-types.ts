@@ -67,6 +67,7 @@ export interface WatchlistItemReadData {
   posterPath?: string | null;
   voteAverage?: number | null;
   releaseDate?: string | null; // plain ISO date string; NOT a Timestamp
+  nextUnwatchedEpisodeAirDate?: string | null; // plain ISO date string; NOT a Timestamp
   watchingViaPlex?: boolean; // optional on read: legacy docs pre-0061 lack this field
 }
 export interface WatchlistItemWriteData {
@@ -79,6 +80,7 @@ export interface WatchlistItemWriteData {
   posterPath?: string | null;
   voteAverage?: number | null;
   releaseDate?: string | null; // plain ISO date string; NOT a Timestamp
+  nextUnwatchedEpisodeAirDate?: string | null; // plain ISO date string; NOT a Timestamp
   watchingViaPlex: boolean;
 }
 

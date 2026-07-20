@@ -188,6 +188,24 @@ describe('SearchService', () => {
     expect(writeData['releaseDate']).toBe('2021-08-12');
   });
 
+  it('add() initializes nextUnwatchedEpisodeAirDate: null in the write payload (spec 0081)', async () => {
+    const result = {
+      tmdbId: 44,
+      type: 'tv' as const,
+      title: 'New Show',
+      year: 2021,
+      posterUrl: null,
+      posterPath: null,
+      voteAverage: null,
+      releaseDate: null,
+    };
+    await service.add(result);
+    expect(mockSetDoc).toHaveBeenCalled();
+    const writeData = mockSetDoc.mock.calls[0][1] as Record<string, unknown>;
+    expect(writeData['nextUnwatchedEpisodeAirDate']).toBeNull();
+    expect(writeData).toHaveProperty('nextUnwatchedEpisodeAirDate');
+  });
+
   it('add() writes null posterPath, voteAverage and releaseDate when absent', async () => {
     const result = {
       tmdbId: 43,

@@ -102,6 +102,7 @@ export function watchlistItemToData(
     posterPath: item.posterPath ?? null,
     voteAverage: item.voteAverage ?? null,
     releaseDate: item.releaseDate ?? null,
+    nextUnwatchedEpisodeAirDate: item.nextUnwatchedEpisodeAirDate ?? null,
     watchingViaPlex: item.watchingViaPlex ?? false,
   };
 }
@@ -118,6 +119,8 @@ export function dataToWatchlistItem(
     posterPath: data.posterPath ?? null,
     voteAverage: data.voteAverage ?? null,
     releaseDate: data.releaseDate ?? null,
+    // Legacy docs (pre-0081) lack nextUnwatchedEpisodeAirDate; coalesce → null.
+    nextUnwatchedEpisodeAirDate: data.nextUnwatchedEpisodeAirDate ?? null,
     // Legacy docs (pre-0061) lack watchingViaPlex; coalesce missing → false.
     watchingViaPlex: data.watchingViaPlex ?? false,
   };

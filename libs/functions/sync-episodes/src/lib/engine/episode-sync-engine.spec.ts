@@ -4,6 +4,7 @@ import { createEpisodeSyncEngine } from './episode-sync-engine';
 import type {
   EpisodeStore,
   TmdbEpisodeSource,
+  WatchlistNextWatchableStore,
   WatchlistStatusStore,
   WatchlistTvShow,
   WatchlistTvSource,
@@ -78,6 +79,25 @@ function fakeStatusStore(current: WatchStatus | null) {
   const setStatus = vi.fn((): Promise<void> => Promise.resolve());
   const store: WatchlistStatusStore = { getStatus, setStatus };
   return { store, getStatus, setStatus };
+}
+
+/** A next-watchable store seeded with the episode watch-state its post-write
+ *  read returns; records setNextUnwatchedEpisodeAirDate calls. */
+function fakeNextWatchableStore(
+  watchState: { airDate: string; watched: boolean }[] = [],
+) {
+  const readEpisodeWatchState = vi.fn(
+    (): Promise<{ airDate: string; watched: boolean }[]> =>
+      Promise.resolve(watchState),
+  );
+  const setNextUnwatchedEpisodeAirDate = vi.fn(
+    (): Promise<void> => Promise.resolve(),
+  );
+  const store: WatchlistNextWatchableStore = {
+    readEpisodeWatchState,
+    setNextUnwatchedEpisodeAirDate,
+  };
+  return { store, readEpisodeWatchState, setNextUnwatchedEpisodeAirDate };
 }
 
 // --- syncOne -------------------------------------------------------------
@@ -293,6 +313,165 @@ describe('createEpisodeSyncEngine.syncOne — completed → watching revert', ()
 
     // writeEpisodes still receives ONLY the new id; the status revert is a
     // separate watchlist write that does not affect the episode payload.
+    expect(writes[0].docs.map((d) => d.id)).toEqual(['s01e002']);
+    expect(writes[0].docs.map((d) => d.id)).not.toContain('s01e001');
+  });
+});
+
+// --- syncOne: nextUnwatchedEpisodeAirDate recompute (spec 0081) ----------
+
+describe('createEpisodeSyncEngine.syncOne — nextUnwatchedEpisodeAirDate recompute', () => {
+  it('mix of watched/unwatched after inserting ≥1 new episode → writes MIN airDate among watched:false', async () => {
+    const tmdb = fakeTmdb({ count: 1, seasons: { 1: [ep(1, 1), ep(1, 2)] } });
+    const { store } = fakeEpisodeStore(['s01e001']); // s01e002 is new
+    // Post-write read: s01e001 watched, s01e002 unwatched, plus an earlier
+    // unwatched episode — min over unwatched should win.
+    const {
+      store: nextStore,
+      readEpisodeWatchState,
+      setNextUnwatchedEpisodeAirDate,
+    } = fakeNextWatchableStore([
+      { airDate: '2026-01-01T00:00:00.000Z', watched: true },
+      { airDate: '2026-03-05T00:00:00.000Z', watched: false },
+      { airDate: '2026-02-10T00:00:00.000Z', watched: false },
+    ]);
+    const engine = createEpisodeSyncEngine({
+      tmdb,
+      episodes: store,
+      nextWatchable: nextStore,
+    });
+
+    await engine.syncOne('u1', 'title-1', 100);
+
+    expect(readEpisodeWatchState).toHaveBeenCalledWith('u1', 'title-1');
+    expect(setNextUnwatchedEpisodeAirDate).toHaveBeenCalledTimes(1);
+    expect(setNextUnwatchedEpisodeAirDate).toHaveBeenCalledWith(
+      'u1',
+      'title-1',
+      '2026-02-10T00:00:00.000Z',
+    );
+  });
+
+  it('all episodes watched → writes null', async () => {
+    const tmdb = fakeTmdb({ count: 1, seasons: { 1: [ep(1, 1), ep(1, 2)] } });
+    const { store } = fakeEpisodeStore(['s01e001']); // s01e002 is new
+    const { store: nextStore, setNextUnwatchedEpisodeAirDate } =
+      fakeNextWatchableStore([
+        { airDate: '2026-01-01T00:00:00.000Z', watched: true },
+        { airDate: '2026-01-02T00:00:00.000Z', watched: true },
+      ]);
+    const engine = createEpisodeSyncEngine({
+      tmdb,
+      episodes: store,
+      nextWatchable: nextStore,
+    });
+
+    await engine.syncOne('u1', 'title-1', 100);
+
+    expect(setNextUnwatchedEpisodeAirDate).toHaveBeenCalledWith(
+      'u1',
+      'title-1',
+      null,
+    );
+  });
+
+  it('empty episode set → writes null', async () => {
+    const tmdb = fakeTmdb({ count: 1, seasons: { 1: [ep(1, 1)] } });
+    const { store } = fakeEpisodeStore([]); // s01e001 is new
+    const { store: nextStore, setNextUnwatchedEpisodeAirDate } =
+      fakeNextWatchableStore([]);
+    const engine = createEpisodeSyncEngine({
+      tmdb,
+      episodes: store,
+      nextWatchable: nextStore,
+    });
+
+    await engine.syncOne('u1', 'title-1', 100);
+
+    expect(setNextUnwatchedEpisodeAirDate).toHaveBeenCalledWith(
+      'u1',
+      'title-1',
+      null,
+    );
+  });
+
+  it('inserts ZERO new episodes → nextWatchable is NOT called (the gate)', async () => {
+    const tmdb = fakeTmdb({ count: 1, seasons: { 1: [ep(1, 1), ep(1, 2)] } });
+    const { store } = fakeEpisodeStore(['s01e001', 's01e002']); // nothing new
+    const {
+      store: nextStore,
+      readEpisodeWatchState,
+      setNextUnwatchedEpisodeAirDate,
+    } = fakeNextWatchableStore([
+      { airDate: '2026-01-01T00:00:00.000Z', watched: false },
+    ]);
+    const engine = createEpisodeSyncEngine({
+      tmdb,
+      episodes: store,
+      nextWatchable: nextStore,
+    });
+
+    const result = await engine.syncOne('u1', 'title-1', 100);
+
+    expect(result.episodesWritten).toBe(0);
+    expect(readEpisodeWatchState).not.toHaveBeenCalled();
+    expect(setNextUnwatchedEpisodeAirDate).not.toHaveBeenCalled();
+  });
+
+  it('nextWatchable port ABSENT (entry-point shape without it) → no read/write, no throw', async () => {
+    const tmdb = fakeTmdb({ count: 1, seasons: { 1: [ep(1, 1), ep(1, 2)] } });
+    const { store } = fakeEpisodeStore(['s01e001']); // s01e002 is new
+    const engine = createEpisodeSyncEngine({ tmdb, episodes: store });
+
+    const result = await engine.syncOne('u1', 'title-1', 100);
+
+    expect(result.outcome).toBe('synced');
+    expect(result.episodesWritten).toBe(1);
+  });
+
+  it('interop with 0074: a completed show with BOTH ports wired → status revert AND nextUnwatched write both fire', async () => {
+    const tmdb = fakeTmdb({ count: 1, seasons: { 1: [ep(1, 1), ep(1, 2)] } });
+    const { store } = fakeEpisodeStore(['s01e001']); // s01e002 is new
+    const { store: statusStore, setStatus } = fakeStatusStore('completed');
+    const { store: nextStore, setNextUnwatchedEpisodeAirDate } =
+      fakeNextWatchableStore([
+        { airDate: '2026-01-01T00:00:00.000Z', watched: true },
+        { airDate: '2026-01-02T00:00:00.000Z', watched: false },
+      ]);
+    const engine = createEpisodeSyncEngine({
+      tmdb,
+      episodes: store,
+      watchlistStatus: statusStore,
+      nextWatchable: nextStore,
+    });
+
+    const result = await engine.syncOne('u1', 'title-1', 100);
+
+    // 0074 revert fired…
+    expect(setStatus).toHaveBeenCalledWith('u1', 'title-1', 'watching');
+    expect(result.statusRevertedToWatching).toBe(true);
+    // …and the 0081 recompute fired independently.
+    expect(setNextUnwatchedEpisodeAirDate).toHaveBeenCalledWith(
+      'u1',
+      'title-1',
+      '2026-01-02T00:00:00.000Z',
+    );
+  });
+
+  it('insert-only invariant unchanged — the recompute never touches episode docs', async () => {
+    const tmdb = fakeTmdb({ count: 1, seasons: { 1: [ep(1, 1), ep(1, 2)] } });
+    const { store, writes } = fakeEpisodeStore(['s01e001']);
+    const { store: nextStore } = fakeNextWatchableStore([
+      { airDate: '2026-01-02T00:00:00.000Z', watched: false },
+    ]);
+    const engine = createEpisodeSyncEngine({
+      tmdb,
+      episodes: store,
+      nextWatchable: nextStore,
+    });
+
+    await engine.syncOne('u1', 'title-1', 100);
+
     expect(writes[0].docs.map((d) => d.id)).toEqual(['s01e002']);
     expect(writes[0].docs.map((d) => d.id)).not.toContain('s01e001');
   });

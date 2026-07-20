@@ -48,6 +48,7 @@ import {
   createEpisodeUpsertStore,
   createWatchlistTvSourceAdapter,
   createWatchlistStatusStoreAdapter,
+  createNextWatchableStoreAdapter,
 } from './sync-episodes';
 import { classifyAuth } from './lib/auth';
 import type { VerifyToken } from './lib/auth';
@@ -330,6 +331,7 @@ export const syncTitles = onRequest(
             episodes: createEpisodeUpsertStore(firestore),
             watchlist: createWatchlistTvSourceAdapter(firestore),
             watchlistStatus: createWatchlistStatusStoreAdapter(firestore), // NEW (spec 0074, D5)
+            nextWatchable: createNextWatchableStoreAdapter(firestore), // NEW (spec 0081)
           }),
         verifyToken: verifyIdToken,
         secret: SYNC_SHARED_SECRET.value(),
