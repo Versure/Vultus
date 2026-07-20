@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { provideIonicAngular } from '@ionic/angular/standalone';
-import { REGIONS, type Region } from '@vultus/shared/domain';
+import { REGIONS, regionDisplayName, type Region } from '@vultus/shared/domain';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock the data-access service module so the page test never pulls in the real
@@ -75,6 +75,28 @@ describe('OnboardingPage', () => {
       'NL',
     );
     void fixture;
+  });
+
+  it('renders each option with the raw code as value and the endonym as label (spec 0079)', async () => {
+    const { el } = await setup();
+    const options = Array.from(
+      el.querySelectorAll('ion-select-option'),
+    ) as (HTMLElement & { value?: string })[];
+    // Every option keeps the raw ISO code as its [value] (what persists), while
+    // its rendered label is the human-readable display name — proving the
+    // value/label divergence. Expected text sourced from the shared helper.
+    for (const option of options) {
+      const value = (option.getAttribute('ng-reflect-value') ??
+        option.value) as Region;
+      expect(REGIONS).toContain(value);
+      expect(option.textContent?.trim()).toBe(regionDisplayName(value));
+    }
+    // Spot-check the issue's example so the divergence is explicit.
+    const nl = options.find(
+      (o) => (o.getAttribute('ng-reflect-value') ?? o.value) === 'NL',
+    );
+    expect(nl?.textContent?.trim()).toBe('Nederland');
+    expect(nl?.textContent?.trim()).not.toBe('NL');
   });
 
   it('changing region select updates internal state', async () => {

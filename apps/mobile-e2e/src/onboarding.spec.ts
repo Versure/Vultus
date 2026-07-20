@@ -74,10 +74,12 @@ test('F-onboard-2: pick region DE, complete → /tabs/watchlist; user doc create
   expect(uid).toBeTruthy();
 
   // Open the region select popover and pick 'DE'.
+  // The option's visible label is the endonym display name ('Deutschland');
+  // the underlying [value] stays the raw ISO code 'DE' (spec 0079).
   await page.locator('ion-select').click();
   const option = page
     .locator('ion-popover ion-radio, ion-popover ion-item')
-    .filter({ hasText: /^\s*DE\s*$/ })
+    .filter({ hasText: /^\s*Deutschland\s*$/ })
     .first();
   await expect(option).toBeVisible();
   await option.click();
