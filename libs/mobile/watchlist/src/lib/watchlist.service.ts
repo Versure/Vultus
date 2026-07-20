@@ -262,6 +262,12 @@ export class WatchlistService {
    * no-ops (the emptiness check IS the guard — no extra status read, decision 7).
    * Moving status AWAY from `'completed'` never touches episodes (decision 6).
    *
+   * Next-unwatched-air-date side effect (spec 0081): the same completed→tv path
+   * marks every episode watched, so nothing is left unwatched — the status write
+   * therefore also sets `nextUnwatchedEpisodeAirDate: null`, keeping the
+   * denormalized field correct without waiting for the next server-side sync.
+   * Movies and non-completed transitions do NOT touch the field.
+   *
    * Returns a `Promise<void>` so tests can await the batch effect; the page
    * still calls it fire-and-forget (`void`).
    */
@@ -274,12 +280,19 @@ export class WatchlistService {
     if (!uid) {
       return;
     }
+    const statusWrite: {
+      status: WatchStatus;
+      nextUnwatchedEpisodeAirDate?: null;
+    } = { status };
     if (status === 'completed' && type === 'tv') {
       await this.markAllEpisodesWatched(uid, titleId);
+      // Everything is now watched → no next-unwatched episode (spec 0081).
+      statusWrite.nextUnwatchedEpisodeAirDate = null;
     }
-    await updateDoc(doc(this.firestore, watchlistItemPath(uid, titleId)), {
-      status,
-    });
+    await updateDoc(
+      doc(this.firestore, watchlistItemPath(uid, titleId)),
+      statusWrite,
+    );
   }
 
   /**

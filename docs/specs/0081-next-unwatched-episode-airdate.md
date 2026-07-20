@@ -2,7 +2,7 @@
 number: 0081
 slug: next-unwatched-episode-airdate
 title: Track each TV show's next-unwatched-episode air date for watchability checks
-status: approved
+status: done
 slices: [slice:sync-episodes, slice:title-detail, slice:watchlist, slice:search]
 scopes: [scope:shared, scope:functions, scope:mobile]
 created: 2026-07-20

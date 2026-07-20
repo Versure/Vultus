@@ -3,6 +3,7 @@
 import type {
   EpisodeStore,
   TmdbEpisodeSource,
+  WatchlistNextWatchableStore,
   WatchlistStatusStore,
   WatchlistTvSource,
 } from '../ports';
@@ -17,6 +18,10 @@ export interface EpisodeSyncConfig {
    *  reverts a `'completed'` show to `'watching'` after inserting ≥1 new episode
    *  (spec 0074). Omitted by the on-add trigger (entry point A). */
   watchlistStatus?: WatchlistStatusStore;
+  /** Present on BOTH entry points (spec 0081 — deliberate deviation from 0074's
+   *  entry-A omission). When present, `syncOne` recomputes and writes
+   *  nextUnwatchedEpisodeAirDate after inserting ≥1 new episode. */
+  nextWatchable?: WatchlistNextWatchableStore;
 }
 
 export interface EpisodeUpsertResult {

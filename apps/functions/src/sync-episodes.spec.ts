@@ -6,6 +6,7 @@ import type {
 } from '@vultus/functions/sync-episodes';
 import {
   episodePath,
+  episodesPath,
   episodeToData,
   watchlistItemPath,
 } from '@vultus/shared/firestore-schema';
@@ -14,6 +15,7 @@ import {
   handleWatchlistCreate,
   createEpisodeUpsertStore,
   createWatchlistStatusStoreAdapter,
+  createNextWatchableStoreAdapter,
   type WatchlistCreateEvent,
 } from './sync-episodes';
 
@@ -328,6 +330,101 @@ describe('createWatchlistStatusStoreAdapter', () => {
   });
 });
 
+// --- createNextWatchableStoreAdapter (Admin-SDK adapter, spec 0081) -------
+
+/** A Firestore-Timestamp-like value: `dataToEpisode` calls `.toDate()` on it. */
+function ts(iso: string) {
+  return { toDate: () => new Date(iso) };
+}
+
+/** An `EpisodeReadData`-shaped stored doc (airDate/watchedAt as Timestamps). */
+function episodeData(iso: string, watched: boolean) {
+  return {
+    season: 1,
+    episode: 1,
+    title: 'ep',
+    airDate: ts(iso),
+    watched,
+    watchedAt: watched ? ts(iso) : null,
+  };
+}
+
+/** A fake Firestore backing ONE episodes collection (its docs each expose
+ *  `.data()`) plus ONE watchlist doc whose `.update()` patch is recorded. */
+function fakeNextWatchableDb(episodes: { iso: string; watched: boolean }[]) {
+  const collections: string[] = [];
+  const updates: RecordedUpdate[] = [];
+
+  const db = {
+    collection: (path: string) => ({
+      get: () => {
+        collections.push(path);
+        return Promise.resolve({
+          docs: episodes.map((e) => ({
+            data: () => episodeData(e.iso, e.watched),
+          })),
+        });
+      },
+    }),
+    doc: (path: string) => ({
+      update: (data: unknown) => {
+        updates.push({ path, data });
+        return Promise.resolve();
+      },
+    }),
+  };
+
+  return { db: db as unknown as Firestore, collections, updates };
+}
+
+describe('createNextWatchableStoreAdapter', () => {
+  it('readEpisodeWatchState maps stored docs to { airDate, watched } via dataToEpisode', async () => {
+    const { db, collections } = fakeNextWatchableDb([
+      { iso: '2011-04-24T00:00:00.000Z', watched: true },
+      { iso: '2011-05-01T00:00:00.000Z', watched: false },
+    ]);
+    const store = createNextWatchableStoreAdapter(db);
+    const state = await store.readEpisodeWatchState('u1', 'title-1');
+
+    expect(collections).toEqual([episodesPath('u1', 'title-1')]);
+    expect(state).toEqual([
+      { airDate: '2011-04-24T00:00:00.000Z', watched: true },
+      { airDate: '2011-05-01T00:00:00.000Z', watched: false },
+    ]);
+    // airDate is a plain ISO string (NOT a Date/Timestamp).
+    expect(typeof state[0].airDate).toBe('string');
+    expect(state[0].airDate).not.toBeInstanceOf(Date);
+  });
+
+  it('setNextUnwatchedEpisodeAirDate issues .update({ nextUnwatchedEpisodeAirDate }) on watchlistItemPath', async () => {
+    const { db, updates } = fakeNextWatchableDb([]);
+    const store = createNextWatchableStoreAdapter(db);
+    await store.setNextUnwatchedEpisodeAirDate(
+      'u1',
+      'title-1',
+      '2011-05-01T00:00:00.000Z',
+    );
+    expect(updates).toEqual([
+      {
+        path: watchlistItemPath('u1', 'title-1'),
+        data: { nextUnwatchedEpisodeAirDate: '2011-05-01T00:00:00.000Z' },
+      },
+    ]);
+  });
+
+  it('setNextUnwatchedEpisodeAirDate writes null through unchanged (all-watched/empty case)', async () => {
+    const { db, updates } = fakeNextWatchableDb([]);
+    const store = createNextWatchableStoreAdapter(db);
+    await store.setNextUnwatchedEpisodeAirDate('u1', 'title-1', null);
+    expect(updates).toEqual([
+      {
+        path: watchlistItemPath('u1', 'title-1'),
+        data: { nextUnwatchedEpisodeAirDate: null },
+      },
+    ]);
+  });
+});
+
 // --- Entry-point engine wiring shape (spec 0074, Test plan) --------------
 //
 // Closes the named "Unit — apps/functions adapter" assertion: entry-point-B
@@ -363,6 +460,12 @@ describe('entry-point engine config shape (spec 0074)', () => {
     // The revert port is deliberately absent on the on-add trigger.
     expect('watchlistStatus' in config).toBe(false);
     expect(config.watchlistStatus).toBeUndefined();
+    // But the nextWatchable port IS wired on entry A (spec 0081 — the deliberate
+    // deviation from 0074): a freshly-added TV show must get its
+    // nextUnwatchedEpisodeAirDate set on its first episode sync, not 24h later.
+    // The natural mistake is to copy 0074's entry-A omission here — do NOT.
+    expect('nextWatchable' in config).toBe(true);
+    expect(config.nextWatchable).toBeDefined();
     // Sanity: it DOES wire the ports the on-add backfill needs.
     expect(config.tmdb).toBeDefined();
     expect(config.episodes).toBeDefined();
@@ -392,6 +495,9 @@ describe('entry-point engine config shape (spec 0074)', () => {
     // The daily pass supplies the revert port (spec 0074, D5).
     expect('watchlistStatus' in config).toBe(true);
     expect(config.watchlistStatus).toBeDefined();
+    // And the nextWatchable port (spec 0081), alongside watchlistStatus.
+    expect('nextWatchable' in config).toBe(true);
+    expect(config.nextWatchable).toBeDefined();
     // And the shared episode-backfill ports it has in common with entry point A.
     expect(config.tmdb).toBeDefined();
     expect(config.episodes).toBeDefined();

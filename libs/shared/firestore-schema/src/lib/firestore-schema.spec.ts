@@ -372,6 +372,7 @@ describe('converters — round-trip identity', () => {
       posterPath: null,
       voteAverage: null,
       releaseDate: null,
+      nextUnwatchedEpisodeAirDate: null,
     });
   });
 
@@ -386,6 +387,7 @@ describe('converters — round-trip identity', () => {
       posterPath: '/matrix.jpg',
       voteAverage: 8.2,
       releaseDate: '1999-03-31',
+      nextUnwatchedEpisodeAirDate: null,
       watchingViaPlex: false,
     };
     expect(
@@ -404,6 +406,7 @@ describe('converters — round-trip identity', () => {
       posterPath: null,
       voteAverage: null,
       releaseDate: null,
+      nextUnwatchedEpisodeAirDate: null,
       watchingViaPlex: false,
     };
     expect(
@@ -463,6 +466,7 @@ describe('converters — round-trip identity', () => {
       posterPath: null,
       voteAverage: null,
       releaseDate: null,
+      nextUnwatchedEpisodeAirDate: null,
       watchingViaPlex: true,
     };
     const result = dataToWatchlistItem(
@@ -483,6 +487,7 @@ describe('converters — round-trip identity', () => {
       posterPath: null,
       voteAverage: null,
       releaseDate: null,
+      nextUnwatchedEpisodeAirDate: null,
       watchingViaPlex: false,
     };
     const result = dataToWatchlistItem(
@@ -514,6 +519,55 @@ describe('converters — round-trip identity', () => {
     delete stored['watchingViaPlex'];
     const result = dataToWatchlistItem(stored as never);
     expect(result.watchingViaPlex).toBe(false);
+  });
+
+  it('WatchlistItem: nextUnwatchedEpisodeAirDate set (tv) round-trips as a plain ISO string (not a Timestamp)', () => {
+    const item: WatchlistItem = {
+      type: 'tv',
+      tmdbId: 1399,
+      traktId: null,
+      title: 'Game of Thrones',
+      addedAt: '2026-03-04T05:06:07.000Z',
+      status: 'watching',
+      posterPath: null,
+      voteAverage: null,
+      releaseDate: null,
+      nextUnwatchedEpisodeAirDate: '2011-04-24T00:00:00.000Z',
+      watchingViaPlex: false,
+    };
+    const write = watchlistItemToData(item);
+    // Stored as the raw ISO string, NOT a Date/Timestamp (like releaseDate).
+    expect(write.nextUnwatchedEpisodeAirDate).toBe('2011-04-24T00:00:00.000Z');
+    expect(typeof write.nextUnwatchedEpisodeAirDate).toBe('string');
+    expect(write.nextUnwatchedEpisodeAirDate).not.toBeInstanceOf(Date);
+    const result = dataToWatchlistItem(simulateStored(write) as never);
+    expect(result).toEqual(item);
+    expect(result.nextUnwatchedEpisodeAirDate).toBe('2011-04-24T00:00:00.000Z');
+  });
+
+  it('WatchlistItem: backward-compat — legacy doc missing nextUnwatchedEpisodeAirDate reads back as null', () => {
+    // Simulates a doc written before spec 0081 (no nextUnwatchedEpisodeAirDate field stored).
+    const item: WatchlistItem = {
+      type: 'tv',
+      tmdbId: 1396,
+      traktId: null,
+      title: 'Breaking Bad',
+      addedAt: '2026-03-04T05:06:07.000Z',
+      status: 'watching',
+      posterPath: null,
+      voteAverage: null,
+      releaseDate: null,
+      nextUnwatchedEpisodeAirDate: '2011-04-24T00:00:00.000Z',
+      watchingViaPlex: false,
+    };
+    const stored = simulateStored(watchlistItemToData(item)) as Record<
+      string,
+      unknown
+    >;
+    // Delete nextUnwatchedEpisodeAirDate to simulate a pre-0081 stored doc.
+    delete stored['nextUnwatchedEpisodeAirDate'];
+    const result = dataToWatchlistItem(stored as never);
+    expect(result.nextUnwatchedEpisodeAirDate).toBeNull();
   });
 
   it('EpisodeDoc: watchedAt set (watched true), title present', () => {
