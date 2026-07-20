@@ -2,7 +2,7 @@
 number: 0086
 slug: fix-plex-sync-posters
 title: Fix Plex sync — fetch and denormalize posterPath/voteAverage on add + backfill
-status: implementing
+status: done
 slices: [slice:settings]
 scopes: [scope:mobile]
 created: 2026-07-20
