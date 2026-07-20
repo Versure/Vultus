@@ -55,13 +55,20 @@ whole-object).
   disabled while the global toggle is off — spec 0051 parity). "Notifications
   off" is a valid, completable state.
 - **Step 4 — Plex link:** injects `OnboardingPlexLinkService` and renders ONE of
-  its four stages. The `code`/`waiting` stages share a card (the code, an mm:ss
-  countdown, a "Get a new code" button, and a waiting spinner); the `error`
-  stage shows reason-specific copy for `expired`/`no-server`/`network`; the
-  `connected` stage shows the discovered server row. A **"Skip for now"**
-  affordance (present in every non-connected stage) calls `cancel()` and advances
-  with NO `hasPlex`/`plexSync` write. When connected, a "Continue" advances
-  instead. This step is the only skippable one.
+  its stages. The link is **user-initiated**: the step opens in the `idle` stage
+  showing a **"Connect Plex"** button (it is NOT auto-started on step entry —
+  auto-starting raced the deterministic auto-authorizing `MockPlexClient` to
+  `connected` on every non-native surface, writing `hasPlex`/`plexSync` and
+  tearing the skip button out of the DOM; keeping it user-triggered also matches
+  spec 0078 decision 7, which scopes navigate-in + skip to e2e and the live
+  PIN/discovery to device-only). Tapping "Connect Plex" calls `requestCode()`;
+  the `code`/`waiting` stages then share a card (the code, an mm:ss countdown, a
+  "Get a new code" button, and a waiting spinner); the `error` stage shows
+  reason-specific copy for `expired`/`no-server`/`network`; the `connected`
+  stage shows the discovered server row. A **"Skip for now"** affordance
+  (present in every non-connected stage, including `idle`) calls `cancel()` and
+  advances with NO `hasPlex`/`plexSync` write. When connected, a "Continue"
+  advances instead. This step is the only skippable one.
 - **Step 5 — Finish:** "Get started" calls `complete()` — on a native platform it
   requests OS push permission and, on grant, registers + `arrayUnion`s one FCM
   token; then it sets `onboarding_done = 'true'` **last**. A denied/failed push

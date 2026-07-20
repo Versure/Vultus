@@ -1,11 +1,4 @@
-import {
-  Component,
-  computed,
-  effect,
-  inject,
-  signal,
-  untracked,
-} from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import {
   IonButton,
@@ -46,9 +39,10 @@ const TMDB_LOGO_BASE = 'https://image.tmdb.org/t/p/w92';
  * (`users/{uid}`), so "Back" (steps 2-5) simply moves the step signal with the
  * prior value still shown. Step 4 injects the onboarding-owned
  * `OnboardingPlexLinkService` (its own class — NOT the `slice:settings`
- * `PlexLinkService`) and renders one of its four stages; it carries a
- * "Skip for now" affordance that stops the poll and advances without any
- * `hasPlex`/`plexSync` write.
+ * `PlexLinkService`); it starts in `idle` with a user-initiated "Connect Plex"
+ * button and renders one of its stages once started, and it carries a
+ * "Skip for now" affordance (present in every non-connected stage) that stops
+ * the poll and advances without any `hasPlex`/`plexSync` write.
  *
  * DESIGN: step CONTENT is aligned to the in-repo Settings / Connect-Plex markup
  * (already Stitch-aligned — My Providers `cebdfd02c7d44023b0e0019dd4907d48`,
@@ -126,12 +120,23 @@ export class OnboardingPage {
   constructor() {
     addIcons({ checkmarkCircle, alertCircle, shieldCheckmark });
 
-    // Step-entry side effects: load the provider catalog when the wizard reaches
-    // step 2, and request a fresh PIN when it reaches step 4 (only if idle, so a
-    // Back-and-forward doesn't stomp a live/connected flow). `loadProviderCatalog`
-    // no-ops when already loaded for the region; both reads of the link stage are
-    // `untracked` so this effect fires on the STEP change alone, never on the
-    // stage/catalog signals it triggers.
+    // Step-entry side effect: load the provider catalog when the wizard reaches
+    // step 2 (no-ops when already loaded for the region). Fires on the STEP change
+    // alone.
+    //
+    // The step-4 Plex link is DELIBERATELY NOT auto-started here — the PIN flow is
+    // user-initiated from the idle stage's "Connect Plex" button (see `startLink`).
+    // Auto-requesting a PIN on step-4 ENTRY conflated "navigate into step 4" with
+    // "run the live PIN/discovery", which spec 0078 decision 7 keeps distinct
+    // (navigate-in + skip is in e2e scope; the live link is device-only). Worse,
+    // every NON-native surface (e2e / serve-mock / web) resolves `PLEX_CLIENT` to
+    // the deterministic `MockPlexClient`, whose `checkPin` AUTO-authorizes on the
+    // first poll: an auto-started poll therefore raced straight to `connected`,
+    // writing `hasPlex`/`plexSync` and tearing the "Skip for now" button out of
+    // the DOM mid-click — the deterministic e2e detachment failure. Leaving step 4
+    // in `idle` until the user taps "Connect Plex" keeps the skip affordance a
+    // stable, always-clickable node and guarantees the skip path performs no
+    // Plex write.
     effect(() => {
       const step = this.service.currentStep();
       if (step === 2) {
@@ -139,10 +144,6 @@ export class OnboardingPage {
         // being unavailable, as in the e2e emulator harness) so it doesn't surface
         // as an unhandled promise rejection / console noise.
         this.service.loadProviderCatalog().catch(() => undefined);
-      } else if (step === 4) {
-        if (untracked(() => this.plexLink.stage()) === 'idle') {
-          void this.plexLink.requestCode();
-        }
       }
     });
   }
@@ -205,6 +206,14 @@ export class OnboardingPage {
   }
 
   // --- Step 4: Plex link ----------------------------------------------------
+  /** "Connect Plex" (step-4 idle stage) — user-initiated START of the PIN-link
+   *  flow. NOT fired on step entry (see the constructor effect comment): keeping
+   *  the flow user-triggered stops the auto-authorizing MockPlexClient from
+   *  racing to `connected` before the user can skip. */
+  protected startLink(): void {
+    void this.plexLink.requestCode();
+  }
+
   /** "Get a new code" / "Try again" — request a fresh PIN. */
   protected regenerate(): void {
     void this.plexLink.regenerateCode();

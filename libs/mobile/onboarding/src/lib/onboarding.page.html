@@ -281,8 +281,16 @@
       </section>
       } @else {
       <section class="stage-card" data-test="stage-idle">
-        <ion-spinner name="crescent"></ion-spinner>
-        <p class="waiting-label">Preparing a link code…</p>
+        <div class="plex-tile plex-tile--lg" aria-hidden="true">
+          <img src="/assets/plex-logo.svg" alt="Plex" />
+        </div>
+        <p class="stage-instruction">
+          Link your Plex server to sync your library and watch history, or skip
+          and connect later from Settings.
+        </p>
+        <button type="button" class="solid-button" (click)="startLink()">
+          Connect Plex
+        </button>
       </section>
       }
 
