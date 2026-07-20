@@ -25,6 +25,22 @@ The barrel (`@vultus/mobile/settings`) exports:
   `PLEX_PROVIDERS`** export and **no `plex.providers.ts`** — the shell factory is
   the single client selector.
 - `PlexSyncSummary` (type) — the `{ added, updated, skipped }` outcome of a sync.
+- `SETTINGS_TMDB_CONFIG` (token, spec 0086) — an
+  `InjectionToken<TmdbDetailConfig>` the shell's `app.config.ts` wires from
+  `environment.tmdb` (the same value `TMDB_SEARCH_CONFIG` / `TMDB_DETAIL_CONFIG`
+  receive). It configures the slice-local TMDB detail client `PlexSyncService`
+  uses to fetch `posterPath` / `voteAverage`. Named `SETTINGS_TMDB_CONFIG` (not
+  `TMDB_DETAIL_CONFIG`) to avoid a symbol collision with the title-detail
+  slice's token already imported into the shell.
+- `TmdbDetailConfig` (type, spec 0086) — the config shape the token carries
+  (`apiBaseUrl`, `imageBaseUrl`, `auth`, optional `fetchImpl`).
+
+The TMDB detail client itself (`createTmdbDetailClient`, `TmdbDetailClient`,
+`TmdbDetail`, `TmdbDetailError` in `tmdb-detail.client.ts`) is
+**slice-internal** — not barrel-exported. It is a **deliberate per-slice
+duplicate** of the search / title-detail clients (spec 0016 decision 2,
+reaffirmed by spec 0086); the settings slice must not import
+`@vultus/mobile/search` or `@vultus/mobile/title-detail`.
 
 `SettingsService` and `SyncStatusService` are internal data-access services used
 only by `SettingsPage` / its cards and are intentionally **not** barrel-exported
@@ -160,6 +176,25 @@ watching` on ≥1 watched episode, `watching → completed` when all present
   `s{SS}e{EEE}` (season padded to 2, episode to 3, e.g. `s01e001`) — replicated
   from `sync-episodes`' `episode-id.ts` (a `scope:functions` lib this slice cannot
   import), derived from Plex `parentIndex` (season) + `index` (episode).
+
+**Poster / rating denormalization (spec 0086, issue #229).** Plex GUIDs yield
+only a `tmdbId`, so the sync fetches `posterPath` / `voteAverage` from TMDB via
+the slice-local detail client (`createTmdbDetailClient`, configured by
+`SETTINGS_TMDB_CONFIG`) and denormalizes them onto the watchlist doc — matching
+the search / title-detail add paths (spec 0035). On a **new add**, `addItem`
+fetches the detail before the `setDoc`. On an **already-tracked** item whose
+stored `posterPath` is still `null`, the sync **self-heals**: it fetches TMDB
+and `updateDoc`s `posterPath` / `voteAverage`. The backfill runs
+**unconditionally of status** — a sticky-`dropped` item still gets its poster
+(display enrichment, not a status change) — and is **skipped** when
+`posterPath` is already non-null (strict `=== null` guard, never a falsy check,
+so an empty-string path is not treated as absent). Every TMDB call is wrapped
+per-item in try/catch (`describeTmdbError`, `plex-errors.ts`): a TMDB failure is
+non-fatal (poster stays `null`, the item self-heals next sync) and never fails
+the surrounding status write or the rest of the sync loop, and never marks the
+pass `error`. A pure poster backfill is NOT counted as an `updated` status
+change. The client performs NO Firestore access and never reads/writes
+`title-cache`.
 
 The X-Plex-Token is stored ONLY in `@capacitor/preferences`, NEVER written to any
 Firestore path, and NEVER logged/echoed (CLAUDE.md secrets rule).
