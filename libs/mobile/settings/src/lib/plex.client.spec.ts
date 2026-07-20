@@ -141,6 +141,57 @@ describe('CapacitorHttpPlexClient', () => {
       expect(server?.baseUrl).toBe('http://[fe80::1]:32400');
     });
 
+    it('builds a raw-IP http base URL from address+port, discarding the .plex.direct uri (issue #171)', async () => {
+      // The real-world case: Plex advertises the local connection with a
+      // *.plex.direct HTTPS uri (DNS-rebind routers can't resolve it) but the
+      // `address` field is the raw LAN IP. We must reach it by IP over http.
+      httpGet.mockResolvedValue(
+        res(200, [
+          serverWith([
+            {
+              uri: 'https://192-168-178-195.abc123.plex.direct:32400',
+              protocol: 'https',
+              address: '192.168.178.195',
+              port: 32400,
+              local: true,
+              IPv6: false,
+            },
+          ]),
+        ]),
+      );
+      const server = await new CapacitorHttpPlexClient().discoverServer('tok');
+      expect(server?.baseUrl).toBe('http://192.168.178.195:32400');
+    });
+
+    it('brackets an IPv6 raw address when building the base URL', async () => {
+      httpGet.mockResolvedValue(
+        res(200, [
+          serverWith([
+            {
+              uri: 'https://fe80--1.abc123.plex.direct:32400',
+              protocol: 'https',
+              address: 'fe80::1',
+              port: 32400,
+              local: true,
+              IPv6: true,
+            },
+          ]),
+        ]),
+      );
+      const server = await new CapacitorHttpPlexClient().discoverServer('tok');
+      expect(server?.baseUrl).toBe('http://[fe80::1]:32400');
+    });
+
+    it('falls back to the reported uri when a local connection carries no address', async () => {
+      httpGet.mockResolvedValue(
+        res(200, [
+          serverWith([{ uri: 'http://192.168.1.20:32400', local: true }]),
+        ]),
+      );
+      const server = await new CapacitorHttpPlexClient().discoverServer('tok');
+      expect(server?.baseUrl).toBe('http://192.168.1.20:32400');
+    });
+
     it('prefers an OWNED server over a shared one', async () => {
       httpGet.mockResolvedValue(
         res(200, [

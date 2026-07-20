@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Permit cleartext (plain HTTP) so the app can reach a self-hosted Plex Media
+  Server at its LAN address (issue #171).
+
+  WHY: Plex's secure local URL is a `*.plex.direct` hostname that resolves to a
+  PRIVATE LAN IP via PUBLIC DNS. Routers with DNS-rebind protection (e.g. AVM
+  FritzBox, on by default) refuse to return a private-IP answer for a public
+  lookup, so that URL fails with "Unable to resolve host ….plex.direct". The app
+  therefore connects to the server's raw-IP local connection (http://<ip>:32400),
+  which is plaintext and needs this allowance — targetSdk 34+ blocks cleartext by
+  default.
+
+  SCOPE: Android's network-security-config cannot express private-IP CIDR ranges,
+  and the PMS LAN IP is DHCP-assigned, so a base-config is used. This does NOT
+  weaken the app's other traffic: Firebase, TMDB, and plex.tv are all HTTPS and
+  are never downgraded — the only cleartext destination in practice is the
+  user's own LAN Plex server.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

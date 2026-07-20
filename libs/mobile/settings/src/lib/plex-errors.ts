@@ -30,3 +30,28 @@ export class PlexPinGoneError extends Error {
     this.name = 'PlexPinGoneError';
   }
 }
+
+/**
+ * Redact an unknown Plex failure into a SHORT, SAFE diagnostic string for
+ * `console`/logcat — the only way to see WHY a link/sync failed on-device
+ * (issue #171: the failure was swallowed with no clue what went wrong).
+ *
+ * SAFE-BY-CONSTRUCTION (CLAUDE.md / spec 0073): returns STRINGS pulled from
+ * known-safe fields only — never the error object itself and never any header.
+ * Our HTTP calls carry the X-Plex-Token in a HEADER (never the URL), so
+ * `PlexHttpError` (status + endpoint path) and a transport error's `name`/
+ * `message` (URL + reason, e.g. a cleartext/timeout/DNS failure) cannot contain
+ * the token. That is why we extract these two fields instead of logging `err`.
+ */
+export function describePlexError(err: unknown): string {
+  if (err instanceof PlexHttpError) {
+    return err.message; // "plex request to {endpoint} failed with HTTP {status}"
+  }
+  if (err instanceof PlexPinGoneError) {
+    return 'plex.tv pin expired';
+  }
+  if (err instanceof Error) {
+    return `${err.name}: ${err.message}`;
+  }
+  return 'unknown error';
+}

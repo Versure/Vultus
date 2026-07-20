@@ -30,7 +30,12 @@ import { PlexHttpError, PlexPinGoneError } from './plex-errors';
  * Server discovery (`discoverServer`) reads `/api/v2/resources`, prefers an
  * OWNED server with a LOCAL connection (`includeRelay=0`, `includeIPv6=1` so an
  * IPv6-only LAN still yields a local entry), and returns its local base URL +
- * access token.
+ * access token. It builds the base URL as a **raw-IP `http://<address>:<port>`**
+ * from the local connection's fields (`localBaseUrl`), DISCARDING Plex's reported
+ * `*.plex.direct` HTTPS `uri`: that hostname resolves the LAN IP via PUBLIC DNS,
+ * which DNS-rebind-protected routers refuse to answer (issue #171). Reaching the
+ * raw-IP URL needs cleartext-to-LAN, enabled via
+ * `res/xml/network_security_config.xml`.
  *
  * SECURITY (CLAUDE.md / spec 0073): the X-Plex-Token is NEVER logged or echoed
  * and NEVER written to Firestore — the caller (`PlexLinkService`) persists it to
@@ -115,6 +120,45 @@ function tmdbIdFromGuids(item: Record<string, unknown>): number | null {
   return null;
 }
 
+/**
+ * Choose the best local connection to a PMS from its `/resources` list. Prefers
+ * an IPv4 connection; an IPv6 entry is used only when it is the ONLY local one.
+ */
+function pickLocalConnection(
+  locals: Record<string, unknown>[],
+): Record<string, unknown> | undefined {
+  return locals.find((c) => c['IPv6'] !== true) ?? locals[0];
+}
+
+/**
+ * Build a **DNS-free** base URL for a local PMS connection (issue #171).
+ *
+ * We deliberately DISCARD the connection's reported `uri` and rebuild from its
+ * raw `address` + `port` as plaintext `http://`. With `includeHttps=1`, Plex
+ * reports a local connection's `uri` as a `*.plex.direct` HTTPS hostname (so its
+ * cert validates against a name, not a bare IP) — but that hostname resolves the
+ * LAN IP via PUBLIC DNS, which DNS-rebind-protected routers (e.g. a FritzBox)
+ * refuse to answer ("Unable to resolve host ….plex.direct"). The `address` field
+ * is the raw LAN IP, so `http://<address>:<port>` reaches the server with NO DNS
+ * lookup at all. This is why the app permits cleartext to the LAN
+ * (android/app/src/main/res/xml/network_security_config.xml). IPv6 literals are
+ * bracketed. Falls back to the reported `uri` only if the entry carries no
+ * usable address (should not happen for a `local` connection).
+ *
+ * NOTE: this needs the PMS to serve plain HTTP on the LAN (Plex default; NOT the
+ * case when "Settings → Network → Secure connections: Required" is set — that
+ * setup must instead whitelist `plex.direct` in the router's DNS-rebind config).
+ */
+function localBaseUrl(conn: Record<string, unknown>): string {
+  const address = str(conn['address']);
+  const port = num(conn['port']);
+  if (address && port) {
+    const host = conn['IPv6'] === true ? `[${address}]` : address;
+    return `http://${host}:${port}`;
+  }
+  return str(conn['uri']);
+}
+
 export class CapacitorHttpPlexClient implements PlexClient {
   /** Single-flight memo for the per-install client identifier. */
   private clientIdPromise: Promise<string> | null = null;
@@ -184,13 +228,11 @@ export class CapacitorHttpPlexClient implements PlexClient {
     for (const server of ranked) {
       const connections = asArray(server['connections']).map(asRecord);
       const locals = connections.filter((c) => c['local'] === true);
-      // Prefer an IPv4 local connection; an IPv6 URI is only used when it is
-      // the ONLY local entry (the device may sit on an IPv4-only network).
-      const local = locals.find((c) => c['IPv6'] !== true) ?? locals[0];
+      const local = pickLocalConnection(locals);
       if (local) {
         return {
           name: str(server['name']),
-          baseUrl: str(local['uri']),
+          baseUrl: localBaseUrl(local),
           accessToken: str(server['accessToken']),
         };
       }

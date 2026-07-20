@@ -58,7 +58,20 @@ reads). Two impls live in this slice:
   `X-Plex-Client-Identifier` (a UUID generated once and persisted to Preferences
   under `plex_client_id`) — a constant shared by all installs collides in the
   account's plex.tv device registry — and passes `includeIPv6=1` to discovery so
-  an IPv6-only LAN still exposes a `local` connection. The library listing
+  an IPv6-only LAN still exposes a `local` connection. For the chosen local
+  connection (`pickLocalConnection`, IPv4-preferred) it builds the base URL as a
+  **raw-IP `http://<address>:<port>`** from the connection's fields
+  (`localBaseUrl`), **discarding** Plex's reported `uri`: with `includeHttps=1`
+  that local `uri` is a `*.plex.direct` HTTPS hostname whose public DNS resolves
+  the LAN IP, which **DNS-rebind-protected routers** (e.g. a FritzBox) refuse to
+  answer ("Unable to resolve host ….plex.direct") — so the raw IP is used to skip
+  DNS entirely (issue #171). Reaching the raw-IP URL needs **cleartext-to-LAN**,
+  enabled by `android/app/src/main/res/xml/network_security_config.xml`
+  (base-config `cleartextTrafficPermitted`, wired via the manifest's
+  `networkSecurityConfig`); all other traffic (Firebase / TMDB / plex.tv) stays
+  HTTPS. This assumes the PMS serves plain HTTP on the LAN (Plex default); with
+  "Secure connections: Required" it does not, and that network must instead
+  whitelist `plex.direct` in the router's DNS-rebind config. The library listing
   (`/library/sections/{id}/all`) is fetched with **`includeGuids=1`** — WITHOUT
   it Plex omits the external `Guid[]` (`tmdb://`) and every `tmdbId` parses as
   `null`, so every item is skipped and nothing ever syncs (the original
@@ -104,7 +117,12 @@ can kill an in-flight request's socket while the app is backgrounded at
 plex.tv/link), and the expiry countdown is **wall-clock anchored** (a deadline
 timestamp, not a decrement-per-tick counter) because Android throttles WebView
 timers while backgrounded. The merged `PlexPin` carries no `expiresIn`, so the
-~15-minute PIN TTL deadline is owned locally at code issue.
+~15-minute PIN TTL deadline is owned locally at code issue. Every swallowed
+link/sync failure logs a **redacted diagnostic** via `describePlexError`
+(`plex-errors.ts`) to `console.error` (issue #171) — the HTTP status + endpoint
+path, or a transport error's `name`/`message`, **never** the error object or any
+header (the X-Plex-Token rides in a header, never the URL/message), so the real
+cause is visible in logcat without leaking the token.
 
 **Unlink** clears the Preferences token + `plexSync` (`deleteField()`), KEEPS
 `hasPlex` + all synced data, and touches no watchlist/episode doc.
