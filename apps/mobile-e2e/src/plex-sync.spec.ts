@@ -287,6 +287,16 @@ test('sync outcome', async ({ page }) => {
   await expect(badge).toBeVisible();
   await expect(badge.locator('img[alt="Plex"]')).toBeVisible();
 
+  // New-add poster path (spec 0086): the sync fetched TMDB detail for Blade Runner
+  // 2049 (335984) and denormalized a real `posterPath`, so the card renders a real
+  // poster <img> (src → the TMDB image CDN) and NOT the `.poster-fallback`.
+  await expect(bladeRunnerCard.locator('.poster img')).toBeVisible();
+  await expect(bladeRunnerCard.locator('.poster img')).toHaveAttribute(
+    'src',
+    /image\.tmdb\.org\/.+\/\S+/,
+  );
+  await expect(bladeRunnerCard.locator('.poster-fallback')).toHaveCount(0);
+
   // And the flipped Fight Club renders as a `completed` card (UI mirror of the
   // read-back above).
   const fightClubCard = page.locator('.watchlist-card', {
@@ -294,4 +304,15 @@ test('sync outcome', async ({ page }) => {
   });
   await expect(fightClubCard).toBeVisible();
   await expect(fightClubCard).toHaveClass(/\bstatus-completed\b/);
+
+  // Backfill poster path (spec 0086, the bulk of issue #229): Fight Club (550) was
+  // pre-seeded as a tracked item with `posterPath: null` (the real-world bug). The
+  // sync's self-heal backfill fetched TMDB detail and updated `posterPath`, so the
+  // card now renders a real poster <img> and NOT the `.poster-fallback`.
+  await expect(fightClubCard.locator('.poster img')).toBeVisible();
+  await expect(fightClubCard.locator('.poster img')).toHaveAttribute(
+    'src',
+    /image\.tmdb\.org\/.+\/\S+/,
+  );
+  await expect(fightClubCard.locator('.poster-fallback')).toHaveCount(0);
 });
