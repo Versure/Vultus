@@ -18,6 +18,15 @@ architecture and decisions; read it before non-trivial work.
   each other.
 - **Data model:** Firestore, keyed by `userId` from day one; see PLAN §4 for
   collection paths, `title-cache`, and the `previousSnapshot` transition model.
+- **Onboarding ↔ User-field parity (F4).** Any spec that adds a new field to the
+  `User` domain type (`@vultus/shared/domain`'s `documents.ts`) or changes the
+  meaning/shape of an existing one must explicitly resolve to one of two outcomes:
+  **(a) include in onboarding** — the spec's scope/task graph collects it during
+  first-launch onboarding, or the Risks section names a follow-up spec that will;
+  or **(b) deliberately Settings-only** — a one-line justification for why it
+  should _not_ be in first-launch onboarding. Silence about onboarding when a
+  `User` field changes is a **blocking** spec-reviewer finding, same severity as
+  the F1 (orphaned DoD task) and F2 (shared-type ripple) probes.
 - **UI design source:** Google Stitch "Vultus Android App Design"
   (`projects/13590348714018893783`), via the `stitch` MCP. The **authoritative
   token set lives in the repo** at `docs/design/vultus-design-system.md` (exported
