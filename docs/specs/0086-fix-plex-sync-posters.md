@@ -2,7 +2,7 @@
 number: 0086
 slug: fix-plex-sync-posters
 title: Fix Plex sync — fetch and denormalize posterPath/voteAverage on add + backfill
-status: approved
+status: done
 slices: [slice:settings]
 scopes: [scope:mobile]
 created: 2026-07-20
@@ -77,8 +77,7 @@ Out of scope:
 - **No migration of the search / title-detail TMDB clients to a shared lib**
   (explicitly rejected — see §"Affected slices"). A third per-slice client is
   the deliberate vertical-slice trade.
-- **No Cloud Function change** — stays pure `scope:mobile`, consistent with spec
-  0073.
+- **No Cloud Function change** — stays pure `scope:mobile`, consistent with spec 0073.
 - **No change to `title-cache` read/write semantics** — the mobile app still
   never reads it.
 - **No UI / template / styling change.** `WatchlistPage.posterUrl()`'s fallback
@@ -131,7 +130,7 @@ the client rather than extracting to `scope:shared`:
   time.
 - The write path is unchanged: `addItem` still `setDoc(watchlistItemToData(...))`
   and the backfill uses `updateDoc(watchlistItemPath(uid, tmdbId), { posterPath,
-  voteAverage })` — the same doc/path the sync already writes. The existing
+voteAverage })` — the same doc/path the sync already writes. The existing
   `firestore.rules` rule keyed by `userId` for `users/{userId}/watchlist/**`
   (spec 0073) already authorizes these writes; **no new rule, no
   `firestore.indexes.json` entry** (no new query) is required.
@@ -232,7 +231,7 @@ Changed method signatures in `PlexSyncService`
 
 - `currentStatus(uid, tmdbId): Promise<WatchStatus | null>` → rename/extend to
   `currentTracked(uid, tmdbId): Promise<{ status: WatchStatus; posterPath: string
-  | null } | null>` (read `posterPath` off the tracked doc via
+| null } | null>` (read `posterPath` off the tracked doc via
   `dataToWatchlistItem`, alongside `status`) so the loop knows whether to
   backfill. `null` still means untracked / doc absent.
 - `addItem(uid, item, tmdbId, status)` — unchanged signature; body now fetches
@@ -287,11 +286,11 @@ Changes:
 
 1. Inject the config + build the client (mirror title-detail service
    `title-detail.service.ts:126-127`): `private readonly tmdbConfig =
-   inject(SETTINGS_TMDB_CONFIG);` and `private readonly tmdbClient =
-   createTmdbDetailClient(this.tmdbConfig);` (the config carries `fetchImpl` in
+inject(SETTINGS_TMDB_CONFIG);` and `private readonly tmdbClient =
+createTmdbDetailClient(this.tmdbConfig);` (the config carries `fetchImpl` in
    mock/dev; prod uses global `fetch`).
 2. Add a private `fetchDetailSafe(tmdbId, type): Promise<{ posterPath: string |
-   null; voteAverage: number | null } | null>` helper that calls
+null; voteAverage: number | null } | null>` helper that calls
    `this.tmdbClient.getDetail(tmdbId, type)` inside a try/catch, returning the
    two fields on success and `null` on ANY failure (network / non-2xx / 404 /
    timeout / abort). On failure it logs a **redacted** diagnostic. **Add a small
@@ -305,10 +304,10 @@ Changes:
    e.g. `` `TmdbDetailError: HTTP ${err.status}` `` for a `TmdbDetailError` and
    `` `${err.name}: ${err.message}` `` for a generic `Error`. The helper then
    logs a short string (e.g. `` `[plex-sync] tmdb detail {tmdbId} failed:
-   ${describeTmdbError(err)}` ``), **never** the raw error object.
+${describeTmdbError(err)}` ``), **never** the raw error object.
 3. `addItem` — before constructing the `WatchlistItem`, `const detail = await
-   this.fetchDetailSafe(tmdbId, item.type);` and set `posterPath: detail?.posterPath
-   ?? null`, `voteAverage: detail?.voteAverage ?? null` (replacing the hardcoded
+this.fetchDetailSafe(tmdbId, item.type);` and set `posterPath: detail?.posterPath
+?? null`, `voteAverage: detail?.voteAverage ?? null` (replacing the hardcoded
    `null` literals at lines 364-365). A `null` detail (TMDB failed) leaves both
    `null` — the add still succeeds.
 4. `currentStatus` → `currentTracked` (see §"Public types"): read `posterPath`
@@ -317,7 +316,7 @@ Changes:
    **poster backfill runs first and unconditionally of status** — for a tracked
    item with `tracked.posterPath === null`, call `fetchDetailSafe`, and on a
    non-null result `updateDoc(watchlistItemPath(uid, String(tmdbId)), {
-   posterPath, voteAverage })`. This runs even for a `dropped` item (the
+posterPath, voteAverage })`. This runs even for a `dropped` item (the
    sticky-dropped guard at lines 232-235 skips only the **status** write, not
    the poster backfill). Then apply the existing sticky-dropped status guard and
    `deriveStatus` status write unchanged. A backfill must NOT be counted as an
@@ -380,9 +379,9 @@ Changes:
    `await expect(bladeRunnerCard.locator('.poster img')).toBeVisible();` and
    assert its `src` is non-empty and non-fallback (e.g.
    `await expect(bladeRunnerCard.locator('.poster img')).toHaveAttribute('src',
-   /image\.tmdb\.org\/.+\/\S+/);` — the URL is built from the mock fixture's
+/image\.tmdb\.org\/.+\/\S+/);` — the URL is built from the mock fixture's
    `poster_path`), and `await expect(bladeRunnerCard.locator('.poster-fallback'
-   )).toHaveCount(0);`.
+)).toHaveCount(0);`.
 
    b. **Backfill poster (550):** the flow already pre-seeds Fight Club (550) as an
    **existing tracked item with `posterPath: null`** before the sync runs — the
@@ -428,7 +427,7 @@ block, dropping the provider tests):
   `setDoc` payload carries `posterPath: '/x.jpg'`, `voteAverage: 8.4`.
 - **add succeeds with null when TMDB throws (any status):** `getDetail` rejects
   (network / 404 / 500) → `addItem` still `setDoc`s the doc with `posterPath:
-  null`, `voteAverage: null`, does NOT throw, and the surrounding
+null`, `voteAverage: null`, does NOT throw, and the surrounding
   `processLibrary` loop still completes (`sync()` returns `ok`, not `error`).
 - **backfill of a tracked null-poster item:** a tracked item (`current !== null`)
   whose stored `posterPath` is `null` → an `updateDoc` on

@@ -36,6 +36,7 @@ import {
   CapacitorHttpPlexClient,
   MockPlexClient,
   PlexSyncService,
+  SETTINGS_TMDB_CONFIG,
 } from '@vultus/mobile/settings';
 import { appRoutes } from './app.routes';
 import { environment } from '../environments/environment';
@@ -187,5 +188,11 @@ export const appConfig: ApplicationConfig = {
         imageBaseUrl: environment.tmdb.detailImageBaseUrl,
       },
     },
+    // TMDB detail config for the settings slice's Plex-sync poster fetch/backfill
+    // (spec 0086) — reuses `environment.tmdb` as-is (like the search token above);
+    // the settings client only reads `.posterPath` / `.voteAverage`, never
+    // `.posterUrl`, so which `imageBaseUrl` variant is passed is irrelevant. A
+    // separate token (not TMDB_DETAIL_CONFIG) preserves slice isolation.
+    { provide: SETTINGS_TMDB_CONFIG, useValue: environment.tmdb },
   ],
 };
