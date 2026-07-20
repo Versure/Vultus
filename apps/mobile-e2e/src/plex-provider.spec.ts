@@ -84,6 +84,11 @@ test('manual Plex tagging shows alongside provider availability', async ({
   await page.reload();
   await expect(page).toHaveURL(/\/tabs\/today$/);
 
+  // Boot now lands on the Today tab (spec 0083); the watchlist card only exists
+  // on the Watchlist tab's rendered DOM, so switch there before asserting on it.
+  await page.locator('ion-tab-button[tab="watchlist"]').click();
+  await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+
   // The seeded card renders (guards the R3 owner-mismatch empty-list trap).
   const card = page.locator('.watchlist-card', { hasText: SEEDED_TITLE });
   await expect(card).toBeVisible();

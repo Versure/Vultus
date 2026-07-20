@@ -66,8 +66,11 @@ async function bootSeededWatchlist(page: import('@playwright/test').Page) {
   // Reload so the freshly-seeded docs are picked up by the watchlist stream.
   await page.reload();
 
-  // Land on the default tab and confirm the seeded card rendered before refreshing.
+  // Land on the default Today tab (spec 0083), then switch to the Watchlist tab
+  // whose DOM owns the card, and confirm the seeded card rendered before refreshing.
   await expect(page).toHaveURL(/\/tabs\/today$/);
+  await page.locator('ion-tab-button[tab="watchlist"]').click();
+  await expect(page).toHaveURL(/\/tabs\/watchlist$/);
   await expect(page.locator('.watchlist-card')).toHaveCount(1);
   await expect(page.locator('.watchlist-card')).toContainText(SEEDED_TITLE);
   return uid;

@@ -90,6 +90,11 @@ test('shows on-your-provider vs also-on framing', async ({ page }) => {
   await page.reload();
   await expect(page).toHaveURL(/\/tabs\/today$/);
 
+  // Boot now lands on the Today tab (spec 0083); the watchlist cards only exist
+  // on the Watchlist tab's rendered DOM, so switch there before asserting on them.
+  await page.locator('ion-tab-button[tab="watchlist"]').click();
+  await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+
   // Both seeded cards render (guards the R3 owner-mismatch empty-list trap).
   const mineCard = page.locator('.watchlist-card', { hasText: MINE_TITLE });
   const elsewhereCard = page.locator('.watchlist-card', {

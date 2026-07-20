@@ -66,6 +66,10 @@ async function bootAndSeed(
 
 /** Tap the watchlist header bell → push the notifications inbox. */
 async function openInbox(page: import('@playwright/test').Page): Promise<void> {
+  // Boot now lands on the Today tab (spec 0083), whose header has NO bell; the
+  // bell lives only on the Watchlist header, so switch there before tapping it.
+  await page.locator('ion-tab-button[tab="watchlist"]').click();
+  await expect(page).toHaveURL(/\/tabs\/watchlist$/);
   await page.locator('.bell-button').click();
   await expect(page).toHaveURL(/\/tabs\/notifications$/);
 }
