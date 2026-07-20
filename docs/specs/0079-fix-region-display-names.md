@@ -2,7 +2,7 @@
 number: 0079
 slug: fix-region-display-names
 title: Display human-readable region names (endonyms) in Settings instead of raw ISO codes
-status: approved
+status: done
 slices: [slice:settings, slice:onboarding]
 scopes: [scope:shared, scope:mobile]
 created: 2026-07-20

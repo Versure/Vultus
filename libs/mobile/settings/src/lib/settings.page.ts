@@ -16,6 +16,7 @@ import {
   IonToolbar,
   ToastController,
 } from '@ionic/angular/standalone';
+import { regionDisplayName } from '@vultus/shared/domain';
 import type { CatalogProvider, Region } from '@vultus/shared/domain';
 import { VultusErrorState } from '@vultus/shared/ui-kit';
 import { addIcons } from 'ionicons';
@@ -84,6 +85,13 @@ export class SettingsPage implements OnInit {
    * season-collapse idiom in-slice (not imported from `slice:title-detail`).
    */
   protected readonly providersExpanded = signal(false);
+
+  /**
+   * Maps a raw ISO `Region` code to its human-readable native endonym for
+   * DISPLAY only (spec 0079). The persisted `region` value stays the raw code —
+   * this wrapper is applied at the option label, footer, and prune toast.
+   */
+  protected readonly regionDisplayName = regionDisplayName;
 
   constructor() {
     addIcons({
@@ -233,9 +241,13 @@ export class SettingsPage implements OnInit {
 
   private async presentPruneToast(dropped: number): Promise<void> {
     const region = this.service.region();
+    // A prune only fires after a region change, so `region` is always resolved
+    // here; the guard just narrows away the signal's `null` for the display-name
+    // wrapper (spec 0079) — there is nothing to name if there is no region.
+    if (region === null) return;
     const noun = dropped === 1 ? 'provider' : 'providers';
     const toast = await this.toastController.create({
-      message: `${dropped} ${noun} aren't available in ${region} and were removed`,
+      message: `${dropped} ${noun} aren't available in ${regionDisplayName(region)} and were removed`,
       duration: 4000,
       position: 'bottom',
     });

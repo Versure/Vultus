@@ -33,6 +33,27 @@ import { clearAll, resolveAnonUid, seedFor } from './support';
 const REGIONS = ['NL', 'DE', 'GB', 'US', 'FR', 'BE', 'ES', 'IT', 'CA', 'AU'];
 
 /**
+ * Region code → display name (endonym), a SMALL LOCAL mirror of
+ * `REGION_DISPLAY_NAMES` in `@vultus/shared/domain` (spec 0079). Intentionally
+ * NOT imported from the shared barrel: keeping it local avoids taking on
+ * Playwright/tsconfig path-alias resolution for `mobile-e2e`, and a stale local
+ * entry fails LOUDLY here — `pickRegion` never finds the popover row and the
+ * test errors clearly — rather than silently matching the wrong text.
+ */
+const REGION_DISPLAY_NAMES: Record<string, string> = {
+  NL: 'Nederland',
+  DE: 'Deutschland',
+  GB: 'United Kingdom',
+  US: 'United States',
+  FR: 'France',
+  BE: 'België',
+  ES: 'España',
+  IT: 'Italia',
+  CA: 'Canada',
+  AU: 'Australia',
+};
+
+/**
  * Navigate to the Settings tab and wait for its content to render.
  *
  * The Settings page is render-gated on `service.loaded()` (a one-shot
@@ -68,16 +89,20 @@ async function selectedRegion(page: Page): Promise<string> {
  * region (NO confirm button — selecting an option commits and dismisses the
  * popover, firing `(ionChange)` → `onRegionChange` → `setRegion`). We therefore:
  *   1. click the `ion-select` to open the popover,
- *   2. click the option whose text matches `region`,
+ *   2. click the option whose VISIBLE TEXT matches the region's DISPLAY NAME
+ *      (spec 0079: the option label now renders `regionDisplayName(region)`, an
+ *      endonym like `Nederland`, while `[value]` stays the raw code `NL`), and
  *   3. wait for the popover to dismiss (selection committed).
  */
 async function pickRegion(page: Page, region: string): Promise<void> {
   await page.locator('ion-select.settings-row__select[label="Region"]').click();
 
-  // The popover renders `ion-select-popover` with one option row per region.
+  // The popover renders `ion-select-popover` with one option row per region;
+  // its label is the display name (endonym), NOT the raw code (spec 0079).
+  const displayName = REGION_DISPLAY_NAMES[region];
   const option = page
     .locator('ion-popover ion-radio, ion-popover ion-item')
-    .filter({ hasText: new RegExp(`^\\s*${region}\\s*$`) })
+    .filter({ hasText: new RegExp(`^\\s*${displayName}\\s*$`) })
     .first();
   await expect(option).toBeVisible();
   await option.click();
