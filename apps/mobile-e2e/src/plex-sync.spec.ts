@@ -4,6 +4,7 @@ import {
   encodeFields,
   readDocument,
   resolveAnonUid,
+  routeTmdbMovie,
   seedFor,
   writeDocument,
 } from './support';
@@ -166,6 +167,13 @@ test('sync outcome', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('CapacitorStorage.plex_token', 'mock-plex-token');
   });
+
+  // TMDB interception (spec 0086): the sync now fetches movie detail to populate
+  // posterPath/voteAverage, so intercept both movie ids to their fixtures BEFORE
+  // the app boots — the plain `development` config used by e2e has no fetch mock,
+  // so unrouted calls would hit the real network and fail (poster stays null).
+  await routeTmdbMovie(page, 550, 'tmdb-movie-detail-550.json');
+  await routeTmdbMovie(page, 335984, 'tmdb-movie-detail-335984.json');
 
   // Boot; the app signs in anonymously against the Auth emulator.
   await page.goto('/');
