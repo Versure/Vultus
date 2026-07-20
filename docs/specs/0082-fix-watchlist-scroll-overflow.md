@@ -2,7 +2,7 @@
 number: 0082
 slug: fix-watchlist-scroll-overflow
 title: Stop the empty Watchlist page scrolling — clip the off-screen filter sheet
-status: implementing
+status: done
 slices: [slice:watchlist]
 scopes: [scope:mobile]
 created: 2026-07-20
