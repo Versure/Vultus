@@ -12,8 +12,8 @@
 
 Total specs: 90
 
-- done: 86
-- approved: 4
+- done: 87
+- approved: 3
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -106,4 +106,4 @@ Total specs: 90
 | 88 | no-notifications-for-completed | Suppress availability/episode notifications for completed or dropped watchlist items | done | slice:dispatch-notifications | scope:functions |
 | 89 | fix-automatic-notification-dispatch | Fix automatic notification dispatch — daily-sync rate-limit hardening and a daily episode-aired airing-scan | approved | slice:sync-titles, slice:dispatch-notifications | scope:functions |
 | 90 | plex-link-code-actions | Add copy-code + "Open plex.tv/link" actions to the Plex link-code stage (onboarding parity + both pages) | approved | slice:onboarding, slice:settings | scope:mobile |
-| 91 | fix-watch-today-header | Shrink the Watch Today hero title/subtitle to match other pages' headings | approved | slice:today | scope:mobile |
+| 91 | fix-watch-today-header | Shrink the Watch Today hero title/subtitle to match other pages' headings | done | slice:today | scope:mobile |
