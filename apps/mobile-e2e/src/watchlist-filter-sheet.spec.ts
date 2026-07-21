@@ -124,6 +124,7 @@ test('watchlist filter sheet opens visible and closes', async ({ page }) => {
   await bootSeededWatchlist(page);
 
   const panel = page.locator('.filter-sheet-panel');
+  const backdrop = page.locator('.filter-sheet-backdrop');
   // Closed by default: the panel is off-screen / non-interactive (the sheet is
   // `visibility: hidden`), so Playwright treats it as hidden.
   await expect(panel).toBeHidden();
@@ -132,6 +133,20 @@ test('watchlist filter sheet opens visible and closes', async ({ page }) => {
   // "Sort and filter") — NOT by icon name or CSS class (watchlist.page.spec.ts
   // L257-266 convention).
   await page.getByRole('button', { name: 'Sort and filter' }).click();
+
+  // Wait for the OPEN transition to actually settle before measuring geometry.
+  // The panel slides from `translateY(100%)` → `translateY(0)` and the backdrop
+  // fades `opacity: 0` → `1` over a 300ms CSS transition. Crucially, the sheet's
+  // `visibility` flips synchronously with the `open` class (NO transition on
+  // `visibility`), so `toBeVisible()` / `boundingBox()` resolve instantly —
+  // potentially BEFORE the transform transition has meaningfully progressed,
+  // snapshotting the panel still near its closed off-screen position (the
+  // deterministic CI `957`px failure). `toHaveCSS` auto-retries the COMPUTED
+  // style until it matches the transition's end state, so these two assertions
+  // gate the subsequent bounding-box checks on the animation being finished —
+  // no fixed sleep (spec 0087 D2: every wait on a real, observable condition).
+  await expect(panel).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)');
+  await expect(backdrop).toHaveCSS('opacity', '1');
 
   // The panel is visible AND fully within the viewport. `toBeVisible()` alone is
   // NOT enough (see file header): the #230 regression left the panel visible but
@@ -169,4 +184,12 @@ test('watchlist filter sheet opens visible and closes', async ({ page }) => {
   // flips back to `visibility: hidden`, so it is no longer visible).
   await panel.locator('.filter-sheet-done').click();
   await expect(panel).toBeHidden();
+
+  // Symmetric settle-wait for the REVERSE (close) transition. `toBeHidden()`
+  // above gates only on `visibility: hidden` (which, like the open case, flips
+  // instantly and is NOT gated on the 300ms transform/opacity reverse); this
+  // extra assertion waits for the backdrop to finish fading back to `opacity: 0`
+  // so the closed end-state is genuinely reached, not merely visibility-hidden
+  // mid-animation. `toHaveCSS` polls the computed style — no fixed sleep.
+  await expect(backdrop).toHaveCSS('opacity', '0');
 });
