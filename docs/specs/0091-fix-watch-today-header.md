@@ -2,7 +2,7 @@
 number: 0091
 slug: fix-watch-today-header
 title: Shrink the Watch Today hero title/subtitle to match other pages' headings
-status: implementing
+status: done
 slices: [slice:today]
 scopes: [scope:mobile]
 created: 2026-07-21
