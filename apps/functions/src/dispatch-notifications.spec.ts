@@ -9,6 +9,7 @@ import type { NotificationDoc } from '@vultus/shared/domain';
 import { handleDispatch, type DispatchEvent } from './dispatch-notifications';
 import {
   createFirestoreNotificationStore,
+  createFirestoreWatchlistStore,
   createMessagingFcmSender,
 } from './dispatch/adapters';
 
@@ -378,5 +379,90 @@ describe('createFirestoreNotificationStore', () => {
     expect(writes[0].path).toBe(
       notificationPath('u2', '1399-US-episode-aired'),
     );
+  });
+});
+
+// --- Watchlist store adapter: findUsersTracking reads status (spec 0088) ----
+
+/**
+ * Fake `db` for `findUsersTracking`: `collectionGroup('watchlist').get()` serves
+ * a single matched watchlist doc (with a parent `users/{uid}` ref), and
+ * `doc('users/{uid}').get()` serves that user's doc.
+ */
+function createWatchlistDb(opts: {
+  tmdbId: number;
+  watchlistData: Record<string, unknown>;
+  uid: string;
+  titleId: string;
+  userData: Record<string, unknown>;
+}) {
+  const watchlistDoc = {
+    id: opts.titleId,
+    data: () => opts.watchlistData,
+    ref: {
+      id: opts.titleId,
+      parent: { parent: { id: opts.uid } },
+    },
+  };
+
+  const collectionGroup = () => ({
+    get: () => Promise.resolve({ docs: [watchlistDoc] }),
+  });
+
+  const doc = (path: string) => ({
+    get: () => {
+      if (path === 'users/' + opts.uid) {
+        return Promise.resolve({ exists: true, data: () => opts.userData });
+      }
+      return Promise.resolve({ exists: false, data: () => undefined });
+    },
+  });
+
+  return { collectionGroup, doc } as unknown as Firestore;
+}
+
+describe('createFirestoreWatchlistStore.findUsersTracking (spec 0088)', () => {
+  const userData = {
+    region: 'NL',
+    notificationPrefs: {
+      episodeAired: true,
+      movieAvailable: true,
+      cameToPlatform: true,
+      deliveryHour: null,
+    },
+    fcmTokens: [],
+  };
+
+  it("reads status off the matched watchlist doc ('completed')", async () => {
+    const db = createWatchlistDb({
+      tmdbId: 603,
+      watchlistData: { tmdbId: 603, status: 'completed' },
+      uid: 'u1',
+      titleId: 'title-1',
+      userData,
+    });
+
+    const users =
+      await createFirestoreWatchlistStore(db).findUsersTracking(603);
+
+    expect(users).toHaveLength(1);
+    expect(users[0].uid).toBe('u1');
+    expect(users[0].status).toBe('completed');
+  });
+
+  it("maps a watchlist doc missing status to 'watching' (fallback)", async () => {
+    const db = createWatchlistDb({
+      tmdbId: 603,
+      watchlistData: { tmdbId: 603 },
+      uid: 'u1',
+      titleId: 'title-1',
+      userData,
+    });
+
+    const users =
+      await createFirestoreWatchlistStore(db).findUsersTracking(603);
+
+    expect(users).toHaveLength(1);
+    expect(users[0].status).toBe('watching');
   });
 });
