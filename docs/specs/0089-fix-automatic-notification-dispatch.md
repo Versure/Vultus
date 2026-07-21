@@ -2,7 +2,7 @@
 number: 0089
 slug: fix-automatic-notification-dispatch
 title: Fix automatic notification dispatch — daily-sync rate-limit hardening and a daily episode-aired airing-scan
-status: approved
+status: implementing
 slices: [slice:sync-titles, slice:dispatch-notifications]
 scopes: [scope:functions]
 created: 2026-07-21
@@ -817,13 +817,13 @@ component/e2e (no UI).
       capped, credential-free `errors` array** (`main.ts:259-263`) so response and
       `sync-runs` doc are identical, with the `main.ts:91-92` invariant comment updated;
       per-title `logger.error`; `daily-sync.yml` fails the job on `errored*100/
-    gathered >= 20` or `errored >= 20`, warns otherwise, and its `curl --max-time`
+gathered >= 20` or `errored >= 20`, warns otherwise, and its `curl --max-time`
       / timeouts sit above the new 540s function ceiling. (Tasks 3–4)
 - [ ] `syncTitles` `timeoutSeconds` raised to 540; `triggerSync` engine wiring
       unchanged. (Task 3)
 - [ ] **READMEs updated** (CLAUDE.md lib-README rule): `libs/functions/sync-titles/
-    README.md` (backoff/retry/engine config) and `libs/functions/dispatch-
-    notifications/README.md` (single-owner episode-aired via the airing-scan,
+README.md` (backoff/retry/engine config) and `libs/functions/dispatch-
+notifications/README.md` (single-owner episode-aired via the airing-scan,
       recency window, per-episode id + `exists` idempotency, `write(uid,id,doc)`). No
       other lib README changes.
 - [ ] **Verify-and-record NO change (D6/D7):** `firestore.rules`,

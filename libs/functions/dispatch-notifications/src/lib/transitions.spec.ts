@@ -4,6 +4,7 @@ import {
   classifyFlatrateTransition,
   decideKinds,
   hasFlatrate,
+  isEpisodeRecentlyAired,
   isWithinDeliveryWindow,
 } from './transitions';
 
@@ -80,114 +81,70 @@ describe('hasFlatrate', () => {
 });
 
 describe('decideKinds', () => {
-  const NOW = '2026-06-22T00:00:00.000Z';
-
   it('appeared + movie → ["movie-available"]', () => {
-    expect(
-      decideKinds({
-        type: 'movie',
-        transition: 'appeared',
-        hasFlatrateNow: true,
-        episodeAirDates: [],
-        now: NOW,
-      }),
-    ).toEqual(['movie-available']);
+    expect(decideKinds({ type: 'movie', transition: 'appeared' })).toEqual([
+      'movie-available',
+    ]);
   });
 
-  it('appeared + tv with no episodes → ["show-came-to-platform"]', () => {
-    expect(
-      decideKinds({
-        type: 'tv',
-        transition: 'appeared',
-        hasFlatrateNow: true,
-        episodeAirDates: [],
-        now: NOW,
-      }),
-    ).toEqual(['show-came-to-platform']);
-  });
-
-  it('tv + hasFlatrateNow + episode airDate <= now → includes "episode-aired"', () => {
-    expect(
-      decideKinds({
-        type: 'tv',
-        transition: 'unchanged',
-        hasFlatrateNow: true,
-        episodeAirDates: ['2026-06-21T00:00:00.000Z'],
-        now: NOW,
-      }),
-    ).toEqual(['episode-aired']);
-  });
-
-  it('tv that both appeared AND has an aired episode → both kinds', () => {
-    expect(
-      decideKinds({
-        type: 'tv',
-        transition: 'appeared',
-        hasFlatrateNow: true,
-        episodeAirDates: ['2026-06-20T00:00:00.000Z'],
-        now: NOW,
-      }),
-    ).toEqual(['show-came-to-platform', 'episode-aired']);
+  it('appeared + tv → ["show-came-to-platform"]', () => {
+    expect(decideKinds({ type: 'tv', transition: 'appeared' })).toEqual([
+      'show-came-to-platform',
+    ]);
   });
 
   it('removed → [] (no notification)', () => {
-    expect(
-      decideKinds({
-        type: 'movie',
-        transition: 'removed',
-        hasFlatrateNow: false,
-        episodeAirDates: [],
-        now: NOW,
-      }),
-    ).toEqual([]);
+    expect(decideKinds({ type: 'movie', transition: 'removed' })).toEqual([]);
+    expect(decideKinds({ type: 'tv', transition: 'removed' })).toEqual([]);
   });
 
-  it('tv + hasFlatrateNow but all episode airDates > now → no "episode-aired"', () => {
-    expect(
-      decideKinds({
-        type: 'tv',
-        transition: 'unchanged',
-        hasFlatrateNow: true,
-        episodeAirDates: ['2026-06-23T00:00:00.000Z'],
-        now: NOW,
-      }),
-    ).toEqual([]);
+  it('unchanged → [] (no availability kind)', () => {
+    expect(decideKinds({ type: 'movie', transition: 'unchanged' })).toEqual([]);
+    expect(decideKinds({ type: 'tv', transition: 'unchanged' })).toEqual([]);
   });
 
-  it('tv with aired episode but not on flatrate now → no "episode-aired"', () => {
-    expect(
-      decideKinds({
-        type: 'tv',
-        transition: 'unchanged',
-        hasFlatrateNow: false,
-        episodeAirDates: ['2026-06-20T00:00:00.000Z'],
-        now: NOW,
-      }),
-    ).toEqual([]);
+  // Regression (spec 0089 / D3): episode-aired is owned exclusively by the
+  // airing-scan (`dispatchEpisodeAired`); decideKinds must never emit it.
+  it('never returns "episode-aired" in any branch', () => {
+    const branches = (['appeared', 'removed', 'unchanged'] as const).flatMap(
+      (transition) =>
+        (['movie', 'tv'] as const).map((type) =>
+          decideKinds({ type, transition }),
+        ),
+    );
+    branches.forEach((kinds) => expect(kinds).not.toContain('episode-aired'));
+  });
+});
+
+describe('isEpisodeRecentlyAired', () => {
+  const NOW = '2026-06-22T00:00:00.000Z';
+
+  it('1 day before now → true', () => {
+    expect(isEpisodeRecentlyAired('2026-06-21T00:00:00.000Z', NOW, 3)).toBe(
+      true,
+    );
   });
 
-  it('movie never yields "episode-aired" even with aired dates and flatrate', () => {
-    expect(
-      decideKinds({
-        type: 'movie',
-        transition: 'unchanged',
-        hasFlatrateNow: true,
-        episodeAirDates: ['2026-06-20T00:00:00.000Z'],
-        now: NOW,
-      }),
-    ).toEqual([]);
+  it('exactly now - 3d (lower boundary) → true', () => {
+    expect(isEpisodeRecentlyAired('2026-06-19T00:00:00.000Z', NOW, 3)).toBe(
+      true,
+    );
   });
 
-  it('episode airing exactly at now is included (<= boundary)', () => {
-    expect(
-      decideKinds({
-        type: 'tv',
-        transition: 'unchanged',
-        hasFlatrateNow: true,
-        episodeAirDates: [NOW],
-        now: NOW,
-      }),
-    ).toEqual(['episode-aired']);
+  it('exactly now (upper boundary) → true', () => {
+    expect(isEpisodeRecentlyAired(NOW, NOW, 3)).toBe(true);
+  });
+
+  it('5 days before now (before window) → false', () => {
+    expect(isEpisodeRecentlyAired('2026-06-17T00:00:00.000Z', NOW, 3)).toBe(
+      false,
+    );
+  });
+
+  it('future airDate (> now, above window) → false', () => {
+    expect(isEpisodeRecentlyAired('2026-06-23T00:00:00.000Z', NOW, 3)).toBe(
+      false,
+    );
   });
 });
 

@@ -14,10 +14,10 @@ permissions:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 13
     steps:
       - name: Trigger daily sync
-        timeout-minutes: 8
+        timeout-minutes: 11
         env:
           SYNC_URL: ${{ vars.VULTUS_SYNC_URL }}
           SYNC_SECRET: ${{ secrets.SYNC_SHARED_SECRET }}
@@ -39,7 +39,7 @@ jobs:
           # 403 branching that this step exists for.
           status="$(curl --silent --show-error \
             --retry 3 --retry-all-errors --retry-delay 5 \
-            --max-time 330 \
+            --max-time 550 \
             -o "$body_file" -w '%{http_code}' \
             -X POST "$SYNC_URL" \
             -H "X-Vultus-Sync-Secret: $SYNC_SECRET" \
@@ -53,6 +53,29 @@ jobs:
           echo
           case "$status" in
             2??)
+              # D4: gate on the per-title error rate reported in the 200 body.
+              # SyncRunResponse: { ok, trigger, gathered, synced, skipped,
+              # errored, forced, durationMs, errorSample }. errorSample is the
+              # capped (<=10), credential-free list of per-title error reasons.
+              # Integer arithmetic only (no floating point): compare
+              # errored*100 >= 20*gathered instead of dividing.
+              gathered="$(jq -r '.gathered // 0' "$body_file")"
+              errored="$(jq -r '.errored // 0' "$body_file")"
+              if [ "$gathered" -eq 0 ]; then
+                echo "Daily sync: gathered 0 titles — healthy no-op."
+                exit 0
+              fi
+              if [ "$errored" -eq 0 ]; then
+                echo "Daily sync: 0 errored of $gathered gathered — healthy."
+                exit 0
+              fi
+              if [ "$((errored * 100))" -ge "$((20 * gathered))" ] || [ "$errored" -ge 20 ]; then
+                echo "::error::Daily sync error rate too high: errored=$errored of gathered=$gathered (threshold: >=20% or >=20 absolute). Per-title reasons:"
+                jq -r '.errorSample[]?' "$body_file"
+                exit 1
+              fi
+              echo "::warning::Daily sync had $errored errored title(s) of $gathered gathered (under the failure threshold). Per-title reasons:"
+              jq -r '.errorSample[]?' "$body_file"
               exit 0
               ;;
             403)

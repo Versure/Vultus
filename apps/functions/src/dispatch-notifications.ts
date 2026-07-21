@@ -18,7 +18,6 @@ import { createNotificationDispatcher } from '@vultus/functions/dispatch-notific
 import type { AvailabilityChange } from '@vultus/functions/dispatch-notifications';
 import type { Region, TitleType, WatchProvider } from '@vultus/shared/domain';
 import {
-  createFirestoreEpisodeStore,
   createFirestoreNotificationStore,
   createFirestoreWatchlistStore,
   createMessagingFcmSender,
@@ -95,7 +94,6 @@ export async function handleDispatch(
 
   const dispatcher = createNotificationDispatcher({
     watchlist: createFirestoreWatchlistStore(db),
-    episodes: createFirestoreEpisodeStore(db),
     notifications: createFirestoreNotificationStore(db),
     fcm: createMessagingFcmSender(messaging, titleStr),
   });

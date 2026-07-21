@@ -19,6 +19,7 @@ import { defineSecret, defineString } from 'firebase-functions/params';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import type { Firestore } from 'firebase-admin/firestore';
+import { getMessaging } from 'firebase-admin/messaging';
 import {
   createSyncEngine,
   createTmdbClient,
@@ -50,6 +51,7 @@ import {
   createWatchlistStatusStoreAdapter,
   createNextWatchableStoreAdapter,
 } from './sync-episodes';
+import { runEpisodeAiredScan } from './dispatch-episode-aired';
 import { classifyAuth } from './lib/auth';
 import type { VerifyToken } from './lib/auth';
 import { dedupeTitles } from './lib/gather';
@@ -88,8 +90,10 @@ export const RATE_LIMIT_MS = 5 * 60 * 1000;
 /** Staleness window (~20h): skip a title synced more recently, unless forced. */
 export const STALENESS_WINDOW_MS = 20 * 60 * 60 * 1000;
 
-/** The JSON summary returned on a 200. Never includes a secret, token, or raw
- *  per-title reason — aggregate counts only. */
+/** The JSON summary returned on a 200. Never includes a secret or token.
+ *  `errorSample` is exactly the capped, credential-free per-title reason list
+ *  mirrored from the `sync-runs` doc (same array — spec 0089 / D4 / NB1), so the
+ *  200 body and the `sync-runs` record carry identical content. */
 export interface SyncRunResponse {
   ok: true;
   trigger: 'cron' | 'user';
@@ -99,6 +103,9 @@ export interface SyncRunResponse {
   errored: number; // engine results with outcome 'error'
   forced: boolean;
   durationMs: number;
+  /** Capped (≤10), credential-free per-title error reasons — identical to the
+   *  `sync-runs` doc's `errors` array (spec 0089 / D4). */
+  errorSample: string[];
 }
 
 /** Dependencies injected into `runSync`, so tests drive it with fakes. */
@@ -118,6 +125,10 @@ export interface RunSyncDeps {
   /** Factory for the episode sync engine (best-effort daily pass, entry point B).
    *  Optional — omit to skip the episode pass (existing tests remain green). */
   createEpisodeEngine?: (db: Firestore) => EpisodeSyncEngine;
+  /** The daily episode-aired airing-scan (spec 0089 / D3), invoked right AFTER
+   *  the episode-insert pass (best-effort). Optional — omit to skip the scan
+   *  (wired for `syncTitles`, not `triggerSync`; existing tests remain green). */
+  runEpisodeAiredScan?: (db: Firestore) => Promise<void>;
 }
 
 /** A minimal view of the request `runSync` needs — satisfied by the real
@@ -250,6 +261,22 @@ export async function runSync(
     }
   }
 
+  // Episode-aired airing-scan (spec 0089 / D3) — runs STRICTLY AFTER the
+  // episode-insert pass so it reads each show's `status` after spec 0074's
+  // completed→watching revert write has committed (NB2), and so it sees the
+  // just-inserted episode docs. Best-effort: a scan failure is logged and NEVER
+  // fails the run (mirrors the episode pass above).
+  if (deps.runEpisodeAiredScan) {
+    try {
+      await deps.runEpisodeAiredScan(deps.db);
+    } catch (err) {
+      logger.error(
+        'episode-aired airing-scan failed (best-effort, continuing)',
+        err,
+      );
+    }
+  }
+
   const end = deps.now();
   await writeSyncState(deps.db, end, start);
 
@@ -261,6 +288,18 @@ export async function runSync(
     .map((r) => r.reason)
     .filter((s): s is string => !!s)
     .slice(0, 10);
+  // Per-title error visibility (spec 0089 / D4): log each errored title's
+  // (already credential-free) reason so a half-failing nightly run is no longer
+  // invisible in the logs. Aggregate counts alone hid the ~47% failure.
+  for (const r of results) {
+    if (r.outcome === 'error') {
+      logger.error('[syncTitles] title errored', {
+        tmdbId: r.tmdbId,
+        type: r.type,
+        reason: r.reason,
+      });
+    }
+  }
   try {
     await writeSyncRun(deps.db, {
       kind: 'cron',
@@ -286,6 +325,9 @@ export async function runSync(
     errored,
     forced,
     durationMs: end - start,
+    // Identical to the `sync-runs` doc's `errors` array (NB1): same capped,
+    // credential-free per-title reasons — no new credential-exposure surface.
+    errorSample: errors,
   };
   logger.info('syncTitles run complete', {
     trigger,
@@ -311,9 +353,11 @@ function ensureAdmin(): Firestore {
 export const syncTitles = onRequest(
   // Default gen2 timeout is 60s; a full pass over the tracked-title union
   // (serial TMDB/Trakt throttle, spec 0009 §Scaling) already exceeds that at
-  // current watchlist size (~130s observed), so every cron run 504'd before
-  // finishing. Raised with headroom per spec 0009's documented escalation.
-  { secrets: [SYNC_SHARED_SECRET, TMDB_READ_TOKEN], timeoutSeconds: 300 },
+  // current watchlist size (~130s observed). The spec-0089 backoff floor +
+  // second-pass retry + episode-aired airing-scan can push total runtime past
+  // the previous 300s ceiling, so it is raised to 540s (the workflow's
+  // `curl --max-time` sits above this — spec 0089 / D2 / D4).
+  { secrets: [SYNC_SHARED_SECRET, TMDB_READ_TOKEN], timeoutSeconds: 540 },
   async (req, res) => {
     const db = ensureAdmin();
     const createEngine = (firestore: Firestore): SyncEngine =>
@@ -321,6 +365,12 @@ export const syncTitles = onRequest(
         tmdb: createTmdbClient({ readAccessToken: TMDB_READ_TOKEN.value() }),
         trakt: createTraktClient({ clientId: TRAKT_CLIENT_ID.value() }),
         store: createFirestoreTitleCacheStore(firestore),
+        // Spec 0089 / D2: one extra pass over retryable-errored (429/transport)
+        // titles after a short cooldown, so a transient rate-limit blip never
+        // permanently skips a title's availability write for the day. The manual
+        // `triggerSync` path is left unconfigured (never rate-limits).
+        retryErroredPasses: 1,
+        retryDelayMs: 2000,
       });
 
     const output = await runSync(
@@ -337,6 +387,10 @@ export const syncTitles = onRequest(
             watchlistStatus: createWatchlistStatusStoreAdapter(firestore), // NEW (spec 0074, D5)
             nextWatchable: createNextWatchableStoreAdapter(firestore), // NEW (spec 0081)
           }),
+        // Spec 0089 / D3: the daily episode-aired airing-scan, invoked right
+        // after the episode-insert pass. Wired for `syncTitles` only.
+        runEpisodeAiredScan: (firestore: Firestore): Promise<void> =>
+          runEpisodeAiredScan(firestore, getMessaging()),
         verifyToken: verifyIdToken,
         secret: SYNC_SHARED_SECRET.value(),
         now: () => Date.now(),
