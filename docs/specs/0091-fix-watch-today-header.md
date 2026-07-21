@@ -2,7 +2,7 @@
 number: 0091
 slug: fix-watch-today-header
 title: Shrink the Watch Today hero title/subtitle to match other pages' headings
-status: approved
+status: implementing
 slices: [slice:today]
 scopes: [scope:mobile]
 created: 2026-07-21
@@ -93,8 +93,8 @@ new/edited Stitch screen, no data-model / Firestore / functions change, no
 
 ## Affected slices & Sheriff tags
 
-| Project      | Path                | Sheriff tags                  | Change                                                                                                                                          |
-| ------------ | ------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Project      | Path                | Sheriff tags                  | Change                                                                                                                                                            |
+| ------------ | ------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | mobile-today | `libs/mobile/today` | `scope:mobile`, `slice:today` | `today.page.html`: `<h1>`→`<h2>` on the hero title. `today.page.scss`: `.hero-title` + `.hero-subtitle` token swaps + comment. `.spec.ts`: 1 tag/class assertion. |
 
 - **No cross-slice / cross-scope import.** A single existing `scope:mobile` slice
@@ -149,10 +149,10 @@ tokens on two existing text elements change.
 **Type-scale contract (checkable — the Watch Today hero, verify via serve-mock;
 tokens reference `docs/design/vultus-design-system.md`, not reprinted hex):**
 
-| Element                  | Tag (after)     | Before (token)         | After (token)     | Resulting scale     |
-| ------------------------ | --------------- | ---------------------- | ----------------- | ------------------- |
-| `.hero-title` "Watch Today" | `<h2>` (was `<h1>`) | `display-lg-mobile`    | **`headline-sm`** | 20px / 600 / 28px   |
-| `.hero-subtitle` (subtitle) | `<p>` (unchanged)   | `body-lg`              | **`body-md`**     | 14px / 400 / 20px   |
+| Element                     | Tag (after)         | Before (token)      | After (token)     | Resulting scale   |
+| --------------------------- | ------------------- | ------------------- | ----------------- | ----------------- |
+| `.hero-title` "Watch Today" | `<h2>` (was `<h1>`) | `display-lg-mobile` | **`headline-sm`** | 20px / 600 / 28px |
+| `.hero-subtitle` (subtitle) | `<p>` (unchanged)   | `body-lg`           | **`body-md`**     | 14px / 400 / 20px |
 
 - **Title** uses `--vultus-text-headline-sm-size` / `-weight` / `-line`, color
   `--vultus-on-surface`, `margin: 0 0 var(--vultus-space-xs)` (unchanged). This is
@@ -296,5 +296,5 @@ Tailored from the PLAN §5 checklist. Every checkbox maps to Task A.
   change, no cross-slice import, no `User` field (F4 N/A). Fully consistent with
   PLAN §3 vertical-slice and the "don't extract to shared until 3+ slices" rule
   (the shared page-header refactor is explicitly deferred).
-</content>
-</invoke>
+  </content>
+  </invoke>
