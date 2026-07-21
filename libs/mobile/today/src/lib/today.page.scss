@@ -83,8 +83,11 @@ vultus-error-state.fill-state {
 }
 
 // -----------------------------------------------------------------------------
-// Hero — `mb-10` (40px). Title display-lg-mobile (28px/700); subtitle body-lg
-// (16px/400) on-surface-variant.
+// Hero — `mb-10` (40px). Title headline-sm (20px/600) on-surface; subtitle
+// body-md (14px/400) on-surface-variant. Deliberate deviation from Stitch screen
+// `812340847a604f8a968021183690bf54` (which specced the larger display-lg-mobile
+// title / body-lg subtitle) — shrunk to match the other tabs' canonical page-title
+// scale for cross-page consistency (issue #243).
 // -----------------------------------------------------------------------------
 .hero {
   margin-bottom: var(--vultus-space-5);
@@ -93,18 +96,18 @@ vultus-error-state.fill-state {
 .hero-title {
   margin: 0 0 var(--vultus-space-xs);
   font-family: var(--vultus-font-family);
-  font-size: var(--vultus-text-display-lg-mobile-size);
-  font-weight: var(--vultus-text-display-lg-weight);
-  line-height: var(--vultus-text-display-lg-mobile-line);
+  font-size: var(--vultus-text-headline-sm-size);
+  font-weight: var(--vultus-text-headline-sm-weight);
+  line-height: var(--vultus-text-headline-sm-line);
   color: var(--vultus-on-surface);
 }
 
 .hero-subtitle {
   margin: 0;
   font-family: var(--vultus-font-family);
-  font-size: var(--vultus-text-body-lg-size);
-  font-weight: var(--vultus-text-body-lg-weight);
-  line-height: var(--vultus-text-body-lg-line);
+  font-size: var(--vultus-text-body-md-size);
+  font-weight: var(--vultus-text-body-md-weight);
+  line-height: var(--vultus-text-body-md-line);
   color: var(--vultus-on-surface-variant);
 }
 
