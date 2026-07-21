@@ -2,7 +2,7 @@
 number: 0087
 slug: fix-watchlist-filter-sheet-clip
 title: Fix the clipped Watchlist filter sheet — bind `open` on the panel/backdrop themselves
-status: approved
+status: implementing
 slices: [slice:watchlist]
 scopes: [scope:mobile]
 created: 2026-07-21

@@ -333,17 +333,11 @@ vultus-error-state.fill-state {
   // affecting the open panel (translateY(0), within this box). Issue #159 follow-up.
   overflow: hidden;
 
+  // Same-element toggle (the sheet's own visibility/pointer-events) — this rule
+  // matches on the very element whose class flips, so it applies reliably.
   &.open {
     visibility: visible;
     pointer-events: auto;
-
-    .filter-sheet-backdrop {
-      opacity: 1;
-    }
-
-    .filter-sheet-panel {
-      transform: translateY(0);
-    }
   }
 }
 
@@ -354,6 +348,18 @@ vultus-error-state.fill-state {
   backdrop-filter: blur(4px);
   opacity: 0;
   transition: opacity 300ms ease;
+}
+
+// Open-state declarations bound directly on the backdrop/panel themselves (via
+// their own `[class.open]` bindings), NOT via a nested
+// `.filter-sheet.open .filter-sheet-panel` ancestor-descendant selector. The
+// nested descendant override failed to win the cascade in-browser — toggling
+// `open` on the ancestor did not reliably restyle the descendants, so the panel
+// stayed at its closed `translateY(100%)` and was clipped by 0082's
+// `overflow: hidden` (issue #230, follow-up to spec 0082). A same-element class
+// toggle sidesteps that invalidation gap.
+.filter-sheet-backdrop.open {
+  opacity: 1;
 }
 
 .filter-sheet-panel {
@@ -369,6 +375,10 @@ vultus-error-state.fill-state {
   box-shadow: 0 -8px 32px rgb(0 0 0 / 0.45);
   transform: translateY(100%);
   transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.filter-sheet-panel.open {
+  transform: translateY(0);
 }
 
 .filter-sheet-handle {

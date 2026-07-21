@@ -13,7 +13,8 @@
 Total specs: 86
 
 - done: 84
-- approved: 2
+- approved: 1
+- implementing: 1
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -102,4 +103,4 @@ Total specs: 86
 | 83 | watch-today-tab | Add a Watch Today tab showing everything ready to watch right now | done | slice:today, slice:onboarding | scope:mobile |
 | 85 | background-plex-sync | Background Plex sync (periodic on-device sync while backgrounded) | done | slice:settings | scope:mobile, scope:shared |
 | 86 | fix-plex-sync-posters | Fix Plex sync — fetch and denormalize posterPath/voteAverage on add + backfill | done | slice:settings | scope:mobile |
-| 87 | fix-watchlist-filter-sheet-clip | Fix the clipped Watchlist filter sheet — bind `open` on the panel/backdrop themselves | approved | slice:watchlist | scope:mobile |
+| 87 | fix-watchlist-filter-sheet-clip | Fix the clipped Watchlist filter sheet — bind `open` on the panel/backdrop themselves | implementing | slice:watchlist | scope:mobile |
