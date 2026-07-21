@@ -16,12 +16,14 @@ import {
   IonToolbar,
   NavController,
 } from '@ionic/angular/standalone';
+import { Browser } from '@capacitor/browser';
 import { addIcons } from 'ionicons';
 import {
   alertCircle,
   arrowBack,
   checkmarkCircle,
   copyOutline,
+  openOutline,
   shieldCheckmark,
 } from 'ionicons/icons';
 import { PlexBackgroundService } from './plex-background.service';
@@ -97,6 +99,7 @@ export class PlexConnectPage implements OnInit, OnDestroy {
       arrowBack,
       checkmarkCircle,
       copyOutline,
+      openOutline,
       shieldCheckmark,
     });
   }
@@ -158,6 +161,19 @@ export class PlexConnectPage implements OnInit, OnDestroy {
       this.copied.set(false);
       this.copiedTimer = null;
     }, 2000);
+  }
+
+  /**
+   * "Open plex.tv/link" — open the Plex link page in the system/in-app browser
+   * so the user can enter the displayed code without re-typing it. Uses
+   * `@capacitor/browser` directly with NO native guard (D5): the plugin's web
+   * implementation opens a new tab via `window.open`, so it works unmodified in
+   * serve-mock/web and on device. Fire-and-forget (`void`) — a rejected web open
+   * never surfaces as an unhandled rejection. The OS/in-app-browser's own
+   * back/dismiss gesture returns the user to this stage.
+   */
+  protected openPlexLink(): void {
+    void Browser.open({ url: 'https://plex.tv/link' });
   }
 
   /**

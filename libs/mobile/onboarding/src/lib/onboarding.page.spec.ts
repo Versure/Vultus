@@ -23,6 +23,16 @@ vi.mock('./onboarding.service', () => ({
 vi.mock('./onboarding-plex-link.service', () => ({
   OnboardingPlexLinkService: class OnboardingPlexLinkService {},
 }));
+// Mock @capacitor/browser (the "Open plex.tv/link" action) in the repo's
+// house style — a top-level `vi.fn()` spy wrapped in an arrow inside the hoisted
+// factory (the wrapper defers access so the const isn't hit under TDZ), asserted
+// directly rather than via an unbound `Browser.open` reference.
+const browserOpenMock = vi.fn<(opts: { url: string }) => Promise<void>>();
+vi.mock('@capacitor/browser', () => ({
+  Browser: {
+    open: (opts: { url: string }): Promise<void> => browserOpenMock(opts),
+  },
+}));
 
 import { OnboardingPage } from './onboarding.page';
 import { OnboardingPlexLinkService } from './onboarding-plex-link.service';
@@ -174,10 +184,38 @@ async function continueFromRegion(
   await fixture.whenStable();
 }
 
+/**
+ * Drive the wizard to step 4 with the Plex link machine at a given stage/code so
+ * the step-4 code/waiting stage renders. `setup()` starts at step 1; jumping the
+ * `currentStep` signal + setting the mock link stage re-renders step 4.
+ */
+async function setupStep4(
+  stage: PlexLinkStage,
+  code: string | null = 'H7X2',
+): Promise<Awaited<ReturnType<typeof setup>>> {
+  const ctx = await setup();
+  ctx.service.currentStep.set(4);
+  ctx.plexLink.stage.set(stage);
+  ctx.plexLink.code.set(code);
+  ctx.fixture.detectChanges();
+  await ctx.fixture.whenStable();
+  return ctx;
+}
+
 describe('OnboardingPage (5-step wizard)', () => {
+  let writeText: ReturnType<typeof vi.fn>;
+
   beforeEach(() => {
     TestBed.resetTestingModule();
     navigateMock.mockClear();
+    browserOpenMock.mockClear();
+    // jsdom has no `navigator.clipboard` — stub the WEB Clipboard API the page
+    // uses (navigator.clipboard.writeText), fresh per test.
+    writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
   });
 
   it('renders step 1 (region) first with the "Step 1 of 5" indicator and no Back', async () => {
@@ -362,5 +400,72 @@ describe('OnboardingPage (5-step wizard)', () => {
     expect(navigateMock).toHaveBeenCalledWith(['/tabs/today'], {
       replaceUrl: true,
     });
+  });
+
+  // ── Step-4 copy-code parity + "Open plex.tv/link" (spec 0090) ──────────────
+
+  it('step-4 "code": tapping copy writes the code and shows "Copied" feedback', async () => {
+    const { el, fixture } = await setupStep4('code', 'H7X2');
+    expect(el.querySelector('[data-test="copied-feedback"]')).toBeFalsy();
+
+    (el.querySelectorAll('.copy-button')[0] as HTMLElement).click();
+    // Let the async writeText resolve, then flush the resulting signal update.
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(writeText).toHaveBeenCalledWith('H7X2');
+    expect(
+      el.querySelector('[data-test="copied-feedback"]')?.textContent?.trim(),
+    ).toBe('Copied');
+  });
+
+  it('step-4 copy is resilient: no clipboard API → no throw, no "Copied"', async () => {
+    const { el, fixture } = await setupStep4('code', 'H7X2');
+    // Remove the Clipboard API for this test (feature-detect must short-circuit).
+    Object.defineProperty(navigator, 'clipboard', {
+      value: undefined,
+      configurable: true,
+    });
+
+    expect(() =>
+      (el.querySelectorAll('.copy-button')[0] as HTMLElement).click(),
+    ).not.toThrow();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(el.querySelector('[data-test="copied-feedback"]')).toBeFalsy();
+  });
+
+  it('step-4 "code": renders "Open plex.tv/link" and opens the URL once on tap', async () => {
+    const { el } = await setupStep4('code');
+    const openBtn = el.querySelector('[data-test="open-plex-link"]');
+    expect(openBtn).toBeTruthy();
+    expect(openBtn?.textContent?.trim()).toBe('Open plex.tv/link');
+
+    (openBtn as HTMLElement).click();
+    expect(browserOpenMock).toHaveBeenCalledTimes(1);
+    expect(browserOpenMock).toHaveBeenCalledWith({
+      url: 'https://plex.tv/link',
+    });
+  });
+
+  it('step-4: copy + open-link buttons render in "code" and "waiting" stages', async () => {
+    for (const stage of ['code', 'waiting'] as const) {
+      // Each iteration configures a fresh TestBed, so reset the previous one.
+      TestBed.resetTestingModule();
+      const { el } = await setupStep4(stage);
+      expect(el.querySelector('.copy-button')).toBeTruthy();
+      expect(el.querySelector('[data-test="open-plex-link"]')).toBeTruthy();
+    }
+  });
+
+  it('step-4: copy + open-link buttons are ABSENT in idle/connected/error stages', async () => {
+    for (const stage of ['idle', 'connected', 'error'] as const) {
+      // Each iteration configures a fresh TestBed, so reset the previous one.
+      TestBed.resetTestingModule();
+      const { el } = await setupStep4(stage);
+      expect(el.querySelector('.copy-button')).toBeFalsy();
+      expect(el.querySelector('[data-test="open-plex-link"]')).toBeFalsy();
+    }
   });
 });

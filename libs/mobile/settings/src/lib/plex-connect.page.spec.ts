@@ -15,6 +15,19 @@ vi.mock('./plex-sync.service', () => ({
 vi.mock('./plex-background.service', () => ({
   PlexBackgroundService: class PlexBackgroundService {},
 }));
+// Mock @capacitor/browser so the "Open plex.tv/link" button never opens a real
+// tab under test; we assert the page called Browser.open with the fixed URL.
+// The factory delegates to a standalone `vi.fn()` (house style, mirrors
+// plex-background.service.spec.ts) so assertions reference a plain function
+// rather than the `Browser.open` method (avoids @typescript-eslint/unbound-method).
+const browserOpenMock = vi
+  .fn<(opts: { url: string }) => Promise<void>>()
+  .mockResolvedValue(undefined);
+vi.mock('@capacitor/browser', () => ({
+  Browser: {
+    open: (opts: { url: string }): Promise<void> => browserOpenMock(opts),
+  },
+}));
 
 import { PlexConnectPage } from './plex-connect.page';
 import { PlexLinkService } from './plex-link.service';
@@ -94,6 +107,7 @@ describe('PlexConnectPage', () => {
 
   beforeEach(() => {
     TestBed.resetTestingModule();
+    browserOpenMock.mockClear();
     // jsdom has no `navigator.clipboard` — stub the WEB Clipboard API the page
     // uses (navigator.clipboard.writeText), fresh per test.
     writeText = vi.fn().mockResolvedValue(undefined);
@@ -152,6 +166,35 @@ describe('PlexConnectPage', () => {
     expect(
       el.querySelector('[data-test="copied-feedback"]')?.textContent?.trim(),
     ).toBe('Copied');
+  });
+
+  it('stage "code": renders "Open plex.tv/link" and opens the URL on tap', async () => {
+    const { el } = await setup('code');
+    const open = el.querySelector('[data-test="open-plex-link"]');
+    expect(open?.textContent?.trim()).toBe('Open plex.tv/link');
+
+    (open as HTMLElement).click();
+    expect(browserOpenMock).toHaveBeenCalledTimes(1);
+    expect(browserOpenMock).toHaveBeenCalledWith({
+      url: 'https://plex.tv/link',
+    });
+  });
+
+  it('"Open plex.tv/link" is present in the code/waiting stage only', async () => {
+    for (const stage of ['code', 'waiting'] as const) {
+      const { el } = await setup(stage);
+      expect(el.querySelector('[data-test="open-plex-link"]')).toBeTruthy();
+      TestBed.resetTestingModule();
+    }
+    for (const [stage, reason] of [
+      ['idle', null],
+      ['connected', null],
+      ['error', 'expired'],
+    ] as const) {
+      const { el } = await setup(stage, reason);
+      expect(el.querySelector('[data-test="open-plex-link"]')).toBeFalsy();
+      TestBed.resetTestingModule();
+    }
   });
 
   it('stage "waiting": renders "Waiting for authorization…" and "Cancel"', async () => {
