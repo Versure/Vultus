@@ -1,5 +1,13 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import {
+  Component,
+  type OnDestroy,
+  computed,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 import { Router } from '@angular/router';
+import { Browser } from '@capacitor/browser';
 import {
   IonButton,
   IonContent,
@@ -15,7 +23,13 @@ import {
   type Region,
 } from '@vultus/shared/domain';
 import { addIcons } from 'ionicons';
-import { alertCircle, checkmarkCircle, shieldCheckmark } from 'ionicons/icons';
+import {
+  alertCircle,
+  checkmarkCircle,
+  copyOutline,
+  openOutline,
+  shieldCheckmark,
+} from 'ionicons/icons';
 import { OnboardingPlexLinkService } from './onboarding-plex-link.service';
 import { ONBOARDING_PROVIDERS } from './onboarding.providers';
 import { OnboardingService } from './onboarding.service';
@@ -69,10 +83,16 @@ const TMDB_LOGO_BASE = 'https://image.tmdb.org/t/p/w92';
   templateUrl: './onboarding.page.html',
   styleUrl: './onboarding.page.scss',
 })
-export class OnboardingPage {
+export class OnboardingPage implements OnDestroy {
   protected readonly service = inject(OnboardingService);
   protected readonly plexLink = inject(OnboardingPlexLinkService);
   private readonly router = inject(Router);
+
+  /** Transient "Copied" confirmation for the step-4 link code, auto-cleared
+   *  ~2s after a successful copy. Slice-local copy of the Settings Connect-Plex
+   *  pattern (spec 0073); NOT extracted cross-slice (spec 0090 D3, 2 slices < 3+). */
+  protected readonly copied = signal(false);
+  private copiedTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** Step-1 selection (defaults to `NL`); persisted via `setRegion` on Continue.
    *  Held on the component so a Back-nav to step 1 still shows the prior pick. */
@@ -118,7 +138,13 @@ export class OnboardingPage {
   });
 
   constructor() {
-    addIcons({ checkmarkCircle, alertCircle, shieldCheckmark });
+    addIcons({
+      checkmarkCircle,
+      alertCircle,
+      shieldCheckmark,
+      copyOutline,
+      openOutline,
+    });
 
     // Step-entry side effect: load the provider catalog when the wizard reaches
     // step 2 (no-ops when already loaded for the region). Fires on the STEP change
@@ -146,6 +172,16 @@ export class OnboardingPage {
         this.service.loadProviderCatalog().catch(() => undefined);
       }
     });
+  }
+
+  ngOnDestroy(): void {
+    // Drop any pending "Copied" reset so no timer fires after teardown. (Unlike
+    // the Settings page, onboarding does NOT cancel the poll here — its
+    // `onSkip()`/`onBack()` already cancel it when leaving step 4.)
+    if (this.copiedTimer !== null) {
+      clearTimeout(this.copiedTimer);
+      this.copiedTimer = null;
+    }
   }
 
   // --- Step 1: region -------------------------------------------------------
@@ -217,6 +253,46 @@ export class OnboardingPage {
   /** "Get a new code" / "Try again" — request a fresh PIN. */
   protected regenerate(): void {
     void this.plexLink.regenerateCode();
+  }
+
+  /**
+   * Copy the current 4-char link code to the clipboard via the WEB Clipboard
+   * API (`navigator.clipboard`) — works in the Capacitor Android WebView (secure
+   * `https` scheme + the tap's user gesture) and in serve-mock/web, so no
+   * `@capacitor/clipboard` plugin is needed. Feature-detected + guarded: a
+   * missing API or a rejected write (permission denied) is swallowed so the page
+   * never crashes; neither the code nor the error is logged. Mirrors the Settings
+   * Connect-Plex `copyCode()` verbatim (spec 0090 D2 parity; NOT shared — D3).
+   */
+  protected async copyCode(): Promise<void> {
+    if (!navigator.clipboard?.writeText) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(this.plexLink.code() ?? '');
+    } catch {
+      // writeText can reject when the gesture/permission is denied — no-op.
+      return;
+    }
+    this.copied.set(true);
+    if (this.copiedTimer !== null) {
+      clearTimeout(this.copiedTimer);
+    }
+    this.copiedTimer = setTimeout(() => {
+      this.copied.set(false);
+      this.copiedTimer = null;
+    }, 2000);
+  }
+
+  /**
+   * "Open plex.tv/link" — open the Plex link page in the system/in-app browser so
+   * the user can jump straight there and return with the OS back/dismiss gesture.
+   * Fire-and-forget: `@capacitor/browser`'s web implementation opens a new tab
+   * via `window.open`, so no `Capacitor.isNativePlatform()` guard is needed
+   * (spec 0090 D5) and a rejected open never surfaces as an unhandled rejection.
+   */
+  protected openPlexLink(): void {
+    void Browser.open({ url: 'https://plex.tv/link' });
   }
 
   /** "Skip for now" (step 4 only) — stop any live poll, then advance to step 5

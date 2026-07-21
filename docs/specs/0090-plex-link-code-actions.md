@@ -2,7 +2,7 @@
 number: 0090
 slug: plex-link-code-actions
 title: Add copy-code + "Open plex.tv/link" actions to the Plex link-code stage (onboarding parity + both pages)
-status: approved
+status: done
 slices: [slice:onboarding, slice:settings]
 scopes: [scope:mobile]
 created: 2026-07-21
@@ -69,7 +69,7 @@ pattern exactly:
   existing `.code-box` (mirroring `plex-connect.page.html` L37-44: `type="button"`,
   `class="copy-button"`, `aria-label="Copy code"`, `(click)="copyCode()"`, a
   `copy-outline` `ion-icon`), and add the conditional `@if (copied()) { <p
-  class="copied-feedback" role="status" data-test="copied-feedback">Copied</p> }`
+class="copied-feedback" role="status" data-test="copied-feedback">Copied</p> }`
   paragraph directly below the code box (mirroring `plex-connect.page.html`
   L46-50). The `copy-outline` icon must be registered via `addIcons({ … copyOutline })`.
 - **SCSS** — mirror the settings page's `.code-box` (add `position: relative` — the
@@ -165,11 +165,11 @@ Stitch mockup; sanity-check on serve-mock" gate.
 
 ## Affected slices & Sheriff tags
 
-| Project           | Path                     | Sheriff tags                       | Change                                                                                                                                                                                                                       |
-| ----------------- | ------------------------ | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Project           | Path                     | Sheriff tags                       | Change                                                                                                                                                                                                                                                                                                       |
+| ----------------- | ------------------------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | mobile-onboarding | `libs/mobile/onboarding` | `scope:mobile`, `slice:onboarding` | `onboarding.page.ts`: `copied` signal + `copyCode()` + `OnDestroy` + `openPlexLink()` + icons. `onboarding.page.html`: copy button + "Copied" + "Open plex.tv/link". `onboarding.page.scss`: copy-button/feedback + text-button-muted. `onboarding.page.spec.ts`: new tests. `README.md` if API note needed. |
-| mobile-settings   | `libs/mobile/settings`   | `scope:mobile`, `slice:settings`   | `plex-connect.page.ts`: `openPlexLink()` + `open-outline` icon. `plex-connect.page.html`: "Open plex.tv/link" button. `plex-connect.page.scss`: (reuses existing `.text-button-muted`; no new rule expected). `plex-connect.page.spec.ts`: new test. |
-| (root)            | `package.json`, lockfile | (workspace root; not slice-tagged) | Add `@capacitor/browser`.                                                                                                                                                                                                    |
+| mobile-settings   | `libs/mobile/settings`   | `scope:mobile`, `slice:settings`   | `plex-connect.page.ts`: `openPlexLink()` + `open-outline` icon. `plex-connect.page.html`: "Open plex.tv/link" button. `plex-connect.page.scss`: (reuses existing `.text-button-muted`; no new rule expected). `plex-connect.page.spec.ts`: new test.                                                         |
+| (root)            | `package.json`, lockfile | (workspace root; not slice-tagged) | Add `@capacitor/browser`.                                                                                                                                                                                                                                                                                    |
 
 - **No cross-slice / cross-scope import.** Each `scope:mobile` slice owns its own
   page files and its own `copyCode()`/`openPlexLink()`. `slice:onboarding`
@@ -211,7 +211,7 @@ barrel-exported API.
   the `User` domain type (`@vultus/shared/domain`'s `documents.ts`); no persisted
   preference is introduced. This is a pure in-stage UI affordance (copy code /
   open a URL), so the onboarding-parity rule does not apply. (Ironically, the
-  feature itself *improves* the onboarding Plex-link step — but it persists
+  feature itself _improves_ the onboarding Plex-link step — but it persists
   nothing new.)
 
 **New dependency:** `@capacitor/browser`. Match the exact-pin convention of the
@@ -246,7 +246,7 @@ the already-shipped settings implementation, `plex-connect.page.scss` L119-201):
 - **`.code-value`** — display-lg-mobile (28px / 700), `--ion-color-primary`,
   letter-spacing `0.15em` (unchanged; already present).
 - **`.copy-button`** — **36×36**, `position: absolute; right: --vultus-space-sm;
-  top: 50%; transform: translateY(-50%)`, transparent background, `--vultus-radius`,
+top: 50%; transform: translateY(-50%)`, transparent background, `--vultus-radius`,
   20px icon. **States:** default icon `--vultus-on-surface-variant`; **hover** →
   background `color-mix(--vultus-surface-container-highest 50%, transparent)`, icon
   `--vultus-on-surface`; **active** → `translateY(-50%) scale(0.95)`;
@@ -412,7 +412,7 @@ in `plex-connect.page.spec.ts` L95-104 (`Object.defineProperty(navigator,
   absent (delete the stub for one test) does not throw and does not show "Copied".
 - **"Open plex.tv/link" (F3 exact-text):** with `stage === 'code'`, assert the
   `[data-test="open-plex-link"]` button renders with exact text **`Open
-  plex.tv/link`**; clicking it calls the mocked `Browser.open` once with
+plex.tv/link`**; clicking it calls the mocked `Browser.open` once with
   `{ url: 'https://plex.tv/link' }`.
 - **Stage-scoping:** assert the copy button and the "Open plex.tv/link" button are
   **present** in the `code`/`waiting` stage and **absent** in `idle` / `connected`
@@ -425,7 +425,7 @@ in `plex-connect.page.spec.ts` L95-104 (`Object.defineProperty(navigator,
 
 - **"Open plex.tv/link" (F3 exact-text):** with `stage === 'code'`, assert the
   `[data-test="open-plex-link"]` button renders with exact text **`Open
-  plex.tv/link`**; clicking it calls the mocked `Browser.open` once with
+plex.tv/link`**; clicking it calls the mocked `Browser.open` once with
   `{ url: 'https://plex.tv/link' }`.
 - **Stage-scoping:** the button is present in `code`/`waiting` and absent in
   `idle`/`connected`/`error` (D4).
@@ -456,7 +456,7 @@ Tailored from the PLAN §5 checklist. Every checkbox maps to a task (0 / A / B).
 - [ ] **`@capacitor/browser` added** to `package.json` (exact pin, latest 8.x
       matching sibling convention) and the pnpm lockfile updated by **splice** onto
       the committed pnpm-9 lockfile; a clean `corepack pnpm@9 install
-      --frozen-lockfile` passes. `cap sync android` self-registers the plugin.
+  --frozen-lockfile` passes. `cap sync android` self-registers the plugin.
       (Task 0)
 - [ ] **Onboarding copy parity:** `copied` signal + `copyCode()` (feature-detected,
       try/catch-swallowed, 2s reset, nothing logged) + `implements OnDestroy` with
@@ -514,11 +514,11 @@ Tailored from the PLAN §5 checklist. Every checkbox maps to a task (0 / A / B).
 - **pnpm lockfile / CI pnpm-9 divergence.** Adding a dependency risks the
   pnpm-11-local-vs-pnpm-9-CI lockfile reformat (memory). Mitigation: splice the new
   dep block onto the committed lockfile and validate with `corepack pnpm@9 install
-  --frozen-lockfile` (Task 0), not a full local regenerate.
+--frozen-lockfile` (Task 0), not a full local regenerate.
 - **No PLAN conflict.** A UI-affordance addition to two existing `scope:mobile`
   slices plus one root dependency; no `scope:shared` change, no cross-slice import,
   no `User` field (F4 N/A), no data-model change. The intentional `copyCode()` /
   `openPlexLink()` duplication across 2 slices is consistent with PLAN §3
   vertical-slice (below the 3+ extraction threshold).
-</content>
-</invoke>
+  </content>
+  </invoke>
