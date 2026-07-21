@@ -10,10 +10,10 @@
 
 # Spec status ledger
 
-Total specs: 87
+Total specs: 88
 
 - done: 86
-- approved: 1
+- approved: 2
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -104,3 +104,4 @@ Total specs: 87
 | 86 | fix-plex-sync-posters | Fix Plex sync — fetch and denormalize posterPath/voteAverage on add + backfill | done | slice:settings | scope:mobile |
 | 87 | fix-watchlist-filter-sheet-clip | Fix the clipped Watchlist filter sheet — bind `open` on the panel/backdrop themselves | done | slice:watchlist | scope:mobile |
 | 88 | no-notifications-for-completed | Suppress availability/episode notifications for completed or dropped watchlist items | done | slice:dispatch-notifications | scope:functions |
+| 91 | fix-watch-today-header | Shrink the Watch Today hero title/subtitle to match other pages' headings | approved | slice:today | scope:mobile |
