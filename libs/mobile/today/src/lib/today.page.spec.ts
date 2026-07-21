@@ -332,6 +332,16 @@ describe('TodayPage', () => {
     );
   });
 
+  it('renders the hero heading as an <h2> (not <h1>) carrying class hero-title', async () => {
+    const service = mockService([
+      item({ tmdbId: 1, type: 'movie', releaseDate: '2024-01-01' }),
+    ]);
+    const { el } = await setup(service);
+    expect(el.querySelector('h2.hero-title')).not.toBeNull();
+    expect(el.querySelector('h1.hero-title')).toBeNull();
+    expect(el.querySelector('h2.hero-title')?.textContent).toBe('Watch Today');
+  });
+
   it('D3 pill: renders exact "On Netflix" + check icon for a mine provider', async () => {
     const service = mockService(
       [item({ tmdbId: 1, type: 'movie', releaseDate: '2024-01-01' })],
