@@ -341,7 +341,11 @@ ion-content {
   color: var(--vultus-on-surface-variant);
 }
 
+// Code box — holds the code value plus a trailing copy button (additive
+// affordance). `position: relative` anchors the absolutely-positioned copy
+// button. Mirrors the Settings Connect-Plex `.code-box` (spec 0090 D2).
 .code-box {
+  position: relative;
   width: 100%;
   box-sizing: border-box;
   display: flex;
@@ -353,6 +357,64 @@ ion-content {
   border-radius: var(--vultus-radius);
   padding: var(--vultus-space-md) var(--vultus-space-lg);
   margin-bottom: var(--vultus-space-sm);
+}
+
+// Copy button — 36x36 round, trailing-aligned; muted icon → on-surface on hover,
+// press-scale + focus ring. Mirrors the Settings page (spec 0090 D2).
+.copy-button {
+  position: absolute;
+  right: var(--vultus-space-sm);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--vultus-radius);
+  cursor: pointer;
+  transition:
+    background 150ms ease-in-out,
+    transform 100ms ease-in-out;
+
+  ion-icon {
+    font-size: 20px;
+    color: var(--vultus-on-surface-variant);
+    transition: color 150ms ease-in-out;
+  }
+
+  &:hover {
+    background: color-mix(
+      in srgb,
+      var(--vultus-surface-container-highest) 50%,
+      transparent
+    );
+
+    ion-icon {
+      color: var(--vultus-on-surface);
+    }
+  }
+
+  &:active {
+    transform: translateY(-50%) scale(0.95);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--ion-color-primary);
+    outline-offset: 2px;
+  }
+}
+
+// "Copied" confirmation — label-sm primary, sits above the expiry line, 24px
+// below to hold the layout steady while it toggles.
+.copied-feedback {
+  margin: 0 0 var(--vultus-space-lg);
+  font-size: var(--vultus-text-label-sm-size);
+  font-weight: var(--vultus-text-label-sm-weight);
+  line-height: var(--vultus-text-label-sm-line);
+  color: var(--ion-color-primary);
 }
 
 // The 4-char code — display-lg-mobile (28px/700), primary, wide tracking.
@@ -528,6 +590,43 @@ ion-content {
 
   &:active {
     transform: scale(0.98);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--ion-color-primary);
+    outline-offset: 2px;
+  }
+}
+
+// Muted text button ("Open plex.tv/link") — label-md on-surface-variant →
+// on-surface on hover. Copied from the Settings Connect-Plex `.text-button-muted`
+// (onboarding lacked it). NO Stitch mockup exists for this button (spec 0090 D6)
+// — UNVERIFIED against Stitch; a small secondary treatment that does not compete
+// with the primary "Get a new code" `.solid-button`. `inline-flex` + `gap` seats
+// the leading `open-outline` icon on the label baseline.
+.text-button-muted {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--vultus-space-xs);
+  margin-top: var(--vultus-space-sm);
+  background: transparent;
+  border: 0;
+  padding: var(--vultus-space-sm) 0;
+  cursor: pointer;
+  font-size: var(--vultus-text-label-md-size);
+  font-weight: var(--vultus-text-label-md-weight);
+  line-height: var(--vultus-text-label-md-line);
+  letter-spacing: var(--vultus-text-label-md-spacing);
+  color: var(--vultus-on-surface-variant);
+  transition: color 150ms ease-in-out;
+
+  ion-icon {
+    font-size: 18px;
+  }
+
+  &:hover {
+    color: var(--vultus-on-surface);
   }
 
   &:focus-visible {

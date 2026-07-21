@@ -69,6 +69,19 @@
       <button type="button" class="solid-button" (click)="regenerate()">
         Get a new code
       </button>
+
+      <!-- Secondary action: jump straight to plex.tv/link (no Stitch mockup —
+           UNVERIFIED; styled as a muted text button so it does not compete with
+           the primary "Get a new code"). Code/waiting stage only (D4/D6). -->
+      <button
+        type="button"
+        class="text-button-muted"
+        data-test="open-plex-link"
+        (click)="openPlexLink()"
+      >
+        <ion-icon name="open-outline"></ion-icon>
+        Open plex.tv/link
+      </button>
     </section>
     }
 

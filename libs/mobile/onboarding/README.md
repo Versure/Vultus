@@ -62,8 +62,10 @@ whole-object).
   tearing the skip button out of the DOM; keeping it user-triggered also matches
   spec 0078 decision 7, which scopes navigate-in + skip to e2e and the live
   PIN/discovery to device-only). Tapping "Connect Plex" calls `requestCode()`;
-  the `code`/`waiting` stages then share a card (the code, an mm:ss countdown, a
-  "Get a new code" button, and a waiting spinner); the `error` stage shows
+  the `code`/`waiting` stages then share a card (the code with a copy-to-clipboard
+  button + transient "Copied" feedback, an mm:ss countdown, a "Get a new code"
+  button, an "Open plex.tv/link" secondary button that opens the Plex link page via
+  `@capacitor/browser`, and a waiting spinner — spec 0090); the `error` stage shows
   reason-specific copy for `expired`/`no-server`/`network`; the `connected`
   stage shows the discovered server row. A **"Skip for now"** affordance
   (present in every non-connected stage, including `idle`) calls `cancel()` and

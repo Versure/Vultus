@@ -11,3 +11,8 @@
 # must not reformat it, or the committed ledger would diverge from the generator
 # output and the guard would go red.
 /docs/specs/STATUS.md
+
+# pnpm's own writer, not prettier's, owns this format — some existing dependency
+# chains here exceed the YAML "simple key" length prettier's parser enforces,
+# which crashes the whole file (not just those lines) rather than reformatting it.
+/pnpm-lock.yaml

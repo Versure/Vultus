@@ -34,6 +34,9 @@ importers:
       '@capacitor/app':
         specifier: 8.1.0
         version: 8.1.0(@capacitor/core@8.4.0)
+      '@capacitor/browser':
+        specifier: 8.0.4
+        version: 8.0.4(@capacitor/core@8.4.0)
       '@capacitor/core':
         specifier: 8.4.0
         version: 8.4.0
@@ -1746,6 +1749,14 @@ packages:
       }
     engines: { node: '>=10.3.0' }
     hasBin: true
+
+  '@capacitor/browser@8.0.4':
+    resolution:
+      {
+        integrity: sha512-ORZ4u/y+7aMuu6yVuk6SP529fUZyqcbnuHB1q5McpA3o2SYfVoi28iB8rsQjI2ad1qlKJd29ZUuGtspXLBDlWg==,
+      }
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
 
   '@capacitor/cli@5.7.8':
     resolution:
@@ -18972,6 +18983,10 @@ snapshots:
       - react-native-b4a
       - supports-color
       - typescript
+
+  '@capacitor/browser@8.0.4(@capacitor/core@8.4.0)':
+    dependencies:
+      '@capacitor/core': 8.4.0
 
   '@capacitor/cli@5.7.8':
     dependencies:

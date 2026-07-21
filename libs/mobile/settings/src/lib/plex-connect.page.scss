@@ -294,8 +294,14 @@ ion-content {
   color: var(--vultus-on-surface-variant);
 }
 
-// Muted text button (Cancel) — label-md on-surface-variant → on-surface on hover.
+// Muted text button (Cancel, "Open plex.tv/link") — label-md on-surface-variant
+// → on-surface on hover. Inline-flex so an optional leading icon sits centered
+// on the label baseline (the "Open plex.tv/link" button; Cancel has no icon so
+// the gap is inert).
 .text-button-muted {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--vultus-space-xs);
   background: transparent;
   border: 0;
   padding: var(--vultus-space-sm) 0;
@@ -306,6 +312,11 @@ ion-content {
   letter-spacing: var(--vultus-text-label-md-spacing);
   color: var(--vultus-on-surface-variant);
   transition: color 150ms ease-in-out;
+
+  ion-icon {
+    font-size: 1.125rem; // ~18px — matches the label-md line-height
+    color: inherit; // leading icon follows the label colour on hover/focus
+  }
 
   &:hover {
     color: var(--vultus-on-surface);
