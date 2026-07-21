@@ -265,7 +265,20 @@
         </p>
         <div class="code-box">
           <span class="code-value">{{ plexLink.code() ?? '····' }}</span>
+          <button
+            type="button"
+            class="copy-button"
+            aria-label="Copy code"
+            (click)="copyCode()"
+          >
+            <ion-icon name="copy-outline" slot="icon-only"></ion-icon>
+          </button>
         </div>
+        @if (copied()) {
+        <p class="copied-feedback" role="status" data-test="copied-feedback">
+          Copied
+        </p>
+        }
         <p class="code-expiry" data-test="code-countdown">
           Code expires in {{ plexLink.countdown() }}
         </p>
@@ -277,6 +290,17 @@
         }
         <button type="button" class="solid-button" (click)="regenerate()">
           Get a new code
+        </button>
+        <!-- "Open plex.tv/link" — NO Stitch mockup exists (spec 0090 D6);
+             UNVERIFIED against Stitch, styled as a muted secondary text button. -->
+        <button
+          type="button"
+          class="text-button-muted"
+          data-test="open-plex-link"
+          (click)="openPlexLink()"
+        >
+          <ion-icon name="open-outline"></ion-icon>
+          Open plex.tv/link
         </button>
       </section>
       } @else {
