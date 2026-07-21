@@ -29,6 +29,11 @@ export interface SyncEngineConfig {
   /** Injectable clock for deterministic `lastSyncedAt`. Default
    *  `() => new Date().toISOString()`. */
   now?: () => string;
+  /** Extra passes re-running only titles whose outcome was 'error' with a
+   *  retryable errorStatus (429 or 0 transport). Default 0 (current behavior). */
+  retryErroredPasses?: number;
+  /** Cooldown before each retry pass, ms. Default 0. Injectable for tests. */
+  retryDelayMs?: number;
 }
 
 export interface SyncEngine {

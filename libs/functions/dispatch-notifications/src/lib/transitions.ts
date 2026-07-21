@@ -37,17 +37,17 @@ export function hasFlatrate(next: WatchProvider[]): boolean {
 
 /**
  * Decide the notification kinds for a change. Availability kinds fire only on
- * an 'appeared' transition (decision 1C: 'removed' notifies nothing). The
- * episode-aired kind is orthogonal: it fires for tv titles that are currently
- * on flatrate with at least one episode whose air date is at or before `now`,
- * regardless of the transition. Movies never yield 'episode-aired'.
+ * an 'appeared' transition (decision 1C: 'removed' notifies nothing): a movie
+ * yields 'movie-available', a tv title yields 'show-came-to-platform'.
+ *
+ * `episode-aired` is NOT emitted here (spec 0089 / D3): it is owned
+ * exclusively by the daily airing-scan (`dispatchEpisodeAired`), driven by an
+ * episode actually crossing into the recency window rather than by an
+ * availability write. The availability path no longer reads episodes.
  */
 export function decideKinds(input: {
   type: TitleType;
   transition: FlatrateTransition;
-  hasFlatrateNow: boolean;
-  episodeAirDates: string[]; // ISO 8601
-  now: string; // ISO 8601
 }): NotificationKind[] {
   const kinds: NotificationKind[] = [];
 
@@ -59,15 +59,25 @@ export function decideKinds(input: {
     }
   }
 
-  if (
-    input.type === 'tv' &&
-    input.hasFlatrateNow &&
-    input.episodeAirDates.some((airDate) => airDate <= input.now)
-  ) {
-    kinds.push('episode-aired');
-  }
-
   return kinds;
+}
+
+/**
+ * True when `airDate` is within `[now - windowDays, now]` (inclusive). ISO 8601
+ * lexical/temporal comparison against a computed lower bound; guards the
+ * back-catalog storm on a user's first add (spec 0089 / D3). A future `airDate`
+ * (`> now`) is out of window (false); an `airDate` exactly at `now` or exactly
+ * at the lower bound `now - windowDays` is in window (true).
+ */
+export function isEpisodeRecentlyAired(
+  airDate: string,
+  now: string,
+  windowDays: number,
+): boolean {
+  const nowMs = new Date(now).getTime();
+  const airMs = new Date(airDate).getTime();
+  const lowerMs = nowMs - windowDays * 24 * 60 * 60 * 1000;
+  return airMs >= lowerMs && airMs <= nowMs;
 }
 
 /**

@@ -1,7 +1,9 @@
 // Internal fetch/retry/throttle core shared in-slice by the TMDB client and the
 // Trakt calendar client. Not exported from the barrel. Right-sized for a
 // personal daily sync: serialized requests (effective concurrency ~1), 429
-// retried honoring `Retry-After`, no 5xx retry.
+// retried honoring `Retry-After` with an exponential-backoff-with-jitter FLOOR
+// (so a missing `Retry-After` no longer means an immediate hammer-retry), no
+// 5xx retry.
 //
 // The transport is auth-agnostic: the identifying/auth headers and base URL are
 // supplied per client (TMDB passes `Authorization: Bearer …` + `Accept`; Trakt
@@ -24,15 +26,27 @@ export interface HttpCoreConfig {
   baseUrl: string;
   maxRetries: number;
   minRequestIntervalMs: number;
+  /** Base (ms) for the exponential backoff FLOOR applied to a `429` retry:
+   *  `expBackoff(attempt) = backoffBaseMs * 2^attempt + jitter`, the whole thing
+   *  capped by `MAX_RETRY_AFTER_MS`. The actual wait is
+   *  `max(Retry-After, expBackoff(attempt))`, so `Retry-After` is still honored
+   *  when present and the floor only bites the no-header (immediate-retry) case.
+   *  Default 500. Set to 0 to disable the floor (e.g. deterministic tests). */
+  backoffBaseMs?: number;
+  /** Injectable sleep so tests can assert the 429 backoff wait without real
+   *  timers. Defaults to the internal `setTimeout`-based sleep. */
+  sleep?: (ms: number) => Promise<void>;
   /** Builds the client-specific error (`TmdbError` / `TraktError`) so the core
    *  stays error-type-agnostic. `status` is 0 for a transport/network failure. */
   errorFactory: (message: string, status: number, endpoint: string) => Error;
 }
 
-// Cap a Retry-After-derived wait so a hostile/huge header can't stall the sync.
+// Cap a Retry-After-derived wait (and the backoff floor) so a hostile/huge
+// header — or a large attempt exponent — can't stall the sync.
 const MAX_RETRY_AFTER_MS = 60_000;
+const DEFAULT_BACKOFF_BASE_MS = 500;
 
-function sleep(ms: number): Promise<void> {
+function defaultSleep(ms: number): Promise<void> {
   if (ms <= 0) return Promise.resolve();
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -44,6 +58,18 @@ function parseRetryAfterMs(header: string | null): number {
   return Math.min(seconds * 1000, MAX_RETRY_AFTER_MS);
 }
 
+// Exponential backoff floor with small bounded jitter, capped. `attempt` is the
+// 1-based retry number (1 on the first retry, 2 on the second, …), so the floor
+// grows 2x per attempt. Jitter is modest (`[0, backoffBaseMs)`) so the base term
+// dominates and tests can assert monotonic growth. `Math.random` is fine here —
+// this is runtime code, not a workflow script.
+function expBackoffMs(attempt: number, backoffBaseMs: number): number {
+  if (backoffBaseMs <= 0) return 0;
+  const base = backoffBaseMs * 2 ** attempt;
+  const jitter = Math.random() * backoffBaseMs;
+  return Math.min(base + jitter, MAX_RETRY_AFTER_MS);
+}
+
 export function createHttpCore(config: HttpCoreConfig) {
   const {
     headers,
@@ -53,6 +79,8 @@ export function createHttpCore(config: HttpCoreConfig) {
     minRequestIntervalMs,
     errorFactory,
   } = config;
+  const backoffBaseMs = config.backoffBaseMs ?? DEFAULT_BACKOFF_BASE_MS;
+  const sleep = config.sleep ?? defaultSleep;
 
   // Serialize all requests onto a single tail-chained promise, and enforce a
   // minimum interval between the start of consecutive requests.
@@ -92,7 +120,16 @@ export function createHttpCore(config: HttpCoreConfig) {
       if (status === 429) {
         if (attempt < maxRetries) {
           attempt += 1;
-          const waitMs = parseRetryAfterMs(response.headers.get('Retry-After'));
+          // Honor `Retry-After` when present; otherwise (header absent → 0) the
+          // exponential backoff floor prevents an immediate hammer-retry. Either
+          // way the wait is capped by MAX_RETRY_AFTER_MS.
+          const retryAfterMs = parseRetryAfterMs(
+            response.headers.get('Retry-After'),
+          );
+          const waitMs = Math.min(
+            Math.max(retryAfterMs, expBackoffMs(attempt, backoffBaseMs)),
+            MAX_RETRY_AFTER_MS,
+          );
           await sleep(waitMs);
           continue;
         }

@@ -456,7 +456,7 @@ Tailored from the PLAN §5 checklist. Every checkbox maps to a task (0 / A / B).
 - [ ] **`@capacitor/browser` added** to `package.json` (exact pin, latest 8.x
       matching sibling convention) and the pnpm lockfile updated by **splice** onto
       the committed pnpm-9 lockfile; a clean `corepack pnpm@9 install
-  --frozen-lockfile` passes. `cap sync android` self-registers the plugin.
+--frozen-lockfile` passes. `cap sync android` self-registers the plugin.
       (Task 0)
 - [ ] **Onboarding copy parity:** `copied` signal + `copyCode()` (feature-detected,
       try/catch-swallowed, 2s reset, nothing logged) + `implements OnDestroy` with

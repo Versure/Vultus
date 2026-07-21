@@ -41,10 +41,13 @@ export interface TmdbClientConfig {
   baseUrl?: string;
   /** Metadata language for overview/title/poster selection. Defaults to 'en-US'. */
   language?: string;
-  /** 429 retry cap; default 3. */
+  /** 429 retry cap; default 5. */
   maxRetries?: number;
   /** Throttle floor between requests in ms; default 250. */
   minRequestIntervalMs?: number;
+  /** Base (ms) for the exponential backoff floor on a `429` retry; default 500.
+   *  See `createHttpCore` — the wait is `max(Retry-After, base*2^attempt+jitter)`. */
+  backoffBaseMs?: number;
 }
 
 export interface TmdbClient {
@@ -70,8 +73,9 @@ export interface TmdbClient {
 
 const DEFAULT_BASE_URL = 'https://api.themoviedb.org/3';
 const DEFAULT_LANGUAGE = 'en-US';
-const DEFAULT_MAX_RETRIES = 3;
+const DEFAULT_MAX_RETRIES = 5;
 const DEFAULT_MIN_REQUEST_INTERVAL_MS = 250;
+const DEFAULT_BACKOFF_BASE_MS = 500;
 
 export function createTmdbClient(config: TmdbClientConfig): TmdbClient {
   const fetchImpl = config.fetch ?? globalThis.fetch;
@@ -93,6 +97,7 @@ export function createTmdbClient(config: TmdbClientConfig): TmdbClient {
     maxRetries: config.maxRetries ?? DEFAULT_MAX_RETRIES,
     minRequestIntervalMs:
       config.minRequestIntervalMs ?? DEFAULT_MIN_REQUEST_INTERVAL_MS,
+    backoffBaseMs: config.backoffBaseMs ?? DEFAULT_BACKOFF_BASE_MS,
     errorFactory: (message, status, endpoint) =>
       new TmdbError(`TMDB ${message}`, status, endpoint),
   });

@@ -17,11 +17,9 @@ import type {
   WatchStatus,
 } from '@vultus/shared/domain';
 import type {
-  EpisodeStore,
   FcmSender,
   FcmSendResult,
   NotificationStore,
-  TrackedEpisode,
   TrackingUser,
   WatchlistStore,
 } from '@vultus/functions/dispatch-notifications';
@@ -79,49 +77,32 @@ export function createFirestoreWatchlistStore(db: Firestore): WatchlistStore {
 }
 
 /**
- * Episode store backed by `users/{uid}/watchlist/{titleId}/episodes`. Maps each
- * episode doc to the minimal `TrackedEpisode` shape the dispatcher needs.
- */
-export function createFirestoreEpisodeStore(db: Firestore): EpisodeStore {
-  return {
-    async getEpisodes(
-      uid: string,
-      titleId: string,
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      _tmdbId: number,
-    ): Promise<TrackedEpisode[]> {
-      const snap = await db
-        .collection('users/' + uid + '/watchlist/' + titleId + '/episodes')
-        .get();
-      return snap.docs.map((doc) => {
-        const data = doc.data() as TrackedEpisode;
-        return {
-          airDate: data.airDate,
-          season: data.season,
-          episode: data.episode,
-        };
-      });
-    },
-  };
-}
-
-/**
- * Notification store that writes to `users/{uid}/notifications/{id}` keyed by the
- * deterministic id `{tmdbId}-{region}-{kind}` (spec 0041). Pinning the doc id —
- * rather than appending with a Firestore-generated id — lets the mobile app's
- * mark-as-read write target the exact doc, and makes a re-fired availability
+ * Notification store that writes to `users/{uid}/notifications/{id}` using the
+ * caller-supplied `id` verbatim (the dispatcher core owns id derivation for both
+ * the availability path — `{tmdbId}-{region}-{kind}` — and the episode-aired path
+ * — `{tmdbId}-{region}-episode-aired-{episodeId}`, spec 0089 / D3). Pinning the
+ * doc id — rather than appending with a Firestore-generated id — lets the mobile
+ * app's mark-as-read write target the exact doc, and makes a re-fired availability
  * trigger idempotent (it merges onto the same doc instead of duplicating).
  * ISO timestamps are mapped to Timestamps via the shared schema converter.
+ *
+ * `exists(uid, id)` backs the episode-aired path's per-episode idempotency: the
+ * daily airing-scan re-sees an episode for up to `EPISODE_RECENCY_WINDOW_DAYS`,
+ * so the dispatcher checks whether the per-episode notification doc already exists
+ * before writing/sending, notifying each episode exactly once.
  */
 export function createFirestoreNotificationStore(
   db: Firestore,
 ): NotificationStore {
   return {
-    async write(uid, doc): Promise<void> {
-      const id = `${doc.payload.tmdbId}-${doc.payload.region}-${doc.kind}`;
+    async write(uid, id, doc): Promise<void> {
       await db
         .doc(notificationPath(uid, id))
         .set(notificationToData(doc), { merge: true });
+    },
+    async exists(uid, id): Promise<boolean> {
+      const snap = await db.doc(notificationPath(uid, id)).get();
+      return snap.exists;
     },
   };
 }

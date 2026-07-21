@@ -36,7 +36,11 @@ Imported from `@vultus/functions/sync-titles`:
   - `sync(titles: SyncTitleInput[])` → `Promise<SyncResult[]>` — runs one sync
     pass over the caller-supplied `{ tmdbId, type }[]`, writing refreshed
     metadata + per-region availability and returning a structured per-title
-    result with the detected transitions.
+    result with the detected transitions. When `retryErroredPasses > 0` it then
+    re-runs only the titles whose outcome was a **retryable** error (`429` or a
+    `0` transport failure) for up to that many extra passes, so a transient rate
+    limit never permanently skips a title's availability write for the day
+    (spec 0089 / D2). Returns exactly one result per input title, in input order.
 - `createFirestoreTitleCacheStore(db: Firestore): TitleCacheStore` — the
   Admin-SDK adapter (spec 0009) implementing the engine's `TitleCacheStore` port
   against `firebase-admin` Firestore. A thin map onto the spec-0005
@@ -123,13 +127,28 @@ dependencies are **injected**, mirroring the client factories:
   converters.
 - `now?` — an injectable clock for deterministic `lastSyncedAt` and transition
   timestamps. Defaults to `() => new Date().toISOString()`.
+- `retryErroredPasses?` — extra passes re-running only the titles whose outcome
+  was a **retryable** error (`429` or `0` transport). Default `0` (current
+  behavior, so existing callers are unaffected). Spec 0089 / D2.
+- `retryDelayMs?` — cooldown (ms) slept before each retry pass. Default `0`.
 
 Per input `{ tmdbId, type }`, in order: fetch metadata (`getMovie` for movies,
 `getTvShow` for tv) — a `null` (TMDB 404) is a clean **skip** (no write); for
-**tv only**, resolve `getShowTraktId(tmdbId)` onto the entry's `traktId`
-(movies never call it — `traktId` stays `null`); write the entry; then fetch
+**tv only**, resolve the show's `traktId` — but **reuse a cached non-null
+`traktId`** from `store.getEntry(tmdbId)` (traktId is stable, so re-resolving it
+every run is pure Trakt-call waste, spec 0089 / D2) and only call
+`getShowTraktId(tmdbId)` when the cache has a `null`/absent traktId; movies never
+resolve a traktId (`traktId` stays `null`); write the entry; then fetch
 `getWatchProviders` and, per returned region, detect transitions and write the
 rolled availability.
+
+**Second-pass retry (D2).** After the initial pass, up to `retryErroredPasses`
+additional passes re-run only the subset of titles whose result is
+`outcome: 'error'` with a **retryable** `errorStatus` (`429` rate limit or `0`
+transport/network), sleeping `retryDelayMs` between passes. A later pass's
+`synced`/`skipped` (or newer error) supersedes the earlier error; non-retryable
+errors (`401`/`403`/`5xx`) are never re-tried. The result array always has one
+entry per input title, in input order.
 
 **Transition baseline + snapshot roll.** Transitions are detected by diffing the
 freshly fetched providers (`next`) against the **stored current `providers`**
@@ -213,11 +232,22 @@ the http transport are slice-internal.
 ## Future work
 
 The in-slice HTTP transport in `src/lib/shared/http.ts` (min-interval throttle,
-`429`/`Retry-After` retry, `404` sentinel, status → injected-error mapping) is
-now **auth-agnostic** and shared by both clients in this slice — headers, base
-URL, and error factory are injected per client. It stays in this slice rather
-than being extracted to `shared/`, per the vertical-slice 3+-consumers rule
-(there is still exactly one consuming slice).
+`429`/`Retry-After` retry with an exponential-backoff-with-jitter **floor**,
+`404` sentinel, status → injected-error mapping) is now **auth-agnostic** and
+shared by both clients in this slice — headers, base URL, and error factory are
+injected per client. It stays in this slice rather than being extracted to
+`shared/`, per the vertical-slice 3+-consumers rule (there is still exactly one
+consuming slice).
+
+**429 backoff (spec 0089 / D2).** On a `429` the transport waits
+`max(Retry-After, backoffBaseMs * 2^attempt + jitter)`, capped at 60s
+(`MAX_RETRY_AFTER_MS`), for up to `maxRetries` attempts. `Retry-After` is still
+honored when present; the exponential **floor** only bites the no-header case,
+which previously retried immediately. `HttpCoreConfig` gains
+`backoffBaseMs?` (default 500; `0` disables the floor) and an injectable
+`sleep?` (default `setTimeout`-based) so tests can assert the wait values.
+`DEFAULT_MAX_RETRIES` in both clients is **5** (was 3); both accept a
+`backoffBaseMs?` config passed through to the transport.
 
 The HTTP sync function (PLAN §6 item 12) is **built** in spec 0009: the
 `apps/functions` `syncTitles` `onRequest` handler wires `createSyncEngine` to
