@@ -136,7 +136,13 @@ Because that flex-column scroll part makes every light-DOM `ion-content` child a
 flex item, the closed "Sort & Filter" bottom sheet is now clipped with
 `overflow: hidden` on `.filter-sheet` (spec 0082) so its off-screen
 `translateY(100%)` panel cannot leak ~277px of scrollable overflow into
-`ion-content` and let the empty page scroll.
+`ion-content` and let the empty page scroll. The sheet's **open**-state
+declarations (`opacity: 1` / `translateY(0)`) are bound directly on
+`.filter-sheet-backdrop`/`.filter-sheet-panel` via their own `[class.open]`
+bindings — **not** via a nested `.filter-sheet.open` descendant selector, which
+failed to win the cascade in-browser (spec 0087, issue #230) — so the open panel
+reliably reaches `translateY(0)` and is not clipped by the 0082
+`overflow: hidden`.
 
 The slice-local grouping/filtering/sort helpers (`groupByStatus`, `filterByType`,
 `sortItems`, `getAvailableProviders`, the `WatchlistSort` type,

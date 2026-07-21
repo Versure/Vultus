@@ -2,7 +2,7 @@
 number: 0088
 slug: no-notifications-for-completed
 title: Suppress availability/episode notifications for completed or dropped watchlist items
-status: approved
+status: done
 slices: [slice:dispatch-notifications]
 scopes: [scope:functions]
 created: 2026-07-21

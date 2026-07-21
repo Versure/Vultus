@@ -10,9 +10,9 @@
 
 # Spec status ledger
 
-Total specs: 88
+Total specs: 90
 
-- done: 84
+- done: 86
 - approved: 4
 
 | # | slug | title | status | slices | scopes |
@@ -102,6 +102,8 @@ Total specs: 88
 | 83 | watch-today-tab | Add a Watch Today tab showing everything ready to watch right now | done | slice:today, slice:onboarding | scope:mobile |
 | 85 | background-plex-sync | Background Plex sync (periodic on-device sync while backgrounded) | done | slice:settings | scope:mobile, scope:shared |
 | 86 | fix-plex-sync-posters | Fix Plex sync — fetch and denormalize posterPath/voteAverage on add + backfill | done | slice:settings | scope:mobile |
-| 87 | fix-watchlist-filter-sheet-clip | Fix the clipped Watchlist filter sheet — bind `open` on the panel/backdrop themselves | approved | slice:watchlist | scope:mobile |
-| 88 | no-notifications-for-completed | Suppress availability/episode notifications for completed or dropped watchlist items | approved | slice:dispatch-notifications | scope:functions |
+| 87 | fix-watchlist-filter-sheet-clip | Fix the clipped Watchlist filter sheet — bind `open` on the panel/backdrop themselves | done | slice:watchlist | scope:mobile |
+| 88 | no-notifications-for-completed | Suppress availability/episode notifications for completed or dropped watchlist items | done | slice:dispatch-notifications | scope:functions |
 | 89 | fix-automatic-notification-dispatch | Fix automatic notification dispatch — daily-sync rate-limit hardening and a daily episode-aired airing-scan | approved | slice:sync-titles, slice:dispatch-notifications | scope:functions |
+| 90 | plex-link-code-actions | Add copy-code + "Open plex.tv/link" actions to the Plex link-code stage (onboarding parity + both pages) | approved | slice:onboarding, slice:settings | scope:mobile |
+| 91 | fix-watch-today-header | Shrink the Watch Today hero title/subtitle to match other pages' headings | approved | slice:today | scope:mobile |
