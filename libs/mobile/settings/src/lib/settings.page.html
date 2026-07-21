@@ -255,6 +255,62 @@
               {{ plexSync.running() ? 'Syncing…' : 'Sync now' }}
             </button>
           </div>
+          <!--
+            Background sync controls (spec 0085). Reuse the sibling
+            Notifications toggle + delivery-hour select patterns (the tokenized
+            settings-row classes); every colour via --vultus-* / --ion-* vars.
+            Android-only — off-native these are a safe no-op (the toggle/select
+            still render + persist to Preferences, no plugin call).
+          -->
+          <div class="plex-connected__background">
+            <div class="settings-row">
+              <div class="settings-row__body">
+                <ion-toggle
+                  class="settings-row__toggle"
+                  justify="space-between"
+                  [checked]="plexBackground.enabled()"
+                  (ionChange)="onBackgroundToggleChange($event)"
+                >
+                  Sync in background
+                </ion-toggle>
+                <p class="settings-row__helper">
+                  Periodically sync your Plex library while on Wi-Fi. Android
+                  only.
+                </p>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row__body">
+                <ion-select
+                  class="settings-row__select"
+                  label="Sync frequency"
+                  labelPlacement="start"
+                  interface="popover"
+                  [value]="plexBackground.intervalMinutes()"
+                  [disabled]="!plexBackground.enabled()"
+                  (ionChange)="onBackgroundIntervalChange($event)"
+                >
+                  <ion-select-option [value]="15"
+                    >Every 15 minutes</ion-select-option
+                  >
+                  <ion-select-option [value]="30"
+                    >Every 30 minutes</ion-select-option
+                  >
+                  <ion-select-option [value]="60">Every hour</ion-select-option>
+                  <ion-select-option [value]="180"
+                    >Every 3 hours</ion-select-option
+                  >
+                  <ion-select-option [value]="360"
+                    >Every 6 hours</ion-select-option
+                  >
+                </ion-select>
+                <p class="settings-row__helper">
+                  How often to check Plex in the background (minimum 15
+                  minutes).
+                </p>
+              </div>
+            </div>
+          </div>
           <div class="plex-connected__footer">
             <button
               type="button"

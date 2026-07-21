@@ -11,6 +11,7 @@ import { AUTH_UID, PLEX_CLIENT } from '@vultus/shared/domain/tokens';
 import type { PlexServer } from '@vultus/shared/domain';
 import { dataToUser, userPath } from '@vultus/shared/firestore-schema';
 import type { UserReadData } from '@vultus/shared/firestore-schema';
+import { PlexBackgroundService } from './plex-background.service';
 import { PlexPinGoneError, describePlexError } from './plex-errors';
 
 /** Preferences key for the on-device X-Plex-Token (NEVER in Firestore). */
@@ -70,6 +71,10 @@ export class PlexLinkService {
   private readonly firestore = inject(Firestore);
   private readonly uid = inject(AUTH_UID);
   private readonly client = inject(PLEX_CLIENT);
+  // One-directional dependency (spec 0085): unlink() stops the background task +
+  // clears its Preferences keys. PlexBackgroundService does NOT inject back
+  // (that would cycle → NG0200), so its onFetch reads the plex_token key directly.
+  private readonly plexBackground = inject(PlexBackgroundService);
 
   private readonly _stage = signal<PlexLinkStage>('idle');
   private readonly _errorReason = signal<PlexLinkErrorReason | null>(null);
@@ -204,6 +209,8 @@ export class PlexLinkService {
     this.currentPinId = null;
     this.pinDeadlineMs = null;
     await Preferences.remove({ key: PLEX_TOKEN_KEY });
+    // Stop the periodic background sync + clear its device-local config (0085).
+    await this.plexBackground.stop();
     const uid = this.uid();
     if (uid !== null) {
       await updateDoc(doc(this.firestore, userPath(uid)), {

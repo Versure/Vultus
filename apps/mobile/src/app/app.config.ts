@@ -25,6 +25,7 @@ import {
 import {
   AUTH_UID,
   GET_WATCH_PROVIDERS,
+  PLEX_BACKGROUND_INIT,
   PLEX_CLIENT,
   PLEX_SYNC_TRIGGER,
   TRIGGER_SYNC,
@@ -35,6 +36,7 @@ import { TMDB_DETAIL_CONFIG } from '@vultus/mobile/title-detail';
 import {
   CapacitorHttpPlexClient,
   MockPlexClient,
+  PlexBackgroundService,
   PlexSyncService,
   SETTINGS_TMDB_CONFIG,
 } from '@vultus/mobile/settings';
@@ -171,6 +173,21 @@ export const appConfig: ApplicationConfig = {
           Capacitor.isNativePlatform()
             ? svc.sync().then(() => undefined)
             : Promise.resolve();
+      },
+    },
+    // Provide the background-sync init as a scope:shared thunk (spec 0085) so the
+    // shell (App) can initialize periodic on-device background Plex sync on boot
+    // without importing the settings slice's service graph the wrong way. THE
+    // NATIVE GUARD LIVES HERE (a no-op off-native), mirroring PLEX_SYNC_TRIGGER
+    // above. PlexBackgroundService is providedIn:'root', so this root factory
+    // resolves it from the root injector (page-provided services are invisible
+    // here) — the same singleton the Settings page and boot trigger share.
+    {
+      provide: PLEX_BACKGROUND_INIT,
+      useFactory: () => {
+        const svc = inject(PlexBackgroundService);
+        return () =>
+          Capacitor.isNativePlatform() ? svc.init() : Promise.resolve();
       },
     },
     // TMDB search config (spec 0013) — provided at root from `environment.tmdb`
