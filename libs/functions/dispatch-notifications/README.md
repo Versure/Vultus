@@ -29,6 +29,26 @@ ignored):
 Each kind is gated by the user's `NotificationPrefs` opt-in
 (`movieAvailable` / `cameToPlatform` / `episodeAired`).
 
+## Completed/dropped suppression (spec 0088)
+
+Once a user is **done** with a title they receive **zero** notifications about it
+— **all** kinds are suppressed, not just the availability kinds:
+
+- `TrackingUser.status` (a `WatchStatus`) carries the user's watch status for the
+  title. When it is `'completed'` or `'dropped'`, `dispatch()` excludes that user
+  in the **same filter line** as the region filter — **before** any
+  kind-decision logic runs — so no `movie-available`, `show-came-to-platform`, or
+  `episode-aired` doc/push is produced for that user.
+- `'watching'` and `'planned'` are unaffected.
+- The adapter that populates `TrackingUser` maps a **missing/legacy** `status` to
+  `'watching'` (notifiable), never to an excluded status, so an anomalous doc
+  **fails open** rather than silently suppressing a real user's notifications.
+
+Because the exclusion is chained into the same filter that already narrows by
+region, **`usersConsidered`** in `DispatchSummary` now reflects region-matched
+**AND** status-eligible users — "users this dispatch would actually consider
+notifying." Completed/dropped users are not counted.
+
 ## Delivery window (spec 0051)
 
 `NotificationPrefs.deliveryHour` lets a user pin the **UTC hour** at which they

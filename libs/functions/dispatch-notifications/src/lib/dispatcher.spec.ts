@@ -47,6 +47,7 @@ const user = (overrides: Partial<TrackingUser> = {}): TrackingUser => ({
   notificationPrefs: allPrefs(),
   fcmTokens: [token('tok-1')],
   titleId: 'title-1',
+  status: 'watching',
   ...overrides,
 });
 
@@ -324,6 +325,79 @@ describe('createNotificationDispatcher', () => {
     expect(stores.sent[0].data.notificationId).toBe(
       stores.sent[1].data.notificationId,
     );
+  });
+
+  describe('completed/dropped suppression (spec 0088)', () => {
+    it("status 'completed': no notification, no FCM, usersConsidered 0", async () => {
+      const stores = makeStores({ users: [user({ status: 'completed' })] });
+      const summary = await makeDispatcher(stores).dispatch(makeChange());
+
+      expect(stores.written).toHaveLength(0);
+      expect(stores.sent).toHaveLength(0);
+      expect(summary.usersConsidered).toBe(0);
+      expect(summary.notificationsWritten).toBe(0);
+      expect(summary.fcmSent).toBe(0);
+    });
+
+    it("status 'dropped': no notification, no FCM, usersConsidered 0", async () => {
+      const stores = makeStores({ users: [user({ status: 'dropped' })] });
+      const summary = await makeDispatcher(stores).dispatch(makeChange());
+
+      expect(stores.written).toHaveLength(0);
+      expect(stores.sent).toHaveLength(0);
+      expect(summary.usersConsidered).toBe(0);
+      expect(summary.notificationsWritten).toBe(0);
+      expect(summary.fcmSent).toBe(0);
+    });
+
+    it("status 'planned': unaffected, notification fires as before", async () => {
+      const stores = makeStores({ users: [user({ status: 'planned' })] });
+      const summary = await makeDispatcher(stores).dispatch(makeChange());
+
+      expect(stores.written).toHaveLength(1);
+      expect(stores.written[0].doc.kind).toBe('movie-available');
+      expect(stores.sent).toHaveLength(1);
+      expect(summary.usersConsidered).toBe(1);
+      expect(summary.notificationsWritten).toBe(1);
+      expect(summary.fcmSent).toBe(1);
+    });
+
+    it('mixed statuses on the same title: only the eligible user is notified', async () => {
+      const users = [
+        user({ uid: 'a', titleId: 't-a', fcmTokens: [token('ta')] }), // watching
+        user({
+          uid: 'b',
+          titleId: 't-b',
+          fcmTokens: [token('tb')],
+          status: 'completed',
+        }),
+      ];
+      const stores = makeStores({ users });
+      const summary = await makeDispatcher(stores).dispatch(makeChange());
+
+      expect(stores.written.map((w) => w.uid)).toEqual(['a']);
+      expect(stores.sent.map((s) => s.token)).toEqual(['ta']);
+      expect(summary.usersConsidered).toBe(1);
+      expect(summary.notificationsWritten).toBe(1);
+      expect(summary.fcmSent).toBe(1);
+    });
+
+    it("tv title + aired episode + 'completed': episode-aired is also suppressed", async () => {
+      const stores = makeStores({
+        users: [user({ status: 'completed' })],
+        episodesByUser: {
+          u1: [{ airDate: '2026-06-01T00:00:00.000Z', season: 1, episode: 1 }],
+        },
+      });
+      const summary = await makeDispatcher(stores).dispatch(
+        makeChange({ type: 'tv' }),
+      );
+
+      expect(stores.written).toHaveLength(0);
+      expect(stores.sent).toHaveLength(0);
+      expect(summary.usersConsidered).toBe(0);
+      expect(summary.notificationsWritten).toBe(0);
+    });
   });
 
   describe('delivery window (spec 0051)', () => {
