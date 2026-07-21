@@ -58,6 +58,9 @@ importers:
       '@ionic/angular':
         specifier: 8.8.10
         version: 8.8.10(7c2fe7624fe2a881b75ccae01d14a059)
+      '@transistorsoft/capacitor-background-fetch':
+        specifier: 8.1.3
+        version: 8.1.3(@capacitor/core@8.4.0)
       firebase-admin:
         specifier: 13.10.0
         version: 13.10.0(encoding@0.1.13)
@@ -6093,6 +6096,14 @@ packages:
       {
         integrity: sha512-C5Mc6rdnsaJDjO3UpGW/CQTHtCKaYlScZTly4JIu97Jxo/odCiH0ITnDXSJPTOrEKk/ycSZ0AOgTmkDtkOsvIA==,
       }
+
+  '@transistorsoft/background-fetch-types@1.0.0':
+    resolution: {integrity: sha512-dfkUpAps8cVvtJlOCM8BmVAgcboyz0pg0GtfwsWnnezG2KbvV9nrt/z0s8Ksk3stEW0dSX59XMqUAF7/48OR5w==}
+
+  '@transistorsoft/capacitor-background-fetch@8.1.3':
+    resolution: {integrity: sha512-LxDDc8KGP88iMDd184oNRcQAmvQD0X66rY7EMcQk2s8BGfkPHnKwRW+abYY2jNWi+Rm/AVyBi66L9wygBtwWJQ==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
 
   '@trapezedev/gradle-parse@7.1.3':
     resolution:
@@ -22177,6 +22188,13 @@ snapshots:
     optional: true
 
   '@tootallnate/quickjs-emscripten@0.23.0': {}
+
+  '@transistorsoft/background-fetch-types@1.0.0': {}
+
+  '@transistorsoft/capacitor-background-fetch@8.1.3(@capacitor/core@8.4.0)':
+    dependencies:
+      '@capacitor/core': 8.4.0
+      '@transistorsoft/background-fetch-types': 1.0.0
 
   '@trapezedev/gradle-parse@7.1.3': {}
 

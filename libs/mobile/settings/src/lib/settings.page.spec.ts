@@ -79,6 +79,9 @@ vi.mock('./plex-link.service', () => ({
 vi.mock('./plex-sync.service', () => ({
   PlexSyncService: class PlexSyncService {},
 }));
+vi.mock('./plex-background.service', () => ({
+  PlexBackgroundService: class PlexBackgroundService {},
+}));
 
 // `./settings.providers` (imported transitively by the page) statically imports
 // the real `SyncStatusService`, which pulls in `@angular/fire/firestore`. Mock
@@ -91,6 +94,7 @@ import { SettingsPage } from './settings.page';
 import { SettingsService } from './settings.service';
 import { PlexLinkService } from './plex-link.service';
 import { PlexSyncService } from './plex-sync.service';
+import { PlexBackgroundService } from './plex-background.service';
 
 interface MockPlexLink {
   linked: WritableSignal<boolean>;
@@ -102,6 +106,14 @@ interface MockPlexLink {
 interface MockPlexSync {
   running: WritableSignal<boolean>;
   sync: ReturnType<typeof vi.fn>;
+}
+interface MockPlexBackground {
+  enabled: WritableSignal<boolean>;
+  intervalMinutes: WritableSignal<number>;
+  init: ReturnType<typeof vi.fn>;
+  setEnabled: ReturnType<typeof vi.fn>;
+  setIntervalMinutes: ReturnType<typeof vi.fn>;
+  stop: ReturnType<typeof vi.fn>;
 }
 
 function mockPlexLink(linked: boolean): MockPlexLink {
@@ -120,6 +132,16 @@ function mockPlexSync(): MockPlexSync {
       status: 'ok',
       summary: { added: 0, updated: 0, skipped: 0 },
     }),
+  };
+}
+function mockPlexBackground(enabled = true, interval = 60): MockPlexBackground {
+  return {
+    enabled: signal<boolean>(enabled),
+    intervalMinutes: signal<number>(interval),
+    init: vi.fn().mockResolvedValue(undefined),
+    setEnabled: vi.fn().mockResolvedValue(undefined),
+    setIntervalMinutes: vi.fn().mockResolvedValue(undefined),
+    stop: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -150,10 +172,11 @@ function mockService(loaded: boolean, loadFailed = false): MockSettingsService {
 
 async function setupWithService(
   service: MockSettingsService,
-  opts: { plexLinked?: boolean } = {},
+  opts: { plexLinked?: boolean; plexBackground?: MockPlexBackground } = {},
 ) {
   const plexLink = mockPlexLink(opts.plexLinked ?? false);
   const plexSync = mockPlexSync();
+  const plexBackground = opts.plexBackground ?? mockPlexBackground();
   const router = { navigate: vi.fn() };
   const alertPresent = vi.fn().mockResolvedValue(undefined);
   const alertController = {
@@ -166,6 +189,7 @@ async function setupWithService(
       { provide: SettingsService, useValue: service },
       { provide: PlexLinkService, useValue: plexLink },
       { provide: PlexSyncService, useValue: plexSync },
+      { provide: PlexBackgroundService, useValue: plexBackground },
       { provide: Router, useValue: router },
       { provide: AlertController, useValue: alertController },
     ],
@@ -185,6 +209,7 @@ async function setupWithService(
     el,
     plexLink,
     plexSync,
+    plexBackground,
     router,
     alertController,
     alertPresent,
@@ -412,6 +437,7 @@ describe('SettingsPage', () => {
         { provide: SettingsService, useValue: service },
         { provide: PlexLinkService, useValue: mockPlexLink(false) },
         { provide: PlexSyncService, useValue: mockPlexSync() },
+        { provide: PlexBackgroundService, useValue: mockPlexBackground() },
         { provide: Router, useValue: { navigate: vi.fn() } },
         {
           provide: AlertController,
@@ -666,6 +692,7 @@ describe('SettingsPage', () => {
         { provide: SettingsService, useValue: service },
         { provide: PlexLinkService, useValue: link },
         { provide: PlexSyncService, useValue: plexSync },
+        { provide: PlexBackgroundService, useValue: mockPlexBackground() },
         { provide: Router, useValue: { navigate: vi.fn() } },
         {
           provide: AlertController,
@@ -682,5 +709,136 @@ describe('SettingsPage', () => {
     expect(
       el.querySelector('.plex-connected__last-synced')?.textContent?.trim(),
     ).toBe('Not synced yet');
+  });
+
+  // ── Background sync controls (spec 0085) ─────────────────────────────────
+
+  it('connected: renders the "Sync in background" toggle reflecting enabled()', async () => {
+    const bg = mockPlexBackground(true, 60);
+    const { el } = await setupWithService(mockService(true), {
+      plexLinked: true,
+      plexBackground: bg,
+    });
+    const toggle = el.querySelectorAll(
+      '.plex-connected__background .settings-row__toggle',
+    )[0] as HTMLElement & { checked: boolean };
+    expect(toggle).toBeTruthy();
+    // EXACT rendered string (single .trim() only — no whitespace collapse).
+    expect(toggle.textContent?.trim()).toBe('Sync in background');
+    expect(toggle.checked).toBe(true);
+  });
+
+  it('connected: the "Sync in background" toggle reflects enabled()=false', async () => {
+    const bg = mockPlexBackground(false, 60);
+    const { el } = await setupWithService(mockService(true), {
+      plexLinked: true,
+      plexBackground: bg,
+    });
+    const toggle = el.querySelectorAll(
+      '.plex-connected__background .settings-row__toggle',
+    )[0] as HTMLElement & { checked: boolean };
+    expect(toggle.checked).toBe(false);
+  });
+
+  it('connected: renders the EXACT background-sync helper caption', async () => {
+    const { el } = await setupWithService(mockService(true), {
+      plexLinked: true,
+    });
+    const helper = el.querySelector(
+      '.plex-connected__background .settings-row__helper',
+    );
+    expect(helper?.textContent?.trim()).toBe(
+      'Periodically sync your Plex library while on Wi-Fi. Android only.',
+    );
+  });
+
+  it('connected: toggling "Sync in background" calls setEnabled with the new value', async () => {
+    const bg = mockPlexBackground(true);
+    const { el } = await setupWithService(mockService(true), {
+      plexLinked: true,
+      plexBackground: bg,
+    });
+    const toggle = el.querySelector(
+      '.plex-connected__background .settings-row__toggle',
+    );
+    toggle?.dispatchEvent(
+      new CustomEvent('ionChange', { detail: { checked: false } }),
+    );
+    expect(bg.setEnabled).toHaveBeenCalledWith(false);
+  });
+
+  it('connected: renders the interval select with the current value + EXACT option labels', async () => {
+    const bg = mockPlexBackground(true, 180);
+    const { el } = await setupWithService(mockService(true), {
+      plexLinked: true,
+      plexBackground: bg,
+    });
+    const select = el.querySelectorAll(
+      '.plex-connected__background .settings-row__select',
+    )[0] as HTMLElement & { value: number };
+    expect(select).toBeTruthy();
+    expect(select.getAttribute('label')).toBe('Sync frequency');
+    expect(select.value).toBe(180);
+    const labels = Array.from(select.querySelectorAll('ion-select-option')).map(
+      (o) => o.textContent?.trim(),
+    );
+    expect(labels).toEqual([
+      'Every 15 minutes',
+      'Every 30 minutes',
+      'Every hour',
+      'Every 3 hours',
+      'Every 6 hours',
+    ]);
+  });
+
+  it('connected: renders the EXACT interval helper caption', async () => {
+    const { el } = await setupWithService(mockService(true), {
+      plexLinked: true,
+    });
+    const helpers = el.querySelectorAll(
+      '.plex-connected__background .settings-row__helper',
+    );
+    expect(helpers[1]?.textContent?.trim()).toBe(
+      'How often to check Plex in the background (minimum 15 minutes).',
+    );
+  });
+
+  it('connected: interval select is disabled when the background toggle is OFF', async () => {
+    const bg = mockPlexBackground(false, 60);
+    const { el } = await setupWithService(mockService(true), {
+      plexLinked: true,
+      plexBackground: bg,
+    });
+    const select = el.querySelectorAll(
+      '.plex-connected__background .settings-row__select',
+    )[0] as HTMLElement & { disabled: boolean };
+    expect(select.disabled).toBe(true);
+  });
+
+  it('connected: interval select is enabled when the background toggle is ON', async () => {
+    const bg = mockPlexBackground(true, 60);
+    const { el } = await setupWithService(mockService(true), {
+      plexLinked: true,
+      plexBackground: bg,
+    });
+    const select = el.querySelectorAll(
+      '.plex-connected__background .settings-row__select',
+    )[0] as HTMLElement & { disabled: boolean };
+    expect(select.disabled).toBe(false);
+  });
+
+  it('connected: changing the interval select calls setIntervalMinutes with the numeric value', async () => {
+    const bg = mockPlexBackground(true, 60);
+    const { el } = await setupWithService(mockService(true), {
+      plexLinked: true,
+      plexBackground: bg,
+    });
+    const select = el.querySelector(
+      '.plex-connected__background .settings-row__select',
+    );
+    select?.dispatchEvent(
+      new CustomEvent('ionChange', { detail: { value: 180 } }),
+    );
+    expect(bg.setIntervalMinutes).toHaveBeenCalledWith(180);
   });
 });

@@ -24,6 +24,7 @@ import {
   copyOutline,
   shieldCheckmark,
 } from 'ionicons/icons';
+import { PlexBackgroundService } from './plex-background.service';
 import { PlexLinkService } from './plex-link.service';
 import { PlexSyncService } from './plex-sync.service';
 
@@ -58,6 +59,7 @@ import { PlexSyncService } from './plex-sync.service';
 export class PlexConnectPage implements OnInit, OnDestroy {
   protected readonly link = inject(PlexLinkService);
   private readonly sync = inject(PlexSyncService);
+  private readonly background = inject(PlexBackgroundService);
   private readonly nav = inject(NavController);
 
   /** Transient "Copied" confirmation, auto-cleared ~2s after a successful copy. */
@@ -158,9 +160,15 @@ export class PlexConnectPage implements OnInit, OnDestroy {
     }, 2000);
   }
 
-  /** "Done" — pop back to Settings and kick an initial sync (fire-and-forget). */
+  /**
+   * "Done" — pop back to Settings, kick an initial sync, and initialize periodic
+   * background sync (spec 0085) so a freshly-linked device schedules its task
+   * immediately (default ON) without waiting for the next boot. Both are
+   * fire-and-forget; `init()` is a native-guarded no-op off-device.
+   */
   protected done(): void {
     void this.sync.sync();
+    void this.background.init();
     void this.nav.navigateBack('/tabs/settings');
   }
 }

@@ -95,6 +95,12 @@ PlexSyncMeta | null` — the per-user Plex sync cursor + link metadata (spec
     resume to run one Plex sync (no-op when not linked / not native / already
     running); the shell wires it over the settings slice's `PlexSyncService`
     (spec 0073).
+  - `PLEX_BACKGROUND_INIT` — `() => Promise<void>` thunk the shell calls once on
+    boot to initialize periodic on-device background Plex sync (Android
+    WorkManager via `@transistorsoft/capacitor-background-fetch`); a
+    native-guarded no-op off native / when not linked. The shell wires it over
+    the settings slice's `PlexBackgroundService`; mirrors `PLEX_SYNC_TRIGGER`
+    (spec 0085).
 
 `NotificationPayload` carries the data a notification renders from:
 `tmdbId: number` (the TMDB id of the affected title), `titleId`, `title`,

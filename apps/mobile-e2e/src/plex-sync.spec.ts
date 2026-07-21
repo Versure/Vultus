@@ -66,7 +66,10 @@ test.beforeEach(async ({ page }) => {
 // PIN auto-authorizes → the connected stage → "Done" → back on Settings the card
 // shows the connected block (server name + "Connected"); `users/{uid}.hasPlex`
 // is set true by the link flow. No `plex_token` is pre-seeded: the link flow
-// itself persists it (and sets the in-memory `linked()` signal).
+// itself persists it (and sets the in-memory `linked()` signal). It also asserts
+// the spec-0085 background-sync controls render in the connected block with their
+// DEFAULT values ("Sync in background" toggle ON, "Sync frequency" = "Every hour")
+// — control-render only; the native background service is a no-op off-device.
 // ---------------------------------------------------------------------------
 test('connect flow', async ({ page }) => {
   // Boot; the app signs in anonymously against the Auth emulator.
@@ -129,6 +132,32 @@ test('connect flow', async ({ page }) => {
   await expect(
     connectedBlock.locator('.plex-connected__status-label'),
   ).toHaveText('Connected');
+
+  // Background-sync controls (spec 0085) also render inside the connected block.
+  // On e2e (non-native) `PlexBackgroundService` is a native-guarded no-op, but
+  // the UI + DEFAULT signal values still render: `init()` returns before loading
+  // Preferences off-native, so `enabled()` stays ON and `intervalMinutes()` stays
+  // 60. Scope to `.plex-connected__background` so these don't collide with the
+  // sibling Notifications toggle / delivery-hour select elsewhere on the page.
+  const backgroundControls = connectedBlock.locator(
+    '.plex-connected__background',
+  );
+  await expect(backgroundControls).toBeVisible();
+
+  // (A) The "Sync in background" toggle renders with the EXACT label (reflects
+  //     the default `enabled()` = ON on serve-mock/e2e).
+  await expect(backgroundControls.locator('.settings-row__toggle')).toHaveText(
+    'Sync in background',
+  );
+
+  // (B) The "Sync frequency" interval select renders showing the default
+  //     "Every hour" (interval 60) — Ionic renders the selected display value
+  //     into the scoped `.select-text` element.
+  const intervalSelect = backgroundControls.locator(
+    'ion-select.settings-row__select[label="Sync frequency"]',
+  );
+  await expect(intervalSelect).toBeVisible();
+  await expect(intervalSelect.locator('.select-text')).toHaveText('Every hour');
 
   // The connect flow wrote `users/{uid}.hasPlex = true` — assert it directly on
   // the emulator (robust against UI timing).

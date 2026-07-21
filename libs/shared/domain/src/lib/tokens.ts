@@ -53,3 +53,13 @@ export const PLEX_CLIENT = new InjectionToken<PlexClient>('PLEX_CLIENT');
 export const PLEX_SYNC_TRIGGER = new InjectionToken<() => Promise<void>>(
   'PLEX_SYNC_TRIGGER',
 );
+
+/** A thunk the shell calls once on boot to initialize periodic on-device
+ *  background Plex sync (Android WorkManager via
+ *  @transistorsoft/capacitor-background-fetch). No-op when not native / not
+ *  linked. scope:shared so the shell wires it over the settings slice's
+ *  PlexBackgroundService without importing the slice the wrong way — mirrors
+ *  PLEX_SYNC_TRIGGER (spec 0073 / 0085). */
+export const PLEX_BACKGROUND_INIT = new InjectionToken<() => Promise<void>>(
+  'PLEX_BACKGROUND_INIT',
+);

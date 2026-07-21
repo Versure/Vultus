@@ -31,6 +31,7 @@ import {
   personCircleOutline,
   timeOutline,
 } from 'ionicons/icons';
+import { PlexBackgroundService } from './plex-background.service';
 import { PlexLinkService } from './plex-link.service';
 import { PlexSyncService } from './plex-sync.service';
 import type { PlexSyncResult } from './plex-sync.service';
@@ -74,6 +75,10 @@ export class SettingsPage implements OnInit {
   // instance the trigger drives (a page-scoped provide would fork the state).
   protected readonly plexLink = inject(PlexLinkService);
   protected readonly plexSync = inject(PlexSyncService);
+  // Root singleton (spec 0085) — the SAME instance the shell's boot trigger
+  // (PLEX_BACKGROUND_INIT) and the connect page's on-link init drive. NOT listed
+  // in SETTINGS_PROVIDERS (a page-scoped provide would fork it from the trigger).
+  protected readonly plexBackground = inject(PlexBackgroundService);
   private readonly toastController = inject(ToastController);
   private readonly alertController = inject(AlertController);
   private readonly router = inject(Router);
@@ -253,6 +258,20 @@ export class SettingsPage implements OnInit {
       position: 'bottom',
     });
     await toast.present();
+  }
+
+  /** "Sync in background" toggle → persist + (re)configure the periodic task. */
+  protected onBackgroundToggleChange(event: CustomEvent): void {
+    void this.plexBackground.setEnabled(
+      (event.detail as { checked: boolean }).checked,
+    );
+  }
+
+  /** "Sync frequency" select → persist + reconfigure the interval. */
+  protected onBackgroundIntervalChange(event: CustomEvent): void {
+    void this.plexBackground.setIntervalMinutes(
+      +(event.detail as { value: number }).value,
+    );
   }
 
   protected onNotificationsChange(event: CustomEvent): void {

@@ -3,7 +3,10 @@ import { IonApp, IonRouterOutlet } from '@ionic/angular/standalone';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
-import { PLEX_SYNC_TRIGGER } from '@vultus/shared/domain/tokens';
+import {
+  PLEX_BACKGROUND_INIT,
+  PLEX_SYNC_TRIGGER,
+} from '@vultus/shared/domain/tokens';
 import { NotificationHandlerService } from './notification-handler.service';
 import { SplashComponent } from './splash/splash.component';
 
@@ -21,6 +24,10 @@ export class App implements OnInit {
   // the settings slice's PlexSyncService. Native-guarded internally (a no-op
   // off-native), so the boot/resume calls below are safe on web.
   private readonly plexSyncTrigger = inject(PLEX_SYNC_TRIGGER);
+  // Background Plex sync init (spec 0085) — a scope:shared thunk the shell
+  // provides over the settings slice's PlexBackgroundService. Native-guarded in
+  // the factory (a no-op off-native), so the boot call below is safe on web.
+  private readonly plexBackgroundInit = inject(PLEX_BACKGROUND_INIT);
 
   ngOnInit(): void {
     // Fire-and-forget: ngOnInit must return void (OnInit contract). The
@@ -32,6 +39,10 @@ export class App implements OnInit {
     // is a safe no-op on web; the sync service's own concurrent guard covers any
     // overlap with the resume listener below.
     void this.plexSyncTrigger();
+    // Initialize periodic on-device background Plex sync (Android only; a
+    // native-guarded no-op on web). Registers the WorkManager task that reruns
+    // PlexSyncService.sync() on the user's chosen interval (spec 0085).
+    void this.plexBackgroundInit();
     // Register a foreground-resume listener that re-runs the Plex sync
     // (native-only, idempotent — mirrors initStatusBar's guard style).
     void this.registerPlexResumeSync();
