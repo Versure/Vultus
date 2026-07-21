@@ -13,7 +13,8 @@
 Total specs: 91
 
 - done: 87
-- approved: 4
+- approved: 3
+- implementing: 1
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -100,7 +101,7 @@ Total specs: 91
 | 81 | next-unwatched-episode-airdate | Track each TV show's next-unwatched-episode air date for watchability checks | done | slice:sync-episodes, slice:title-detail, slice:watchlist, slice:search | scope:shared, scope:functions, scope:mobile |
 | 82 | fix-watchlist-scroll-overflow | Stop the empty Watchlist page scrolling — clip the off-screen filter sheet | done | slice:watchlist | scope:mobile |
 | 83 | watch-today-tab | Add a Watch Today tab showing everything ready to watch right now | done | slice:today, slice:onboarding | scope:mobile |
-| 84 | splash-icon-parity | Give the native Android splash icon the web loading screen's box + corner-bracket treatment | approved | — | scope:mobile |
+| 84 | splash-icon-parity | Give the native Android splash icon the web loading screen's box + corner-bracket treatment | implementing | — | scope:mobile |
 | 85 | background-plex-sync | Background Plex sync (periodic on-device sync while backgrounded) | done | slice:settings | scope:mobile, scope:shared |
 | 86 | fix-plex-sync-posters | Fix Plex sync — fetch and denormalize posterPath/voteAverage on add + backfill | done | slice:settings | scope:mobile |
 | 87 | fix-watchlist-filter-sheet-clip | Fix the clipped Watchlist filter sheet — bind `open` on the panel/backdrop themselves | done | slice:watchlist | scope:mobile |
