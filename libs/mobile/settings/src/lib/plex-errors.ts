@@ -2,6 +2,10 @@
 // @capacitor/*, no Firebase) so `plex-link.service` can discriminate failures
 // via `instanceof` WITHOUT transitively importing `@capacitor/core` (which
 // `plex.client` needs) into the service module and every spec that loads it.
+// `describeTmdbError` (spec 0086) imports the equally dependency-free
+// `TmdbDetailError` from `./tmdb-detail.client`, preserving that invariant.
+
+import { TmdbDetailError } from './tmdb-detail.client';
 
 /**
  * plex.tv / the PMS answered with a non-2xx status. Carries the HTTP status and
@@ -49,6 +53,31 @@ export function describePlexError(err: unknown): string {
   }
   if (err instanceof PlexPinGoneError) {
     return 'plex.tv pin expired';
+  }
+  if (err instanceof Error) {
+    return `${err.name}: ${err.message}`;
+  }
+  return 'unknown error';
+}
+
+/**
+ * Redact an unknown TMDB-detail failure into a SHORT, SAFE diagnostic string for
+ * `console`/logcat, so a per-item TMDB failure during Plex sync (spec 0086) is
+ * visible without blocking the sync. A distinct helper from `describePlexError`
+ * (pinned by spec 0086): a TMDB failure shape (`TmdbDetailError` with its HTTP
+ * `status`, or a fetch network/abort `Error`) differs from the Plex error shapes,
+ * so it needs its own branch.
+ *
+ * SAFE-BY-CONSTRUCTION (CLAUDE.md / spec 0068): returns STRINGS pulled from
+ * known-safe fields only — never the error object itself. `TmdbDetailError`
+ * carries only an HTTP status; a transport error's `name`/`message` carry the URL
+ * + reason. The TMDB auth token travels in a header (bearer) or an `api_key`
+ * query param the client builds — neither is echoed by reading `status` /
+ * `name` / `message`.
+ */
+export function describeTmdbError(err: unknown): string {
+  if (err instanceof TmdbDetailError) {
+    return `TmdbDetailError: HTTP ${err.status}`;
   }
   if (err instanceof Error) {
     return `${err.name}: ${err.message}`;

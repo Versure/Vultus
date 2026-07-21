@@ -13,6 +13,7 @@ import { AUTH_UID, PLEX_CLIENT } from '@vultus/shared/domain/tokens';
 import type {
   PlexLibraryItem,
   PlexServer,
+  TitleType,
   WatchStatus,
   WatchlistItem,
 } from '@vultus/shared/domain';
@@ -30,7 +31,9 @@ import type {
   WatchlistItemReadData,
 } from '@vultus/shared/firestore-schema';
 import { PLEX_TOKEN_KEY } from './plex-link.service';
-import { describePlexError } from './plex-errors';
+import { describePlexError, describeTmdbError } from './plex-errors';
+import { createTmdbDetailClient } from './tmdb-detail.client';
+import { SETTINGS_TMDB_CONFIG } from './tokens';
 
 /** Small per-sync outcome summary (logging + the mock e2e assertions). */
 export interface PlexSyncSummary {
@@ -102,6 +105,8 @@ export class PlexSyncService {
   private readonly firestore = inject(Firestore);
   private readonly uid = inject(AUTH_UID);
   private readonly client = inject(PLEX_CLIENT);
+  private readonly tmdbConfig = inject(SETTINGS_TMDB_CONFIG);
+  private readonly tmdbClient = createTmdbDetailClient(this.tmdbConfig);
 
   private readonly _running = signal<boolean>(false);
   /** True while a sync is in flight (drives the "Sync now" spinner/disabled). */
@@ -190,7 +195,7 @@ export class PlexSyncService {
         continue;
       }
       const tmdbId = item.tmdbId;
-      const current = await this.currentStatus(uid, tmdbId);
+      const current = await this.currentTracked(uid, tmdbId);
       // Mirror the show's episode docs FIRST (full mirror for matched titles,
       // NOT cursor-gated) so status derivation reads fresh watched-counts. A
       // movie's "watched" is its own viewCount. The mirror is a no-op for a
@@ -227,9 +232,34 @@ export class PlexSyncService {
         continue;
       }
 
-      // Already tracked. Sticky-dropped: NEVER auto-change a dropped status; the
-      // episode mirror has already written above for a show.
-      if (current === 'dropped') {
+      // Already tracked. POSTER BACKFILL runs FIRST and UNCONDITIONALLY of
+      // status (spec 0086): a tracked item whose stored posterPath is null (the
+      // exact issue #229 bug for Plex-synced titles) gets its TMDB
+      // posterPath/voteAverage fetched and written — this is display-data
+      // enrichment, NOT a status change, so it happens even for a sticky-dropped
+      // item (the dropped guard below skips only the STATUS write). A strict
+      // `=== null` check, NOT a falsy check: an empty-string posterPath is a real
+      // value and must NOT trigger a redundant fetch. Skip the TMDB call entirely
+      // when posterPath is already non-null (self-limiting: once healed, never
+      // re-fetched). A pure poster backfill does NOT increment `updated` (which
+      // means "status changed").
+      if (current.posterPath === null) {
+        const detail = await this.fetchDetailSafe(tmdbId, item.type);
+        if (detail !== null) {
+          await updateDoc(
+            doc(this.firestore, watchlistItemPath(uid, String(tmdbId))),
+            {
+              posterPath: detail.posterPath,
+              voteAverage: detail.voteAverage,
+            },
+          );
+        }
+      }
+
+      // Sticky-dropped: NEVER auto-change a dropped status; the episode mirror
+      // has already written above for a show, and the poster backfill above has
+      // already run (a dropped item still gets its poster healed).
+      if (current.status === 'dropped') {
         skipped += 1;
         continue;
       }
@@ -238,10 +268,10 @@ export class PlexSyncService {
         uid,
         item,
         tmdbId,
-        current,
+        current.status,
         watched,
       );
-      if (derived !== null && derived !== current) {
+      if (derived !== null && derived !== current.status) {
         await updateDoc(
           doc(this.firestore, watchlistItemPath(uid, String(tmdbId))),
           { status: derived },
@@ -347,6 +377,35 @@ export class PlexSyncService {
     return { total, watched };
   }
 
+  /**
+   * Fetch TMDB `posterPath`/`voteAverage` for a matched title, isolating any
+   * failure (spec 0086). Returns the two denormalized fields on success and
+   * `null` on ANY failure (network / non-2xx / 404 / timeout / abort) so a TMDB
+   * outage never throws out of `addItem` / the backfill check and never fails the
+   * surrounding item's status write or the rest of the sync loop. On failure logs
+   * a REDACTED diagnostic via `describeTmdbError` — NEVER the raw error object
+   * (which may echo the query-param `api_key` or a header token, spec 0068). The
+   * service always supplies `type` (the Plex library item's type), so the
+   * no-hint movie→tv retry in the client is never exercised here.
+   */
+  private async fetchDetailSafe(
+    tmdbId: number,
+    type: TitleType,
+  ): Promise<{ posterPath: string | null; voteAverage: number | null } | null> {
+    try {
+      const detail = await this.tmdbClient.getDetail(tmdbId, type);
+      return {
+        posterPath: detail.posterPath,
+        voteAverage: detail.voteAverage,
+      };
+    } catch (err) {
+      console.error(
+        `[plex-sync] tmdb detail ${tmdbId} failed: ${describeTmdbError(err)}`,
+      );
+      return null;
+    }
+  }
+
   /** Create the watchlist doc for a Plex-matched item (watchingViaPlex: true). */
   private async addItem(
     uid: string,
@@ -354,6 +413,10 @@ export class PlexSyncService {
     tmdbId: number,
     status: WatchStatus,
   ): Promise<void> {
+    // Fetch TMDB detail before the write so a new Plex add persists its real
+    // posterPath/voteAverage (spec 0086). A null detail (TMDB failed) leaves both
+    // null — the add still succeeds, never throws (issue #229).
+    const detail = await this.fetchDetailSafe(tmdbId, item.type);
     const watchlistItem: WatchlistItem = {
       type: item.type,
       tmdbId,
@@ -361,8 +424,8 @@ export class PlexSyncService {
       title: item.title,
       addedAt: new Date().toISOString(),
       status,
-      posterPath: null,
-      voteAverage: null,
+      posterPath: detail?.posterPath ?? null,
+      voteAverage: detail?.voteAverage ?? null,
       watchingViaPlex: true,
     };
     await setDoc(
@@ -371,17 +434,27 @@ export class PlexSyncService {
     );
   }
 
-  /** One-shot read of the tracked status; null when untracked / doc absent. */
-  private async currentStatus(
+  /**
+   * One-shot read of the tracked item's status + denormalized posterPath; null
+   * when untracked / doc absent (spec 0086). `posterPath` is normalized to
+   * `string | null` by `dataToWatchlistItem` (never `undefined`), so the caller's
+   * backfill guard is a strict `=== null` check.
+   */
+  private async currentTracked(
     uid: string,
     tmdbId: number,
-  ): Promise<WatchStatus | null> {
+  ): Promise<{ status: WatchStatus; posterPath: string | null } | null> {
     const snap = await getDoc(
       doc(this.firestore, watchlistItemPath(uid, String(tmdbId))),
     );
     if (!snap.exists()) {
       return null;
     }
-    return dataToWatchlistItem(snap.data() as WatchlistItemReadData).status;
+    const item = dataToWatchlistItem(snap.data() as WatchlistItemReadData);
+    // `posterPath` is optional on the WatchlistItem TYPE but the converter always
+    // coalesces it to `string | null` (converters.ts `?? null`); `?? null` here
+    // just narrows the (never-actually-`undefined`) type so the strict `=== null`
+    // backfill guard is sound.
+    return { status: item.status, posterPath: item.posterPath ?? null };
   }
 }

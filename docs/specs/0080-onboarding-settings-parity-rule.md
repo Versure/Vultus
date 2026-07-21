@@ -2,7 +2,7 @@
 number: 0080
 slug: onboarding-settings-parity-rule
 title: Add a standing Onboarding ↔ User-field parity rule (F4) to the spec-driven workflow
-status: approved # draft | approved | implementing | done
+status: done # draft | approved | implementing | done
 slices: []
 scopes: []
 created: 2026-07-20

@@ -72,6 +72,57 @@ const MOCK_RESULTS = [
   },
 ];
 
+/**
+ * Detail-only fixtures for the Plex mock-library ids (spec 0086 / T4). These ids
+ * are NOT in MOCK_RESULTS (which drives the search fixture, ids 1–5); they are the
+ * tmdbIds the mock Plex library returns (`plex.client.mock.ts`): Fight Club (550,
+ * movie), Blade Runner 2049 (335984, movie), Breaking Bad (1396, tv). The detail
+ * stub checks this map BEFORE the MOCK_RESULTS lookup so PlexSyncService's TMDB
+ * fetch resolves a real `poster_path` / `vote_average` for these titles — without
+ * disturbing the search-results fixture. If the mock Plex library ids change, this
+ * map must change with them (and with the e2e assertions in plex-sync.spec.ts).
+ */
+interface DetailExtra {
+  media_type: 'movie' | 'tv';
+  title?: string;
+  name?: string;
+  release_date?: string;
+  first_air_date?: string;
+  overview: string;
+  poster_path: string;
+  vote_average: number;
+}
+
+const DETAIL_EXTRAS: Record<number, DetailExtra> = {
+  550: {
+    media_type: 'movie',
+    title: 'Fight Club',
+    release_date: '1999-10-15',
+    overview:
+      'A mock detail fixture (spec 0086) so the Plex-synced Fight Club renders real poster artwork instead of the fallback.',
+    poster_path: '/mock-fight-club-550.jpg',
+    vote_average: 8.4,
+  },
+  335984: {
+    media_type: 'movie',
+    title: 'Blade Runner 2049',
+    release_date: '2017-10-06',
+    overview:
+      'A mock detail fixture (spec 0086) so the Plex-synced Blade Runner 2049 renders real poster artwork instead of the fallback.',
+    poster_path: '/mock-blade-runner-335984.jpg',
+    vote_average: 7.6,
+  },
+  1396: {
+    media_type: 'tv',
+    name: 'Breaking Bad',
+    first_air_date: '2008-01-20',
+    overview:
+      'A mock detail fixture (spec 0086) so the Plex-synced Breaking Bad renders real poster artwork instead of the fallback.',
+    poster_path: '/mock-breaking-bad-1396.jpg',
+    vote_average: 8.9,
+  },
+};
+
 const MOCK_PROVIDERS_RESPONSE = {
   results: {
     US: {
@@ -102,6 +153,24 @@ function createMockFetch(): typeof fetch {
     const movieMatch = /\/movie\/(\d+)/.exec(url);
     if (movieMatch) {
       const id = Number(movieMatch[1]);
+      // Plex mock-library detail ids (spec 0086) resolve with a real poster.
+      const extra = DETAIL_EXTRAS[id];
+      if (extra?.media_type === 'movie') {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              id,
+              title: extra.title,
+              release_date: extra.release_date,
+              overview: extra.overview,
+              poster_path: extra.poster_path,
+              vote_average: extra.vote_average,
+              runtime: 112,
+            }),
+            { status: 200 },
+          ),
+        );
+      }
       const fixture = MOCK_RESULTS.find(
         (r) => r.id === id && r.media_type === 'movie',
       );
@@ -133,6 +202,23 @@ function createMockFetch(): typeof fetch {
     const tvMatch = /\/tv\/(\d+)/.exec(url);
     if (tvMatch) {
       const id = Number(tvMatch[1]);
+      // Plex mock-library detail ids (spec 0086) resolve with a real poster.
+      const extra = DETAIL_EXTRAS[id];
+      if (extra?.media_type === 'tv') {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              id,
+              name: extra.name,
+              first_air_date: extra.first_air_date,
+              overview: extra.overview,
+              poster_path: extra.poster_path,
+              vote_average: extra.vote_average,
+            }),
+            { status: 200 },
+          ),
+        );
+      }
       const fixture = MOCK_RESULTS.find(
         (r) => r.id === id && r.media_type === 'tv',
       );
