@@ -181,7 +181,16 @@ export function createNotificationDispatcher(
       const timestamp = now();
 
       const allUsers = await watchlist.findUsersTracking(change.tmdbId);
-      const users = allUsers.filter((u) => u.region === change.region);
+      // Region filter + completed/dropped suppression (spec 0088): once a user
+      // is done with a title, they get ZERO notifications about it (all kinds).
+      // Applied BEFORE usersConsidered is computed, so usersConsidered counts
+      // only users this dispatch would actually consider notifying.
+      const users = allUsers.filter(
+        (u) =>
+          u.region === change.region &&
+          u.status !== 'completed' &&
+          u.status !== 'dropped',
+      );
 
       const counters = {
         notificationsWritten: 0,

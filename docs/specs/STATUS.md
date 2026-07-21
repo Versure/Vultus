@@ -12,8 +12,8 @@
 
 Total specs: 87
 
-- done: 85
-- approved: 2
+- done: 86
+- approved: 1
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -103,4 +103,4 @@ Total specs: 87
 | 85 | background-plex-sync | Background Plex sync (periodic on-device sync while backgrounded) | done | slice:settings | scope:mobile, scope:shared |
 | 86 | fix-plex-sync-posters | Fix Plex sync — fetch and denormalize posterPath/voteAverage on add + backfill | done | slice:settings | scope:mobile |
 | 87 | fix-watchlist-filter-sheet-clip | Fix the clipped Watchlist filter sheet — bind `open` on the panel/backdrop themselves | done | slice:watchlist | scope:mobile |
-| 88 | no-notifications-for-completed | Suppress availability/episode notifications for completed or dropped watchlist items | approved | slice:dispatch-notifications | scope:functions |
+| 88 | no-notifications-for-completed | Suppress availability/episode notifications for completed or dropped watchlist items | done | slice:dispatch-notifications | scope:functions |
