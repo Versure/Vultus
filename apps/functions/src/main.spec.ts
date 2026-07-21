@@ -350,8 +350,11 @@ describe('runSync handler wiring', () => {
     const body = out.body as SyncRunResponse;
     expect(body.synced).toBe(2);
     expect(body.errored).toBe(1);
-    // reason never leaks into the response.
-    expect(JSON.stringify(body)).not.toContain('boom');
+    // Spec 0089 / D4 / NB1: the (credential-free) per-title reason IS now
+    // surfaced in `errorSample` (mirrored from the sync-runs doc), but no
+    // secret/token ever leaks.
+    expect(body.errorSample).toEqual(['boom']);
+    expect(JSON.stringify(body)).not.toMatch(/secret|token|bearer/i);
   });
 
   it('runs the episode pass (syncAll) AFTER the title-cache pass when createEpisodeEngine is provided; SyncRunResponse shape is unchanged', async () => {
@@ -407,6 +410,7 @@ describe('runSync handler wiring', () => {
       [
         'durationMs',
         'errored',
+        'errorSample',
         'forced',
         'gathered',
         'ok',
@@ -521,6 +525,7 @@ describe('runSync handler wiring', () => {
       [
         'durationMs',
         'errored',
+        'errorSample',
         'forced',
         'gathered',
         'ok',
@@ -647,6 +652,7 @@ describe('runSync handler wiring', () => {
       [
         'durationMs',
         'errored',
+        'errorSample',
         'forced',
         'gathered',
         'ok',
@@ -737,6 +743,7 @@ describe('runSync handler wiring', () => {
       [
         'durationMs',
         'errored',
+        'errorSample',
         'forced',
         'gathered',
         'ok',
@@ -749,5 +756,163 @@ describe('runSync handler wiring', () => {
     // (so it was not recorded), but that did not regress the run.
     expect(writes.some((w) => w.path === 'system/sync')).toBe(true);
     expect(writes.some((w) => w.path.startsWith('sync-runs/'))).toBe(false);
+  });
+
+  it('response.errorSample equals the capped, credential-free errors array and matches the sync-runs doc (spec 0089 / D4 / NB1)', async () => {
+    const titles = Array.from({ length: 15 }, (_, i) => ({
+      tmdbId: i + 1,
+      type: 'movie' as const,
+    }));
+    const { db, writes } = createFakeDb({ watchlist: titles });
+
+    const allErrors = createFakeEngine((inputs) =>
+      inputs.map((input, i) => ({
+        ...input,
+        outcome: 'error' as const,
+        transitions: [],
+        reason: `reason-${i}`,
+      })),
+    );
+
+    const out = await runSync(
+      baseDeps({ db, createEngine: () => allErrors.engine }),
+      req({
+        headers: { 'x-vultus-sync-secret': SECRET },
+        body: { force: true },
+      }),
+    );
+
+    const body = out.body as SyncRunResponse;
+    // Capped at 10, credential-free.
+    expect(body.errorSample).toHaveLength(10);
+    expect(JSON.stringify(body.errorSample)).not.toMatch(
+      /secret|token|bearer/i,
+    );
+    // IDENTICAL content to the sync-runs doc's `errors` array (NB1).
+    const runWrite = writes.find((w) => w.path.startsWith('sync-runs/'));
+    const data = runWrite?.data as { errors: string[] };
+    expect(body.errorSample).toEqual(data.errors);
+  });
+
+  it('errorSample is an empty array on a clean run (no errored titles)', async () => {
+    const { db } = createFakeDb({
+      watchlist: [{ tmdbId: 603, type: 'movie' }],
+    });
+    const out = await runSync(
+      baseDeps({ db, createEngine }),
+      req({
+        headers: { 'x-vultus-sync-secret': SECRET },
+        body: { force: true },
+      }),
+    );
+    expect((out.body as SyncRunResponse).errorSample).toEqual([]);
+  });
+
+  it('logs a logger.error per errored title with its credential-free reason (spec 0089 / D4)', async () => {
+    const { db } = createFakeDb({
+      watchlist: [
+        { tmdbId: 1, type: 'movie' },
+        { tmdbId: 2, type: 'movie' },
+      ],
+    });
+    const mixed = createFakeEngine((inputs) =>
+      inputs.map((input, i) =>
+        i === 1
+          ? { ...input, outcome: 'error', transitions: [], reason: 'boom' }
+          : syncedResult(input),
+      ),
+    );
+    const errSpy = vi
+      .spyOn(logger, 'error')
+      .mockImplementation(() => undefined);
+    try {
+      await runSync(
+        baseDeps({ db, createEngine: () => mixed.engine }),
+        req({
+          headers: { 'x-vultus-sync-secret': SECRET },
+          body: { force: true },
+        }),
+      );
+      const titleErrLog = errSpy.mock.calls.find(
+        (c) => c[0] === '[syncTitles] title errored',
+      );
+      expect(titleErrLog).toBeDefined();
+      expect(titleErrLog?.[1]).toMatchObject({ tmdbId: 2, reason: 'boom' });
+    } finally {
+      errSpy.mockRestore();
+    }
+  });
+
+  it('invokes runEpisodeAiredScan AFTER the episode-insert pass (spec 0089 / D3, NB2)', async () => {
+    const { db } = createFakeDb({
+      watchlist: [{ tmdbId: 1396, type: 'tv' }],
+    });
+    const order: string[] = [];
+    const titleEngine = createFakeEngine((inputs) => {
+      order.push('title-sync');
+      return inputs.map(syncedResult);
+    });
+    const episodeEngine: EpisodeSyncEngine = {
+      syncOne: vi.fn(),
+      syncAll: vi.fn((): Promise<EpisodeUpsertResult[]> => {
+        order.push('episode-sync');
+        return Promise.resolve([]);
+      }),
+    };
+    const scan = vi.fn(() => {
+      order.push('airing-scan');
+      return Promise.resolve();
+    });
+
+    await runSync(
+      baseDeps({
+        db,
+        createEngine: () => titleEngine.engine,
+        createEpisodeEngine: () => episodeEngine,
+        runEpisodeAiredScan: scan,
+      }),
+      req({
+        headers: { 'x-vultus-sync-secret': SECRET },
+        body: { force: true },
+      }),
+    );
+
+    expect(scan).toHaveBeenCalledTimes(1);
+    expect(scan).toHaveBeenCalledWith(db);
+    // Strictly after the episode-insert pass (NB2: status read post-0074 revert).
+    expect(order).toEqual(['title-sync', 'episode-sync', 'airing-scan']);
+  });
+
+  it('BEST-EFFORT: an airing-scan failure does NOT fail the run (200, shape unchanged, system/sync written)', async () => {
+    const { db, writes } = createFakeDb({
+      watchlist: [{ tmdbId: 1396, type: 'tv' }],
+    });
+    const scan = vi.fn(() => Promise.reject(new Error('scan boom')));
+
+    const out = await runSync(
+      baseDeps({ db, createEngine, runEpisodeAiredScan: scan }),
+      req({
+        headers: { 'x-vultus-sync-secret': SECRET },
+        body: { force: true },
+      }),
+    );
+
+    expect(out.status).toBe(200);
+    expect((out.body as SyncRunResponse).ok).toBe(true);
+    expect(writes.some((w) => w.path === 'system/sync')).toBe(true);
+  });
+
+  it('omitting runEpisodeAiredScan skips the scan (existing-deps shape stays green)', async () => {
+    const { db } = createFakeDb({
+      watchlist: [{ tmdbId: 1396, type: 'tv' }],
+    });
+    const out = await runSync(
+      baseDeps({ db, createEngine }),
+      req({
+        headers: { 'x-vultus-sync-secret': SECRET },
+        body: { force: true },
+      }),
+    );
+    expect(out.status).toBe(200);
   });
 });

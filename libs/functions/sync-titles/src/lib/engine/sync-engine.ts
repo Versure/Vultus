@@ -18,9 +18,23 @@ import type {
 
 const DEFAULT_NOW = (): string => new Date().toISOString();
 
+// A per-title error is worth re-attempting only when it is transient: a rate
+// limit (429) or a transport/network failure (status 0). A 401/403/5xx/4xx is
+// deterministic for the day and must NOT be re-tried.
+function isRetryableStatus(status: number | undefined): boolean {
+  return status === 429 || status === 0;
+}
+
+function sleep(ms: number): Promise<void> {
+  if (ms <= 0) return Promise.resolve();
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
   const { tmdb, trakt, store } = config;
   const now = config.now ?? DEFAULT_NOW;
+  const retryErroredPasses = config.retryErroredPasses ?? 0;
+  const retryDelayMs = config.retryDelayMs ?? 0;
 
   async function syncOne(title: SyncTitleInput): Promise<SyncResult> {
     const { tmdbId, type } = title;
@@ -40,8 +54,15 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
         };
       }
 
-      // 2. Trakt id (tv only). Movies never call getShowTraktId.
-      const traktId = type === 'tv' ? await trakt.getShowTraktId(tmdbId) : null;
+      // 2. Trakt id (tv only). Movies never call getShowTraktId. A cached,
+      // non-null traktId is stable — reuse it and skip the (rate-limited) Trakt
+      // call. A null/absent cached traktId still resolves via getShowTraktId.
+      let traktId: number | null = null;
+      if (type === 'tv') {
+        const cached = await store.getEntry(tmdbId);
+        // `??` short-circuits: a cached non-null traktId skips the Trakt call.
+        traktId = cached?.traktId ?? (await trakt.getShowTraktId(tmdbId));
+      }
 
       // 3. Write the refreshed entry.
       await store.putEntry(tmdbId, {
@@ -101,12 +122,41 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     }
   }
 
+  async function runPass(titles: SyncTitleInput[]): Promise<SyncResult[]> {
+    const results: SyncResult[] = [];
+    for (const title of titles) {
+      results.push(await syncOne(title));
+    }
+    return results;
+  }
+
   return {
     async sync(titles: SyncTitleInput[]): Promise<SyncResult[]> {
-      const results: SyncResult[] = [];
-      for (const title of titles) {
-        results.push(await syncOne(title));
+      const results = await runPass(titles);
+
+      // Second-pass retry: re-run only the titles whose outcome is a RETRYABLE
+      // error (429 / transport), up to `retryErroredPasses` additional passes,
+      // sleeping `retryDelayMs` between passes. A later pass's synced/skipped
+      // (or newer error) supersedes the earlier error, so each input title still
+      // yields exactly one result in input order. Non-retryable errors (e.g.
+      // 401) are never re-tried.
+      for (let pass = 0; pass < retryErroredPasses; pass += 1) {
+        const retryIndices: number[] = [];
+        results.forEach((r, i) => {
+          if (r.outcome === 'error' && isRetryableStatus(r.errorStatus)) {
+            retryIndices.push(i);
+          }
+        });
+        if (retryIndices.length === 0) break;
+
+        await sleep(retryDelayMs);
+
+        const retryResults = await runPass(retryIndices.map((i) => titles[i]));
+        retryIndices.forEach((originalIndex, k) => {
+          results[originalIndex] = retryResults[k];
+        });
       }
+
       return results;
     },
   };

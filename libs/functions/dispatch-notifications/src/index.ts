@@ -4,26 +4,29 @@
 // The firebase-admin / FCM-bound adapters that implement these ports live in
 // `apps/functions` — no Firebase import crosses this barrel.
 
-export { createNotificationDispatcher } from './lib/dispatcher';
+export {
+  createNotificationDispatcher,
+  EPISODE_RECENCY_WINDOW_DAYS,
+} from './lib/dispatcher';
 export type {
   NotificationDispatcher,
   DispatcherConfig,
   AvailabilityChange,
+  EpisodeAiredChange,
   DispatchSummary,
 } from './lib/dispatcher';
 export type {
   WatchlistStore,
-  EpisodeStore,
   NotificationStore,
   FcmSender,
   TrackingUser,
-  TrackedEpisode,
   FcmSendResult,
 } from './lib/ports';
 export {
   classifyFlatrateTransition,
   hasFlatrate,
   decideKinds,
+  isEpisodeRecentlyAired,
   isWithinDeliveryWindow,
 } from './lib/transitions';
 export type { FlatrateTransition } from './lib/transitions';

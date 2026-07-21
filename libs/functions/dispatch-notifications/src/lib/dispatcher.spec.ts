@@ -8,12 +8,11 @@ import type {
 import {
   createNotificationDispatcher,
   type AvailabilityChange,
+  type EpisodeAiredChange,
 } from './dispatcher';
 import type {
-  EpisodeStore,
   FcmSendResult,
   NotificationStore,
-  TrackedEpisode,
   TrackingUser,
   WatchlistStore,
 } from './ports';
@@ -54,20 +53,22 @@ const user = (overrides: Partial<TrackingUser> = {}): TrackingUser => ({
 // ---- fakes ----
 interface WrittenNotification {
   uid: string;
+  id: string;
   doc: NotificationDoc;
 }
 
 function makeStores(
   opts: {
     users?: TrackingUser[];
-    episodesByUser?: Record<string, TrackedEpisode[]>;
     unregisteredTokens?: Set<string>;
     writeError?: (uid: string) => boolean;
+    existingIds?: Set<string>; // "uid|id" already-notified markers
   } = {},
 ) {
   const written: WrittenNotification[] = [];
   const removed: { uid: string; token: string }[] = [];
   const sent: { token: string; data: Record<string, string> }[] = [];
+  const existsChecks: { uid: string; id: string }[] = [];
 
   const watchlist: WatchlistStore = {
     findUsersTracking: vi.fn(() => Promise.resolve(opts.users ?? [])),
@@ -77,17 +78,15 @@ function makeStores(
     }),
   };
 
-  const episodes: EpisodeStore = {
-    getEpisodes: vi.fn((uid: string) =>
-      Promise.resolve(opts.episodesByUser?.[uid] ?? []),
-    ),
-  };
-
   const notifications: NotificationStore = {
-    write: vi.fn((uid: string, doc: NotificationDoc) => {
+    write: vi.fn((uid: string, id: string, doc: NotificationDoc) => {
       if (opts.writeError?.(uid)) throw new Error(`write failed for ${uid}`);
-      written.push({ uid, doc });
+      written.push({ uid, id, doc });
       return Promise.resolve();
+    }),
+    exists: vi.fn((uid: string, id: string) => {
+      existsChecks.push({ uid, id });
+      return Promise.resolve(opts.existingIds?.has(`${uid}|${id}`) ?? false);
     }),
   };
 
@@ -103,7 +102,15 @@ function makeStores(
     ),
   };
 
-  return { watchlist, episodes, notifications, fcm, written, removed, sent };
+  return {
+    watchlist,
+    notifications,
+    fcm,
+    written,
+    removed,
+    sent,
+    existsChecks,
+  };
 }
 
 function makeChange(
@@ -125,7 +132,6 @@ function makeDispatcher(
 ) {
   return createNotificationDispatcher({
     watchlist: stores.watchlist,
-    episodes: stores.episodes,
     notifications: stores.notifications,
     fcm: stores.fcm,
     now: () => nowIso,
@@ -140,8 +146,9 @@ describe('createNotificationDispatcher', () => {
     const summary = await makeDispatcher(stores).dispatch(makeChange());
 
     expect(stores.written).toHaveLength(1);
-    const { uid, doc } = stores.written[0];
+    const { uid, id, doc } = stores.written[0];
     expect(uid).toBe('u1');
+    expect(id).toBe('100-NL-movie-available');
     expect(doc.kind).toBe('movie-available');
     expect(doc.payload.tmdbId).toBe(100);
     expect(doc.payload.region).toBe('NL');
@@ -197,35 +204,33 @@ describe('createNotificationDispatcher', () => {
     expect(on.written).toHaveLength(1);
   });
 
-  it('tv appeared + aired episode: two notifications when both prefs on', async () => {
-    const stores = makeStores({
-      users: [user()],
-      episodesByUser: {
-        u1: [{ airDate: '2026-06-01T00:00:00.000Z', season: 1, episode: 1 }],
-      },
-    });
+  it('tv appeared: one show-came-to-platform doc, never episode-aired (D3)', async () => {
+    const stores = makeStores({ users: [user()] });
     const summary = await makeDispatcher(stores).dispatch(
       makeChange({ type: 'tv' }),
     );
 
     const kinds = stores.written.map((w) => w.doc.kind);
-    expect(kinds).toEqual(['show-came-to-platform', 'episode-aired']);
-    expect(summary.notificationsWritten).toBe(2);
-    expect(summary.fcmSent).toBe(2);
+    expect(kinds).toEqual(['show-came-to-platform']);
+    expect(kinds).not.toContain('episode-aired');
+    expect(stores.written[0].id).toBe('100-NL-show-came-to-platform');
+    expect(summary.notificationsWritten).toBe(1);
+    expect(summary.fcmSent).toBe(1);
   });
 
-  it('tv appeared + aired episode: only enabled subset when episodeAired off', async () => {
-    const stores = makeStores({
-      users: [user({ notificationPrefs: allPrefs({ episodeAired: false }) })],
-      episodesByUser: {
-        u1: [{ airDate: '2026-06-01T00:00:00.000Z', season: 1, episode: 1 }],
-      },
-    });
-    await makeDispatcher(stores).dispatch(makeChange({ type: 'tv' }));
-
-    expect(stores.written.map((w) => w.doc.kind)).toEqual([
-      'show-came-to-platform',
-    ]);
+  it('availability path never reads episodes (no EpisodeStore dependency)', async () => {
+    // The dispatcher is constructed without an episodes port at all; this test
+    // documents that the availability path is episode-free (D3). A movie/tv
+    // appeared fires exactly the availability kind with no episode-aired.
+    const stores = makeStores({ users: [user()] });
+    const summary = await makeDispatcher(stores).dispatch(
+      makeChange({ type: 'tv', previousProviders: [flatrate(1)] }),
+    );
+    // unchanged transition (flatrate → flatrate) → no availability kind and no
+    // episode-aired, so nothing is written.
+    expect(summary.transition).toBe('unchanged');
+    expect(stores.written).toHaveLength(0);
+    expect(stores.sent).toHaveLength(0);
   });
 
   it('removed transition: no availability notification written', async () => {
@@ -302,15 +307,10 @@ describe('createNotificationDispatcher', () => {
   });
 
   it('clock determinism: every sentAt equals the injected now()', async () => {
-    const stores = makeStores({
-      users: [user()],
-      episodesByUser: {
-        u1: [{ airDate: '2026-06-01T00:00:00.000Z', season: 1, episode: 1 }],
-      },
-    });
+    const stores = makeStores({ users: [user()] });
     await makeDispatcher(stores).dispatch(makeChange({ type: 'tv' }));
 
-    expect(stores.written).toHaveLength(2);
+    expect(stores.written).toHaveLength(1);
     stores.written.forEach((w) => expect(w.doc.sentAt).toBe(NOW));
   });
 
@@ -325,6 +325,8 @@ describe('createNotificationDispatcher', () => {
     expect(stores.sent[0].data.notificationId).toBe(
       stores.sent[1].data.notificationId,
     );
+    expect(stores.written[0].id).toBe('100-NL-movie-available');
+    expect(stores.written[1].id).toBe('100-NL-movie-available');
   });
 
   describe('completed/dropped suppression (spec 0088)', () => {
@@ -380,23 +382,6 @@ describe('createNotificationDispatcher', () => {
       expect(summary.usersConsidered).toBe(1);
       expect(summary.notificationsWritten).toBe(1);
       expect(summary.fcmSent).toBe(1);
-    });
-
-    it("tv title + aired episode + 'completed': episode-aired is also suppressed", async () => {
-      const stores = makeStores({
-        users: [user({ status: 'completed' })],
-        episodesByUser: {
-          u1: [{ airDate: '2026-06-01T00:00:00.000Z', season: 1, episode: 1 }],
-        },
-      });
-      const summary = await makeDispatcher(stores).dispatch(
-        makeChange({ type: 'tv' }),
-      );
-
-      expect(stores.written).toHaveLength(0);
-      expect(stores.sent).toHaveLength(0);
-      expect(summary.usersConsidered).toBe(0);
-      expect(summary.notificationsWritten).toBe(0);
     });
   });
 
@@ -518,6 +503,227 @@ describe('createNotificationDispatcher', () => {
       await makeDispatcher(miss, FIXED).dispatch(makeChange());
       expect(miss.written[0].doc.sentAt).toBe(FIXED);
       expect(miss.sent).toHaveLength(0);
+    });
+  });
+});
+
+describe('dispatchEpisodeAired (spec 0089 / D3)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const RECENT = '2026-06-21T00:00:00.000Z'; // 1 day before NOW → in window
+
+  const episodeChange = (
+    overrides: Partial<EpisodeAiredChange> = {},
+  ): EpisodeAiredChange => ({
+    tmdbId: 100,
+    region: 'NL',
+    uid: 'u1',
+    titleId: 'title-1',
+    status: 'watching',
+    notificationPrefs: allPrefs(),
+    fcmTokens: [token('tok-1')],
+    episodeId: 's01e001',
+    airDate: RECENT,
+    hasFlatrateNow: true,
+    ...overrides,
+  });
+
+  const EXPECTED_ID = '100-NL-episode-aired-s01e001';
+
+  it('happy path (watching, prefs on, flatrate, recent, not-yet-notified): one inbox doc + FCM to each token in-window', async () => {
+    const stores = makeStores();
+    const result = await makeDispatcher(stores).dispatchEpisodeAired(
+      episodeChange({ fcmTokens: [token('tok-1'), token('tok-2')] }),
+    );
+
+    expect(result).toEqual({
+      notified: true,
+      fcmSent: 2,
+      staleTokensPruned: 0,
+    });
+    expect(stores.written).toHaveLength(1);
+    const { uid, id, doc } = stores.written[0];
+    expect(uid).toBe('u1');
+    expect(id).toBe(EXPECTED_ID);
+    expect(doc.kind).toBe('episode-aired');
+    expect(doc.payload).toEqual({
+      tmdbId: 100,
+      titleId: 'title-1',
+      title: '',
+      region: 'NL',
+    });
+    expect(doc.sentAt).toBe(NOW);
+    expect(doc.readAt).toBeNull();
+
+    expect(stores.sent.map((s) => s.token)).toEqual(['tok-1', 'tok-2']);
+    // Exact-string FCM data assertions (F3 — no whitespace normalization).
+    expect(stores.sent[0].data).toEqual({
+      notificationId: EXPECTED_ID,
+      titleId: 'title-1',
+      kind: 'episode-aired',
+      region: 'NL',
+      tmdbId: '100',
+      episodeId: 's01e001',
+    });
+    expect(stores.sent[0].data.kind).toBe('episode-aired');
+    expect(stores.sent[0].data.episodeId).toBe('s01e001');
+  });
+
+  it("suppressed for status 'completed' → no write, no send", async () => {
+    const stores = makeStores();
+    const result = await makeDispatcher(stores).dispatchEpisodeAired(
+      episodeChange({ status: 'completed' }),
+    );
+    expect(result.notified).toBe(false);
+    expect(stores.written).toHaveLength(0);
+    expect(stores.sent).toHaveLength(0);
+  });
+
+  it("suppressed for status 'dropped' → no write, no send", async () => {
+    const stores = makeStores();
+    const result = await makeDispatcher(stores).dispatchEpisodeAired(
+      episodeChange({ status: 'dropped' }),
+    );
+    expect(result.notified).toBe(false);
+    expect(stores.written).toHaveLength(0);
+    expect(stores.sent).toHaveLength(0);
+  });
+
+  it('suppressed when prefs.episodeAired is false → no write, no send', async () => {
+    const stores = makeStores();
+    const result = await makeDispatcher(stores).dispatchEpisodeAired(
+      episodeChange({
+        notificationPrefs: allPrefs({ episodeAired: false }),
+      }),
+    );
+    expect(result.notified).toBe(false);
+    expect(stores.written).toHaveLength(0);
+    expect(stores.sent).toHaveLength(0);
+  });
+
+  it('suppressed when not on flatrate → no write, no send', async () => {
+    const stores = makeStores();
+    const result = await makeDispatcher(stores).dispatchEpisodeAired(
+      episodeChange({ hasFlatrateNow: false }),
+    );
+    expect(result.notified).toBe(false);
+    expect(stores.written).toHaveLength(0);
+    expect(stores.sent).toHaveLength(0);
+  });
+
+  it('suppressed when airDate is outside the recency window → no write, no send', async () => {
+    const stores = makeStores();
+    const result = await makeDispatcher(stores).dispatchEpisodeAired(
+      episodeChange({ airDate: '2026-06-10T00:00:00.000Z' }), // > 3d before NOW
+    );
+    expect(result.notified).toBe(false);
+    expect(stores.written).toHaveLength(0);
+    expect(stores.sent).toHaveLength(0);
+  });
+
+  it('idempotent: when the per-episode id already exists → no write, no send', async () => {
+    const stores = makeStores({
+      existingIds: new Set([`u1|${EXPECTED_ID}`]),
+    });
+    const result =
+      await makeDispatcher(stores).dispatchEpisodeAired(episodeChange());
+    expect(result.notified).toBe(false);
+    expect(stores.written).toHaveLength(0);
+    expect(stores.sent).toHaveLength(0);
+    expect(stores.existsChecks).toContainEqual({ uid: 'u1', id: EXPECTED_ID });
+  });
+
+  it('outside the delivery window: inbox doc written but NO FCM sent', async () => {
+    const FIXED = '2024-03-15T08:30:00.000Z'; // UTC hour 8
+    const stores = makeStores();
+    const result = await makeDispatcher(stores, FIXED).dispatchEpisodeAired(
+      episodeChange({
+        airDate: '2024-03-14T00:00:00.000Z', // 1 day before FIXED → in window
+        notificationPrefs: allPrefs({ deliveryHour: 10 }), // mismatch
+      }),
+    );
+    expect(result).toEqual({
+      notified: true,
+      fcmSent: 0,
+      staleTokensPruned: 0,
+    });
+    expect(stores.written).toHaveLength(1);
+    expect(stores.sent).toHaveLength(0);
+  });
+
+  it('two distinct episodes → two distinct ids', async () => {
+    const stores = makeStores();
+    const dispatcher = makeDispatcher(stores);
+    await dispatcher.dispatchEpisodeAired(
+      episodeChange({ episodeId: 's01e001' }),
+    );
+    await dispatcher.dispatchEpisodeAired(
+      episodeChange({ episodeId: 's01e002' }),
+    );
+
+    expect(stores.written.map((w) => w.id)).toEqual([
+      '100-NL-episode-aired-s01e001',
+      '100-NL-episode-aired-s01e002',
+    ]);
+  });
+
+  it('stale token pruned exactly once', async () => {
+    const stores = makeStores({
+      users: [],
+      unregisteredTokens: new Set(['stale']),
+    });
+    const result = await makeDispatcher(stores).dispatchEpisodeAired(
+      episodeChange({ fcmTokens: [token('good'), token('stale')] }),
+    );
+
+    expect(result.staleTokensPruned).toBe(1);
+    expect(stores.removed).toEqual([{ uid: 'u1', token: 'stale' }]);
+    expect(stores.sent.map((s) => s.token).sort()).toEqual(['good', 'stale']);
+  });
+
+  // Three B1 airing-scan cases exercised via the dispatcher (spec 0089).
+  describe('B1 walk-through cases', () => {
+    it('(a) first-add back catalog: episodes aired weeks ago → none notified', async () => {
+      const stores = makeStores();
+      const dispatcher = makeDispatcher(stores);
+      const oldDates = [
+        '2026-05-01T00:00:00.000Z',
+        '2026-05-08T00:00:00.000Z',
+        '2026-05-15T00:00:00.000Z',
+      ];
+      for (const airDate of oldDates) {
+        await dispatcher.dispatchEpisodeAired(episodeChange({ airDate }));
+      }
+      expect(stores.written).toHaveLength(0);
+      expect(stores.sent).toHaveLength(0);
+    });
+
+    it('(b) new weekly episode: notified once, second run (exists) not re-notified', async () => {
+      // The fake `exists` reads this set live, so persisting the id after the
+      // first write makes the second run see the episode as already-notified.
+      const existingIds = new Set<string>();
+      const stores = makeStores({ existingIds });
+      const dispatcher = makeDispatcher(stores);
+
+      const first = await dispatcher.dispatchEpisodeAired(episodeChange());
+      expect(first.notified).toBe(true);
+      expect(stores.written).toHaveLength(1);
+      // Simulate the write persisting the per-episode notified marker.
+      existingIds.add(`${stores.written[0].uid}|${stores.written[0].id}`);
+
+      // Second run within the window: exists true → skipped.
+      const second = await dispatcher.dispatchEpisodeAired(episodeChange());
+      expect(second.notified).toBe(false);
+      expect(stores.written).toHaveLength(1);
+    });
+
+    it('(c) missed-day catch-up: episode aired yesterday, exists false → notified', async () => {
+      const stores = makeStores();
+      const result = await makeDispatcher(stores).dispatchEpisodeAired(
+        episodeChange({ airDate: RECENT }),
+      );
+      expect(result.notified).toBe(true);
+      expect(stores.written).toHaveLength(1);
     });
   });
 });

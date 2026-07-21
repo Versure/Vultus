@@ -32,10 +32,13 @@ export interface TraktClientConfig {
   fetch?: typeof fetch;
   /** Defaults to 'https://api.trakt.tv'. */
   baseUrl?: string;
-  /** 429 retry cap; default 3. */
+  /** 429 retry cap; default 5. */
   maxRetries?: number;
   /** Throttle floor between requests in ms; default 250. */
   minRequestIntervalMs?: number;
+  /** Base (ms) for the exponential backoff floor on a `429` retry; default 500.
+   *  See `createHttpCore` — the wait is `max(Retry-After, base*2^attempt+jitter)`. */
+  backoffBaseMs?: number;
 }
 
 export interface TraktClient {
@@ -47,8 +50,9 @@ export interface TraktClient {
 }
 
 const DEFAULT_BASE_URL = 'https://api.trakt.tv';
-const DEFAULT_MAX_RETRIES = 3;
+const DEFAULT_MAX_RETRIES = 5;
 const DEFAULT_MIN_REQUEST_INTERVAL_MS = 250;
+const DEFAULT_BACKOFF_BASE_MS = 500;
 const TRAKT_API_VERSION = '2';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -85,6 +89,7 @@ export function createTraktClient(config: TraktClientConfig): TraktClient {
     maxRetries: config.maxRetries ?? DEFAULT_MAX_RETRIES,
     minRequestIntervalMs:
       config.minRequestIntervalMs ?? DEFAULT_MIN_REQUEST_INTERVAL_MS,
+    backoffBaseMs: config.backoffBaseMs ?? DEFAULT_BACKOFF_BASE_MS,
     errorFactory: (message, status, endpoint) =>
       new TraktError(`Trakt ${message}`, status, endpoint),
   });

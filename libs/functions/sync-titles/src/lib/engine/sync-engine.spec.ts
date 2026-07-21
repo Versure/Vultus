@@ -432,3 +432,166 @@ describe('createSyncEngine', () => {
     expect(store.entries.size).toBe(0);
   });
 });
+
+describe('createSyncEngine — cached-traktId dedup (D2)', () => {
+  let store: ReturnType<typeof createFakeStore>;
+
+  beforeEach(() => {
+    store = createFakeStore();
+  });
+
+  it('reuses a cached non-null traktId and does NOT call getShowTraktId', async () => {
+    store.entries.set(1396, {
+      type: 'tv',
+      traktId: 999,
+      metadata: tvMeta,
+      lastSyncedAt: 'old',
+    });
+    const tmdb = createTmdbMock();
+    const trakt = createTraktMock();
+    const engine = createSyncEngine({
+      tmdb: tmdb.client,
+      trakt: trakt.client,
+      store,
+      now: () => FIXED_NOW,
+    });
+
+    const results = await engine.sync([{ tmdbId: 1396, type: 'tv' }]);
+
+    expect(trakt.getShowTraktId).not.toHaveBeenCalled();
+    expect(store.entries.get(1396)?.traktId).toBe(999);
+    expect(results[0].outcome).toBe('synced');
+  });
+
+  it('still calls getShowTraktId when the cached traktId is null', async () => {
+    store.entries.set(1396, {
+      type: 'tv',
+      traktId: null,
+      metadata: tvMeta,
+      lastSyncedAt: 'old',
+    });
+    const tmdb = createTmdbMock();
+    const trakt = createTraktMock();
+    const engine = createSyncEngine({
+      tmdb: tmdb.client,
+      trakt: trakt.client,
+      store,
+      now: () => FIXED_NOW,
+    });
+
+    await engine.sync([{ tmdbId: 1396, type: 'tv' }]);
+
+    expect(trakt.getShowTraktId).toHaveBeenCalledTimes(1);
+    expect(trakt.getShowTraktId).toHaveBeenCalledWith(1396);
+    expect(store.entries.get(1396)?.traktId).toBe(42);
+  });
+});
+
+describe('createSyncEngine — second-pass retry (D2)', () => {
+  let store: ReturnType<typeof createFakeStore>;
+
+  beforeEach(() => {
+    store = createFakeStore();
+  });
+
+  it('re-runs a retryable (429) error on a second pass and ends synced, writing availability', async () => {
+    const getMovie = vi
+      .fn()
+      .mockRejectedValueOnce(new TmdbError('rate limit', 429, '/movie/1'))
+      .mockResolvedValueOnce(movieMeta);
+    const tmdb = createTmdbMock({ getMovie });
+    const trakt = createTraktMock();
+    const engine = createSyncEngine({
+      tmdb: tmdb.client,
+      trakt: trakt.client,
+      store,
+      now: () => FIXED_NOW,
+      retryErroredPasses: 1,
+      retryDelayMs: 0,
+    });
+
+    const results = await engine.sync([{ tmdbId: 1, type: 'movie' }]);
+
+    expect(getMovie).toHaveBeenCalledTimes(2);
+    expect(results).toHaveLength(1);
+    expect(results[0].outcome).toBe('synced');
+    // The availability write that the first pass never reached now happened.
+    expect(store.availability.get(1)?.NL).toBeDefined();
+  });
+
+  it('does NOT re-run a non-retryable (401) error even with retry passes enabled', async () => {
+    const getMovie = vi
+      .fn()
+      .mockRejectedValue(new TmdbError('unauthorized', 401, '/movie/1'));
+    const tmdb = createTmdbMock({ getMovie });
+    const trakt = createTraktMock();
+    const engine = createSyncEngine({
+      tmdb: tmdb.client,
+      trakt: trakt.client,
+      store,
+      now: () => FIXED_NOW,
+      retryErroredPasses: 2,
+      retryDelayMs: 0,
+    });
+
+    const results = await engine.sync([{ tmdbId: 1, type: 'movie' }]);
+
+    expect(getMovie).toHaveBeenCalledTimes(1); // never re-tried
+    expect(results[0].outcome).toBe('error');
+    expect(results[0].errorStatus).toBe(401);
+  });
+
+  it('retryErroredPasses: 0 (default) reproduces current behavior — a 429 stays error, not re-tried', async () => {
+    const getMovie = vi
+      .fn()
+      .mockRejectedValue(new TmdbError('rate limit', 429, '/movie/1'));
+    const tmdb = createTmdbMock({ getMovie });
+    const trakt = createTraktMock();
+    const engine = createSyncEngine({
+      tmdb: tmdb.client,
+      trakt: trakt.client,
+      store,
+      now: () => FIXED_NOW,
+      // retryErroredPasses omitted → default 0
+    });
+
+    const results = await engine.sync([{ tmdbId: 1, type: 'movie' }]);
+
+    expect(getMovie).toHaveBeenCalledTimes(1);
+    expect(results[0].outcome).toBe('error');
+    expect(results[0].errorStatus).toBe(429);
+  });
+
+  it('preserves input order and one result per title while retrying a subset', async () => {
+    // title 1 always ok; title 2 429s then succeeds; title 3 ok.
+    const getMovie = vi
+      .fn()
+      .mockResolvedValueOnce(movieMeta) // pass1 title1
+      .mockRejectedValueOnce(new TmdbError('rate', 429, '/movie/2')) // pass1 title2
+      .mockResolvedValueOnce(movieMeta) // pass1 title3
+      .mockResolvedValueOnce(movieMeta); // pass2 title2 retry
+    const tmdb = createTmdbMock({ getMovie });
+    const trakt = createTraktMock();
+    const engine = createSyncEngine({
+      tmdb: tmdb.client,
+      trakt: trakt.client,
+      store,
+      now: () => FIXED_NOW,
+      retryErroredPasses: 1,
+      retryDelayMs: 0,
+    });
+
+    const results = await engine.sync([
+      { tmdbId: 1, type: 'movie' },
+      { tmdbId: 2, type: 'movie' },
+      { tmdbId: 3, type: 'movie' },
+    ]);
+
+    expect(results.map((r) => r.tmdbId)).toEqual([1, 2, 3]);
+    expect(results.map((r) => r.outcome)).toEqual([
+      'synced',
+      'synced',
+      'synced',
+    ]);
+  });
+});

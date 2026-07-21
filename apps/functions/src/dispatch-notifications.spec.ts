@@ -347,13 +347,13 @@ function makeNotificationDoc(
 }
 
 describe('createFirestoreNotificationStore', () => {
-  it('writes to the deterministic {tmdbId}-{region}-{kind} doc id with merge', async () => {
+  it('writes to the caller-supplied id path with merge (spec 0089 (uid,id,doc))', async () => {
     const { db, writes } = createFakeDb({ titleCache: {} });
     const setSpy = vi.spyOn(db, 'doc');
     const store = createFirestoreNotificationStore(db);
     const doc = makeNotificationDoc();
 
-    await store.write('u1', doc);
+    await store.write('u1', '603-NL-movie-available', doc);
 
     const expectedPath = notificationPath('u1', '603-NL-movie-available');
     expect(setSpy).toHaveBeenCalledWith(expectedPath);
@@ -364,12 +364,13 @@ describe('createFirestoreNotificationStore', () => {
     });
   });
 
-  it('derives the id from payload.tmdbId, payload.region and kind for episode-aired', async () => {
+  it('uses the id verbatim — a per-episode episode-aired id (spec 0089)', async () => {
     const { db, writes } = createFakeDb({ titleCache: {} });
     const store = createFirestoreNotificationStore(db);
 
     await store.write(
       'u2',
+      '1399-US-episode-aired-s01e005',
       makeNotificationDoc({
         kind: 'episode-aired',
         payload: { tmdbId: 1399, titleId: 't', title: '', region: 'US' },
@@ -377,7 +378,20 @@ describe('createFirestoreNotificationStore', () => {
     );
 
     expect(writes[0].path).toBe(
-      notificationPath('u2', '1399-US-episode-aired'),
+      notificationPath('u2', '1399-US-episode-aired-s01e005'),
+    );
+  });
+
+  it('exists(uid,id) returns true when the notification doc is present, false otherwise', async () => {
+    const presentPath = notificationPath('u3', '603-NL-episode-aired-s01e001');
+    const { db } = createFakeDb({
+      titleCache: { [presentPath]: { kind: 'episode-aired' } },
+    });
+    const store = createFirestoreNotificationStore(db);
+
+    expect(await store.exists('u3', '603-NL-episode-aired-s01e001')).toBe(true);
+    expect(await store.exists('u3', '603-NL-episode-aired-s01e999')).toBe(
+      false,
     );
   });
 });

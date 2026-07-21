@@ -30,22 +30,16 @@ export interface WatchlistStore {
   removeFcmToken(uid: string, token: string): Promise<void>;
 }
 
-export interface TrackedEpisode {
-  airDate: string; // ISO 8601
-  season: number;
-  episode: number;
-}
-
-export interface EpisodeStore {
-  getEpisodes(
-    uid: string,
-    titleId: string,
-    tmdbId: number,
-  ): Promise<TrackedEpisode[]>;
-}
-
 export interface NotificationStore {
-  write(uid: string, doc: NotificationDoc): Promise<void>;
+  /** Create/merge users/{uid}/notifications/{id}. The core owns id derivation
+   *  for both paths (availability: `${tmdbId}-${region}-${kind}`; episode:
+   *  `${tmdbId}-${region}-episode-aired-${episodeId}`). */
+  write(uid: string, id: string, doc: NotificationDoc): Promise<void>;
+  /** True when users/{uid}/notifications/{id} already exists. Used by the
+   *  episode-aired path so the daily airing-scan notifies each episode exactly
+   *  once even though the episode stays in the recency window for several runs
+   *  (spec 0089 / D3). */
+  exists(uid: string, id: string): Promise<boolean>;
 }
 
 export interface FcmSendResult {

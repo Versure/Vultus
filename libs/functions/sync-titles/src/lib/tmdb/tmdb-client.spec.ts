@@ -50,6 +50,7 @@ function client(
     readAccessToken: TOKEN,
     fetch: fetchMock,
     minRequestIntervalMs: 0,
+    backoffBaseMs: 0, // disable the 429 backoff floor so retry tests stay fast
     ...overrides,
   });
 }
