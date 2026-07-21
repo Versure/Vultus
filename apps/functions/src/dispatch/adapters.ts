@@ -14,6 +14,7 @@ import type {
   FcmToken,
   NotificationPrefs,
   Region,
+  WatchStatus,
 } from '@vultus/shared/domain';
 import type {
   EpisodeStore,
@@ -35,7 +36,7 @@ export function createFirestoreWatchlistStore(db: Firestore): WatchlistStore {
     async findUsersTracking(tmdbId: number): Promise<TrackingUser[]> {
       const snap = await db.collectionGroup('watchlist').get();
       const matches = snap.docs.filter((doc) => {
-        const data = doc.data() as { tmdbId?: number };
+        const data = doc.data() as { tmdbId?: number; status?: WatchStatus };
         return data.tmdbId === tmdbId;
       });
 
@@ -55,12 +56,15 @@ export function createFirestoreWatchlistStore(db: Firestore): WatchlistStore {
             }
           | undefined;
         if (!userData) continue;
+        const matchedData = doc.data() as { status?: WatchStatus };
         users.push({
           uid,
           titleId,
           region: userData.region,
           notificationPrefs: userData.notificationPrefs,
           fcmTokens: userData.fcmTokens ?? [],
+          // legacy/malformed doc missing status → notifiable (spec 0088)
+          status: matchedData.status ?? 'watching',
         });
       }
       return users;

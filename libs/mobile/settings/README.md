@@ -19,12 +19,34 @@ The barrel (`@vultus/mobile/settings`) exports:
   over `PlexSyncService.sync()` from the ROOT injector and both pages can share
   that instance. **Do NOT list them in `SETTINGS_PROVIDERS`** (page-scoping would
   fork the state from the boot/resume trigger's instance).
+- `PlexBackgroundService` (spec 0085) — **`providedIn: 'root'`** singleton for
+  periodic on-device background Plex sync (Android WorkManager via
+  `@transistorsoft/capacitor-background-fetch`). Exported so the shell's
+  `app.config.ts` can wire `PLEX_BACKGROUND_INIT` over `PlexBackgroundService.init()`
+  from the ROOT injector. **Do NOT list it in `SETTINGS_PROVIDERS`** (page-scoping
+  would fork it from the boot/link trigger). See the dedicated section below.
 - `CapacitorHttpPlexClient`, `MockPlexClient` (spec 0073) — the two `PlexClient`
   impls, exported so the shell's `PLEX_CLIENT` factory selects between them
   (`Capacitor.isNativePlatform()` → real, else mock). There is **no
   `PLEX_PROVIDERS`** export and **no `plex.providers.ts`** — the shell factory is
   the single client selector.
 - `PlexSyncSummary` (type) — the `{ added, updated, skipped }` outcome of a sync.
+- `SETTINGS_TMDB_CONFIG` (token, spec 0086) — an
+  `InjectionToken<TmdbDetailConfig>` the shell's `app.config.ts` wires from
+  `environment.tmdb` (the same value `TMDB_SEARCH_CONFIG` / `TMDB_DETAIL_CONFIG`
+  receive). It configures the slice-local TMDB detail client `PlexSyncService`
+  uses to fetch `posterPath` / `voteAverage`. Named `SETTINGS_TMDB_CONFIG` (not
+  `TMDB_DETAIL_CONFIG`) to avoid a symbol collision with the title-detail
+  slice's token already imported into the shell.
+- `TmdbDetailConfig` (type, spec 0086) — the config shape the token carries
+  (`apiBaseUrl`, `imageBaseUrl`, `auth`, optional `fetchImpl`).
+
+The TMDB detail client itself (`createTmdbDetailClient`, `TmdbDetailClient`,
+`TmdbDetail`, `TmdbDetailError` in `tmdb-detail.client.ts`) is
+**slice-internal** — not barrel-exported. It is a **deliberate per-slice
+duplicate** of the search / title-detail clients (spec 0016 decision 2,
+reaffirmed by spec 0086); the settings slice must not import
+`@vultus/mobile/search` or `@vultus/mobile/title-detail`.
 
 `SettingsService` and `SyncStatusService` are internal data-access services used
 only by `SettingsPage` / its cards and are intentionally **not** barrel-exported
@@ -58,7 +80,20 @@ reads). Two impls live in this slice:
   `X-Plex-Client-Identifier` (a UUID generated once and persisted to Preferences
   under `plex_client_id`) — a constant shared by all installs collides in the
   account's plex.tv device registry — and passes `includeIPv6=1` to discovery so
-  an IPv6-only LAN still exposes a `local` connection. The library listing
+  an IPv6-only LAN still exposes a `local` connection. For the chosen local
+  connection (`pickLocalConnection`, IPv4-preferred) it builds the base URL as a
+  **raw-IP `http://<address>:<port>`** from the connection's fields
+  (`localBaseUrl`), **discarding** Plex's reported `uri`: with `includeHttps=1`
+  that local `uri` is a `*.plex.direct` HTTPS hostname whose public DNS resolves
+  the LAN IP, which **DNS-rebind-protected routers** (e.g. a FritzBox) refuse to
+  answer ("Unable to resolve host ….plex.direct") — so the raw IP is used to skip
+  DNS entirely (issue #171). Reaching the raw-IP URL needs **cleartext-to-LAN**,
+  enabled by `android/app/src/main/res/xml/network_security_config.xml`
+  (base-config `cleartextTrafficPermitted`, wired via the manifest's
+  `networkSecurityConfig`); all other traffic (Firebase / TMDB / plex.tv) stays
+  HTTPS. This assumes the PMS serves plain HTTP on the LAN (Plex default); with
+  "Secure connections: Required" it does not, and that network must instead
+  whitelist `plex.direct` in the router's DNS-rebind config. The library listing
   (`/library/sections/{id}/all`) is fetched with **`includeGuids=1`** — WITHOUT
   it Plex omits the external `Guid[]` (`tmdb://`) and every `tmdbId` parses as
   `null`, so every item is skipped and nothing ever syncs (the original
@@ -104,7 +139,12 @@ can kill an in-flight request's socket while the app is backgrounded at
 plex.tv/link), and the expiry countdown is **wall-clock anchored** (a deadline
 timestamp, not a decrement-per-tick counter) because Android throttles WebView
 timers while backgrounded. The merged `PlexPin` carries no `expiresIn`, so the
-~15-minute PIN TTL deadline is owned locally at code issue.
+~15-minute PIN TTL deadline is owned locally at code issue. Every swallowed
+link/sync failure logs a **redacted diagnostic** via `describePlexError`
+(`plex-errors.ts`) to `console.error` (issue #171) — the HTTP status + endpoint
+path, or a transport error's `name`/`message`, **never** the error object or any
+header (the X-Plex-Token rides in a header, never the URL/message), so the real
+cause is visible in logcat without leaking the token.
 
 **Unlink** clears the Preferences token + `plexSync` (`deleteField()`), KEEPS
 `hasPlex` + all synced data, and touches no watchlist/episode doc.
@@ -143,8 +183,87 @@ watching` on ≥1 watched episode, `watching → completed` when all present
   from `sync-episodes`' `episode-id.ts` (a `scope:functions` lib this slice cannot
   import), derived from Plex `parentIndex` (season) + `index` (episode).
 
+**Poster / rating denormalization (spec 0086, issue #229).** Plex GUIDs yield
+only a `tmdbId`, so the sync fetches `posterPath` / `voteAverage` from TMDB via
+the slice-local detail client (`createTmdbDetailClient`, configured by
+`SETTINGS_TMDB_CONFIG`) and denormalizes them onto the watchlist doc — matching
+the search / title-detail add paths (spec 0035). On a **new add**, `addItem`
+fetches the detail before the `setDoc`. On an **already-tracked** item whose
+stored `posterPath` is still `null`, the sync **self-heals**: it fetches TMDB
+and `updateDoc`s `posterPath` / `voteAverage`. The backfill runs
+**unconditionally of status** — a sticky-`dropped` item still gets its poster
+(display enrichment, not a status change) — and is **skipped** when
+`posterPath` is already non-null (strict `=== null` guard, never a falsy check,
+so an empty-string path is not treated as absent). Every TMDB call is wrapped
+per-item in try/catch (`describeTmdbError`, `plex-errors.ts`): a TMDB failure is
+non-fatal (poster stays `null`, the item self-heals next sync) and never fails
+the surrounding status write or the rest of the sync loop, and never marks the
+pass `error`. A pure poster backfill is NOT counted as an `updated` status
+change. The client performs NO Firestore access and never reads/writes
+`title-cache`.
+
 The X-Plex-Token is stored ONLY in `@capacitor/preferences`, NEVER written to any
 Firestore path, and NEVER logged/echoed (CLAUDE.md secrets rule).
+
+### `PlexBackgroundService` (`providedIn: 'root'`, spec 0085)
+
+Adds the periodic **background** trigger missing from 0073 (which fires only on
+boot, foreground resume, and manual "Sync now"). Because the PMS lives on the
+user's LAN, the only place a periodic sync can run is on the phone while on the
+home Wi-Fi — so the OS (Android WorkManager, via the community
+`@transistorsoft/capacitor-background-fetch` plugin) wakes the app's JS on the
+user's interval and the plugin's `onFetch` callback reruns the **existing**
+`PlexSyncService.sync()`. **No sync logic is reimplemented** — this is purely a
+new trigger. **Android-only**; on iOS/web every plugin call is a native-guarded
+no-op.
+
+Public surface:
+
+- signals `enabled: Signal<boolean>` (default `true`) and
+  `intervalMinutes: Signal<number>` (default `60`), mirroring the device-local
+  config persisted in `@capacitor/preferences` (keys `plex_bg_enabled` /
+  `plex_bg_interval_min` — **not** Firestore; background execution is inherently
+  per-device);
+- `init()` — boot/link init: native-guard FIRST (off-native returns, so the
+  signals stay at defaults), then load the config and `BackgroundFetch.configure`
+  (`minimumFetchInterval` = interval; `NETWORK_TYPE_UNMETERED`; battery-not-low;
+  no charging requirement; `stopOnTerminate:false`, `startOnBoot:true`,
+  `enableHeadless:true`) + register `onFetch`/`onTimeout`. If disabled, stops the
+  plugin so nothing schedules;
+- `setEnabled(enabled)` / `setIntervalMinutes(min)` — persist the key
+  **unconditionally**, then (native only) reconfigure/start or stop. Interval
+  options are `[15, 30, 60, 180, 360]` minutes; any value `< 15` is clamped to 15
+  (the WorkManager floor);
+- `stop()` — clear both bg Preferences keys **unconditionally**, then (native
+  only) `BackgroundFetch.stop()`.
+
+**`onFetch` gating:** runs `sync()` only when `enabled()` AND the device is linked
+(a non-empty `plex_token` in Preferences); `sync()` failures are swallowed (fail
+quietly, reusing 0073's handling — no new error UI); the task is **always**
+finished in a `finally`.
+
+**Circular-DI avoidance (hard rule):** `PlexBackgroundService` **MUST NOT** inject
+`PlexLinkService` — the dependency is one-directional (`PlexLinkService →
+PlexBackgroundService`). It reads the on-device token key **directly** (importing
+the exported `PLEX_TOKEN_KEY`) for the linked check; a back-injection would cycle
+(`NG0200`, both being `providedIn: 'root'`). Only the token's **presence** is
+tested — the VALUE is never logged or exposed (CLAUDE.md secrets).
+
+**Reliability envelope (do NOT over-promise):** reliable while the app is
+alive/backgrounded and when Android relaunches the app in the background for a
+task. The fully-terminated / swiped-away path is **best-effort only** (a headless
+finishing stub in the shell's `main.ts`); meaningful terminated-state sync is
+on-device-verify-only.
+
+**Lifecycle integration:**
+
+- `PlexLinkService.unlink()` calls `PlexBackgroundService.stop()` — disconnecting
+  stops the scheduled task and clears the bg config.
+- `PlexConnectPage.done()` (on successful link) calls `PlexBackgroundService.init()`
+  (fire-and-forget) so a freshly-linked device schedules its periodic task
+  immediately (default ON) without waiting for the next boot.
+- The Settings connected Plex card renders a "Sync in background" toggle + a "Sync
+  frequency" interval `ion-select` (see the card section below).
 
 ### Plex Server card (in `SettingsPage`)
 
@@ -156,6 +275,15 @@ text button (disabled + "Syncing…" while `plexSync.running()`), and a
 "Disconnect" text button (confirm alert → `unlink()`). The logo tile uses a
 `--vultus-*` surface token; the Plex brand colour lives only in
 `/assets/plex-logo.svg`.
+
+The connected block also carries the background-sync controls (spec 0085),
+between the sync-row and the footer: a "Sync in background" `ion-toggle` bound to
+`plexBackground.enabled()` (→ `setEnabled`) and a "Sync frequency" `ion-select`
+bound to `plexBackground.intervalMinutes()` (→ `setIntervalMinutes`, disabled when
+the toggle is off), reusing the tokenized `settings-row*` classes (no new colours).
+`PlexBackgroundService` is the ROOT singleton (not a page-scoped mock), so on
+`serve-mock` (off-native) `init()` no-ops before loading Preferences and the
+controls render their DEFAULT values (enabled ON / "Every hour").
 
 The `mock` build profile provides page-scoped mock mirrors of the root
 `PlexLinkService` / `PlexSyncService` (seeded CONNECTED) so `mobile:serve-mock`

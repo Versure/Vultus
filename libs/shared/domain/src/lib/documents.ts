@@ -74,6 +74,13 @@ export interface WatchlistItem {
   posterPath?: string | null; // TMDB poster path, e.g. '/abc123.jpg'; null when unknown
   voteAverage?: number | null; // TMDB vote average 0–10; null when unknown
   releaseDate?: string | null; // plain ISO date, e.g. '2024-03-15'; null when unknown
+  /** Air date (ISO 8601, same format as EpisodeDoc.airDate) of the EARLIEST
+   *  currently-unwatched episode of this TV show; null when the item is a movie,
+   *  the episodes subcollection is empty, or every episode is watched (spec 0081).
+   *  Denormalized: written server-side on sync (Cloud Functions) and client-side
+   *  after the user's own mark-watched actions. Legacy docs missing it → null via
+   *  the converter. Never meaningfully set for movies. */
+  nextUnwatchedEpisodeAirDate?: string | null;
   /** Manual per-title override: the user watches THIS title via their Plex
    *  server, regardless of TMDB availability (spec 0061, GitHub #140). Additive
    *  to — never a replacement for — the TMDB availability framing (spec 0060).

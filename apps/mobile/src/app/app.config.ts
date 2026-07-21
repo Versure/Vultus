@@ -25,6 +25,7 @@ import {
 import {
   AUTH_UID,
   GET_WATCH_PROVIDERS,
+  PLEX_BACKGROUND_INIT,
   PLEX_CLIENT,
   PLEX_SYNC_TRIGGER,
   TRIGGER_SYNC,
@@ -35,7 +36,9 @@ import { TMDB_DETAIL_CONFIG } from '@vultus/mobile/title-detail';
 import {
   CapacitorHttpPlexClient,
   MockPlexClient,
+  PlexBackgroundService,
   PlexSyncService,
+  SETTINGS_TMDB_CONFIG,
 } from '@vultus/mobile/settings';
 import { appRoutes } from './app.routes';
 import { environment } from '../environments/environment';
@@ -172,6 +175,21 @@ export const appConfig: ApplicationConfig = {
             : Promise.resolve();
       },
     },
+    // Provide the background-sync init as a scope:shared thunk (spec 0085) so the
+    // shell (App) can initialize periodic on-device background Plex sync on boot
+    // without importing the settings slice's service graph the wrong way. THE
+    // NATIVE GUARD LIVES HERE (a no-op off-native), mirroring PLEX_SYNC_TRIGGER
+    // above. PlexBackgroundService is providedIn:'root', so this root factory
+    // resolves it from the root injector (page-provided services are invisible
+    // here) — the same singleton the Settings page and boot trigger share.
+    {
+      provide: PLEX_BACKGROUND_INIT,
+      useFactory: () => {
+        const svc = inject(PlexBackgroundService);
+        return () =>
+          Capacitor.isNativePlatform() ? svc.init() : Promise.resolve();
+      },
+    },
     // TMDB search config (spec 0013) — provided at root from `environment.tmdb`
     // so the search slice can inject it without importing apps/mobile.
     { provide: TMDB_SEARCH_CONFIG, useValue: environment.tmdb },
@@ -187,5 +205,11 @@ export const appConfig: ApplicationConfig = {
         imageBaseUrl: environment.tmdb.detailImageBaseUrl,
       },
     },
+    // TMDB detail config for the settings slice's Plex-sync poster fetch/backfill
+    // (spec 0086) — reuses `environment.tmdb` as-is (like the search token above);
+    // the settings client only reads `.posterPath` / `.voteAverage`, never
+    // `.posterUrl`, so which `imageBaseUrl` variant is passed is irrelevant. A
+    // separate token (not TMDB_DETAIL_CONFIG) preserves slice isolation.
+    { provide: SETTINGS_TMDB_CONFIG, useValue: environment.tmdb },
   ],
 };

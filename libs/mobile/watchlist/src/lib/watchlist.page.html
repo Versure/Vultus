@@ -236,11 +236,13 @@
   <div class="filter-sheet" [class.open]="filterSheetOpen">
     <div
       class="filter-sheet-backdrop"
+      [class.open]="filterSheetOpen"
       aria-hidden="true"
       (click)="closeFilterSheet()"
     ></div>
     <div
       class="filter-sheet-panel"
+      [class.open]="filterSheetOpen"
       role="dialog"
       aria-modal="true"
       aria-label="Sort and filter"

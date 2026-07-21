@@ -819,6 +819,45 @@ describe('WatchlistPage', () => {
       expect(component.filterSheetOpen).toBe(false);
     });
 
+    // Open-state binding wiring (spec 0087, issue #230): the `open` class must
+    // toggle on ALL THREE elements — the `.filter-sheet` wrapper (its own
+    // visibility/pointer-events) AND the `.filter-sheet-backdrop` /
+    // `.filter-sheet-panel` themselves (whose open-state opacity/transform now
+    // hang off their own `[class.open]` binding, not a nested ancestor-descendant
+    // selector). This asserts the binding wiring the fix depends on; the actual
+    // CSS transform/clip/paint is not assertable in jsdom (no layout engine) and
+    // is covered by the D5 serve-mock check + the D2 e2e.
+    it('toggling the sheet adds/removes `open` on the wrapper, backdrop, and panel (spec 0087)', async () => {
+      const service = mockService([item({ tmdbId: 1, status: 'watching' })]);
+      const { fixture, el } = await setup(service);
+
+      const sheet = () => el.querySelector<HTMLElement>('.filter-sheet');
+      const backdrop = () =>
+        el.querySelector<HTMLElement>('.filter-sheet-backdrop');
+      const panel = () => el.querySelector<HTMLElement>('.filter-sheet-panel');
+
+      // Closed by default → none carry `open`.
+      expect(fixture.componentInstance.filterSheetOpen).toBe(false);
+      expect(sheet()?.classList.contains('open')).toBe(false);
+      expect(backdrop()?.classList.contains('open')).toBe(false);
+      expect(panel()?.classList.contains('open')).toBe(false);
+
+      // Open → all three carry `open`.
+      await openSheet(fixture);
+      expect(fixture.componentInstance.filterSheetOpen).toBe(true);
+      expect(sheet()?.classList.contains('open')).toBe(true);
+      expect(backdrop()?.classList.contains('open')).toBe(true);
+      expect(panel()?.classList.contains('open')).toBe(true);
+
+      // Close via Done → `open` gone from all three.
+      el.querySelector<HTMLElement>('.filter-sheet-done')?.click();
+      await settle(fixture);
+      expect(fixture.componentInstance.filterSheetOpen).toBe(false);
+      expect(sheet()?.classList.contains('open')).toBe(false);
+      expect(backdrop()?.classList.contains('open')).toBe(false);
+      expect(panel()?.classList.contains('open')).toBe(false);
+    });
+
     it('backdrop tap closes the sheet', async () => {
       const service = mockService([item({ tmdbId: 1, status: 'watching' })]);
       const { fixture, el } = await setup(service);

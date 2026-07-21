@@ -19,6 +19,8 @@ import {
   plexEpisodeId,
   type PlexSyncSummary,
 } from './plex-sync.service';
+import type { TmdbDetailConfig } from './tmdb-detail.client';
+import { SETTINGS_TMDB_CONFIG } from './tokens';
 
 // --- AngularFire mock (echo path on doc()/collection(); per-test doc store) ---
 interface Ref {
@@ -51,6 +53,31 @@ vi.mock('@capacitor/preferences', () => ({
   },
 }));
 
+// --- TMDB detail fetch mock (spec 0086) ------------------------------------
+// PlexSyncService builds its slice-local TMDB client from SETTINGS_TMDB_CONFIG,
+// which carries a `fetchImpl`. We inject a controllable fetch mock as that
+// impl, so we exercise the REAL client (getDetail → HTTP → mapping) end-to-end
+// and can (a) resolve poster/vote payloads, (b) simulate non-2xx/network
+// failures, and (c) assert the client was NOT called (backfill skip).
+const tmdbFetchMock =
+  vi.fn<(url: string, init?: RequestInit) => Promise<Response>>();
+
+const TMDB_CONFIG: TmdbDetailConfig = {
+  apiBaseUrl: 'https://api.themoviedb.org/3',
+  imageBaseUrl: 'https://image.tmdb.org/t/p/w780',
+  auth: { kind: 'apiKey', apiKey: 'test-key' },
+  fetchImpl: tmdbFetchMock as unknown as typeof fetch,
+};
+
+/** Build a minimal TMDB `Response` (only `.ok`/`.status`/`.json()` are read). */
+function tmdbResponse(body: unknown, ok = true, status = 200): Response {
+  return {
+    ok,
+    status,
+    json: () => Promise.resolve(body),
+  } as unknown as Response;
+}
+
 const UID = 'user-123';
 const SERVER: PlexServer = {
   name: 'Test PMS',
@@ -67,9 +94,14 @@ function snap(data: unknown) {
   return { exists: () => data !== undefined, data: () => data };
 }
 
-/** A watchlist read-data shape carrying the given status (addedAt is a
- *  Timestamp-like so `dataToWatchlistItem` can `.toDate()` it). */
-function watchlistReadData(status: string) {
+/** A watchlist read-data shape carrying the given status + stored posterPath
+ *  (addedAt is a Timestamp-like so `dataToWatchlistItem` can `.toDate()` it).
+ *  posterPath defaults to a NON-NULL value so status-focused tests don't trigger
+ *  the spec-0086 poster backfill; backfill tests pass `null` explicitly. */
+function watchlistReadData(
+  status: string,
+  posterPath: string | null = '/existing.jpg',
+) {
   return {
     type: 'movie',
     tmdbId: 0,
@@ -77,7 +109,7 @@ function watchlistReadData(status: string) {
     title: 'X',
     addedAt: { toDate: () => new Date(0) },
     status,
-    posterPath: null,
+    posterPath,
     voteAverage: null,
     watchingViaPlex: true,
   };
@@ -108,7 +140,13 @@ function mockClient(
  * episode docs.
  */
 function seedFirestore(opts: {
-  watchlist?: Record<string, string>;
+  // A titleId maps to either a status string (→ default non-null stored
+  // posterPath, no backfill) or a { status, posterPath } pair for the spec-0086
+  // backfill cases (posterPath: null = the issue #229 broken state).
+  watchlist?: Record<
+    string,
+    string | { status: string; posterPath: string | null }
+  >;
   episodes?: Record<string, { watched: boolean }>;
   userPlexSync?: { linkedAt: string; lastSyncAt: string | null } | null;
 }) {
@@ -141,10 +179,14 @@ function seedFirestore(opts: {
     // Watchlist item: users/{uid}/watchlist/{titleId}
     const wlMatch = /\/watchlist\/(\d+)$/.exec(ref.path);
     if (wlMatch) {
-      const status = watchlist[wlMatch[1]];
-      return Promise.resolve(
-        snap(status === undefined ? undefined : watchlistReadData(status)),
-      );
+      const entry = watchlist[wlMatch[1]];
+      if (entry === undefined) {
+        return Promise.resolve(snap(undefined));
+      }
+      const status = typeof entry === 'string' ? entry : entry.status;
+      const posterPath =
+        typeof entry === 'string' ? '/existing.jpg' : entry.posterPath;
+      return Promise.resolve(snap(watchlistReadData(status, posterPath)));
     }
     return Promise.resolve(snap(undefined));
   });
@@ -185,6 +227,7 @@ function makeService(client: PlexClient, uid: string | null = UID) {
       { provide: Firestore, useValue: {} },
       { provide: AUTH_UID, useValue: signal<string | null>(uid) },
       { provide: PLEX_CLIENT, useValue: client },
+      { provide: SETTINGS_TMDB_CONFIG, useValue: TMDB_CONFIG },
     ],
   });
   return TestBed.inject(PlexSyncService);
@@ -234,6 +277,17 @@ describe('PlexSyncService', () => {
     vi.clearAllMocks();
     TestBed.resetTestingModule();
     prefsGetMock.mockResolvedValue({ value: 'device-token' });
+    // Default TMDB detail resolves a generic poster/vote so add/backfill paths
+    // that don't assert on the poster still succeed; per-test overrides below
+    // pin specific values or simulate failures.
+    tmdbFetchMock.mockResolvedValue(
+      tmdbResponse({
+        id: 0,
+        title: 'X',
+        poster_path: '/default.jpg',
+        vote_average: 7,
+      }),
+    );
   });
 
   describe('plexEpisodeId', () => {
@@ -430,6 +484,163 @@ describe('PlexSyncService', () => {
         ([ref]) => ref.path === watchlistItemPath(UID, '550'),
       ),
     ).toBe(false);
+  });
+
+  describe('TMDB poster fetch + backfill (spec 0086)', () => {
+    /** Find the setDoc/updateDoc call to a watchlist doc carrying a given key. */
+    function findWatchlistWrite(
+      calls: [Ref, unknown][],
+      titleId: string,
+      key: string,
+    ) {
+      return calls.find(
+        ([ref, payload]) =>
+          ref.path === watchlistItemPath(UID, titleId) &&
+          Object.prototype.hasOwnProperty.call(payload, key),
+      );
+    }
+
+    it('add: populates posterPath/voteAverage from the fetched TMDB detail', async () => {
+      seedFirestore({});
+      tmdbFetchMock.mockResolvedValue(
+        tmdbResponse({
+          id: 550,
+          title: 'Fight Club',
+          poster_path: '/x.jpg',
+          vote_average: 8.4,
+        }),
+      );
+      const service = makeService(mockClient([movieItem(550)]));
+      const summary = await syncOk(service);
+
+      expect(summary.added).toBe(1);
+      const call = setDocMock.mock.calls.find(
+        ([ref]) => ref.path === watchlistItemPath(UID, '550'),
+      );
+      const payload = call?.[1] as {
+        posterPath: string | null;
+        voteAverage: number | null;
+      };
+      expect(payload.posterPath).toBe('/x.jpg');
+      expect(payload.voteAverage).toBe(8.4);
+    });
+
+    // Per-item error isolation: a TMDB failure of ANY shape must not throw out
+    // of addItem, must leave both fields null, and must NOT fail the sync pass.
+    it.each([
+      [
+        'network error',
+        () => tmdbFetchMock.mockRejectedValue(new Error('network down')),
+      ],
+      [
+        'HTTP 404',
+        () => tmdbFetchMock.mockResolvedValue(tmdbResponse({}, false, 404)),
+      ],
+      [
+        'HTTP 500',
+        () => tmdbFetchMock.mockResolvedValue(tmdbResponse({}, false, 500)),
+      ],
+    ])(
+      'add: succeeds with null poster/vote when TMDB fails (%s); sync stays ok',
+      async (_label, arrange) => {
+        seedFirestore({});
+        arrange();
+        const service = makeService(mockClient([movieItem(550)]));
+        const result = await service.sync();
+
+        expect(result.status).toBe('ok');
+        const call = setDocMock.mock.calls.find(
+          ([ref]) => ref.path === watchlistItemPath(UID, '550'),
+        );
+        expect(call).toBeTruthy();
+        const payload = call?.[1] as {
+          posterPath: string | null;
+          voteAverage: number | null;
+        };
+        expect(payload.posterPath).toBeNull();
+        expect(payload.voteAverage).toBeNull();
+      },
+    );
+
+    it('backfill: a tracked item with stored posterPath null gets posterPath/voteAverage updated', async () => {
+      seedFirestore({
+        watchlist: { '550': { status: 'planned', posterPath: null } },
+      });
+      tmdbFetchMock.mockResolvedValue(
+        tmdbResponse({
+          id: 550,
+          title: 'Fight Club',
+          poster_path: '/bf.jpg',
+          vote_average: 6.6,
+        }),
+      );
+      const service = makeService(mockClient([movieItem(550)]));
+      const summary = await syncOk(service);
+
+      const posterWrite = findWatchlistWrite(
+        updateDocMock.mock.calls,
+        '550',
+        'posterPath',
+      );
+      expect(posterWrite).toBeTruthy();
+      const payload = posterWrite?.[1] as {
+        posterPath: string | null;
+        voteAverage: number | null;
+      };
+      expect(payload.posterPath).toBe('/bf.jpg');
+      expect(payload.voteAverage).toBe(6.6);
+      // A pure poster backfill is NOT a status change (summary semantics).
+      expect(summary.updated).toBe(0);
+    });
+
+    it('backfill: skipped when the tracked item already has a non-null posterPath (no TMDB call)', async () => {
+      seedFirestore({
+        watchlist: { '550': { status: 'planned', posterPath: '/have.jpg' } },
+      });
+      const service = makeService(mockClient([movieItem(550)]));
+      await syncOk(service);
+
+      // Strict !== null skip: no redundant fetch, no poster write.
+      expect(tmdbFetchMock).not.toHaveBeenCalled();
+      expect(
+        findWatchlistWrite(updateDocMock.mock.calls, '550', 'posterPath'),
+      ).toBeFalsy();
+    });
+
+    it('backfill: a sticky-dropped item with posterPath null still gets its poster healed (status untouched)', async () => {
+      seedFirestore({
+        watchlist: { '550': { status: 'dropped', posterPath: null } },
+      });
+      tmdbFetchMock.mockResolvedValue(
+        tmdbResponse({
+          id: 550,
+          title: 'Fight Club',
+          poster_path: '/heal.jpg',
+          vote_average: 7.7,
+        }),
+      );
+      const service = makeService(
+        mockClient([movieItem(550, { viewCount: 1 })]),
+      );
+      const summary = await syncOk(service);
+
+      // Poster backfill fires even for a dropped item.
+      const posterWrite = findWatchlistWrite(
+        updateDocMock.mock.calls,
+        '550',
+        'posterPath',
+      );
+      expect(posterWrite).toBeTruthy();
+      expect((posterWrite?.[1] as { posterPath: string }).posterPath).toBe(
+        '/heal.jpg',
+      );
+      // Status is untouched (sticky-dropped): no status write.
+      expect(
+        findWatchlistWrite(updateDocMock.mock.calls, '550', 'status'),
+      ).toBeFalsy();
+      expect(summary.updated).toBe(0);
+      expect(summary.skipped).toBe(1);
+    });
   });
 
   it('episode-doc-absent: a Plex-watched episode with no local doc is a no-op (never creates)', async () => {

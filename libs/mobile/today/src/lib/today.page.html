@@ -1,0 +1,181 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-title>
+      <span class="brand-mark">
+        <ion-icon name="film-outline" class="brand-icon"></ion-icon>
+        Vultus
+      </span>
+    </ion-title>
+    <ion-buttons slot="end">
+      <!-- Non-interactive account placeholder (no handler / no route), matching
+           the existing watchlist header. Today has NO refresh + NO bell. -->
+      <ion-button aria-label="Account">
+        <ion-icon name="person-circle-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  @if ((vm$ | async); as state) { @if (state.error) {
+  <vultus-error-state
+    class="fill-state"
+    message="Couldn't load what's ready to watch."
+    (retry)="onRetry()"
+  />
+  } @else if (state.vm === null) {
+  <div class="today-main">
+    <vultus-skeleton-card [count]="3" />
+  </div>
+  } @else if (state.vm.isEmpty) {
+  <vultus-empty-state
+    class="fill-state"
+    icon="today-outline"
+    title="Nothing to watch today"
+    subtitle="Nothing on your watchlist has a new episode or release available yet."
+  />
+  } @else {
+  <div class="today-main">
+    <!-- Hero -->
+    <section class="hero">
+      <h2 class="hero-title">Watch Today</h2>
+      <p class="hero-subtitle">{{ state.vm.subtitle }}</p>
+    </section>
+
+    <!-- Movies section — rendered only when non-empty. No "View All" (D2). -->
+    @if (state.vm.movies.length > 0) {
+    <section class="today-section">
+      <div class="section-header">
+        <h2 class="section-title">Movies</h2>
+      </div>
+      <div class="card-list">
+        @for (item of state.vm.movies; track titleId(item)) {
+        <article
+          class="today-card"
+          role="button"
+          tabindex="0"
+          (click)="navigateToDetail(titleId(item), item.type)"
+          (keyup.enter)="navigateToDetail(titleId(item), item.type)"
+        >
+          <div class="poster">
+            @if (posterUrl(item); as url) {
+            <img [src]="url" [alt]="item.title" />
+            } @else {
+            <div class="poster-fallback" aria-hidden="true"></div>
+            }
+          </div>
+          <div class="card-body">
+            <div class="card-body-top">
+              <div class="meta-row">
+                <span class="meta-type">Movie</span>
+                @if (availabilityPill$(item, (region$ | async)) | async; as
+                pill) {
+                <span
+                  class="availability-pill"
+                  [class.is-mine]="pill.kind === 'mine'"
+                >
+                  @if (pill.kind === 'mine') {
+                  <ion-icon
+                    class="availability-pill__icon"
+                    name="checkmark-circle"
+                    aria-hidden="true"
+                  ></ion-icon>
+                  <span class="availability-pill__text"
+                    >{{ 'On ' + pill.name }}</span
+                  >
+                  } @else {
+                  <span class="availability-pill__text"
+                    >{{ 'Also on ' + pill.name }}</span
+                  >
+                  }
+                </span>
+                }
+              </div>
+              <h3 class="card-title">{{ item.title }}</h3>
+            </div>
+            <div class="ready-tag">
+              <ion-icon
+                class="ready-tag__icon"
+                name="play-circle"
+                aria-hidden="true"
+              ></ion-icon>
+              <span class="ready-tag__text">Ready to watch</span>
+            </div>
+          </div>
+        </article>
+        }
+      </div>
+    </section>
+    }
+
+    <!-- TV Shows section — rendered only when non-empty. No "View All" (D2). -->
+    @if (state.vm.tvShows.length > 0) {
+    <section class="today-section">
+      <div class="section-header">
+        <h2 class="section-title">TV Shows</h2>
+      </div>
+      <div class="card-list">
+        @for (item of state.vm.tvShows; track titleId(item)) {
+        <article
+          class="today-card"
+          role="button"
+          tabindex="0"
+          (click)="navigateToDetail(titleId(item), item.type)"
+          (keyup.enter)="navigateToDetail(titleId(item), item.type)"
+        >
+          <div class="poster">
+            @if (posterUrl(item); as url) {
+            <img [src]="url" [alt]="item.title" />
+            } @else {
+            <div class="poster-fallback" aria-hidden="true"></div>
+            }
+          </div>
+          <div class="card-body">
+            <div class="card-body-top">
+              <div class="meta-row">
+                <span class="meta-type">TV Show</span>
+                @if (availabilityPill$(item, (region$ | async)) | async; as
+                pill) {
+                <span
+                  class="availability-pill"
+                  [class.is-mine]="pill.kind === 'mine'"
+                >
+                  @if (pill.kind === 'mine') {
+                  <ion-icon
+                    class="availability-pill__icon"
+                    name="checkmark-circle"
+                    aria-hidden="true"
+                  ></ion-icon>
+                  <span class="availability-pill__text"
+                    >{{ 'On ' + pill.name }}</span
+                  >
+                  } @else {
+                  <span class="availability-pill__text"
+                    >{{ 'Also on ' + pill.name }}</span
+                  >
+                  }
+                </span>
+                }
+              </div>
+              <h3 class="card-title card-title--tv">{{ item.title }}</h3>
+              @if (episodeLabel$(item) | async; as label) {
+              <p class="episode-label">{{ label }}</p>
+              }
+            </div>
+            <div class="ready-tag">
+              <ion-icon
+                class="ready-tag__icon"
+                name="play-circle"
+                aria-hidden="true"
+              ></ion-icon>
+              <span class="ready-tag__text">Ready to watch</span>
+            </div>
+          </div>
+        </article>
+        }
+      </div>
+    </section>
+    }
+  </div>
+  } }
+</ion-content>

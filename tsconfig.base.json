@@ -44,7 +44,8 @@
       ],
       "@vultus/functions/sync-episodes": [
         "./libs/functions/sync-episodes/src/index.ts"
-      ]
+      ],
+      "@vultus/mobile/today": ["./libs/mobile/today/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "tmp"]

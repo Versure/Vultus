@@ -15,6 +15,7 @@ export {
   routeTmdb,
   routeTmdbDiscriminated,
   routeTmdbTV,
+  routeTmdbMovie,
   type TmdbFixtureName,
 } from './support/tmdb';
 export {

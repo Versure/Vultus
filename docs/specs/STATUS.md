@@ -10,10 +10,10 @@
 
 # Spec status ledger
 
-Total specs: 84
+Total specs: 91
 
-- done: 78
-- approved: 6
+- done: 87
+- approved: 4
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -94,10 +94,17 @@ Total specs: 84
 | 75 | settings-provider-list-fixes | Fix "N of 0 selected" providers on Settings entry + make the provider list collapsible | done | slice:settings | scope:mobile |
 | 76 | empty-state-centering | Center the empty/error state and stop the stray scroll on the Watchlist and Search pages | done | slice:watchlist, slice:search | scope:mobile |
 | 77 | consolidate-plex-provider-entry | Exclude the real TMDB "Plex" provider from the Settings catalog so only the manual Plex chip shows | done | — | scope:functions |
-| 78 | onboarding-full-settings | Expand onboarding into a multi-step wizard covering region, provider selection, notification settings, and Plex link | approved | slice:onboarding | scope:mobile |
+| 78 | onboarding-full-settings | Expand onboarding into a multi-step wizard covering region, provider selection, notification settings, and Plex link | done | slice:onboarding | scope:mobile |
 | 79 | fix-region-display-names | Display human-readable region names (endonyms) in Settings instead of raw ISO codes | done | slice:settings, slice:onboarding | scope:shared, scope:mobile |
-| 80 | onboarding-settings-parity-rule | Add a standing Onboarding ↔ User-field parity rule (F4) to the spec-driven workflow | approved | — | — |
-| 81 | next-unwatched-episode-airdate | Track each TV show's next-unwatched-episode air date for watchability checks | approved | slice:sync-episodes, slice:title-detail, slice:watchlist, slice:search | scope:shared, scope:functions, scope:mobile |
+| 80 | onboarding-settings-parity-rule | Add a standing Onboarding ↔ User-field parity rule (F4) to the spec-driven workflow | done | — | — |
+| 81 | next-unwatched-episode-airdate | Track each TV show's next-unwatched-episode air date for watchability checks | done | slice:sync-episodes, slice:title-detail, slice:watchlist, slice:search | scope:shared, scope:functions, scope:mobile |
 | 82 | fix-watchlist-scroll-overflow | Stop the empty Watchlist page scrolling — clip the off-screen filter sheet | done | slice:watchlist | scope:mobile |
-| 83 | watch-today-tab | Add a Watch Today tab showing everything ready to watch right now | approved | slice:today, slice:onboarding | scope:mobile |
+| 83 | watch-today-tab | Add a Watch Today tab showing everything ready to watch right now | done | slice:today, slice:onboarding | scope:mobile |
 | 84 | splash-icon-parity | Give the native Android splash icon the web loading screen's box + corner-bracket treatment | approved | — | scope:mobile |
+| 85 | background-plex-sync | Background Plex sync (periodic on-device sync while backgrounded) | done | slice:settings | scope:mobile, scope:shared |
+| 86 | fix-plex-sync-posters | Fix Plex sync — fetch and denormalize posterPath/voteAverage on add + backfill | done | slice:settings | scope:mobile |
+| 87 | fix-watchlist-filter-sheet-clip | Fix the clipped Watchlist filter sheet — bind `open` on the panel/backdrop themselves | done | slice:watchlist | scope:mobile |
+| 88 | no-notifications-for-completed | Suppress availability/episode notifications for completed or dropped watchlist items | done | slice:dispatch-notifications | scope:functions |
+| 89 | fix-automatic-notification-dispatch | Fix automatic notification dispatch — daily-sync rate-limit hardening and a daily episode-aired airing-scan | approved | slice:sync-titles, slice:dispatch-notifications | scope:functions |
+| 90 | plex-link-code-actions | Add copy-code + "Open plex.tv/link" actions to the Plex link-code stage (onboarding parity + both pages) | approved | slice:onboarding, slice:settings | scope:mobile |
+| 91 | fix-watch-today-header | Shrink the Watch Today hero title/subtitle to match other pages' headings | done | slice:today | scope:mobile |

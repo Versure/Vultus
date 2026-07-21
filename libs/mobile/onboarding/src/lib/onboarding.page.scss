@@ -1,67 +1,126 @@
-// Onboarding page (spec 0022).
+// Onboarding wizard (spec 0078).
 //
-// NO Stitch screen exists for onboarding — this is built to the spec's UI
-// contract and is flagged for human visual verification. All colours,
-// typography, spacing and radius come from the shared/ui-kit theme vars
-// (--vultus-* / --ion-*); NO hard-coded hex here. Page background is `surface`;
-// cards step one level up the ramp to `surface-container`.
+// Step CONTENT mirrors the in-repo Settings / Connect-Plex SCSS (already
+// Stitch-aligned); the WIZARD CHROME (progress indicator, step layout, Back,
+// Skip) has NO Stitch screen and is built to the spec's token-only contract —
+// FLAGGED FOR HUMAN VISUAL VERIFICATION. All colours/typography/spacing/radius
+// come from the shared/ui-kit theme vars (--vultus-* / --ion-*); NO hard-coded
+// hex. Page background is `surface`; cards step one level up to
+// `surface-container`.
 
 ion-content {
   --background: var(--vultus-surface);
 }
 
-// Full-height column: header pinned to the top, the CTA pushed to the bottom by
-// the margin-top:auto on the button (the cards sit just under the header).
-.onboarding-container {
+// Full-height column with a centred, capped content width — one consistent
+// gutter shared by every step so navigating between steps never shifts the
+// content horizontally.
+.wizard {
   display: flex;
   flex-direction: column;
   min-height: 100%;
   box-sizing: border-box;
-  padding: var(--vultus-space-lg) var(--vultus-space-md);
+  // `md` (16px) top inset — identical across all 5 steps (chrome contract) so
+  // the content doesn't jump vertically when navigating.
+  padding: var(--vultus-space-md) var(--vultus-space-md) var(--vultus-space-lg);
   max-width: 42rem;
   margin-inline: auto;
+  width: 100%;
 }
 
-// Welcome header — display-lg (mobile size) title + body-lg subtitle.
-.onboarding-header {
-  margin-bottom: var(--vultus-space-xl);
+// ── Step-progress chrome ────────────────────────────────────────────────────
+.wizard-progress {
+  margin-bottom: var(--vultus-space-lg);
 }
 
-.onboarding-title {
+// "Step N of 5" — label-sm in on-surface-variant (chrome contract).
+.wizard-progress__label {
   margin: 0 0 var(--vultus-space-sm);
   font-family: var(--vultus-font-family);
-  font-size: var(--vultus-text-display-lg-mobile-size);
-  font-weight: var(--vultus-text-display-lg-weight);
-  line-height: var(--vultus-text-display-lg-mobile-line);
-  letter-spacing: var(--vultus-text-display-lg-spacing);
-  color: var(--vultus-on-surface);
-}
-
-.onboarding-subtitle {
-  margin: 0;
-  font-family: var(--vultus-font-family);
-  font-size: var(--vultus-text-body-lg-size);
-  font-weight: var(--vultus-text-body-lg-weight);
-  line-height: var(--vultus-text-body-lg-line);
+  font-size: var(--vultus-text-label-sm-size);
+  font-weight: var(--vultus-text-label-sm-weight);
+  line-height: var(--vultus-text-label-sm-line);
   color: var(--vultus-on-surface-variant);
 }
 
-// Cards — surface-container fill, 0.75rem (`md`) radius, 1px outline-variant
-// hairline at low alpha, 16px internal padding, 16px apart.
-.onboarding-card {
+// Segmented bar — 5 equal segments; the completed portion fills with `primary`.
+.wizard-progress__bar {
+  display: flex;
+  gap: var(--vultus-space-xs);
+}
+
+.wizard-progress__seg {
+  flex: 1 1 0;
+  height: 4px;
+  border-radius: var(--vultus-radius-pill);
+  background: var(--vultus-surface-container-highest);
+  transition: background-color 200ms ease-in-out;
+
+  &--done {
+    background: var(--ion-color-primary);
+  }
+}
+
+// ── Step shell ──────────────────────────────────────────────────────────────
+// Each step is a flex column that grows to fill the page; the nav actions are
+// pushed to the bottom by `margin-top: auto` on `.wizard-actions`.
+.wizard-step {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.wizard-heading {
+  margin-bottom: var(--vultus-space-lg);
+}
+
+// Step title — headline-sm (matches the Settings page heading rhythm).
+.wizard-title {
+  margin: 0 0 var(--vultus-space-sm);
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-headline-sm-size);
+  font-weight: var(--vultus-text-headline-sm-weight);
+  line-height: var(--vultus-text-headline-sm-line);
+  color: var(--vultus-on-surface);
+}
+
+.wizard-subtitle {
+  margin: 0;
+  font-family: var(--vultus-font-family);
+  font-size: var(--vultus-text-body-md-size);
+  font-weight: var(--vultus-text-body-md-weight);
+  line-height: var(--vultus-text-body-md-line);
+  color: var(--vultus-on-surface-variant);
+}
+
+// Step body card — surface-container fill, 0.5rem (DEFAULT) radius, low-alpha
+// hairline, 16px padding (chrome contract).
+.wizard-card {
   background: var(--vultus-surface-container);
   border: 1px solid
     color-mix(in srgb, var(--vultus-outline-variant) 20%, transparent);
-  border-radius: var(--vultus-radius-md);
+  border-radius: var(--vultus-radius);
   padding: var(--vultus-space-md);
 
-  & + .onboarding-card {
+  & + .wizard-card {
     margin-top: var(--vultus-space-md);
   }
 }
 
-// Region select — label (body-lg/600) leading, chosen value in primary trailing.
-.onboarding-select {
+// Helper text under a control — body-md in on-surface-variant.
+.wizard-helper {
+  margin: var(--vultus-space-sm) 0 0;
+  font-size: var(--vultus-text-body-md-size);
+  font-weight: var(--vultus-text-body-md-weight);
+  line-height: var(--vultus-text-body-md-line);
+  color: var(--vultus-on-surface-variant);
+}
+
+// Region / delivery-hour select — label (body-lg/600) leading, value in primary
+// trailing; muted icon; dimmed when disabled (delivery hour while notifications
+// off, or the region select while its write is in flight).
+.wizard-select {
   --padding-start: 0;
   --padding-end: 0;
   --padding-top: 0;
@@ -87,19 +146,247 @@ ion-content {
     color: var(--vultus-on-surface-variant);
     opacity: 1;
   }
+
+  &.select-disabled {
+    opacity: 0.4;
+  }
 }
 
-// Helper text under the region picker — body-md in on-surface-variant.
-.onboarding-helper {
-  margin: var(--vultus-space-sm) 0 0;
+// Notifications toggle — title leading, switch trailing; checked track = primary.
+.wizard-toggle {
+  width: 100%;
+  font-size: var(--vultus-text-body-lg-size);
+  font-weight: 600;
+  line-height: var(--vultus-text-body-lg-line);
+  --track-background: var(--vultus-surface-container-highest);
+  --track-background-checked: var(--ion-color-primary);
+  --handle-background: var(--vultus-on-surface);
+  --handle-background-checked: var(--vultus-on-primary);
+
+  &::part(label) {
+    color: var(--vultus-on-surface);
+  }
+}
+
+// ── My Providers grid (step 2 — mirrors the Settings grid) ──────────────────
+.provider-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+// One provider chip — ~96px tappable button, logo tile above a centred name.
+// Unselected = 1px outline-variant border (20% alpha) + 60% opacity; selected =
+// 2px primary border + checkmark badge + full opacity.
+.provider-chip {
+  position: relative;
+  box-sizing: border-box;
+  width: 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  background: transparent;
+  border: 1px solid
+    color-mix(in srgb, var(--vultus-outline-variant) 20%, transparent);
+  border-radius: var(--vultus-radius-md);
+  opacity: 0.6;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease-in-out,
+    opacity 150ms ease-in-out,
+    transform 100ms ease-in-out;
+
+  &:active {
+    transform: scale(0.96);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--ion-color-primary);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+
+  &--selected {
+    border: 2px solid var(--ion-color-primary);
+    opacity: 1;
+  }
+}
+
+.provider-chip__logo {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--vultus-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  img {
+    width: 100%;
+    height: 100%;
+    border-radius: var(--vultus-radius);
+    object-fit: cover;
+  }
+}
+
+.provider-chip__logo-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--vultus-radius);
+  background: var(--vultus-surface-container-highest);
+  color: var(--vultus-on-surface);
+  font-weight: 700;
+  font-size: var(--vultus-text-body-lg-size);
+}
+
+.provider-chip__badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  font-size: 18px;
+  color: var(--ion-color-primary);
+  background: var(--vultus-surface);
+  border-radius: 50%;
+}
+
+.provider-chip__name {
+  font-size: var(--vultus-text-label-sm-size);
+  font-weight: var(--vultus-text-label-sm-weight);
+  line-height: var(--vultus-text-label-sm-line);
+  color: var(--vultus-on-surface);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.provider-footer {
+  margin: var(--vultus-space-md) 0 0;
+  font-size: var(--vultus-text-label-sm-size);
+  font-weight: var(--vultus-text-label-sm-weight);
+  line-height: var(--vultus-text-label-sm-line);
+  color: var(--vultus-on-surface-variant);
+}
+
+// Catalog loading state — spinner + label instead of an empty card.
+.providers-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--vultus-space-sm);
+
+  ion-spinner {
+    width: 20px;
+    height: 20px;
+    color: var(--ion-color-primary);
+  }
+}
+
+.providers-loading__label {
+  font-size: var(--vultus-text-body-md-size);
+  color: var(--vultus-on-surface-variant);
+}
+
+// ── Plex link stage cards (step 4 — mirrors Connect-Plex) ───────────────────
+.stage-card {
+  background: var(--vultus-surface-container);
+  border: 1px solid
+    color-mix(in srgb, var(--vultus-outline-variant) 20%, transparent);
+  border-radius: var(--vultus-radius);
+  padding: var(--vultus-space-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+
+  ion-spinner {
+    color: var(--ion-color-primary);
+  }
+}
+
+.plex-tile {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--vultus-radius);
+  overflow: hidden;
+  background: var(--vultus-surface-container-highest);
+  flex-shrink: 0;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 4px;
+    box-sizing: border-box;
+  }
+}
+
+.plex-tile--lg {
+  width: 48px;
+  height: 48px;
+  margin-bottom: var(--vultus-space-md);
+}
+
+.stage-instruction {
+  margin: 0 0 var(--vultus-space-lg);
+  max-width: 240px;
   font-size: var(--vultus-text-body-md-size);
   font-weight: var(--vultus-text-body-md-weight);
   line-height: var(--vultus-text-body-md-line);
   color: var(--vultus-on-surface-variant);
 }
 
-// Push-permission explainer — body-md in on-surface-variant.
-.onboarding-notifications-text {
+.code-box {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--vultus-surface-container-high);
+  border: 1px solid
+    color-mix(in srgb, var(--vultus-outline-variant) 30%, transparent);
+  border-radius: var(--vultus-radius);
+  padding: var(--vultus-space-md) var(--vultus-space-lg);
+  margin-bottom: var(--vultus-space-sm);
+}
+
+// The 4-char code — display-lg-mobile (28px/700), primary, wide tracking.
+.code-value {
+  font-size: var(--vultus-text-display-lg-mobile-size);
+  font-weight: 700;
+  line-height: var(--vultus-text-display-lg-mobile-line);
+  letter-spacing: 0.15em;
+  color: var(--ion-color-primary);
+}
+
+.code-expiry {
+  margin: 0 0 var(--vultus-space-lg);
+  font-size: var(--vultus-text-label-sm-size);
+  font-weight: var(--vultus-text-label-sm-weight);
+  line-height: var(--vultus-text-label-sm-line);
+  color: var(--vultus-on-surface-variant);
+}
+
+.waiting-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--vultus-space-sm);
+  margin-bottom: var(--vultus-space-lg);
+
+  ion-spinner {
+    width: 40px;
+    height: 40px;
+    color: var(--ion-color-primary);
+  }
+}
+
+.waiting-label {
   margin: 0;
   font-size: var(--vultus-text-body-md-size);
   font-weight: var(--vultus-text-body-md-weight);
@@ -107,14 +394,177 @@ ion-content {
   color: var(--vultus-on-surface-variant);
 }
 
-// Primary CTA — pinned to the bottom of the column. Uses the Ionic primary
-// button styling (emerald, on-primary label) from the theme. 24px above it.
-.onboarding-cta {
+// Error stage — round error-tinted tile + heading + reason-specific detail.
+.error-tile {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--vultus-error) 10%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--vultus-space-md);
+}
+
+.error-icon {
+  font-size: 32px;
+  color: var(--vultus-error);
+}
+
+.error-heading {
+  margin: 0 0 var(--vultus-space-sm);
+  font-size: var(--vultus-text-body-lg-size);
+  font-weight: 700;
+  line-height: var(--vultus-text-body-lg-line);
+  color: var(--vultus-on-surface);
+}
+
+.error-detail {
+  margin: 0 0 var(--vultus-space-lg);
+  max-width: 280px;
+  font-size: var(--vultus-text-body-md-size);
+  font-weight: var(--vultus-text-body-md-weight);
+  line-height: var(--vultus-text-body-md-line);
+  color: var(--vultus-on-surface-variant);
+}
+
+// Connected stage — round status-completed tile + heading + server row.
+.check-tile {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: color-mix(
+    in srgb,
+    var(--vultus-status-completed) 10%,
+    transparent
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--vultus-space-md);
+}
+
+.check-icon {
+  font-size: 32px;
+  color: var(--vultus-status-completed);
+}
+
+.connected-heading {
+  margin: 0 0 var(--vultus-space-md);
+  font-size: var(--vultus-text-body-lg-size);
+  font-weight: 700;
+  line-height: var(--vultus-text-body-lg-line);
+  color: var(--vultus-on-surface);
+}
+
+.server-row {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--vultus-space-md);
+  background: var(--vultus-surface-container-low);
+  border: 1px solid
+    color-mix(in srgb, var(--vultus-outline-variant) 10%, transparent);
+  border-radius: var(--vultus-radius);
+  padding: var(--vultus-space-md);
+  text-align: left;
+
+  &__body {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  &__name {
+    margin: 0;
+    font-size: var(--vultus-text-body-md-size);
+    font-weight: 700;
+    line-height: var(--vultus-text-body-md-line);
+    color: var(--vultus-on-surface);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__caption {
+    margin: 0;
+    font-size: var(--vultus-text-label-sm-size);
+    font-weight: var(--vultus-text-label-sm-weight);
+    line-height: var(--vultus-text-label-sm-line);
+    color: var(--vultus-on-surface-variant);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__verified {
+    flex-shrink: 0;
+    font-size: 20px;
+    color: var(--ion-color-primary);
+  }
+}
+
+// Solid in-card button ("Get a new code" / "Try again") — mirrors Connect-Plex.
+.solid-button {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--vultus-primary-container);
+  color: var(--vultus-on-primary);
+  border: 0;
+  border-radius: var(--vultus-radius-md);
+  padding: 12px var(--vultus-space-md);
+  margin-top: var(--vultus-space-sm);
+  font-family: var(--vultus-font-family);
+  font-weight: 700;
+  font-size: var(--vultus-text-body-md-size);
+  cursor: pointer;
+  transition:
+    opacity 150ms ease-in-out,
+    transform 100ms ease-in-out;
+
+  &:hover {
+    opacity: 0.9;
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--ion-color-primary);
+    outline-offset: 2px;
+  }
+}
+
+// ── Nav actions (bottom of every step) ──────────────────────────────────────
+// Pinned to the bottom of the column; primary CTA full-width, secondary text
+// controls (Back / Skip) stacked below.
+.wizard-actions {
   margin-top: auto;
   padding-top: var(--vultus-space-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+// Primary CTA — full-width Ionic button (emerald bg, on-primary label from the
+// theme). Standard Ionic control height — not shrunk.
+.wizard-cta {
   --border-radius: var(--vultus-radius-md);
 
   ion-spinner {
     margin-inline-end: var(--vultus-space-sm);
   }
+}
+
+// "Back" / "Skip for now" — clear text buttons, left-aligned (chrome contract).
+.wizard-back,
+.wizard-skip {
+  align-self: flex-start;
+  margin-top: var(--vultus-space-xs);
+  --color: var(--vultus-on-surface-variant);
+  --padding-start: 0;
+  --padding-end: 0;
+  font-weight: 600;
+  text-transform: none;
 }

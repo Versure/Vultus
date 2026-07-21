@@ -4,6 +4,7 @@ import {
   encodeFields,
   readDocument,
   resolveAnonUid,
+  routeTmdbMovie,
   seedFor,
   writeDocument,
 } from './support';
@@ -65,12 +66,15 @@ test.beforeEach(async ({ page }) => {
 // PIN auto-authorizes → the connected stage → "Done" → back on Settings the card
 // shows the connected block (server name + "Connected"); `users/{uid}.hasPlex`
 // is set true by the link flow. No `plex_token` is pre-seeded: the link flow
-// itself persists it (and sets the in-memory `linked()` signal).
+// itself persists it (and sets the in-memory `linked()` signal). It also asserts
+// the spec-0085 background-sync controls render in the connected block with their
+// DEFAULT values ("Sync in background" toggle ON, "Sync frequency" = "Every hour")
+// — control-render only; the native background service is a no-op off-device.
 // ---------------------------------------------------------------------------
 test('connect flow', async ({ page }) => {
   // Boot; the app signs in anonymously against the Auth emulator.
   await page.goto('/');
-  await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+  await expect(page).toHaveURL(/\/tabs\/today$/);
 
   // Resolve the LIVE anon uid so the seeded docs line up with the session (R3).
   const uid = await resolveAnonUid(page);
@@ -81,7 +85,7 @@ test('connect flow', async ({ page }) => {
   // then reload so the app reads it.
   await seedFor(uid, 'seeded');
   await page.reload();
-  await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+  await expect(page).toHaveURL(/\/tabs\/today$/);
 
   // Go to the Settings tab. The page is render-gated on `service.loaded()` (a
   // one-shot users/{uid} read), so wait for the region select before asserting.
@@ -129,6 +133,32 @@ test('connect flow', async ({ page }) => {
     connectedBlock.locator('.plex-connected__status-label'),
   ).toHaveText('Connected');
 
+  // Background-sync controls (spec 0085) also render inside the connected block.
+  // On e2e (non-native) `PlexBackgroundService` is a native-guarded no-op, but
+  // the UI + DEFAULT signal values still render: `init()` returns before loading
+  // Preferences off-native, so `enabled()` stays ON and `intervalMinutes()` stays
+  // 60. Scope to `.plex-connected__background` so these don't collide with the
+  // sibling Notifications toggle / delivery-hour select elsewhere on the page.
+  const backgroundControls = connectedBlock.locator(
+    '.plex-connected__background',
+  );
+  await expect(backgroundControls).toBeVisible();
+
+  // (A) The "Sync in background" toggle renders with the EXACT label (reflects
+  //     the default `enabled()` = ON on serve-mock/e2e).
+  await expect(backgroundControls.locator('.settings-row__toggle')).toHaveText(
+    'Sync in background',
+  );
+
+  // (B) The "Sync frequency" interval select renders showing the default
+  //     "Every hour" (interval 60) — Ionic renders the selected display value
+  //     into the scoped `.select-text` element.
+  const intervalSelect = backgroundControls.locator(
+    'ion-select.settings-row__select[label="Sync frequency"]',
+  );
+  await expect(intervalSelect).toBeVisible();
+  await expect(intervalSelect.locator('.select-text')).toHaveText('Every hour');
+
   // The connect flow wrote `users/{uid}.hasPlex = true` — assert it directly on
   // the emulator (robust against UI timing).
   const userDoc = await readDocument(`users/${uid}`);
@@ -167,9 +197,16 @@ test('sync outcome', async ({ page }) => {
     localStorage.setItem('CapacitorStorage.plex_token', 'mock-plex-token');
   });
 
+  // TMDB interception (spec 0086): the sync now fetches movie detail to populate
+  // posterPath/voteAverage, so intercept both movie ids to their fixtures BEFORE
+  // the app boots — the plain `development` config used by e2e has no fetch mock,
+  // so unrouted calls would hit the real network and fail (poster stays null).
+  await routeTmdbMovie(page, 550, 'tmdb-movie-detail-550.json');
+  await routeTmdbMovie(page, 335984, 'tmdb-movie-detail-335984.json');
+
   // Boot; the app signs in anonymously against the Auth emulator.
   await page.goto('/');
-  await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+  await expect(page).toHaveURL(/\/tabs\/today$/);
 
   // Resolve the LIVE anon uid so the seeded docs line up with the session (R3).
   const uid = await resolveAnonUid(page);
@@ -219,7 +256,7 @@ test('sync outcome', async ({ page }) => {
 
   // Reload so the app reads the seeded pre-linked state.
   await page.reload();
-  await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+  await expect(page).toHaveURL(/\/tabs\/today$/);
 
   // Go to Settings; the connected block renders (token present). Wait for the
   // page to load (region select) then for the connected block.
@@ -287,6 +324,16 @@ test('sync outcome', async ({ page }) => {
   await expect(badge).toBeVisible();
   await expect(badge.locator('img[alt="Plex"]')).toBeVisible();
 
+  // New-add poster path (spec 0086): the sync fetched TMDB detail for Blade Runner
+  // 2049 (335984) and denormalized a real `posterPath`, so the card renders a real
+  // poster <img> (src → the TMDB image CDN) and NOT the `.poster-fallback`.
+  await expect(bladeRunnerCard.locator('.poster img')).toBeVisible();
+  await expect(bladeRunnerCard.locator('.poster img')).toHaveAttribute(
+    'src',
+    /image\.tmdb\.org\/.+\/\S+/,
+  );
+  await expect(bladeRunnerCard.locator('.poster-fallback')).toHaveCount(0);
+
   // And the flipped Fight Club renders as a `completed` card (UI mirror of the
   // read-back above).
   const fightClubCard = page.locator('.watchlist-card', {
@@ -294,4 +341,15 @@ test('sync outcome', async ({ page }) => {
   });
   await expect(fightClubCard).toBeVisible();
   await expect(fightClubCard).toHaveClass(/\bstatus-completed\b/);
+
+  // Backfill poster path (spec 0086, the bulk of issue #229): Fight Club (550) was
+  // pre-seeded as a tracked item with `posterPath: null` (the real-world bug). The
+  // sync's self-heal backfill fetched TMDB detail and updated `posterPath`, so the
+  // card now renders a real poster <img> and NOT the `.poster-fallback`.
+  await expect(fightClubCard.locator('.poster img')).toBeVisible();
+  await expect(fightClubCard.locator('.poster img')).toHaveAttribute(
+    'src',
+    /image\.tmdb\.org\/.+\/\S+/,
+  );
+  await expect(fightClubCard.locator('.poster-fallback')).toHaveCount(0);
 });

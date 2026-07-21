@@ -47,10 +47,17 @@ PlexSyncMeta | null` — the per-user Plex sync cursor + link metadata (spec
     `@capacitor/preferences`.
   - `WatchlistItem` (fields: `type`, `tmdbId`, `traktId`, `title`, `addedAt`,
     `status`, `posterPath`/`voteAverage`/`releaseDate` (all nullable/optional),
-    plus `watchingViaPlex: boolean` — a manual per-title override that the user
-    watches THIS title via their Plex server, additive to and never replacing the
-    TMDB availability framing (spec 0061, GitHub #140); default `false`, legacy
-    docs missing it coalesce to `false` via the converter), `EpisodeDoc` (fields: `season`, `episode`, `title` (nullable, spec 0034), `airDate`, `watched`, `watchedAt`)
+    plus `nextUnwatchedEpisodeAirDate?: string | null` — the air date (ISO 8601,
+    same format as `EpisodeDoc.airDate`) of the EARLIEST currently-unwatched
+    episode of a TV show (spec 0081); `null` for movies, an empty episodes
+    subcollection, or an all-watched show; denormalized (written server-side on
+    sync by Cloud Functions and client-side after the user's own mark-watched
+    actions); legacy docs missing it coalesce to `null` via the converter; never
+    meaningfully set for movies — plus `watchingViaPlex: boolean` — a manual
+    per-title override that the user watches THIS title via their Plex server,
+    additive to and never replacing the TMDB availability framing (spec 0061,
+    GitHub #140); default `false`, legacy docs missing it coalesce to `false` via
+    the converter), `EpisodeDoc` (fields: `season`, `episode`, `title` (nullable, spec 0034), `airDate`, `watched`, `watchedAt`)
   - `NotificationDoc`, `NotificationPayload`
   - `SyncRun` — one completed sync-pipeline run (global `sync-runs/{runId}`); written by Cloud Functions, read by the settings slice (spec 0049)
   - `TitleCacheEntry`, `TitleMetadata`, `RegionAvailability`
@@ -88,6 +95,12 @@ PlexSyncMeta | null` — the per-user Plex sync cursor + link metadata (spec
     resume to run one Plex sync (no-op when not linked / not native / already
     running); the shell wires it over the settings slice's `PlexSyncService`
     (spec 0073).
+  - `PLEX_BACKGROUND_INIT` — `() => Promise<void>` thunk the shell calls once on
+    boot to initialize periodic on-device background Plex sync (Android
+    WorkManager via `@transistorsoft/capacitor-background-fetch`); a
+    native-guarded no-op off native / when not linked. The shell wires it over
+    the settings slice's `PlexBackgroundService`; mirrors `PLEX_SYNC_TRIGGER`
+    (spec 0085).
 
 `NotificationPayload` carries the data a notification renders from:
 `tmdbId: number` (the TMDB id of the affected title), `titleId`, `title`,

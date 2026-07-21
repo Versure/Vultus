@@ -20,4 +20,5 @@ export type {
   WatchlistTvShow,
   WatchlistDocRef,
   WatchlistStatusStore,
+  WatchlistNextWatchableStore,
 } from './lib/ports';

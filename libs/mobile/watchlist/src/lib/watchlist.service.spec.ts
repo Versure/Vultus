@@ -342,9 +342,12 @@ describe('WatchlistService', () => {
       }
       expect(batchCommitMock).toHaveBeenCalledTimes(1);
 
-      // Status is still written.
+      // Status is still written — with the next-unwatched field nulled (spec 0081).
       expect(updateDocMock).toHaveBeenCalledTimes(1);
-      expect(updateDocMock.mock.calls[0][1]).toEqual({ status: 'completed' });
+      expect(updateDocMock.mock.calls[0][1]).toEqual({
+        status: 'completed',
+        nextUnwatchedEpisodeAirDate: null,
+      });
     });
 
     it('TV + all episodes already watched → status written, NO batch commit', async () => {
@@ -361,7 +364,10 @@ describe('WatchlistService', () => {
       expect(batchUpdateMock).not.toHaveBeenCalled();
       expect(batchCommitMock).not.toHaveBeenCalled();
       expect(updateDocMock).toHaveBeenCalledTimes(1);
-      expect(updateDocMock.mock.calls[0][1]).toEqual({ status: 'completed' });
+      expect(updateDocMock.mock.calls[0][1]).toEqual({
+        status: 'completed',
+        nextUnwatchedEpisodeAirDate: null,
+      });
     });
 
     it('TV + empty subcollection → status written, NO batch commit', async () => {
@@ -372,7 +378,10 @@ describe('WatchlistService', () => {
       expect(getDocsMock).toHaveBeenCalledTimes(1);
       expect(batchCommitMock).not.toHaveBeenCalled();
       expect(updateDocMock).toHaveBeenCalledTimes(1);
-      expect(updateDocMock.mock.calls[0][1]).toEqual({ status: 'completed' });
+      expect(updateDocMock.mock.calls[0][1]).toEqual({
+        status: 'completed',
+        nextUnwatchedEpisodeAirDate: null,
+      });
     });
 
     it('Movie → status written, NO episode read/batch at all', async () => {
@@ -404,6 +413,53 @@ describe('WatchlistService', () => {
         expect(writeBatchMock).not.toHaveBeenCalled();
         expect(updateDocMock).toHaveBeenCalledTimes(1);
         expect(updateDocMock.mock.calls[0][1]).toEqual({ status });
+      },
+    );
+  });
+
+  describe('updateStatus — nextUnwatchedEpisodeAirDate null-write (spec 0081)', () => {
+    it('completed→tv → status write includes nextUnwatchedEpisodeAirDate: null (everything now watched)', async () => {
+      getDocsMock.mockResolvedValue(
+        docsSnap([
+          { id: 's01e01', season: 1, episode: 1, watched: false },
+          { id: 's01e02', season: 1, episode: 2, watched: false },
+        ]),
+      );
+      const service = createService(UID);
+      await service.updateStatus(UID, '2', 'completed', 'tv');
+
+      expect(updateDocMock).toHaveBeenCalledTimes(1);
+      const [, payload] = updateDocMock.mock.calls[0];
+      expect(payload).toEqual({
+        status: 'completed',
+        nextUnwatchedEpisodeAirDate: null,
+      });
+    });
+
+    it('completed→movie → NO nextUnwatchedEpisodeAirDate key in the write', async () => {
+      const service = createService(UID);
+      await service.updateStatus(UID, '1', 'completed', 'movie');
+
+      expect(updateDocMock).toHaveBeenCalledTimes(1);
+      const [, payload] = updateDocMock.mock.calls[0];
+      expect(payload).toEqual({ status: 'completed' });
+      expect(payload as Record<string, unknown>).not.toHaveProperty(
+        'nextUnwatchedEpisodeAirDate',
+      );
+    });
+
+    it.each(['watching', 'planned', 'dropped'] as const)(
+      'non-completed status (%s) on a TV show → NO nextUnwatchedEpisodeAirDate key in the write',
+      async (status) => {
+        const service = createService(UID);
+        await service.updateStatus(UID, '2', status, 'tv');
+
+        expect(updateDocMock).toHaveBeenCalledTimes(1);
+        const [, payload] = updateDocMock.mock.calls[0];
+        expect(payload).toEqual({ status });
+        expect(payload as Record<string, unknown>).not.toHaveProperty(
+          'nextUnwatchedEpisodeAirDate',
+        );
       },
     );
   });

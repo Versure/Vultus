@@ -8,3 +8,12 @@ export { MockPlexClient } from './lib/plex.client.mock';
 export { PlexLinkService } from './lib/plex-link.service';
 export { PlexSyncService } from './lib/plex-sync.service';
 export type { PlexSyncSummary } from './lib/plex-sync.service';
+// Background Plex sync (spec 0085) — the shell's PLEX_BACKGROUND_INIT factory
+// `inject`s this root singleton to wire the periodic on-device sync trigger.
+export { PlexBackgroundService } from './lib/plex-background.service';
+// TMDB detail config token (spec 0086) — the shell's app.config wires this from
+// environment.tmdb so PlexSyncService can fetch posterPath/voteAverage. The
+// client factory + interface stay slice-internal (the shell only needs the
+// token + config type).
+export { SETTINGS_TMDB_CONFIG } from './lib/tokens';
+export type { TmdbDetailConfig } from './lib/tmdb-detail.client';

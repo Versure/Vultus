@@ -96,3 +96,20 @@ export async function routeTmdbTV(
   );
   return fixture;
 }
+
+/**
+ * Per-id MOVIE-detail interception (spec 0086). `routeTmdbDiscriminated` fulfills
+ * ONE fixture for every movie-detail request; this flow needs two movie ids (550
+ * and 335984) to resolve to two different fixtures, so match on the id itself.
+ */
+export async function routeTmdbMovie(
+  page: Page,
+  movieId: number,
+  fixtureName: TmdbFixtureName,
+): Promise<unknown> {
+  const fixture = loadFixture(fixtureName);
+  await page.route(`**/movie/${movieId}**`, (route) =>
+    route.fulfill({ json: fixture as Record<string, unknown> }),
+  );
+  return fixture;
+}

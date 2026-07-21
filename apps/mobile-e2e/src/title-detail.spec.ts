@@ -49,13 +49,18 @@ async function bootAndSeed(
   page: import('@playwright/test').Page,
 ): Promise<string> {
   await page.goto('/');
-  await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+  await expect(page).toHaveURL(/\/tabs\/today$/);
 
   const uid = await resolveAnonUid(page);
   expect(uid).toBeTruthy();
 
   await seedFor(uid, 'seeded');
   await page.reload();
+  await expect(page).toHaveURL(/\/tabs\/today$/);
+
+  // Boot now lands on the Today tab (spec 0083); the watchlist card only exists
+  // on the Watchlist tab's rendered DOM, so switch there before asserting on it.
+  await page.locator('ion-tab-button[tab="watchlist"]').click();
   await expect(page).toHaveURL(/\/tabs\/watchlist$/);
 
   // Verify the seeded entry rendered for THIS uid (guards the R3 owner-mismatch
@@ -145,7 +150,11 @@ test('watchlist alert remove: card -> empty state (F6 runnable part)', async ({
   await alert.locator('button', { hasText: 'Remove' }).first().click();
 
   // The realtime stream emits an empty list -> the watchlist empty state shows.
-  const emptyState = page.locator('vultus-empty-state');
+  // Scoped to lib-watchlist to avoid matching Today's empty state: `bootAndSeed`
+  // lands on Today before switching tabs, and Ionic keeps inactive tabs mounted
+  // in the DOM, so a bare `vultus-empty-state` resolves to 2 elements (strict-mode
+  // violation).
+  const emptyState = page.locator('lib-watchlist vultus-empty-state');
   await expect(emptyState).toBeVisible();
   await expect(emptyState).toContainText('Your watchlist is empty');
 });

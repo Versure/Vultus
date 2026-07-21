@@ -18,11 +18,12 @@ user's `users/{uid}/watchlist/{titleId}/episodes` subcollection, and inserts
 - `createEpisodeSyncEngine(config)` → `EpisodeSyncEngine` with
   `syncOne(uid, titleId, tmdbId)` and `syncAll()`.
 - `EpisodeSyncEngine`, `EpisodeSyncConfig`, `EpisodeUpsertResult` — contract
-  types. `EpisodeSyncConfig` carries an optional `watchlistStatus` port and
-  `EpisodeUpsertResult` an optional `statusRevertedToWatching` flag (spec 0074).
+  types. `EpisodeSyncConfig` carries an optional `watchlistStatus` port (spec 0074) and an optional `nextWatchable` port (spec 0081); `EpisodeUpsertResult`
+  carries an optional `statusRevertedToWatching` flag (spec 0074).
 - `episodeId(season, episode)` / `newEpisodeDoc(ep)` — id + doc helpers.
 - Ports: `TmdbEpisodeSource`, `EpisodeStore`, `WatchlistTvSource`,
-  `WatchlistTvShow`, `WatchlistDocRef`, `WatchlistStatusStore`.
+  `WatchlistTvShow`, `WatchlistDocRef`, `WatchlistStatusStore`,
+  `WatchlistNextWatchableStore`.
 
 ## Usage
 
@@ -78,6 +79,30 @@ the only place where the Admin SDK and `@vultus/functions/sync-titles` enter.
     only `tmdb` + `episodes`; the engine no-ops the revert safely when
     `watchlistStatus` is absent (and `statusRevertedToWatching` is `false`).
     Only the daily pass (entry point B) wires `watchlistStatus`.
+- **Next-unwatched-episode air date recompute (spec 0081).** The optional
+  `nextWatchable` port (`WatchlistNextWatchableStore`, Admin-SDK-backed in
+  `apps/functions`) keeps the denormalized `nextUnwatchedEpisodeAirDate` field on
+  `users/{uid}/watchlist/{titleId}` correct. In `syncOne`, **after**
+  `writeEpisodes`, when **≥1 new episode was inserted this run**
+  (`toWrite.length > 0`) **and** the port is present, the engine calls
+  `readEpisodeWatchState(uid, titleId)` — a **fresh full read AFTER the write**,
+  so it sees pre-existing docs' real `watched` state PLUS the just-inserted
+  (`watched: false`) docs (the existing `getExistingEpisodeIds` returns ids only,
+  with no watched state, so it cannot supply this). It then computes the **min
+  `airDate` over episodes with `watched === false`** (ISO **lexical** comparison,
+  the `transitions.ts` idiom), or `null` when nothing is unwatched, and writes it
+  via `setNextUnwatchedEpisodeAirDate`. This is a **separate watchlist-doc write**
+  and is **independent of the `watchlistStatus` revert block** — both may fire in
+  the same run; episode docs are never touched (insert-only invariant preserved).
+  - **Wired into BOTH entry points — the deliberate deviation from the 0074
+    `watchlistStatus` port** (which is entry-B-only). Unlike a completed→watching
+    revert (structurally impossible for a brand-new title), a freshly-added TV
+    show **does** need `nextUnwatchedEpisodeAirDate` set on its first sync (entry
+    A) — otherwise it stays `null` until the next daily pass and the show looks
+    like "nothing to watch" for up to 24h. So `apps/functions` wires
+    `nextWatchable` into **both** the on-add trigger (entry A) and the daily pass
+    (entry B). The engine still no-ops safely when the port is absent (optional
+    backward compatibility).
 
 ## Sheriff boundaries
 

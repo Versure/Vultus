@@ -59,6 +59,11 @@ controls" below for the current control set.
     whose episodes are all already watched or not-yet-synced are cheap no-ops
     (the batch is skipped when there are zero unwatched docs — no extra status
     read, and re-selecting "Completed" on an already-completed show is a no-op).
+    **Next-unwatched-air-date null-write (spec 0081):** because the completed→tv
+    path marks every episode watched, the same status `updateDoc` also sets
+    `nextUnwatchedEpisodeAirDate: null` — keeping the denormalized watchlist-doc
+    field correct client-side without waiting for the next server-side sync.
+    Movies and non-`completed` transitions never touch the field.
     Episode docs are created by the sync engine and are only **updated** here
     (never created). The `type` is the slice-local decision input for TV-vs-movie
     and is passed from the caller's `WatchlistItem.type` — the private
@@ -131,7 +136,13 @@ Because that flex-column scroll part makes every light-DOM `ion-content` child a
 flex item, the closed "Sort & Filter" bottom sheet is now clipped with
 `overflow: hidden` on `.filter-sheet` (spec 0082) so its off-screen
 `translateY(100%)` panel cannot leak ~277px of scrollable overflow into
-`ion-content` and let the empty page scroll.
+`ion-content` and let the empty page scroll. The sheet's **open**-state
+declarations (`opacity: 1` / `translateY(0)`) are bound directly on
+`.filter-sheet-backdrop`/`.filter-sheet-panel` via their own `[class.open]`
+bindings — **not** via a nested `.filter-sheet.open` descendant selector, which
+failed to win the cascade in-browser (spec 0087, issue #230) — so the open panel
+reliably reaches `translateY(0)` and is not clipped by the 0082
+`overflow: hidden`.
 
 The slice-local grouping/filtering/sort helpers (`groupByStatus`, `filterByType`,
 `sortItems`, `getAvailableProviders`, the `WatchlistSort` type,
@@ -288,11 +299,13 @@ note (T5)"). Brand colour lives in the logo image; all badge chrome uses
   `title-cache/{tmdbId}/availability/{region}` (provider badges), and — on the
   `completed` + `tv` path only — a one-shot read of the whole
   `users/{uid}/watchlist/{titleId}/episodes` subcollection (spec 0053).
-- **Writes:** `users/{uid}/watchlist/{titleId}` — status update and delete — plus,
-  on the `completed` + `tv` path, a batched `{ watched, watchedAt }` update onto
-  the currently-unwatched docs of `users/{uid}/watchlist/{titleId}/episodes`
-  (own-user episode docs, an already-permitted write shape). Never writes to
-  `users/{uid}`, `title-cache`, or any other path.
+- **Writes:** `users/{uid}/watchlist/{titleId}` — status update (on the
+  `completed` + `tv` path the same write also nulls `nextUnwatchedEpisodeAirDate`,
+  spec 0081) and delete — plus, on the `completed` + `tv` path, a batched
+  `{ watched, watchedAt }` update onto the currently-unwatched docs of
+  `users/{uid}/watchlist/{titleId}/episodes` (own-user episode docs, an
+  already-permitted write shape). Never writes to `users/{uid}`, `title-cache`,
+  or any other path.
 
 The watchlist doc id is `String(tmdbId)` (e.g. `1399`), matching spec 0013's write binding.
 

@@ -31,7 +31,7 @@ export const onboardingGuard: CanActivateFn = async () => {
 /**
  * Reverse guard for the `/onboarding` route (issue #65): once onboarding has
  * completed (the `onboarding_done` Preferences flag is `'true'`), re-entry to
- * `/onboarding` is blocked and the user is redirected to `/tabs/watchlist`.
+ * `/onboarding` is blocked and the user is redirected to `/tabs/today`.
  * This prevents the Android hardware back button from landing on the (now
  * stuck) onboarding page after the flow is done.
  *
@@ -44,7 +44,7 @@ export const reverseOnboardingGuard: CanActivateFn = async () => {
   const router = inject(Router);
   const { value } = await Preferences.get({ key: ONBOARDING_DONE_KEY });
   if (value === 'true') {
-    return router.createUrlTree(['/tabs/watchlist']);
+    return router.createUrlTree(['/tabs/today']);
   }
   return true;
 };

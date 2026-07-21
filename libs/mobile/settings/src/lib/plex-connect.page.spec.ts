@@ -12,10 +12,14 @@ vi.mock('./plex-link.service', () => ({
 vi.mock('./plex-sync.service', () => ({
   PlexSyncService: class PlexSyncService {},
 }));
+vi.mock('./plex-background.service', () => ({
+  PlexBackgroundService: class PlexBackgroundService {},
+}));
 
 import { PlexConnectPage } from './plex-connect.page';
 import { PlexLinkService } from './plex-link.service';
 import { PlexSyncService } from './plex-sync.service';
+import { PlexBackgroundService } from './plex-background.service';
 
 type Stage = 'idle' | 'code' | 'waiting' | 'connected' | 'error';
 type ErrorReason = 'expired' | 'no-server' | 'network' | null;
@@ -65,6 +69,7 @@ function mockSync(): MockSync {
 async function setup(stage: Stage, errorReason: ErrorReason = null) {
   const link = mockLink(stage, errorReason);
   const sync = mockSync();
+  const background = { init: vi.fn().mockResolvedValue(undefined) };
   const nav = { navigateBack: vi.fn() };
   await TestBed.configureTestingModule({
     imports: [PlexConnectPage],
@@ -72,6 +77,7 @@ async function setup(stage: Stage, errorReason: ErrorReason = null) {
       provideIonicAngular(),
       { provide: PlexLinkService, useValue: link },
       { provide: PlexSyncService, useValue: sync },
+      { provide: PlexBackgroundService, useValue: background },
       { provide: NavController, useValue: nav },
     ],
   }).compileComponents();
@@ -80,7 +86,7 @@ async function setup(stage: Stage, errorReason: ErrorReason = null) {
   fixture.detectChanges();
   await fixture.whenStable();
   const el = fixture.nativeElement as HTMLElement;
-  return { fixture, el, link, sync, nav };
+  return { fixture, el, link, sync, background, nav };
 }
 
 describe('PlexConnectPage', () => {
@@ -185,6 +191,12 @@ describe('PlexConnectPage', () => {
     (el.querySelectorAll('.solid-button')[0] as HTMLElement).click();
     expect(sync.sync).toHaveBeenCalledTimes(1);
     expect(nav.navigateBack).toHaveBeenCalledWith('/tabs/settings');
+  });
+
+  it('tapping "Done" initializes background sync (spec 0085)', async () => {
+    const { el, background } = await setup('connected');
+    (el.querySelectorAll('.solid-button')[0] as HTMLElement).click();
+    expect(background.init).toHaveBeenCalledTimes(1);
   });
 
   it('stage "error" reason "expired": renders the expired copy + "Try again"', async () => {

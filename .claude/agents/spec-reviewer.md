@@ -44,7 +44,19 @@ Evaluate the spec against each of these and record concrete findings:
    `User` literal in an unlisted slice like `mobile-onboarding`), that omission is
    a **blocking finding** — widening a required field is a repo-wide ripple and
    every affected slice must be enumerated.
-5. **Testability** — does the test plan follow the pyramid (PLAN §5)? Is the
+5. **Onboarding parity** — **(Blocking — Onboarding parity, F4)** When a spec adds
+   a new field to the `User` domain type (`@vultus/shared/domain`'s `documents.ts`)
+   or changes the meaning/shape of an existing one, it must explicitly resolve to
+   one of two outcomes: **(a) include in onboarding** — the Scope/task graph
+   collects it during first-launch onboarding, or the Risks section names a
+   follow-up spec that will; or **(b) deliberately Settings-only** — a one-line
+   justification for why it should **not** be part of first-launch onboarding
+   (a first-class, legitimate outcome — F4 does not force everything into
+   onboarding). A spec that adds/changes a `User` field and says **nothing** about
+   onboarding is a **blocking finding**, same severity as the F1 (orphaned DoD
+   task) and F2 (shared-type ripple) probes — silence is precisely the failure
+   mode this rule exists to catch.
+6. **Testability** — does the test plan follow the pyramid (PLAN §5)? Is the
    logic actually unit-testable as specified? Are e2e flows named and minimal?
    For a `scope:mobile` spec that adds a new route or critical user action:
    the absence of e2e flows must be **explicitly justified** (e.g. "No e2e
@@ -53,7 +65,7 @@ Evaluate the spec against each of these and record concrete findings:
    finding** — the spec-author must either add named flows or document why e2e
    is not required. A `test.fixme`-gated flow (blocked on an unmerged spec) is
    acceptable, but the blocking dependency must be named.
-6. **UI fidelity (mobile slices)** — does the spec reference an **actual Stitch
+7. **UI fidelity (mobile slices)** — does the spec reference an **actual Stitch
    screen ID** (not "MCP unreachable, tokens only")? Is the UI section a
    **checkable contract** — concrete control **dimensions**, insets that agree
    across sibling elements, radius, and **all interactive states** (default /
@@ -62,13 +74,13 @@ Evaluate the spec against each of these and record concrete findings:
    not just named)? Flag a deferred screen capture, a missing focus/active state,
    or "match the design" hand-waving — these are exactly what send the implementer
    through repeated UI-rework passes.
-7. **Task graph** — are sequential vs parallel tasks marked? Does **every
+8. **Task graph** — are sequential vs parallel tasks marked? Does **every
    [parallel] task carry a file manifest**, and are those manifests genuinely
    **pairwise disjoint** (so concurrent implementers can't collide)? Flag any
    parallel task missing a manifest, or two parallel manifests that overlap
    (they must be marked sequential instead). Is new-slice generation / root
    config wiring kept in the sequential foundation, not parallelized?
-8. **Definition of done** — present and tailored, not generic? **(Blocking — DoD
+9. **Definition of done** — present and tailored, not generic? **(Blocking — DoD
    ⇄ task-manifest coverage, F1)** Every DoD item must be covered by at least one
    task in the task graph — cross-check each DoD requirement against the tasks'
    file manifests. Flag as a **blocking finding** any DoD requirement (rules,
@@ -77,8 +89,8 @@ Evaluate the spec against each of these and record concrete findings:
    lists `firestore.rules` or the rules-test file. The spec-author must add a task
    (or add the missing file to an existing manifest) so no DoD requirement is
    orphaned.
-9. **Risks** — are the real risks (data-source accuracy, PLAN conflicts)
-   surfaced?
+10. **Risks** — are the real risks (data-source accuracy, PLAN conflicts)
+    surfaced?
 
 ## Output
 

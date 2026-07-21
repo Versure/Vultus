@@ -48,6 +48,7 @@ import {
   createEpisodeUpsertStore,
   createWatchlistTvSourceAdapter,
   createWatchlistStatusStoreAdapter,
+  createNextWatchableStoreAdapter,
 } from './sync-episodes';
 import { classifyAuth } from './lib/auth';
 import type { VerifyToken } from './lib/auth';
@@ -308,7 +309,11 @@ function ensureAdmin(): Firestore {
  * into `runSync`, and sends its status + JSON body.
  */
 export const syncTitles = onRequest(
-  { secrets: [SYNC_SHARED_SECRET, TMDB_READ_TOKEN] },
+  // Default gen2 timeout is 60s; a full pass over the tracked-title union
+  // (serial TMDB/Trakt throttle, spec 0009 §Scaling) already exceeds that at
+  // current watchlist size (~130s observed), so every cron run 504'd before
+  // finishing. Raised with headroom per spec 0009's documented escalation.
+  { secrets: [SYNC_SHARED_SECRET, TMDB_READ_TOKEN], timeoutSeconds: 300 },
   async (req, res) => {
     const db = ensureAdmin();
     const createEngine = (firestore: Firestore): SyncEngine =>
@@ -330,6 +335,7 @@ export const syncTitles = onRequest(
             episodes: createEpisodeUpsertStore(firestore),
             watchlist: createWatchlistTvSourceAdapter(firestore),
             watchlistStatus: createWatchlistStatusStoreAdapter(firestore), // NEW (spec 0074, D5)
+            nextWatchable: createNextWatchableStoreAdapter(firestore), // NEW (spec 0081)
           }),
         verifyToken: verifyIdToken,
         secret: SYNC_SHARED_SECRET.value(),
