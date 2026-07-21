@@ -10,10 +10,10 @@
 
 # Spec status ledger
 
-Total specs: 85
+Total specs: 86
 
 - done: 84
-- approved: 1
+- approved: 2
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -102,3 +102,4 @@ Total specs: 85
 | 83 | watch-today-tab | Add a Watch Today tab showing everything ready to watch right now | done | slice:today, slice:onboarding | scope:mobile |
 | 85 | background-plex-sync | Background Plex sync (periodic on-device sync while backgrounded) | done | slice:settings | scope:mobile, scope:shared |
 | 86 | fix-plex-sync-posters | Fix Plex sync — fetch and denormalize posterPath/voteAverage on add + backfill | done | slice:settings | scope:mobile |
+| 88 | no-notifications-for-completed | Suppress availability/episode notifications for completed or dropped watchlist items | approved | slice:dispatch-notifications | scope:functions |
