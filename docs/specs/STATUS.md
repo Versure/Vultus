@@ -10,11 +10,10 @@
 
 # Spec status ledger
 
-Total specs: 90
+Total specs: 91
 
-- done: 86
+- done: 88
 - approved: 3
-- implementing: 1
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -101,10 +100,11 @@ Total specs: 90
 | 81 | next-unwatched-episode-airdate | Track each TV show's next-unwatched-episode air date for watchability checks | done | slice:sync-episodes, slice:title-detail, slice:watchlist, slice:search | scope:shared, scope:functions, scope:mobile |
 | 82 | fix-watchlist-scroll-overflow | Stop the empty Watchlist page scrolling — clip the off-screen filter sheet | done | slice:watchlist | scope:mobile |
 | 83 | watch-today-tab | Add a Watch Today tab showing everything ready to watch right now | done | slice:today, slice:onboarding | scope:mobile |
+| 84 | splash-icon-parity | Give the native Android splash icon the web loading screen's box + corner-bracket treatment | approved | — | scope:mobile |
 | 85 | background-plex-sync | Background Plex sync (periodic on-device sync while backgrounded) | done | slice:settings | scope:mobile, scope:shared |
 | 86 | fix-plex-sync-posters | Fix Plex sync — fetch and denormalize posterPath/voteAverage on add + backfill | done | slice:settings | scope:mobile |
 | 87 | fix-watchlist-filter-sheet-clip | Fix the clipped Watchlist filter sheet — bind `open` on the panel/backdrop themselves | done | slice:watchlist | scope:mobile |
 | 88 | no-notifications-for-completed | Suppress availability/episode notifications for completed or dropped watchlist items | done | slice:dispatch-notifications | scope:functions |
-| 89 | fix-automatic-notification-dispatch | Fix automatic notification dispatch — daily-sync rate-limit hardening and a daily episode-aired airing-scan | implementing | slice:sync-titles, slice:dispatch-notifications | scope:functions |
+| 89 | fix-automatic-notification-dispatch | Fix automatic notification dispatch — daily-sync rate-limit hardening and a daily episode-aired airing-scan | done | slice:sync-titles, slice:dispatch-notifications | scope:functions |
 | 90 | plex-link-code-actions | Add copy-code + "Open plex.tv/link" actions to the Plex link-code stage (onboarding parity + both pages) | approved | slice:onboarding, slice:settings | scope:mobile |
-| 91 | fix-watch-today-header | Shrink the Watch Today hero title/subtitle to match other pages' headings | approved | slice:today | scope:mobile |
+| 91 | fix-watch-today-header | Shrink the Watch Today hero title/subtitle to match other pages' headings | done | slice:today | scope:mobile |

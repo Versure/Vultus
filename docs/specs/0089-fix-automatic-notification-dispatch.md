@@ -2,7 +2,7 @@
 number: 0089
 slug: fix-automatic-notification-dispatch
 title: Fix automatic notification dispatch — daily-sync rate-limit hardening and a daily episode-aired airing-scan
-status: implementing
+status: done
 slices: [slice:sync-titles, slice:dispatch-notifications]
 scopes: [scope:functions]
 created: 2026-07-21
