@@ -2,7 +2,7 @@
 number: 0084
 slug: splash-icon-parity
 title: Give the native Android splash icon the web loading screen's box + corner-bracket treatment
-status: approved
+status: done
 slices: []
 scopes: [scope:mobile]
 created: 2026-07-20
