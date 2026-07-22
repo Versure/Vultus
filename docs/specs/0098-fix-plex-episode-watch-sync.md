@@ -1,5 +1,5 @@
 ---
-number: 0097
+number: 0098
 slug: fix-plex-episode-watch-sync
 title: Fix Plex sync — create missing episode docs on-device so watched episodes mark immediately
 status: approved
@@ -51,6 +51,30 @@ exist** DO mirror correctly today. The bug is specifically shows where episode d
 are **absent at mirror time** — newly Plex-added shows, and watch-implies-add
 shows. Movies are unaffected (a movie's watched state is its own `viewCount`, not an
 episode subcollection).
+
+### Relationship to spec 0097 (fix-plex-sync-unmatched-shows, issue #256 — approved on `main`)
+
+Spec **0097** (a separate Plex-sync bug fix, approved but **not yet
+implemented**) modifies the **same function this spec touches**,
+`PlexSyncService.processLibrary` (`plex-sync.service.ts`): it adds a **per-item
+`try/catch`** so one throwing show no longer aborts the rest of the pass, records
+**skipped/dropped** titles, and hardens pagination. This spec's on-device
+episode-doc creation (`ensureEpisodeDocs`, called from within the same
+per-item loop) is **complementary, not conflicting**, but the two will edit the
+same loop. Coordination the implementer MUST honour:
+
+- **Whichever merges second rebases onto the first** — do not re-derive the loop
+  from the pre-0097 line numbers if 0097 landed first (its per-item `try/catch`
+  will have shifted them). The `plex-sync.service.ts` line references in this spec
+  are anchored to **pre-0097 `main`**; treat them as guidance, not literals, and
+  re-locate against the working tree.
+- This spec's `ensureEpisodeDocs` + TMDB fetch belongs **inside** 0097's per-item
+  `try/catch` (if present), so a TMDB/episode-fetch failure for one show is
+  isolated to that show — reinforcing this spec's own failure-isolation decision
+  (§5) rather than duplicating it.
+- Neither spec changes the other's contract: 0097 is about **which titles get
+  imported / not silently dropped**; this spec is about **episode watch-state
+  landing in one pass** for imported shows. No decision here overrides 0097.
 
 ### Locked decisions (from the architect interview — do NOT re-litigate)
 
@@ -248,7 +272,7 @@ export interface TmdbDetailClient {
     typeHint?: TitleType,
     signal?: AbortSignal,
   ): Promise<TmdbDetail>;
-  /** GET /tv/{id} → `number_of_seasons`; `null` on TMDB 404 (spec 0097).
+  /** GET /tv/{id} → `number_of_seasons`; `null` on TMDB 404 (spec 0098).
    *  Replicates functions `getTvSeasonCount` (tmdb-client.ts:122-127 /
    *  mapper `mapTvSeasonCount`). Non-404 non-2xx → throw `TmdbDetailError`. */
   getTvSeasonCount(
@@ -256,7 +280,7 @@ export interface TmdbDetailClient {
     signal?: AbortSignal,
   ): Promise<number | null>;
   /** GET /tv/{id}/season/{n} → the season's episodes with a NON-NULL air_date;
-   *  `null` on TMDB 404 (spec 0097). Episodes with a null/empty/missing
+   *  `null` on TMDB 404 (spec 0098). Episodes with a null/empty/missing
    *  `air_date` are SKIPPED (EpisodeDoc.airDate is non-null). `season` falls back
    *  to the argument; `title` = TMDB `name ?? null`. Replicates functions
    *  `getSeasonEpisodes` + `mapSeasonEpisodes` (tmdb-mappers.ts:119-139).
@@ -573,7 +597,7 @@ the user's terminal against the emulator (not in-session).
       `.toEqual` write-payload ripple. Stated in the PR.
 - [ ] **F4 (onboarding parity): N/A** — no `User` field added/changed. Stated in
       the PR.
-- [ ] PR references this spec (0097).
+- [ ] PR references this spec (0098).
 - [ ] **POST-MERGE on-device human verification (required — real PMS + TMDB path is
       only verifiable on device).** Via `pnpm nx run mobile:android-usb` against the
       user's real Plex server: watch an episode in Plex for a show not yet in Vultus
