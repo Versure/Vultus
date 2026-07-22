@@ -15,7 +15,7 @@ import {
  * `markAllRead`, `remove`).
  *
  * The seed deliberately exercises EVERY row state under `--configuration=mock`:
- * unread + read, with-poster + no-poster (icon fallback), and all three
+ * unread + read, with-poster + no-poster (icon fallback), and all five
  * notification kinds — so a visual check covers the full §6 contract.
  */
 @Injectable()
@@ -101,6 +101,34 @@ class MockNotificationsServiceImpl {
       },
       sentAt: this.iso(8 * 24 * 60 * 60 * 1000), // 1 week ago, read
       readAt: this.iso(7 * 24 * 60 * 60 * 1000),
+    },
+    {
+      id: 'n6',
+      titleId: '6',
+      kind: 'movie-leaving-platform',
+      payload: {
+        tmdbId: 6, // no poster → film-outline icon fallback
+        titleId: '6',
+        title: 'Oppenheimer',
+        region: 'NL',
+        providerName: 'Netflix',
+      },
+      sentAt: this.iso(3 * 60 * 60 * 1000), // 3h ago, unread, icon
+      readAt: null,
+    },
+    {
+      id: 'n7',
+      titleId: '7',
+      kind: 'show-leaving-platform',
+      payload: {
+        tmdbId: 7, // no poster → tv-outline icon fallback
+        titleId: '7',
+        title: 'Ted Lasso',
+        region: 'NL',
+        providerName: 'Apple TV+',
+      },
+      sentAt: this.iso(6 * 60 * 60 * 1000), // 6h ago, unread, icon
+      readAt: null,
     },
   ];
 

@@ -134,6 +134,60 @@ describe('NotificationsPage', () => {
     );
   });
 
+  it("'movie-leaving-platform' row renders the film-outline fallback + leaving body copy", async () => {
+    const service = mockService(
+      of([
+        row({
+          id: 'leaving-movie',
+          kind: 'movie-leaving-platform',
+          payload: {
+            tmdbId: 6, // no poster → kind-icon fallback
+            titleId: '6',
+            title: 'Oppenheimer',
+            region: 'NL',
+            providerName: 'Netflix',
+          },
+        }),
+      ]),
+    );
+    const { el } = await setup(service);
+
+    const card = el.querySelector('.notification-card');
+    expect(card?.textContent).toContain('Oppenheimer');
+    expect(card?.textContent).toContain('Leaving your platform on Netflix');
+    const icon = card?.querySelector('.notification-thumb__icon') as
+      | (HTMLElement & { name?: string })
+      | null;
+    expect(icon?.name).toBe('film-outline');
+  });
+
+  it("'show-leaving-platform' row renders the tv-outline fallback + leaving body copy", async () => {
+    const service = mockService(
+      of([
+        row({
+          id: 'leaving-show',
+          kind: 'show-leaving-platform',
+          payload: {
+            tmdbId: 7, // no poster → kind-icon fallback
+            titleId: '7',
+            title: 'Ted Lasso',
+            region: 'NL',
+            providerName: 'Apple TV+',
+          },
+        }),
+      ]),
+    );
+    const { el } = await setup(service);
+
+    const card = el.querySelector('.notification-card');
+    expect(card?.textContent).toContain('Ted Lasso');
+    expect(card?.textContent).toContain('Leaving your platform on Apple TV+');
+    const icon = card?.querySelector('.notification-thumb__icon') as
+      | (HTMLElement & { name?: string })
+      | null;
+    expect(icon?.name).toBe('tv-outline');
+  });
+
   it('unread row shows the dot + tint; read row is dimmed with no dot', async () => {
     const service = mockService(
       of([

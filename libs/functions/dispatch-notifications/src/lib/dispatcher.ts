@@ -103,6 +103,12 @@ function isKindEnabled(
       return prefs.cameToPlatform;
     case 'episode-aired':
       return prefs.episodeAired;
+    // Legacy docs (pre-0057) lack these; treat a missing value as enabled —
+    // only an explicit false opts out (spec 0057 decision 4 / Data model).
+    case 'movie-leaving-platform':
+      return prefs.movieLeavingPlatform !== false;
+    case 'show-leaving-platform':
+      return prefs.showLeavingPlatform !== false;
     default:
       return false;
   }

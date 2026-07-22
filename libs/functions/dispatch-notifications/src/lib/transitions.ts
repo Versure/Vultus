@@ -36,9 +36,11 @@ export function hasFlatrate(next: WatchProvider[]): boolean {
 }
 
 /**
- * Decide the notification kinds for a change. Availability kinds fire only on
- * an 'appeared' transition (decision 1C: 'removed' notifies nothing): a movie
- * yields 'movie-available', a tv title yields 'show-came-to-platform'.
+ * Decide the notification kinds for an availability change. An 'appeared'
+ * transition yields 'movie-available' (movie) or 'show-came-to-platform' (tv);
+ * a 'removed' transition yields 'movie-leaving-platform' (movie) or
+ * 'show-leaving-platform' (tv) — reinstating removal notifications behind a
+ * per-kind opt-in (spec 0057, reopening spec 0012 decision 1C).
  *
  * `episode-aired` is NOT emitted here (spec 0089 / D3): it is owned
  * exclusively by the daily airing-scan (`dispatchEpisodeAired`), driven by an
@@ -57,6 +59,14 @@ export function decideKinds(input: {
     } else {
       kinds.push('show-came-to-platform');
     }
+  }
+
+  if (input.transition === 'removed') {
+    kinds.push(
+      input.type === 'movie'
+        ? 'movie-leaving-platform'
+        : 'show-leaving-platform',
+    );
   }
 
   return kinds;

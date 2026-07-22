@@ -63,6 +63,8 @@ function defaultPrefs(): User['notificationPrefs'] {
     episodeAired: true,
     movieAvailable: true,
     cameToPlatform: true,
+    movieLeavingPlatform: true,
+    showLeavingPlatform: true,
     deliveryHour: null,
   };
 }
@@ -128,11 +130,16 @@ class MockOnboardingServiceImpl {
   }
 
   setNotificationsEnabled(enabled: boolean): Promise<void> {
+    const current = this._prefs();
     this._prefs.set({
       episodeAired: enabled,
       movieAvailable: enabled,
       cameToPlatform: enabled,
-      deliveryHour: this._prefs().deliveryHour,
+      // Independent per-kind toggles (spec 0057) — preserved, not folded into
+      // the global enable/disable projection (mirrors the real service).
+      movieLeavingPlatform: current.movieLeavingPlatform,
+      showLeavingPlatform: current.showLeavingPlatform,
+      deliveryHour: current.deliveryHour,
     });
     return Promise.resolve();
   }

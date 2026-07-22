@@ -2,7 +2,7 @@
 number: 0057
 slug: leaving-platform-notifications
 title: Notify when a tracked title loses flatrate availability in the user's region
-status: approved
+status: done
 slices: [slice:dispatch-notifications, slice:notifications, slice:settings]
 scopes: [scope:functions, scope:mobile, scope:shared]
 created: 2026-07-01
@@ -62,7 +62,7 @@ new toggles on sees the new alerts; a user who turns them off does not.
    distinguish "fully gone" from "rent/buy remains". `decideKinds` maps
    `'removed'` → `['movie-leaving-platform']` for movies and
    `['show-leaving-platform']` for tv shows, **replacing** today's `'removed' →
-   []`.
+[]`.
 
 3. **Same delivery pipeline as existing kinds — no new infrastructure.** Same
    `NotificationDoc` write to `users/{uid}/notifications/{id}`, same FCM
@@ -86,7 +86,7 @@ new toggles on sees the new alerts; a user who turns them off does not.
 
 6. **Push deep-link behaviour unchanged.** Spec 0041's handler deep-links FCM
    taps to title-detail by `data.tmdbId`, reading a `{ notificationId, titleId,
-   kind, region, tmdbId }` data record. The new kinds flow through the exact same
+kind, region, tmdbId }` data record. The new kinds flow through the exact same
    `NotificationPayload` shape and `data` record construction — no change to the
    mobile handler. The one FCM wiring touch is the OS-rendered copy
    (`buildNotification` in `apps/functions/src/dispatch/adapters.ts`), which today
@@ -94,7 +94,7 @@ new toggles on sees the new alerts; a user who turns them off does not.
    otherwise mis-label a leaving push as "Now available to stream" (see Public
    types / APIs).
 
-7. **Out of scope:** predicting an *upcoming* removal before it's observed
+7. **Out of scope:** predicting an _upcoming_ removal before it's observed
    (TMDB/Trakt don't reliably expose a "leaving on" date) — this fires only once
    removal is actually observed in a sync pass, reactive not predictive; the
    "fully gone vs switched to rent/buy" distinction (decision 2); any change to
@@ -141,7 +141,7 @@ Out of scope (explicitly):
 - **New Firestore collections / Cloud Function / trigger / FCM channel** —
   reuses the whole spec-0012/0041/0051 pipeline (decision 3).
 - **Changing the global Notifications toggle semantics** — the spec-0011/0018
-  global toggle is a projection over the *three original* booleans and its
+  global toggle is a projection over the _three original_ booleans and its
   `setNotificationsEnabled` writes those three; the two new prefs are
   **independent per-kind rows**, NOT folded into that projection (see Public
   types / APIs — this avoids a behaviour change to the existing global toggle
@@ -155,14 +155,14 @@ Out of scope (explicitly):
 
 ## Affected slices & Sheriff tags
 
-| Project                                 | Path                                    | Sheriff tags                                      | Change                                                                                                    |
-| --------------------------------------- | --------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Project                                 | Path                                    | Sheriff tags                                      | Change                                                                                                                      |
+| --------------------------------------- | --------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | shared-domain (edit)                    | `libs/shared/domain`                    | `scope:shared`                                    | **add** two `NotificationKind`s + two `NotificationPrefs` booleans; update `assertKindExhaustive` + `_user` literal; README |
-| shared-firestore-schema (edit)          | `libs/shared/firestore-schema`          | `scope:shared`                                    | `dataToUser` coalesce for the two new prefs (missing → `true`); extend round-trip tests; README if it lists prefs |
-| functions-dispatch-notifications (edit) | `libs/functions/dispatch-notifications` | `scope:functions`, `slice:dispatch-notifications` | `decideKinds` maps `'removed'` → new kind; `isKindEnabled` two cases; README + tests                       |
-| functions (app, edit)                   | `apps/functions`                        | `scope:functions`                                 | adapter carries new prefs into `TrackingUser`; `buildNotification` leaving-copy branch; specs             |
-| mobile-notifications (edit)             | `libs/mobile/notifications`             | `scope:mobile`, `slice:notifications`             | `kindIcon` + `body` branches for the two new kinds; specs                                                  |
-| mobile-settings (edit)                  | `libs/mobile/settings`                  | `scope:mobile`, `slice:settings`                  | two new toggle rows + service signals/setters; mock mirror; README; specs                                  |
+| shared-firestore-schema (edit)          | `libs/shared/firestore-schema`          | `scope:shared`                                    | `dataToUser` coalesce for the two new prefs (missing → `true`); extend round-trip tests; README if it lists prefs           |
+| functions-dispatch-notifications (edit) | `libs/functions/dispatch-notifications` | `scope:functions`, `slice:dispatch-notifications` | `decideKinds` maps `'removed'` → new kind; `isKindEnabled` two cases; README + tests                                        |
+| functions (app, edit)                   | `apps/functions`                        | `scope:functions`                                 | adapter carries new prefs into `TrackingUser`; `buildNotification` leaving-copy branch; specs                               |
+| mobile-notifications (edit)             | `libs/mobile/notifications`             | `scope:mobile`, `slice:notifications`             | `kindIcon` + `body` branches for the two new kinds; specs                                                                   |
+| mobile-settings (edit)                  | `libs/mobile/settings`                  | `scope:mobile`, `slice:settings`                  | two new toggle rows + service signals/setters; mock mirror; README; specs                                                   |
 
 - **Tagging is by PATH GLOB in `sheriff.config.ts`** (specs 0010/0012/0051). All
   six projects already resolve their tags from their paths. **This spec does NOT
@@ -197,13 +197,13 @@ PLAN §4 paths. The change is: two additive members of the
 booleans. No new collection, no new top-level field, no converter-body change to
 `notificationToData`/`dataToNotification` (payload/kind pass through).
 
-| PLAN §4 path                                       | Access                             | By                                                                                     |
-| -------------------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------- |
-| `users/{uid}.notificationPrefs.movieLeavingPlatform` | **read**, **create**, **update** | settings slice (read on load; default `true` on eager create; write on toggle)         |
-| `users/{uid}.notificationPrefs.showLeavingPlatform`  | **read**, **create**, **update** | settings slice (same)                                                                  |
-| `users/{uid}.notificationPrefs.*` (both new)         | **read**                         | dispatcher (per-user, via `TrackingUser.notificationPrefs` the adapter loads)          |
-| `title-cache/{tmdbId}/availability/{region}`         | **trigger source** (unchanged)   | the `onDocumentWritten` event's `after` (providers + previousSnapshot) — no change     |
-| `users/{uid}/notifications/{id}`                     | **create** (unchanged shape)     | dispatcher — one doc per dispatched new kind, `kind` ∈ the two new members             |
+| PLAN §4 path                                         | Access                           | By                                                                                 |
+| ---------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------- |
+| `users/{uid}.notificationPrefs.movieLeavingPlatform` | **read**, **create**, **update** | settings slice (read on load; default `true` on eager create; write on toggle)     |
+| `users/{uid}.notificationPrefs.showLeavingPlatform`  | **read**, **create**, **update** | settings slice (same)                                                              |
+| `users/{uid}.notificationPrefs.*` (both new)         | **read**                         | dispatcher (per-user, via `TrackingUser.notificationPrefs` the adapter loads)      |
+| `title-cache/{tmdbId}/availability/{region}`         | **trigger source** (unchanged)   | the `onDocumentWritten` event's `after` (providers + previousSnapshot) — no change |
+| `users/{uid}/notifications/{id}`                     | **create** (unchanged shape)     | dispatcher — one doc per dispatched new kind, `kind` ∈ the two new members         |
 
 - **`NotificationKind` union widened.** PLAN §4 lists
   `kind: "episode-aired" | "movie-available" | "show-came-to-platform"` as a
@@ -217,7 +217,7 @@ booleans. No new collection, no new top-level field, no converter-body change to
   `showLeavingPlatform: boolean` — required (mirroring the three existing required
   booleans), value always present on new docs.
 - **Default `true`, not `false`/`null` — and why (load-bearing).** `deliveryHour`
-  defaults `null` because `null` = "no restriction" = the *pre-existing* behaviour
+  defaults `null` because `null` = "no restriction" = the _pre-existing_ behaviour
   (send any time). For the leaving-platform kinds the pre-existing behaviour was
   "no such notification at all"; the product intent (decision 4) is that turning
   this feature on should make existing users **receive** the new alerts by
@@ -245,8 +245,8 @@ booleans. No new collection, no new top-level field, no converter-body change to
     dispatcher via spec 0011's eager create.)
 - **Eager-create defaults (settings `load()`):** extend the create literal to
   `{ region: 'NL', notificationPrefs: { episodeAired: true, movieAvailable: true,
-  cameToPlatform: true, movieLeavingPlatform: true, showLeavingPlatform: true,
-  deliveryHour: null }, fcmTokens: [] }`.
+cameToPlatform: true, movieLeavingPlatform: true, showLeavingPlatform: true,
+deliveryHour: null }, fcmTokens: [] }`.
 - **Write on toggle:** each new toggle persists by rewriting the **whole**
   `notificationPrefs` object from service state (the same pattern
   `setNotificationsEnabled` / `setDeliveryHour` already use — see
@@ -350,10 +350,14 @@ existing `'appeared'` branch):
 
 ```ts
 if (input.transition === 'appeared') {
-  kinds.push(input.type === 'movie' ? 'movie-available' : 'show-came-to-platform');
+  kinds.push(
+    input.type === 'movie' ? 'movie-available' : 'show-came-to-platform',
+  );
 }
 if (input.transition === 'removed') {
-  kinds.push(input.type === 'movie' ? 'movie-leaving-platform' : 'show-leaving-platform');
+  kinds.push(
+    input.type === 'movie' ? 'movie-leaving-platform' : 'show-leaving-platform',
+  );
 }
 ```
 
@@ -365,7 +369,10 @@ The `episode-aired` branch is unchanged and does **not** fire on removal
 `!== false` semantics (Data model):
 
 ```ts
-function isKindEnabled(kind: NotificationKind, prefs: NotificationPrefs): boolean {
+function isKindEnabled(
+  kind: NotificationKind,
+  prefs: NotificationPrefs,
+): boolean {
   switch (kind) {
     case 'movie-available':
       return prefs.movieAvailable;
@@ -399,7 +406,7 @@ same delivery-window gate, and the same stale-token prune. The
   `isKindEnabled` uses `!== false`, a legacy doc's missing new prefs already read
   as enabled — **no adapter backfill is strictly required**. **Verify** the
   adapter passes the prefs through unchanged (it does today: `notificationPrefs:
-  userData.notificationPrefs`); if a future refactor constructs prefs
+userData.notificationPrefs`); if a future refactor constructs prefs
   field-by-field there, it must carry the two new fields defaulting missing →
   `true`. Document the chosen approach (pass-through + core `!== false`).
 - **FCM OS-copy (`dispatch/adapters.ts` `buildNotification`).** Today it returns
@@ -409,15 +416,27 @@ same delivery-window gate, and the same stale-token prune. The
   wording. Add a leaving branch so the OS notification is intelligible:
 
   ```ts
-  function buildNotification(kind: string, titleStr: string): { title: string; body: string } {
+  function buildNotification(
+    kind: string,
+    titleStr: string,
+  ): { title: string; body: string } {
     if (kind === 'episode-aired') {
-      return { title: 'New episode available', body: `${titleStr} has a new episode on ${PLATFORM_FALLBACK}` };
+      return {
+        title: 'New episode available',
+        body: `${titleStr} has a new episode on ${PLATFORM_FALLBACK}`,
+      };
     }
     if (kind === 'movie-leaving-platform' || kind === 'show-leaving-platform') {
-      return { title: 'Leaving your streaming service', body: `${titleStr} is leaving ${PLATFORM_FALLBACK} — watch it soon` };
+      return {
+        title: 'Leaving your streaming service',
+        body: `${titleStr} is leaving ${PLATFORM_FALLBACK} — watch it soon`,
+      };
     }
     // movie-available + show-came-to-platform: availability copy.
-    return { title: 'Now available to stream', body: `${titleStr} is available on ${PLATFORM_FALLBACK}` };
+    return {
+      title: 'Now available to stream',
+      body: `${titleStr} is available on ${PLATFORM_FALLBACK}`,
+    };
   }
   ```
 
@@ -530,13 +549,13 @@ ship token-only.
 **Checkable contract (each row a `.settings-card` matching the Notifications
 card):**
 
-| Element             | Spec                                                                                                                                        | Token / var                                        |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| **Card**            | `.settings-card` — fill `surface-container`, `--vultus-radius-md` (0.75rem), 1px `outline-variant` hairline (20% alpha), 16px padding, 8px gap from the sibling card above. Side inset + inter-card gap **must agree** with the Region / Notifications / Notification-time cards (same stack). | `--vultus-surface-container`, `--vultus-outline-variant`, `--vultus-space-md`, `--vultus-space-sm` |
-| **Icon tile**       | `.settings-row__icon` — 40×40px, `--vultus-radius` (0.5rem), surface-ramp tile, **primary-coloured glyph** (`--ion-color-primary`), 22px icon. Suggested glyphs: `film-outline` (movie row), `tv-outline` (show row) — register via the page's `addIcons`. | `--ion-color-primary`                              |
-| **Control**         | `ion-toggle` styled by `.settings-row__toggle` exactly like the Notifications toggle: `justify="space-between"`, `[checked]="service.movieLeavingPlatform()"` (resp. `showLeavingPlatform()`), `(ionChange)="…"`. Label text: "Movie leaving your platform" / "Show leaving your platform" (or terser "When a movie/show is leaving" — keep body-lg role). | `--ion-color-primary` (toggle track when on)       |
-| **Type roles**      | Toggle label = `body-lg`/600 (the `.settings-row__toggle` label rule); helper = `body-md` (14/400) `on-surface-variant`. Pin via existing classes — introduce **no** new font sizes. | `--vultus-on-surface`, `--vultus-on-surface-variant` |
-| **Helper text**     | `.settings-row__helper` `<p>` e.g. "Get notified when a tracked movie/show is about to leave your streaming service." — 8px below the control, aligned to the control's left edge (same as siblings). | `--vultus-on-surface-variant`                      |
+| Element         | Spec                                                                                                                                                                                                                                                                                                                                                       | Token / var                                                                                        |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| **Card**        | `.settings-card` — fill `surface-container`, `--vultus-radius-md` (0.75rem), 1px `outline-variant` hairline (20% alpha), 16px padding, 8px gap from the sibling card above. Side inset + inter-card gap **must agree** with the Region / Notifications / Notification-time cards (same stack).                                                             | `--vultus-surface-container`, `--vultus-outline-variant`, `--vultus-space-md`, `--vultus-space-sm` |
+| **Icon tile**   | `.settings-row__icon` — 40×40px, `--vultus-radius` (0.5rem), surface-ramp tile, **primary-coloured glyph** (`--ion-color-primary`), 22px icon. Suggested glyphs: `film-outline` (movie row), `tv-outline` (show row) — register via the page's `addIcons`.                                                                                                 | `--ion-color-primary`                                                                              |
+| **Control**     | `ion-toggle` styled by `.settings-row__toggle` exactly like the Notifications toggle: `justify="space-between"`, `[checked]="service.movieLeavingPlatform()"` (resp. `showLeavingPlatform()`), `(ionChange)="…"`. Label text: "Movie leaving your platform" / "Show leaving your platform" (or terser "When a movie/show is leaving" — keep body-lg role). | `--ion-color-primary` (toggle track when on)                                                       |
+| **Type roles**  | Toggle label = `body-lg`/600 (the `.settings-row__toggle` label rule); helper = `body-md` (14/400) `on-surface-variant`. Pin via existing classes — introduce **no** new font sizes.                                                                                                                                                                       | `--vultus-on-surface`, `--vultus-on-surface-variant`                                               |
+| **Helper text** | `.settings-row__helper` `<p>` e.g. "Get notified when a tracked movie/show is about to leave your streaming service." — 8px below the control, aligned to the control's left edge (same as siblings).                                                                                                                                                      | `--vultus-on-surface-variant`                                                                      |
 
 **Placement:** the two rows go in the `.settings-cards` stack **after** the
 Notifications card and **before** (or after — implementer's call, keep grouped
@@ -545,8 +564,8 @@ notification-related cards visually grouped; do not split the stack.
 
 **Interactive-state contract (tick each vs the fetched screen + screenshot):**
 
-| Element             | default                                          | focus                       | active                                      | result                                    |
-| ------------------- | ------------------------------------------------ | --------------------------- | ------------------------------------------- | ----------------------------------------- |
+| Element             | default                                                                                        | focus                       | active                                                                               | result                                                                 |
+| ------------------- | ---------------------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
 | **Each new toggle** | `ion-toggle`, checked reflects the pref (default on); track uses `--ion-color-primary` when on | Ionic `:focus-visible` ring | card `:active` 5% emerald overlay (existing `.settings-card:active`), **not** a lift | `setMovieLeavingPlatform(checked)` / `setShowLeavingPlatform(checked)` |
 
 - **Sibling alignment:** all notification cards share the same 16px side inset,
@@ -645,6 +664,7 @@ sequence T4 after T3.
   `stores.written` / `stores.sent` arrays and the returned `summary`); the point is
   that the two length-0 assertions must become length-1 with the correct `kind`,
   and the implementer must treat this as an intentional flip, not a surprise.
+
 - Update `libs/functions/dispatch-notifications/README.md` (the removed transition
   now notifies; the two new kinds; the `!== false` legacy semantics).
 - Files: `libs/functions/dispatch-notifications/src/lib/transitions.ts`,
@@ -758,7 +778,7 @@ memory: the emulator cannot run under Claude Code tools here).
   - **Movie removed, single in-region user, pref on/default:** one
     `movie-leaving-platform` `NotificationDoc` written (assert `kind`, `payload`,
     `notificationsWritten`); FCM `send` per token with `data.kind =
-    'movie-leaving-platform'` and `notificationId = ${tmdbId}-${region}-movie-leaving-platform`;
+'movie-leaving-platform'` and `notificationId = ${tmdbId}-${region}-movie-leaving-platform`;
     `DispatchSummary.transition === 'removed'`.
   - **Show removed → `show-leaving-platform`** analogously.
   - **Per-kind prefs gate:** a user with `movieLeavingPlatform === false` gets the
@@ -772,7 +792,7 @@ memory: the emulator cannot run under Claude Code tools here).
     stale-token prune, per-user error isolation, no-write-outside-`users/**`,
     delivery-window) **stay green** — only the `'removed' → []` expectation flips.
     Specifically, the pre-existing `'removed transition: no availability
-    notification written'` test (dispatcher.spec.ts ~line 230) **must be
+notification written'` test (dispatcher.spec.ts ~line 230) **must be
     rewritten**: its `stores.written`/`stores.sent` length-0 assertions become
     length-1 with the type-specific new kind (see T3). This is a required
     behavioral flip, not an optional cleanup.
@@ -833,8 +853,8 @@ Tailored from the PLAN §5 checklist to the projects touched. Affected projects:
 dependent build).
 
 - [ ] `pnpm nx typecheck shared-domain shared-firestore-schema
-      functions-dispatch-notifications functions mobile-notifications
-      mobile-settings` passes — the two kinds, the exhaustive switch, the two
+  functions-dispatch-notifications functions mobile-notifications
+  mobile-settings` passes — the two kinds, the exhaustive switch, the two
       prefs, the converter, the dispatcher branches, the inbox branches, and the
       settings toggles compile.
 - [ ] `pnpm nx lint <same projects>` passes **with Sheriff active**: the
@@ -902,14 +922,14 @@ dependent build).
   new alerts without touching Settings (converter `?? true` + core `!== false`).
   The alternative — default `false`/opt-in — was rejected as inconsistent with the
   other three kinds (all default `true`) and because the feature's value is that
-  the user is *warned* by default. A user who does not want it toggles it off. The
+  the user is _warned_ by default. A user who does not want it toggles it off. The
   `!== false` core semantics (not a strict boolean read) is the load-bearing detail
   that makes legacy docs (missing the field) behave as on — a reviewer must confirm
   the core does not use a strict `=== true` that would silently disable legacy
   users.
 - **`buildNotification`'s "everything else = availability copy" fallthrough is a
   trap.** Today the two new kinds would hit the availability branch and render
-  "Now available to stream" for a *leaving* push — a visible correctness bug, not a
+  "Now available to stream" for a _leaving_ push — a visible correctness bug, not a
   typecheck failure (the function takes a `string` kind). The explicit leaving
   branch (T4) fixes it; the test asserting per-kind copy is the guard. Flagged
   because it is easy to miss (the compiler won't catch it).

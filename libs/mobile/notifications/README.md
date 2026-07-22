@@ -2,8 +2,9 @@
 
 The **Notifications inbox** slice — a `scope:mobile` vertical slice owning the
 in-app notification history's UI, state, data, and slice-local types (spec 0042).
-It lists the user's past "new episode" / "now streaming" / "now available" alerts
-(persisted by the spec 0012 dispatcher to `users/{uid}/notifications`), lets them
+It lists the user's past "new episode" / "now streaming" / "now available" /
+"leaving your platform" alerts (persisted by the spec 0012/0057 dispatcher to
+`users/{uid}/notifications`), lets them
 tap a row to open the title (deep-link, reusing spec 0016's `title-detail` route),
 mark all read, swipe to delete, and pull to refresh. The entry point is a bell
 icon with an unread badge in the **watchlist** header (owned by the watchlist

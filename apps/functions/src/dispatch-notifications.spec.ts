@@ -5,7 +5,7 @@ import {
   notificationPath,
   notificationToData,
 } from '@vultus/shared/firestore-schema';
-import type { NotificationDoc } from '@vultus/shared/domain';
+import type { NotificationDoc, TitleType } from '@vultus/shared/domain';
 import { handleDispatch, type DispatchEvent } from './dispatch-notifications';
 import {
   createFirestoreNotificationStore,
@@ -265,6 +265,36 @@ describe('createMessagingFcmSender', () => {
     });
   });
 
+  it('builds movie-leaving-platform copy (spec 0057, not availability copy)', async () => {
+    const send = vi.fn(() => Promise.resolve('msg-id'));
+    const sender = createMessagingFcmSender(
+      { send } as unknown as Messaging,
+      'Inception',
+    );
+
+    await sender.send('tok', { kind: 'movie-leaving-platform' });
+
+    expect(notificationOf(send)).toEqual({
+      title: 'Leaving your streaming service',
+      body: 'Inception is leaving a streaming platform — watch it soon',
+    });
+  });
+
+  it('builds show-leaving-platform copy (spec 0057, shares leaving copy)', async () => {
+    const send = vi.fn(() => Promise.resolve('msg-id'));
+    const sender = createMessagingFcmSender(
+      { send } as unknown as Messaging,
+      'Severance',
+    );
+
+    await sender.send('tok', { kind: 'show-leaving-platform' });
+
+    expect(notificationOf(send)).toEqual({
+      title: 'Leaving your streaming service',
+      body: 'Severance is leaving a streaming platform — watch it soon',
+    });
+  });
+
   it('uses the generic platform phrase (providerName is not in the FCM data)', async () => {
     const send = vi.fn(() => Promise.resolve('msg-id'));
     const sender = createMessagingFcmSender(
@@ -478,5 +508,208 @@ describe('createFirestoreWatchlistStore.findUsersTracking (spec 0088)', () => {
 
     expect(users).toHaveLength(1);
     expect(users[0].status).toBe('watching');
+  });
+});
+
+// --- handleDispatch: 'removed' transition end-to-end (spec 0057) ------------
+
+/**
+ * Fake `db` wiring `handleDispatch`'s full removed-transition path: serves the
+ * parent `title-cache/{tmdbId}` doc (for `type` + title), the
+ * `collectionGroup('watchlist')` scan (one matched doc with a parent user), and
+ * the joined `users/{uid}` doc — while capturing every write path so the inbox
+ * doc can be asserted.
+ */
+function createRemovedDispatchDb(opts: {
+  tmdbId: number;
+  type: TitleType;
+  titleStr: string;
+  uid: string;
+  titleId: string;
+  userData: Record<string, unknown>;
+}) {
+  const writes: { path: string; data: unknown }[] = [];
+
+  const watchlistDoc = {
+    id: opts.titleId,
+    data: () => ({ tmdbId: opts.tmdbId, status: 'watching' }),
+    ref: {
+      id: opts.titleId,
+      parent: { parent: { id: opts.uid } },
+    },
+  };
+
+  const collectionGroup = () => ({
+    get: () => Promise.resolve({ docs: [watchlistDoc] }),
+  });
+
+  const doc = (path: string) => ({
+    get: () => {
+      if (path === 'title-cache/' + opts.tmdbId) {
+        return Promise.resolve({
+          exists: true,
+          data: () => ({
+            type: opts.type,
+            metadata: { title: opts.titleStr },
+          }),
+        });
+      }
+      if (path === 'users/' + opts.uid) {
+        return Promise.resolve({ exists: true, data: () => opts.userData });
+      }
+      return Promise.resolve({ exists: false, data: () => undefined });
+    },
+    set: (data: unknown) => {
+      writes.push({ path, data });
+      return Promise.resolve();
+    },
+    update: (data: unknown) => {
+      writes.push({ path, data });
+      return Promise.resolve();
+    },
+  });
+
+  const db = { collectionGroup, doc } as unknown as Firestore;
+  return { db, writes };
+}
+
+// previousSnapshot carried a flatrate provider; providers now empty → 'removed'.
+const removedEvent = (tmdbId: number): DispatchEvent => ({
+  params: { tmdbId: String(tmdbId), region: 'NL' },
+  data: {
+    after: {
+      data: () => ({
+        providers: [],
+        previousSnapshot: [
+          { providerId: 8, name: 'Netflix', type: 'flatrate' as const },
+        ],
+      }),
+    },
+  },
+});
+
+describe("handleDispatch — 'removed' transition dispatches leaving kinds (spec 0057)", () => {
+  it('movie removed: writes a movie-leaving-platform doc and sends FCM with the leaving block', async () => {
+    const { db, writes } = createRemovedDispatchDb({
+      tmdbId: 603,
+      type: 'movie',
+      titleStr: 'The Matrix',
+      uid: 'u1',
+      titleId: 'title-1',
+      userData: {
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+          movieLeavingPlatform: true,
+          showLeavingPlatform: true,
+          deliveryHour: null,
+        },
+        fcmTokens: [{ token: 'tok-1', platform: 'android' }],
+      },
+    });
+    const send = vi.fn(() => Promise.resolve('msg-id'));
+    const messaging = { send } as unknown as Messaging;
+
+    await handleDispatch(removedEvent(603), db, messaging);
+
+    // Inbox doc written to users/{uid}/notifications/{id} with the new kind.
+    const notifWrites = writes.filter((w) =>
+      w.path.startsWith(notificationPath('u1', '')),
+    );
+    expect(notifWrites).toHaveLength(1);
+    expect(notifWrites[0].path).toBe(
+      notificationPath('u1', '603-NL-movie-leaving-platform'),
+    );
+
+    // FCM send carries the new kind in data and the leaving notification block.
+    expect(send).toHaveBeenCalledTimes(1);
+    const message = send.mock.calls[0][0] as {
+      token: string;
+      data: Record<string, string>;
+      notification: { title: string; body: string };
+    };
+    expect(message.data.kind).toBe('movie-leaving-platform');
+    expect(message.notification).toEqual({
+      title: 'Leaving your streaming service',
+      body: 'The Matrix is leaving a streaming platform — watch it soon',
+    });
+  });
+
+  it('show removed: writes a show-leaving-platform doc and sends FCM', async () => {
+    const { db, writes } = createRemovedDispatchDb({
+      tmdbId: 1399,
+      type: 'tv',
+      titleStr: 'Severance',
+      uid: 'u2',
+      titleId: 'title-2',
+      userData: {
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+          movieLeavingPlatform: true,
+          showLeavingPlatform: true,
+          deliveryHour: null,
+        },
+        fcmTokens: [{ token: 'tok-2', platform: 'android' }],
+      },
+    });
+    const send = vi.fn(() => Promise.resolve('msg-id'));
+    const messaging = { send } as unknown as Messaging;
+
+    await handleDispatch(removedEvent(1399), db, messaging);
+
+    const notifWrites = writes.filter((w) =>
+      w.path.startsWith(notificationPath('u2', '')),
+    );
+    expect(notifWrites).toHaveLength(1);
+    expect(notifWrites[0].path).toBe(
+      notificationPath('u2', '1399-NL-show-leaving-platform'),
+    );
+
+    expect(send).toHaveBeenCalledTimes(1);
+    const message = send.mock.calls[0][0] as {
+      data: Record<string, string>;
+      notification: { title: string; body: string };
+    };
+    expect(message.data.kind).toBe('show-leaving-platform');
+    expect(message.notification.title).toBe('Leaving your streaming service');
+  });
+
+  it('legacy user doc missing the new prefs still dispatches the leaving kind (core !== false)', async () => {
+    const { db, writes } = createRemovedDispatchDb({
+      tmdbId: 603,
+      type: 'movie',
+      titleStr: 'The Matrix',
+      uid: 'u3',
+      titleId: 'title-3',
+      // Pre-0057 doc: notificationPrefs omits movie/showLeavingPlatform.
+      userData: {
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+          deliveryHour: null,
+        },
+        fcmTokens: [{ token: 'tok-3', platform: 'android' }],
+      },
+    });
+    const send = vi.fn(() => Promise.resolve('msg-id'));
+
+    await handleDispatch(removedEvent(603), db, {
+      send,
+    } as unknown as Messaging);
+
+    expect(
+      writes.some(
+        (w) =>
+          w.path === notificationPath('u3', '603-NL-movie-leaving-platform'),
+      ),
+    ).toBe(true);
+    expect(send).toHaveBeenCalledTimes(1);
   });
 });

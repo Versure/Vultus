@@ -25,6 +25,8 @@ interface MockSettingsService {
   region: WritableSignal<Region | null>;
   notificationsEnabled: WritableSignal<boolean>;
   deliveryHour: WritableSignal<number | null>;
+  movieLeavingPlatform: WritableSignal<boolean>;
+  showLeavingPlatform: WritableSignal<boolean>;
   loaded: WritableSignal<boolean>;
   loadFailed: WritableSignal<boolean>;
   providerCatalog: WritableSignal<CatalogProvider[]>;
@@ -36,6 +38,8 @@ interface MockSettingsService {
   setRegion: ReturnType<typeof vi.fn>;
   setNotificationsEnabled: ReturnType<typeof vi.fn>;
   setDeliveryHour: ReturnType<typeof vi.fn>;
+  setMovieLeavingPlatform: ReturnType<typeof vi.fn>;
+  setShowLeavingPlatform: ReturnType<typeof vi.fn>;
   retryLoad: ReturnType<typeof vi.fn>;
   loadProviderCatalog: ReturnType<typeof vi.fn>;
   toggleProvider: ReturnType<typeof vi.fn>;
@@ -155,6 +159,8 @@ function mockService(loaded: boolean, loadFailed = false): MockSettingsService {
     region: signal<Region | null>('NL'),
     notificationsEnabled: signal<boolean>(true),
     deliveryHour: signal<number | null>(null),
+    movieLeavingPlatform: signal<boolean>(true),
+    showLeavingPlatform: signal<boolean>(true),
     loaded: signal<boolean>(loaded),
     loadFailed: signal<boolean>(loadFailed),
     providerCatalog: signal<CatalogProvider[]>(CATALOG),
@@ -166,6 +172,8 @@ function mockService(loaded: boolean, loadFailed = false): MockSettingsService {
     setRegion: vi.fn().mockResolvedValue(undefined),
     setNotificationsEnabled: vi.fn().mockResolvedValue(undefined),
     setDeliveryHour: vi.fn().mockResolvedValue(undefined),
+    setMovieLeavingPlatform: vi.fn().mockResolvedValue(undefined),
+    setShowLeavingPlatform: vi.fn().mockResolvedValue(undefined),
     retryLoad: vi.fn(),
     loadProviderCatalog: vi.fn().mockResolvedValue(undefined),
     toggleProvider: vi.fn().mockResolvedValue(undefined),
@@ -344,6 +352,42 @@ describe('SettingsPage', () => {
       new CustomEvent('ionChange', { detail: { checked: false } }),
     );
     expect(service.setNotificationsEnabled).toHaveBeenCalledWith(false);
+  });
+
+  // ── Leaving-platform toggle rows (spec 0057) ─────────────────────────────
+  // With Plex disconnected (setup default), the ion-toggles in DOM order are:
+  // [0] Notifications, [1] Movie leaving, [2] Show leaving.
+
+  it('renders the two leaving-platform toggle rows reflecting the service signals', async () => {
+    const service = mockService(true);
+    service.movieLeavingPlatform.set(true);
+    service.showLeavingPlatform.set(false);
+    const { el } = await setupWithService(service);
+    const toggles = el.querySelectorAll('ion-toggle');
+    const movie = toggles[1] as HTMLElement & { checked: boolean };
+    const show = toggles[2] as HTMLElement & { checked: boolean };
+    expect(movie.textContent?.trim()).toBe('Movie leaving your platform');
+    expect(movie.checked).toBe(true);
+    expect(show.textContent?.trim()).toBe('Show leaving your platform');
+    expect(show.checked).toBe(false);
+  });
+
+  it('toggling "Movie leaving your platform" calls setMovieLeavingPlatform with the new boolean', async () => {
+    const { el, service } = await setup(true);
+    const movie = el.querySelectorAll('ion-toggle')[1];
+    movie.dispatchEvent(
+      new CustomEvent('ionChange', { detail: { checked: false } }),
+    );
+    expect(service.setMovieLeavingPlatform).toHaveBeenCalledWith(false);
+  });
+
+  it('toggling "Show leaving your platform" calls setShowLeavingPlatform with the new boolean', async () => {
+    const { el, service } = await setup(true);
+    const show = el.querySelectorAll('ion-toggle')[2];
+    show.dispatchEvent(
+      new CustomEvent('ionChange', { detail: { checked: false } }),
+    );
+    expect(service.setShowLeavingPlatform).toHaveBeenCalledWith(false);
   });
 
   // ── My Providers card (spec 0060 + 0075 #166) ────────────────────────────
