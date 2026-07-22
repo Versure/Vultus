@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
-import { provideIonicAngular } from '@ionic/angular/standalone';
+import { NavController, provideIonicAngular } from '@ionic/angular/standalone';
 import { NEVER, type Observable, of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NotificationRow } from './notifications.service';
@@ -61,8 +61,8 @@ function mockService(
 }
 
 function mockRouter() {
-  // `events` + `url` are read by Ionic's NavController (pulled in by
-  // ion-back-button); supply a never-emitting stream so it can subscribe.
+  // `events` + `url` are read by Ionic internals; supply a never-emitting
+  // stream so anything that subscribes can do so.
   return {
     navigate: vi.fn(() => Promise.resolve(true)),
     events: NEVER,
@@ -72,13 +72,24 @@ function mockRouter() {
   };
 }
 
-async function setup(service: MockService, router = mockRouter()) {
+function mockNav() {
+  return {
+    navigateBack: vi.fn(() => Promise.resolve(true)),
+  };
+}
+
+async function setup(
+  service: MockService,
+  router = mockRouter(),
+  nav = mockNav(),
+) {
   await TestBed.configureTestingModule({
     imports: [NotificationsPage],
     providers: [
       provideIonicAngular(),
       { provide: NotificationsService, useValue: service },
       { provide: Router, useValue: router },
+      { provide: NavController, useValue: nav },
     ],
   }).compileComponents();
 
@@ -87,7 +98,7 @@ async function setup(service: MockService, router = mockRouter()) {
   await fixture.whenStable();
   fixture.detectChanges();
   const el = fixture.nativeElement as HTMLElement;
-  return { fixture, el, router };
+  return { fixture, el, router, nav };
 }
 
 describe('NotificationsPage', () => {
@@ -168,6 +179,26 @@ describe('NotificationsPage', () => {
       'title-detail',
       '603',
     ]);
+  });
+
+  it('header back button click → NavController.navigateBack("/tabs/watchlist")', async () => {
+    const service = mockService(of([row()]));
+    const { el, nav } = await setup(service);
+
+    el.querySelector<HTMLElement>('.back-button')?.click();
+
+    expect(nav.navigateBack).toHaveBeenCalledTimes(1);
+    // F3 exact-target discipline: assert the literal string, not a partial.
+    expect(nav.navigateBack).toHaveBeenCalledWith('/tabs/watchlist');
+  });
+
+  it('goBack() → NavController.navigateBack("/tabs/watchlist")', async () => {
+    const service = mockService(of([row()]));
+    const { fixture, nav } = await setup(service);
+
+    fixture.componentInstance.goBack();
+
+    expect(nav.navigateBack).toHaveBeenCalledWith('/tabs/watchlist');
   });
 
   it('"Mark all read" → service.markAllRead(unread ids); hidden when 0 unread', async () => {

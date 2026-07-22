@@ -185,6 +185,52 @@ test.describe('title-detail F4 — watchlist-to-detail-correct-title (spec 0037)
     await expect(page.locator('[data-test="hero"] .hero-title')).toHaveText(
       SEEDED_TITLE,
     );
+
+    // watchlist-to-detail-back-returns-to-watchlist (spec 0092, issue #253):
+    // the custom header back button (`.back-button`, aria-label "Go back")
+    // resolves `?origin=watchlist` -> NavController.navigateBack('/tabs/watchlist').
+    // Anchored `$` so it must land ON the watchlist tab root, not a sub-route.
+    await page.locator('.back-button').click();
+    await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+  });
+
+  // -------------------------------------------------------------------------
+  // today-to-detail-back-returns-to-today (spec 0092, the issue #253 CORE
+  // regression): reaching title-detail from Today must return to /tabs/today on
+  // back — NOT the hardcoded /tabs/watchlist the old `<ion-back-button
+  // defaultHref="tabs/watchlist">` always fell through to.
+  //
+  // Seed variant chosen — DIRECT NAV (?origin=today): the shared `seeded`
+  // fixture's watchlist/2 doc (Breaking Bad) has NO
+  // `nextUnwatchedEpisodeAirDate`, so `isTvWatchableToday` (today.logic.ts) is
+  // false and Today renders NO tappable `.today-card` for it. Rather than mutate
+  // the shared fixture (which watchlist-refresh.spec.ts / provider-preferences
+  // depend on), we navigate straight to the detail route WITH the same
+  // `origin=today` query param the real `today.page.ts` `navigateToDetail` now
+  // threads (T4) — exercising the title-detail resolver -> navigateBack path
+  // deterministically. The load-bearing assertion is identical either way:
+  // back -> /tabs/today, and explicitly NOT /tabs/watchlist.
+  // -------------------------------------------------------------------------
+  test('today-to-detail-back-returns-to-today: back from a Today-originated detail returns to Today', async ({
+    page,
+  }) => {
+    await bootAndSeed(page);
+
+    // Reach title-detail as if opened from Today (the origin the real
+    // `today.page.ts` navigateToDetail now threads alongside `type`).
+    await page.goto('/tabs/title-detail/2?type=tv&origin=today');
+    await expect(page).toHaveURL(/\/tabs\/title-detail\/2\?type=tv/);
+    await expect(page.locator('[data-test="hero"] .hero-title')).toHaveText(
+      SEEDED_TITLE,
+    );
+
+    // Click the custom header back button: goBack() resolves `origin=today` ->
+    // NavController.navigateBack('/tabs/today').
+    await page.locator('.back-button').click();
+
+    // The #253 fix: back returns to Today, NOT the old hardcoded watchlist.
+    await expect(page).toHaveURL(/\/tabs\/today$/);
+    await expect(page).not.toHaveURL(/\/tabs\/watchlist$/);
   });
 
   // -------------------------------------------------------------------------

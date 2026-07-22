@@ -6,7 +6,6 @@ import type { ActionSheetButton, AlertButton } from '@ionic/angular/standalone';
 import {
   IonActionSheet,
   IonAlert,
-  IonBackButton,
   IonButton,
   IonButtons,
   IonContent,
@@ -17,12 +16,14 @@ import {
   IonSkeletonText,
   IonTitle,
   IonToolbar,
+  NavController,
   ToastController,
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
 import {
   add,
   addCircleOutline,
+  arrowBack,
   calendarOutline,
   checkmarkCircle,
   chevronDownOutline,
@@ -137,7 +138,6 @@ const EMPTY_SPLIT: ProviderSplit = { mine: [], elsewhere: [] };
     IonHeader,
     IonToolbar,
     IonButtons,
-    IonBackButton,
     IonContent,
     IonRefresher,
     IonRefresherContent,
@@ -157,6 +157,7 @@ const EMPTY_SPLIT: ProviderSplit = { mine: [], elsewhere: [] };
 export class TitleDetailPage {
   private readonly route = inject(ActivatedRoute);
   private readonly service = inject(TitleDetailService);
+  private readonly nav = inject(NavController);
 
   /** Shared whole-watchlist sync state (cooldown/in-flight) — see `@vultus/shared/ui-kit`. */
   readonly syncState = inject(SyncStateService);
@@ -198,6 +199,15 @@ export class TitleDetailPage {
    * always act on the title currently on screen, not a stale first navigation.
    */
   private currentTmdbId = 0;
+
+  /**
+   * Origin tab that opened this page, from the reactive `?origin=` query param;
+   * drives the header back target. Kept in sync via a `queryParamMap`
+   * subscription (mirroring `currentTmdbId`) so a reused `ion-router-outlet`
+   * page instance resolves the CURRENT origin, not a stale first-navigation
+   * snapshot (the spec-0037 stale-snapshot trap).
+   */
+  private currentOrigin: string | null = null;
 
   /**
    * Synchronously-readable current title type for imperative handlers (spec
@@ -389,12 +399,23 @@ export class TitleDetailPage {
       squareOutline,
       openOutline,
       add,
+      arrowBack,
     });
     // Keep currentTmdbId in sync so imperative handlers always act on the
     // title currently on screen (not the first navigation's id).
     this.tmdbId$.pipe(takeUntilDestroyed()).subscribe((id) => {
       this.currentTmdbId = id;
     });
+    // Keep currentOrigin in sync from the live ?origin= query param so the
+    // header back button resolves the tab we actually came from, even after
+    // Ionic page reuse (spec 0037 stale-snapshot trap — never read a snapshot).
+    this.route.queryParamMap
+      .pipe(
+        map((p) => p.get('origin')),
+        distinctUntilChanged(),
+        takeUntilDestroyed(),
+      )
+      .subscribe((o) => (this.currentOrigin = o));
     // Page-init auto-revert (spec 0050): a 'completed' TV show whose episodes
     // gained an unwatched entry (new episodes synced) silently reverts to
     // 'watching'. Deduped to once per distinct tmdbId via revertCheckedForId.
@@ -419,6 +440,24 @@ export class TitleDetailPage {
   /** Re-resolves the title after a recoverable error (bound to error-state retry). */
   onRetry(): void {
     this.retryTrigger$.next();
+  }
+
+  /**
+   * Header back — return to the tab we came from deterministically (spec 0092,
+   * issue #253). Resolves the live `?origin=` query param to a concrete tab
+   * route and plays the reverse transition via `NavController.navigateBack`,
+   * instead of relying on `ion-back-button`'s ambiguous `defaultHref` stack
+   * fallback. Any missing/unrecognized origin falls back to `/tabs/watchlist`
+   * (a strict non-regression from the old hardcoded default).
+   */
+  goBack(): void {
+    const target =
+      this.currentOrigin === 'today'
+        ? '/tabs/today'
+        : this.currentOrigin === 'search'
+          ? '/tabs/search'
+          : '/tabs/watchlist'; // 'watchlist' + missing/unrecognized fallback
+    void this.nav.navigateBack(target);
   }
 
   /**

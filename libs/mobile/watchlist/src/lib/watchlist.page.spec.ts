@@ -394,7 +394,7 @@ describe('WatchlistPage', () => {
     const card = el.querySelector<HTMLElement>('.watchlist-card');
     card?.click();
     expect(navigate).toHaveBeenCalledWith(['tabs', 'title-detail', '603'], {
-      queryParams: { type: 'movie' },
+      queryParams: { type: 'movie', origin: 'watchlist' },
     });
   });
 
@@ -416,7 +416,7 @@ describe('WatchlistPage', () => {
       new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }),
     );
     expect(navigate).toHaveBeenCalledWith(['tabs', 'title-detail', '1396'], {
-      queryParams: { type: 'tv' },
+      queryParams: { type: 'tv', origin: 'watchlist' },
     });
   });
 
@@ -1443,7 +1443,13 @@ describe('WatchlistPage', () => {
 
       fixture.componentInstance.openNotifications();
 
+      // Regression guard (spec 0092): openNotifications stays a bare
+      // string-segment nav — NO `origin`/queryParams (single-arg call). Only
+      // navigateToDetail threads `origin`; notifications has one caller and uses
+      // a fixed back target instead.
       expect(router.navigate).toHaveBeenCalledWith(['tabs', 'notifications']);
+      expect(router.navigate).toHaveBeenCalledTimes(1);
+      expect(router.navigate.mock.calls[0]).toHaveLength(1);
     });
 
     it('badgeLabel: number ≤ 9 verbatim, > 9 → "9+"', async () => {
