@@ -232,8 +232,10 @@
   ></ion-action-sheet>
 
   <!-- Combined "Sort & Filter" bottom sheet (overlay div; open/close driven by
-       `filterSheetOpen`). Backdrop tap + "Done" + Android back all close it. -->
-  <div class="filter-sheet" [class.open]="filterSheetOpen">
+       `filterSheetOpen`). Backdrop tap + "Done" + Android back all close it.
+       `slot="fixed"` projects this outside `ion-content`'s scroll host so it is
+       anchored to the viewport, not scrolled content (spec 0095, #230 reopen). -->
+  <div class="filter-sheet" slot="fixed" [class.open]="filterSheetOpen">
     <div
       class="filter-sheet-backdrop"
       [class.open]="filterSheetOpen"
