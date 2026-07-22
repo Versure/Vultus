@@ -538,7 +538,7 @@ Tailored from the PLAN §5 checklist. Every checkbox maps to Task A or Task B.
       `expectVisibleWithinViewport`), Done closes it; no fixed sleeps;
       un-skippable (not `test.fixme`); green in CI against the emulator. (Task B)
 - [ ] **Existing e2e unchanged & green:** the original `'watchlist filter sheet
-  opens visible and closes'` test is unmodified and passes; `watchlist-refresh`
+opens visible and closes'` test is unmodified and passes; `watchlist-refresh`
       and `mark-watched` still pass. (Task B)
 - [ ] **D3: no fake jsdom layout assertion** added to `watchlist.page.spec.ts`;
       the existing 0087 component specs still pass. (Task A — verify only)
