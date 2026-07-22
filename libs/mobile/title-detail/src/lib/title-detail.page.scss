@@ -287,6 +287,17 @@ ion-content {
 
 .add-cta {
   flex: 1;
+  // Host box-model reset so this flex: 1 item renders the same width as its
+  // sibling .mark-watched-cta (issue #251). margin: 0 zeroes any default
+  // ion-button host margin. The confirmed culprit (live-measured via
+  // getBoundingClientRect(): 622.3px vs 626.3px, a 4px gap exactly matching
+  // .mark-watched-cta's 2px solid border) is a flex-basis: 0% + box-sizing:
+  // border-box quirk — a bordered flex sibling renders wider than a
+  // border-less one at equal flex: 1. A transparent border matching that
+  // width (2px, from %outlined-primary-control) equalizes the two boxes
+  // without any visible stroke on this filled button.
+  margin: 0;
+  border: 2px solid transparent;
   height: 56px;
   --border-radius: var(--vultus-radius-md);
   font-weight: 700;
