@@ -12,8 +12,8 @@
 
 Total specs: 95
 
-- done: 91
-- approved: 4
+- done: 92
+- approved: 3
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -110,5 +110,5 @@ Total specs: 95
 | 91 | fix-watch-today-header | Shrink the Watch Today hero title/subtitle to match other pages' headings | done | slice:today | scope:mobile |
 | 92 | fix-header-back-navigation | Make the title-detail and notifications header back button return to the page you came from | approved | — | scope:mobile |
 | 93 | fix-detail-action-button-sizing | Equalize the untracked title-detail action buttons — reset the `ion-button` host box-model so both flex siblings render the same width | approved | slice:title-detail | scope:mobile |
-| 94 | fix-also-available-on-spacing | Fix the extra whitespace above "Also Available On" in the title-detail Where to Watch card | approved | slice:title-detail | scope:mobile |
+| 94 | fix-also-available-on-spacing | Fix the extra whitespace above "Also Available On" in the title-detail Where to Watch card | done | slice:title-detail | scope:mobile |
 | 95 | fix-watchlist-filter-sheet-scroll-drift | Fix the Watchlist filter sheet drifting off-screen when the list is scrolled — anchor it to the viewport via `slot="fixed"` | done | slice:watchlist | scope:mobile |
