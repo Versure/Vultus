@@ -1,0 +1,41 @@
+// Shared brand header — film-outline icon + "Vultus" wordmark, uniform across
+// all four tab pages. Reproduces the already-shipped Search/Settings header
+// chrome exactly. Note: NO `--min-height` override is set — that is deliberate
+// (the fix for issue #254, where Today's stray `--min-height: 64px` made its
+// header taller than the others). The toolbar falls back to Ionic's default
+// min-height, matching the other tabs.
+:host {
+  display: block;
+}
+
+ion-header {
+  ion-toolbar {
+    --background: var(--vultus-surface);
+    --border-width: 0 0 1px 0;
+    --border-color: var(--vultus-outline-variant);
+    --border-style: solid;
+    --box-shadow: none;
+
+    ion-title {
+      padding-inline: 16px;
+    }
+  }
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--vultus-space-sm);
+  color: var(--ion-color-primary);
+  font-family: var(--vultus-font-family);
+  font-weight: 700;
+  font-size: 1.125rem;
+}
+
+.brand-icon {
+  font-size: 1.25rem;
+  color: var(--ion-color-primary);
+  flex-shrink: 0;
+  position: relative;
+  top: -1px;
+}

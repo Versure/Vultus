@@ -53,8 +53,9 @@ qualify (watchlist, search, title-detail).
 - **`src/index.ts`** — the TS barrel. Exports `SHARED_UI_KIT_THEME_PATH`
   (documenting the SCSS entrypoint), the four state atom components below
   (`VultusSkeletonCard`, `VultusSkeletonHero`, `VultusEmptyState`,
-  `VultusErrorState`), and the shared manual-sync state service below
-  (`SyncStateService` + the `LAST_SYNC_KEY` / `SYNC_COOLDOWN_MS` constants).
+  `VultusErrorState`), the shared tab-page header `VultusAppHeader`, and the
+  shared manual-sync state service below (`SyncStateService` + the
+  `LAST_SYNC_KEY` / `SYNC_COOLDOWN_MS` constants).
 - **`SyncStateService`** (`providedIn: 'root'`) — the shared client-side
   **manual-sync cooldown** state behind the "refresh now" / sync triggers
   (spec 0025; relocated here in spec 0052 so both the watchlist and title-detail
@@ -74,9 +75,10 @@ qualify (watchlist, search, title-detail).
 
 ## Components
 
-All four are **standalone**, `OnPush`, prefixed `vultus-`, and style themselves
-purely from the `--vultus-*` theme tokens (no hardcoded colors/radii). Import the
-class from `@vultus/shared/ui-kit` and add it to the host component's `imports`.
+All are **standalone**, `OnPush`, prefixed `vultus-`, and style themselves
+purely from the `--vultus-*` / `--ion-*` theme tokens (no hardcoded colors/radii).
+Import the class from `@vultus/shared/ui-kit` and add it to the host component's
+`imports`.
 
 - **`VultusSkeletonCard`** — `<vultus-skeleton-card [count]="N" />`. Renders
   `count` (default `1`) shimmering placeholder rows mimicking a watchlist / search
@@ -94,6 +96,25 @@ class from `@vultus/shared/ui-kit` and add it to the host component's `imports`.
   Centered error icon + message (default `'Something went wrong'`) + a "Try again"
   outline button that emits the `retry` output. **Registers its own icons**
   (`alertCircleOutline`, `refreshOutline`) — consumers need not.
+- **`VultusAppHeader`** — `<vultus-app-header>…trailing buttons…</vultus-app-header>`.
+  The shared tab-page header used by all four tab pages (Today, Watchlist,
+  Search, Settings): a fixed brand mark (`film-outline` icon + "Vultus"
+  wordmark) in the toolbar title, plus an `ion-buttons slot="end"` for the
+  per-page trailing buttons. **No `@Input`s** — the brand mark is identical on
+  every page; only the trailing buttons vary.
+  - **Content-projection contract:** a single default `<ng-content>` is rendered
+    inside the toolbar's `ion-buttons slot="end"`. Consumers project their bare
+    `<ion-button>` elements as children; Ionic then styles them as toolbar
+    buttons. Consumers keep their own `IonButton` / `IonIcon` (and page-specific
+    `IonBadge` / `IonSpinner`) imports and their own `addIcons` for button icons.
+  - **Icon ownership:** the component self-registers **only** `filmOutline` (the
+    brand icon); it does **not** register button icons.
+  - **Theming:** consumes `--ion-color-primary` (brand color) and
+    `--vultus-outline-variant` (the 1px bottom hairline), plus `--vultus-surface`
+    / `--vultus-font-family` / `--vultus-space-sm`. It sets **no `--min-height`**
+    — deliberately, so the toolbar uses Ionic's default height uniformly across
+    the tabs (the fix for issue #254, where Today's stray `--min-height: 64px`
+    made it taller than the others).
 
 ## Usage
 

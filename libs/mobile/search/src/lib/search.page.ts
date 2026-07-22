@@ -3,17 +3,14 @@ import { Router } from '@angular/router';
 import {
   IonBadge,
   IonButton,
-  IonButtons,
   IonContent,
-  IonHeader,
   IonIcon,
   IonList,
   IonSearchbar,
-  IonTitle,
-  IonToolbar,
   ToastController,
 } from '@ionic/angular/standalone';
 import {
+  VultusAppHeader,
   VultusEmptyState,
   VultusErrorState,
   VultusSkeletonCard,
@@ -22,7 +19,6 @@ import { addIcons } from 'ionicons';
 import {
   add,
   checkmarkCircle,
-  filmOutline,
   personCircleOutline,
   search,
 } from 'ionicons/icons';
@@ -32,10 +28,7 @@ import type { SearchResultView } from './search.service';
 @Component({
   selector: 'lib-search',
   imports: [
-    IonHeader,
-    IonToolbar,
-    IonTitle,
-    IonButtons,
+    VultusAppHeader,
     IonButton,
     IonContent,
     IonSearchbar,
@@ -60,7 +53,6 @@ export class SearchPage {
       search,
       checkmarkCircle,
       add,
-      filmOutline,
       personCircleOutline,
     });
   }

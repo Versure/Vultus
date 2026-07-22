@@ -1,19 +1,10 @@
 import { AsyncPipe } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { Router } from '@angular/router';
-import {
-  IonButton,
-  IonButtons,
-  IonContent,
-  IonHeader,
-  IonIcon,
-  IonTitle,
-  IonToolbar,
-} from '@ionic/angular/standalone';
+import { IonButton, IonContent, IonIcon } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
 import {
   checkmarkCircle,
-  filmOutline,
   personCircleOutline,
   playCircle,
   todayOutline,
@@ -26,6 +17,7 @@ import {
   type WatchlistItem,
 } from '@vultus/shared/domain';
 import {
+  VultusAppHeader,
   VultusEmptyState,
   VultusErrorState,
   VultusSkeletonCard,
@@ -94,13 +86,10 @@ interface TodayVm {
   selector: 'lib-today',
   imports: [
     AsyncPipe,
-    IonHeader,
-    IonToolbar,
-    IonTitle,
     IonContent,
-    IonButtons,
     IonButton,
     IonIcon,
+    VultusAppHeader,
     VultusEmptyState,
     VultusErrorState,
     VultusSkeletonCard,
@@ -173,7 +162,6 @@ export class TodayPage {
   constructor() {
     addIcons({
       checkmarkCircle,
-      filmOutline,
       personCircleOutline,
       playCircle,
       todayOutline,
