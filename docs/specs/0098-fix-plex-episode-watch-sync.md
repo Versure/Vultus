@@ -2,7 +2,7 @@
 number: 0098
 slug: fix-plex-episode-watch-sync
 title: Fix Plex sync — create missing episode docs on-device so watched episodes mark immediately
-status: approved
+status: implementing
 slices: [slice:settings]
 scopes: [scope:mobile]
 created: 2026-07-22

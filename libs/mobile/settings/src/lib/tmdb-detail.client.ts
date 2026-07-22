@@ -1,4 +1,4 @@
-import type { TitleType } from '@vultus/shared/domain';
+import type { Episode, TitleType } from '@vultus/shared/domain';
 
 /**
  * The resolved detail the settings Plex sync consumes. Only posterPath /
@@ -51,6 +51,30 @@ export interface TmdbDetailClient {
     typeHint?: TitleType,
     signal?: AbortSignal,
   ): Promise<TmdbDetail>;
+  /**
+   * GET /tv/{id} → `number_of_seasons`; `null` on TMDB 404 (spec 0098).
+   * Replicates functions `getTvSeasonCount` (tmdb-client.ts) + mapper
+   * `mapTvSeasonCount` (tmdb-mappers.ts). Non-404 non-2xx → throw
+   * `TmdbDetailError` (5xx / network / abort surface as a real failure).
+   */
+  getTvSeasonCount(
+    tmdbId: number,
+    signal?: AbortSignal,
+  ): Promise<number | null>;
+  /**
+   * GET /tv/{id}/season/{n} → the season's episodes with a NON-NULL air_date;
+   * `null` on TMDB 404 (spec 0098). Episodes with a null/empty/missing
+   * `air_date` are SKIPPED (`EpisodeDoc.airDate` is non-null). `season` falls
+   * back to the `season` argument when TMDB omits `season_number`; `title` =
+   * TMDB `name ?? null`. Replicates functions `getSeasonEpisodes` +
+   * `mapSeasonEpisodes` (tmdb-mappers.ts). Non-404 non-2xx → throw
+   * `TmdbDetailError`. Uses `type: 'tv'` explicitly (no movie fallback).
+   */
+  getSeasonEpisodes(
+    tmdbId: number,
+    season: number,
+    signal?: AbortSignal,
+  ): Promise<Episode[] | null>;
 }
 
 /** A typed error so the caller can map a TMDB failure without inspecting fetch internals. */
@@ -73,6 +97,20 @@ interface RawTmdbDetail {
   overview?: string;
   poster_path?: string | null;
   vote_average?: number;
+  number_of_seasons?: number; // tv — consumed by getTvSeasonCount (spec 0098)
+}
+
+/**
+ * Raw `/tv/{id}/season/{n}` payload (spec 0098). Slice-local DTO mirroring the
+ * functions' `TmdbSeasonResponse` — only the fields the episode mapper reads.
+ */
+interface RawTmdbSeason {
+  episodes?: {
+    air_date?: string;
+    episode_number: number;
+    season_number?: number;
+    name?: string;
+  }[];
 }
 
 function parseYear(date: string | undefined): number | null {
@@ -80,6 +118,16 @@ function parseYear(date: string | undefined): number | null {
   if (!raw) return null;
   const year = parseInt(raw, 10);
   return Number.isNaN(year) ? null : year;
+}
+
+/**
+ * A present, non-empty date-only `YYYY-MM-DD` → full ISO-8601 UTC instant;
+ * null / missing / empty → null (→ the episode is skipped, since
+ * `EpisodeDoc.airDate` is non-null). Mirrors the functions' `normalizeDate`.
+ */
+function normalizeAirDate(date: string | null | undefined): string | null {
+  if (!date) return null;
+  return new Date(`${date}T00:00:00.000Z`).toISOString();
 }
 
 /**
@@ -128,6 +176,26 @@ export function createTmdbDetailClient(
     };
   }
 
+  /**
+   * Map a raw season payload → `Episode[]`, replicating the functions'
+   * `mapSeasonEpisodes`: skip episodes with a null/empty/missing `air_date`;
+   * `season_number` falls back to the `season` argument; `title = name ?? null`.
+   */
+  function mapSeasonEpisodes(raw: RawTmdbSeason, season: number): Episode[] {
+    const episodes: Episode[] = [];
+    for (const entry of raw.episodes ?? []) {
+      const airDate = normalizeAirDate(entry.air_date);
+      if (airDate === null) continue;
+      episodes.push({
+        season: entry.season_number ?? season,
+        episode: entry.episode_number,
+        title: entry.name ?? null,
+        airDate,
+      });
+    }
+    return episodes;
+  }
+
   async function fetchDetailFor(
     tmdbId: number,
     type: TitleType,
@@ -164,6 +232,43 @@ export function createTmdbDetailClient(
         }
         throw err; // 5xx / network / abort → surface as error, not a wrong title
       }
+    },
+
+    async getTvSeasonCount(
+      tmdbId: number,
+      signal?: AbortSignal,
+    ): Promise<number | null> {
+      const { headers, apiKey } = authParts();
+      const url = buildUrl(`/tv/${tmdbId}`, apiKey);
+      const response = await doFetch(url, { headers, signal });
+      if (response.status === 404) return null;
+      if (!response.ok) {
+        throw new TmdbDetailError(
+          `TMDB season count failed: ${response.status}`,
+          response.status,
+        );
+      }
+      const body = (await response.json()) as RawTmdbDetail;
+      return body.number_of_seasons ?? null;
+    },
+
+    async getSeasonEpisodes(
+      tmdbId: number,
+      season: number,
+      signal?: AbortSignal,
+    ): Promise<Episode[] | null> {
+      const { headers, apiKey } = authParts();
+      const url = buildUrl(`/tv/${tmdbId}/season/${season}`, apiKey);
+      const response = await doFetch(url, { headers, signal });
+      if (response.status === 404) return null;
+      if (!response.ok) {
+        throw new TmdbDetailError(
+          `TMDB season episodes failed: ${response.status}`,
+          response.status,
+        );
+      }
+      const body = (await response.json()) as RawTmdbSeason;
+      return mapSeasonEpisodes(body, season);
     },
   };
 }

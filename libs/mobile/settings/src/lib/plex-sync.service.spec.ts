@@ -78,6 +78,88 @@ function tmdbResponse(body: unknown, ok = true, status = 200): Response {
   } as unknown as Response;
 }
 
+/** The write payload `episodeToData` produces (what a create `setDoc` carries). */
+interface EpisodeWriteLike {
+  season: number;
+  episode: number;
+  title: string | null;
+  airDate: Date;
+  watched: boolean;
+  watchedAt: Date | null;
+}
+
+/** A raw `/tv/{id}/season/{n}` episode entry (only the mapper's fields). */
+function rawEp(
+  episode: number,
+  over: {
+    season_number?: number;
+    name?: string | null;
+    air_date?: string | null;
+  } = {},
+): {
+  episode_number: number;
+  season_number: number;
+  name: string | null;
+  air_date: string | null;
+} {
+  return {
+    episode_number: episode,
+    season_number: over.season_number ?? 1,
+    name: 'name' in over ? (over.name ?? null) : `Ep ${episode}`,
+    air_date: 'air_date' in over ? (over.air_date ?? null) : '2008-01-20',
+  };
+}
+
+/**
+ * Route the injected TMDB fetch by URL for the on-device episode-creation path
+ * (spec 0098): `/tv/{id}/season/{n}` → the season episode list; `/tv/{id}` →
+ * the detail (which also carries `number_of_seasons`, consumed by
+ * `getTvSeasonCount`). `seasons` maps a season number → its raw episodes array;
+ * `seasonCount` populates `number_of_seasons` (null → omitted → getTvSeasonCount
+ * returns null). Any other URL → a generic 200 detail. Season is matched BEFORE
+ * the generic `/tv/{id}` so a season URL never falls through to the detail stub.
+ */
+function routeTmdbTv(opts: {
+  seasonCount: number | null;
+  seasons?: Record<number, unknown[]>;
+  detailStatus?: number;
+  seasonStatus?: number;
+}): void {
+  const seasons = opts.seasons ?? {};
+  tmdbFetchMock.mockImplementation((url: string) => {
+    const seasonMatch = /\/tv\/\d+\/season\/(\d+)/.exec(url);
+    if (seasonMatch) {
+      if (opts.seasonStatus && opts.seasonStatus !== 200) {
+        return Promise.resolve(tmdbResponse({}, false, opts.seasonStatus));
+      }
+      const n = Number(seasonMatch[1]);
+      return Promise.resolve(tmdbResponse({ episodes: seasons[n] ?? [] }));
+    }
+    if (/\/tv\/\d+/.test(url)) {
+      if (opts.detailStatus && opts.detailStatus !== 200) {
+        return Promise.resolve(tmdbResponse({}, false, opts.detailStatus));
+      }
+      return Promise.resolve(
+        tmdbResponse({
+          id: 1396,
+          name: 'Breaking Bad',
+          poster_path: '/bb.jpg',
+          vote_average: 9,
+          number_of_seasons: opts.seasonCount ?? undefined,
+        }),
+      );
+    }
+    return Promise.resolve(
+      tmdbResponse({
+        id: 0,
+        title: 'X',
+        poster_path: '/d.jpg',
+        vote_average: 7,
+      }),
+    );
+  });
+}
+
 const UID = 'user-123';
 const SERVER: PlexServer = {
   name: 'Test PMS',
@@ -192,14 +274,30 @@ function seedFirestore(opts: {
   });
 
   // getDocs over the episodes subcollection: return existing episode docs for
-  // that title as { data: () => ({ watched }) } snapshots (reflects live store).
+  // that title as { id, data: () => ({ watched }) } snapshots (reflects live
+  // store). `id` is the `s{SS}e{EEE}` doc id — read by ensureEpisodeDocs for the
+  // gap-guard + insert-only diff, as real QueryDocumentSnapshot.id would be.
   getDocsMock.mockImplementation((ref: Ref) => {
     const collMatch = /\/watchlist\/(\d+)\/episodes$/.exec(ref.path);
     const titleId = collMatch?.[1];
     const docs = Object.entries(episodes)
       .filter(([key]) => key.startsWith(`${titleId}/`))
-      .map(([, ep]) => ({ data: () => ({ ...ep }) }));
+      .map(([key, ep]) => ({ id: key.split('/')[1], data: () => ({ ...ep }) }));
     return Promise.resolve({ docs });
+  });
+
+  // ensureEpisodeDocs' insert-only create: a setDoc at an episode path adds the
+  // new doc to the in-memory store (starting `watched: false`, as
+  // episodeToData's payload carries) so the subsequent mirror getDoc/updateDoc
+  // and status-derivation getDocs read it back (Firestore read-your-writes).
+  // Non-episode setDocs (watchlist adds) are asserted from the call log only.
+  setDocMock.mockImplementation((ref: Ref, payload: unknown) => {
+    const epMatch = /\/watchlist\/(\d+)\/episodes\/(s\d+e\d+)$/.exec(ref.path);
+    if (epMatch) {
+      const key = `${epMatch[1]}/${epMatch[2]}`;
+      episodes[key] = { watched: (payload as { watched: boolean }).watched };
+    }
+    return Promise.resolve();
   });
 
   // The episode mirror's updateDoc mutates the in-memory episode store so a
@@ -643,27 +741,320 @@ describe('PlexSyncService', () => {
     });
   });
 
-  it('episode-doc-absent: a Plex-watched episode with no local doc is a no-op (never creates)', async () => {
-    // Show tracked planned, but NO local episode docs exist.
-    seedFirestore({ watchlist: { '1396': 'planned' } });
-    const service = makeService(
-      mockClient([tvItem(1396)], {
-        'rk-1396': [
-          { season: 1, episode: 1, viewCount: 1, lastViewedAt: null },
-        ],
-      }),
-    );
-    await service.sync();
+  describe('on-device episode-doc creation (spec 0098, issue #255)', () => {
+    it('creation: writes s01e001 + s01e002 with episodeToData fields (watched:false, watchedAt:null, season/episode/title/airDate)', async () => {
+      seedFirestore({ watchlist: { '1396': 'watching' }, episodes: {} });
+      routeTmdbTv({
+        seasonCount: 1,
+        seasons: {
+          1: [
+            rawEp(1, { name: 'Pilot', air_date: '2008-01-20' }),
+            rawEp(2, { name: 'Cat in the Bag', air_date: '2008-01-27' }),
+          ],
+        },
+      });
+      const service = makeService(
+        mockClient([tvItem(1396)], {
+          'rk-1396': [
+            { season: 1, episode: 1, viewCount: 1, lastViewedAt: null },
+            { season: 1, episode: 2, viewCount: 0, lastViewedAt: null },
+          ],
+        }),
+      );
+      await syncOk(service);
 
-    // No episode setDoc/updateDoc at the episode path (doc absent).
-    expect(
-      updateDocMock.mock.calls.some(
+      const e1 = setDocMock.mock.calls.find(
         ([ref]) => ref.path === episodePath(UID, '1396', 's01e001'),
-      ),
-    ).toBe(false);
-    expect(
-      setDocMock.mock.calls.some(([ref]) => ref.path.includes('/episodes/')),
-    ).toBe(false);
+      )?.[1] as EpisodeWriteLike;
+      expect(e1).toBeTruthy();
+      expect(e1.season).toBe(1);
+      expect(e1.episode).toBe(1);
+      expect(e1.title).toBe('Pilot');
+      expect(e1.watched).toBe(false);
+      expect(e1.watchedAt).toBeNull();
+      expect(e1.airDate).toBeInstanceOf(Date);
+
+      const e2 = setDocMock.mock.calls.find(
+        ([ref]) => ref.path === episodePath(UID, '1396', 's01e002'),
+      )?.[1] as EpisodeWriteLike;
+      expect(e2).toBeTruthy();
+      expect(e2.episode).toBe(2);
+      expect(e2.title).toBe('Cat in the Bag');
+      expect(e2.watched).toBe(false);
+      expect(e2.watchedAt).toBeNull();
+    });
+
+    it('insert-only: an existing watched s01e001 is NOT re-created; only the missing s01e002 is setDoc', async () => {
+      seedFirestore({
+        watchlist: { '1396': 'watching' },
+        episodes: { '1396/s01e001': { watched: true } },
+      });
+      routeTmdbTv({ seasonCount: 1, seasons: { 1: [rawEp(1), rawEp(2)] } });
+      const service = makeService(
+        mockClient([tvItem(1396)], {
+          'rk-1396': [
+            { season: 1, episode: 1, viewCount: 1, lastViewedAt: null },
+            { season: 1, episode: 2, viewCount: 1, lastViewedAt: null },
+          ],
+        }),
+      );
+      await syncOk(service);
+
+      // The already-present watched doc is never re-created (its watched:true
+      // survives — no create clobbers it).
+      expect(
+        setDocMock.mock.calls.some(
+          ([ref]) => ref.path === episodePath(UID, '1396', 's01e001'),
+        ),
+      ).toBe(false);
+      // Only the genuinely-missing id is created.
+      expect(
+        setDocMock.mock.calls.some(
+          ([ref]) => ref.path === episodePath(UID, '1396', 's01e002'),
+        ),
+      ).toBe(true);
+    });
+
+    it('skips existing ids: the create diff excludes any id already in the episodes subcollection', async () => {
+      seedFirestore({
+        watchlist: { '1396': 'watching' },
+        episodes: { '1396/s01e002': { watched: false } },
+      });
+      routeTmdbTv({
+        seasonCount: 1,
+        seasons: { 1: [rawEp(1), rawEp(2), rawEp(3)] },
+      });
+      const service = makeService(
+        mockClient([tvItem(1396)], {
+          'rk-1396': [
+            { season: 1, episode: 3, viewCount: 1, lastViewedAt: null },
+          ],
+        }),
+      );
+      await syncOk(service);
+
+      const created = setDocMock.mock.calls
+        .filter(([ref]) => ref.path.includes('/1396/episodes/'))
+        .map(([ref]) => ref.path.split('/').pop());
+      expect(created).toContain('s01e001');
+      expect(created).toContain('s01e003');
+      expect(created).not.toContain('s01e002'); // already present → skipped
+    });
+
+    it('null-air_date episode is skipped (no doc created for it)', async () => {
+      seedFirestore({ watchlist: { '1396': 'watching' }, episodes: {} });
+      routeTmdbTv({
+        seasonCount: 1,
+        seasons: {
+          1: [
+            rawEp(1, { air_date: '2008-01-20' }),
+            rawEp(2, { air_date: null }),
+          ],
+        },
+      });
+      const service = makeService(
+        mockClient([tvItem(1396)], {
+          'rk-1396': [
+            { season: 1, episode: 1, viewCount: 1, lastViewedAt: null },
+          ],
+        }),
+      );
+      await syncOk(service);
+
+      expect(
+        setDocMock.mock.calls.some(
+          ([ref]) => ref.path === episodePath(UID, '1396', 's01e001'),
+        ),
+      ).toBe(true);
+      expect(
+        setDocMock.mock.calls.some(
+          ([ref]) => ref.path === episodePath(UID, '1396', 's01e002'),
+        ),
+      ).toBe(false);
+    });
+
+    it('gap-guard: NO TMDB fetch (or episode setDoc) when all watched Plex episodes already have local docs', async () => {
+      seedFirestore({
+        watchlist: { '1396': 'watching' },
+        episodes: {
+          '1396/s01e001': { watched: true },
+          '1396/s01e002': { watched: false },
+        },
+      });
+      const service = makeService(
+        mockClient([tvItem(1396)], {
+          'rk-1396': [
+            { season: 1, episode: 1, viewCount: 1, lastViewedAt: null },
+            { season: 1, episode: 2, viewCount: 0, lastViewedAt: null },
+          ],
+        }),
+      );
+      await syncOk(service);
+
+      // No backfill (posterPath non-null) and no ensure fetch → no TMDB call.
+      expect(tmdbFetchMock).not.toHaveBeenCalled();
+      expect(
+        setDocMock.mock.calls.some(([ref]) => ref.path.includes('/episodes/')),
+      ).toBe(false);
+    });
+
+    it('gap-guard: fetches TMDB + creates the doc only when a watched Plex episode lacks a local doc', async () => {
+      seedFirestore({ watchlist: { '1396': 'watching' }, episodes: {} });
+      routeTmdbTv({ seasonCount: 1, seasons: { 1: [rawEp(1)] } });
+      const service = makeService(
+        mockClient([tvItem(1396)], {
+          'rk-1396': [
+            { season: 1, episode: 1, viewCount: 1, lastViewedAt: null },
+          ],
+        }),
+      );
+      await syncOk(service);
+
+      expect(tmdbFetchMock).toHaveBeenCalled();
+      expect(
+        setDocMock.mock.calls.some(
+          ([ref]) => ref.path === episodePath(UID, '1396', 's01e001'),
+        ),
+      ).toBe(true);
+    });
+
+    it('mirror-after-create: the created s01e001 is updateDoc watched:true with watchedAt from lastViewedAt', async () => {
+      const lastViewed = new Date(Date.now() - 3 * 60_000).toISOString();
+      seedFirestore({ watchlist: { '1396': 'watching' }, episodes: {} });
+      routeTmdbTv({ seasonCount: 1, seasons: { 1: [rawEp(1), rawEp(2)] } });
+      const service = makeService(
+        mockClient([tvItem(1396)], {
+          'rk-1396': [
+            { season: 1, episode: 1, viewCount: 1, lastViewedAt: lastViewed },
+            { season: 1, episode: 2, viewCount: 0, lastViewedAt: null },
+          ],
+        }),
+      );
+      await syncOk(service);
+
+      const e1 = updateDocMock.mock.calls.find(
+        ([ref]) => ref.path === episodePath(UID, '1396', 's01e001'),
+      )?.[1] as { watched: boolean; watchedAt: Date | null };
+      expect(e1.watched).toBe(true);
+      expect(e1.watchedAt).toBeInstanceOf(Date);
+    });
+
+    it('status: a tracked planned show with a created+watched episode reaches watching', async () => {
+      seedFirestore({ watchlist: { '1396': 'planned' }, episodes: {} });
+      routeTmdbTv({ seasonCount: 1, seasons: { 1: [rawEp(1), rawEp(2)] } });
+      const service = makeService(
+        mockClient([tvItem(1396)], {
+          'rk-1396': [
+            { season: 1, episode: 1, viewCount: 1, lastViewedAt: null },
+            { season: 1, episode: 2, viewCount: 0, lastViewedAt: null },
+          ],
+        }),
+      );
+      const summary = await syncOk(service);
+
+      expect(summary.updated).toBe(1);
+      const statusWrite = updateDocMock.mock.calls.find(
+        ([ref]) => ref.path === watchlistItemPath(UID, '1396'),
+      );
+      expect((statusWrite?.[1] as { status: string }).status).toBe('watching');
+    });
+
+    it('status: a tracked watching show with ALL created episodes watched reaches completed', async () => {
+      seedFirestore({ watchlist: { '1396': 'watching' }, episodes: {} });
+      routeTmdbTv({ seasonCount: 1, seasons: { 1: [rawEp(1), rawEp(2)] } });
+      const service = makeService(
+        mockClient([tvItem(1396)], {
+          'rk-1396': [
+            { season: 1, episode: 1, viewCount: 1, lastViewedAt: null },
+            { season: 1, episode: 2, viewCount: 1, lastViewedAt: null },
+          ],
+        }),
+      );
+      const summary = await syncOk(service);
+
+      expect(summary.updated).toBe(1);
+      const statusWrite = updateDocMock.mock.calls.find(
+        ([ref]) => ref.path === watchlistItemPath(UID, '1396'),
+      );
+      expect((statusWrite?.[1] as { status: string }).status).toBe('completed');
+    });
+
+    it('sticky-dropped: still creates + mirrors episode docs but writes NO status change', async () => {
+      seedFirestore({ watchlist: { '1396': 'dropped' }, episodes: {} });
+      routeTmdbTv({ seasonCount: 1, seasons: { 1: [rawEp(1), rawEp(2)] } });
+      const service = makeService(
+        mockClient([tvItem(1396, { viewCount: 1 })], {
+          'rk-1396': [
+            { season: 1, episode: 1, viewCount: 1, lastViewedAt: null },
+            { season: 1, episode: 2, viewCount: 0, lastViewedAt: null },
+          ],
+        }),
+      );
+      const summary = await syncOk(service);
+
+      // Docs created …
+      expect(
+        setDocMock.mock.calls.some(
+          ([ref]) => ref.path === episodePath(UID, '1396', 's01e001'),
+        ),
+      ).toBe(true);
+      // … and mirrored to watched:true …
+      const e1 = updateDocMock.mock.calls.find(
+        ([ref]) => ref.path === episodePath(UID, '1396', 's01e001'),
+      )?.[1] as { watched: boolean };
+      expect(e1.watched).toBe(true);
+      // … but NO status write (dropped is sticky).
+      expect(
+        updateDocMock.mock.calls.some(
+          ([ref]) => ref.path === watchlistItemPath(UID, '1396'),
+        ),
+      ).toBe(false);
+      expect(summary.updated).toBe(0);
+    });
+
+    it('TMDB-failure isolation: a rejecting season fetch keeps sync ok, creates no docs, and the rest of the loop runs', async () => {
+      seedFirestore({ watchlist: { '1396': 'planned' } });
+      tmdbFetchMock.mockRejectedValue(new Error('network down'));
+      const service = makeService(
+        mockClient([tvItem(1396), movieItem(603, { viewCount: 1 })], {
+          'rk-1396': [
+            { season: 1, episode: 1, viewCount: 1, lastViewedAt: null },
+          ],
+        }),
+      );
+      const result = await service.sync();
+
+      expect(result.status).toBe('ok');
+      // No episode docs created for the failing show.
+      expect(
+        setDocMock.mock.calls.some(([ref]) =>
+          ref.path.includes('/1396/episodes/'),
+        ),
+      ).toBe(false);
+      // The rest of the loop still ran: the watched untracked movie was added.
+      expect(
+        setDocMock.mock.calls.some(
+          ([ref]) => ref.path === watchlistItemPath(UID, '603'),
+        ),
+      ).toBe(true);
+    });
+
+    it('null season count: a real gap but TMDB reports no season count → nothing created', async () => {
+      seedFirestore({ watchlist: { '1396': 'planned' }, episodes: {} });
+      routeTmdbTv({ seasonCount: null });
+      const service = makeService(
+        mockClient([tvItem(1396)], {
+          'rk-1396': [
+            { season: 1, episode: 1, viewCount: 1, lastViewedAt: null },
+          ],
+        }),
+      );
+      await syncOk(service);
+
+      expect(
+        setDocMock.mock.calls.some(([ref]) => ref.path.includes('/episodes/')),
+      ).toBe(false);
+    });
   });
 
   it('episode mirror writes watchedAt from lastViewedAt (Date), null when unwatched', async () => {

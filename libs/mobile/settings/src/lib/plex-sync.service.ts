@@ -11,6 +11,9 @@ import {
 import { Preferences } from '@capacitor/preferences';
 import { AUTH_UID, PLEX_CLIENT } from '@vultus/shared/domain/tokens';
 import type {
+  Episode,
+  EpisodeDoc,
+  PlexEpisodeItem,
   PlexLibraryItem,
   PlexServer,
   TitleType,
@@ -22,6 +25,7 @@ import {
   dataToWatchlistItem,
   episodePath,
   episodesPath,
+  episodeToData,
   userPath,
   watchlistItemPath,
   watchlistItemToData,
@@ -196,14 +200,22 @@ export class PlexSyncService {
       }
       const tmdbId = item.tmdbId;
       const current = await this.currentTracked(uid, tmdbId);
-      // Mirror the show's episode docs FIRST (full mirror for matched titles,
-      // NOT cursor-gated) so status derivation reads fresh watched-counts. A
-      // movie's "watched" is its own viewCount. The mirror is a no-op for a
-      // brand-new (untracked) show — no episode docs exist yet.
-      const watched =
-        item.type === 'movie'
-          ? item.viewCount > 0
-          : (await this.mirrorEpisodes(uid, server, item, tmdbId)).anyWatched;
+      // For a tv item, fetch the Plex episode list ONCE, then in the SAME pass:
+      // (1) create any MISSING episode docs on-device from TMDB (insert-only,
+      // gap-guarded — spec 0098 / issue #255), so (2) the watched-mirror can
+      // mark them immediately instead of waiting for the server's async episode
+      // trigger/cron. Status derivation then reads fresh watched-counts. A
+      // movie's "watched" is its own viewCount (no episode subcollection).
+      let watched: boolean;
+      if (item.type === 'movie') {
+        watched = item.viewCount > 0;
+      } else {
+        const plexEpisodes = await this.listPlexEpisodes(server, item);
+        await this.ensureEpisodeDocsSafe(uid, tmdbId, plexEpisodes);
+        watched = (
+          await this.mirrorEpisodes(uid, server, item, tmdbId, plexEpisodes)
+        ).anyWatched;
+      }
 
       if (current === null) {
         // Not tracked yet.
@@ -212,8 +224,8 @@ export class PlexSyncService {
           : false;
         if (watched) {
           // Watch-implies-add (NOT cursor-gated): a watched, untracked item is
-          // added — movie → completed, show → watching (episodes already
-          // mirrored above; they land on the next daily sync once docs exist).
+          // added — movie → completed, show → watching (episode docs already
+          // created on-device + mirrored above in this same pass, spec 0098).
           await this.addItem(
             uid,
             item,
@@ -317,24 +329,153 @@ export class PlexSyncService {
   }
 
   /**
-   * Mirror a show's Plex watch state onto its EXISTING episode docs. For each
-   * Plex episode, derive the `s{SS}e{EEE}` id, read the local doc, and if it
+   * Fetch a tv item's Plex episode list ONCE (single PMS call) so both the
+   * on-device ensure-step (`ensureEpisodeDocs`) and the watched-mirror
+   * (`mirrorEpisodes`) consume the SAME list without double-calling the PMS. A
+   * non-tv item has no episodes.
+   */
+  private async listPlexEpisodes(
+    server: PlexServer,
+    item: PlexLibraryItem,
+  ): Promise<PlexEpisodeItem[]> {
+    if (item.type !== 'tv') {
+      return [];
+    }
+    return this.client.listEpisodes(server, item.ratingKey);
+  }
+
+  /**
+   * Create the episode docs a Plex-imported show is MISSING, on-device, from
+   * TMDB — so the watched-mirror can mark them in the SAME sync pass instead of
+   * waiting for the server's async episode trigger/cron (issue #255, spec 0098).
+   *
+   * This DELIBERATELY RELAXES the app-wide "episode docs are created only by
+   * Cloud Functions" invariant (specs 0034/0050/0053) for the Plex path ONLY.
+   * Safety: it uses the SAME TMDB source, the SAME `episodeToData` converter, and
+   * the SAME `s{SS}e{EEE}` id scheme as the functions, so the docs it writes are
+   * byte-for-byte what the functions would write; it is INSERT-ONLY (skips ids
+   * that already have a local doc, never overwrites a doc's `watched`/
+   * `watchedAt`); it is therefore idempotent + race-safe with the server's
+   * insert-only on-create trigger / daily cron (whichever writes a given id
+   * first, the other's existing-id filter skips it).
+   *
+   * GAP-GUARD (self-limiting, decision 5): it reaches for TMDB ONLY when a
+   * WATCHED Plex episode (`viewCount > 0`) has no local doc. A show whose watched
+   * episodes already have docs is never re-fetched — no per-show TMDB
+   * episode-list fetch on every sync.
+   *
+   * It does NOT write watched state — inserts start `watched: false`, and the
+   * existing `mirrorEpisodes` flips them to `watched: true` in the same pass.
+   * Keeping the insert-only-creation vs mirror-update separation is exactly what
+   * the idempotency / race-safety argument (decision 2) rests on — do NOT
+   * collapse it by writing the watched state here.
+   */
+  private async ensureEpisodeDocs(
+    uid: string,
+    tmdbId: number,
+    plexEpisodes: PlexEpisodeItem[],
+  ): Promise<void> {
+    // Existing episode-id set — drives both the gap-guard and the insert-only
+    // diff (a one-shot subcollection read; no query, no index).
+    const existing = await getDocs(
+      collection(this.firestore, episodesPath(uid, String(tmdbId))),
+    );
+    const existingIds = new Set<string>(existing.docs.map((d) => d.id));
+    // Gap-guard: only fetch TMDB when a WATCHED Plex episode lacks a local doc.
+    const hasGap = plexEpisodes.some(
+      (ep) =>
+        ep.viewCount > 0 &&
+        !existingIds.has(plexEpisodeId(ep.season, ep.episode)),
+    );
+    if (!hasGap) {
+      return;
+    }
+    // On a gap: replicate the functions' episode-sync — season count, then the
+    // full episode set season 1..count (a null count / null season = nothing to
+    // create). null-air_date episodes are already skipped by the client's mapper.
+    const seasonCount = await this.tmdbClient.getTvSeasonCount(tmdbId);
+    if (seasonCount === null) {
+      return;
+    }
+    const episodes: Episode[] = [];
+    for (let season = 1; season <= seasonCount; season += 1) {
+      const seasonEpisodes = await this.tmdbClient.getSeasonEpisodes(
+        tmdbId,
+        season,
+      );
+      if (seasonEpisodes === null) {
+        continue;
+      }
+      episodes.push(...seasonEpisodes);
+    }
+    // Insert-only: write ONLY ids not already present, each a fresh
+    // `watched: false` doc (the mirror flips watched next), via the SAME
+    // converter chain the functions use so the persisted doc is identical.
+    for (const ep of episodes) {
+      const epId = plexEpisodeId(ep.season, ep.episode);
+      if (existingIds.has(epId)) {
+        continue;
+      }
+      const episodeDoc: EpisodeDoc = {
+        season: ep.season,
+        episode: ep.episode,
+        title: ep.title,
+        airDate: ep.airDate,
+        watched: false,
+        watchedAt: null,
+      };
+      await setDoc(
+        doc(this.firestore, episodePath(uid, String(tmdbId), epId)),
+        episodeToData(episodeDoc),
+      );
+    }
+  }
+
+  /**
+   * Wrap `ensureEpisodeDocs` so a TMDB/Firestore failure during on-device
+   * episode creation is isolated (mirrors `fetchDetailSafe`, spec 0086): on ANY
+   * failure (network / non-404 non-2xx / timeout / abort / Firestore) log a
+   * REDACTED diagnostic via `describeTmdbError` — NEVER the raw error object
+   * (which may echo the query-param `api_key`, spec 0068) — and return without
+   * throwing, so a TMDB outage never fails the mirror, the status write, or the
+   * rest of the sync loop.
+   */
+  private async ensureEpisodeDocsSafe(
+    uid: string,
+    tmdbId: number,
+    plexEpisodes: PlexEpisodeItem[],
+  ): Promise<void> {
+    try {
+      await this.ensureEpisodeDocs(uid, tmdbId, plexEpisodes);
+    } catch (err) {
+      console.error(
+        `[plex-sync] ensure episodes ${tmdbId} failed: ${describeTmdbError(err)}`,
+      );
+    }
+  }
+
+  /**
+   * Mirror a show's Plex watch state onto its (now-existing) episode docs. For
+   * each Plex episode, derive the `s{SS}e{EEE}` id, read the local doc, and if it
    * EXISTS `updateDoc({ watched, watchedAt })`. NEVER creates a doc — an absent
-   * local doc is a no-op. `watchedAt` = `new Date(lastViewedAt)` or null.
-   * Returns whether any present episode is watched (per Plex).
+   * local doc is a no-op (creation is `ensureEpisodeDocs`' job, run just before
+   * this in the same pass). `watchedAt` = `new Date(lastViewedAt)` or null.
+   * Takes the already-fetched `plexEpisodes` (fetched once by `listPlexEpisodes`)
+   * so the PMS is not double-called. Returns whether any present episode is
+   * watched (per Plex).
    */
   private async mirrorEpisodes(
     uid: string,
     server: PlexServer,
     item: PlexLibraryItem,
     tmdbId: number,
+    plexEpisodes: PlexEpisodeItem[],
   ): Promise<{ anyWatched: boolean }> {
     if (item.type !== 'tv') {
       return { anyWatched: false };
     }
-    const episodes = await this.client.listEpisodes(server, item.ratingKey);
     let anyWatched = false;
-    for (const ep of episodes) {
+    for (const ep of plexEpisodes) {
       const watched = ep.viewCount > 0;
       if (watched) {
         anyWatched = true;

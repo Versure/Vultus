@@ -91,6 +91,12 @@ interface DetailExtra {
   overview: string;
   poster_path: string;
   vote_average: number;
+  /**
+   * For tv extras: the show's season count, served on the `/tv/{id}` detail stub
+   * so PlexSyncService's on-device episode-doc creation (spec 0098) loops the
+   * right season range. Only the Plex mock-library tv show (1396) sets it.
+   */
+  number_of_seasons?: number;
 }
 
 const DETAIL_EXTRAS: Record<number, DetailExtra> = {
@@ -120,6 +126,39 @@ const DETAIL_EXTRAS: Record<number, DetailExtra> = {
       'A mock detail fixture (spec 0086) so the Plex-synced Breaking Bad renders real poster artwork instead of the fallback.',
     poster_path: '/mock-breaking-bad-1396.jpg',
     vote_average: 8.9,
+    // 1 season (spec 0098) — PlexSyncService.ensureEpisodeDocs loops seasons
+    // 1..count and fetches /tv/1396/season/1 (served below) to create the
+    // missing episode docs on-device before mirroring the Plex watch state.
+    number_of_seasons: 1,
+  },
+};
+
+/**
+ * Deterministic season/episode fixtures for the Plex mock-library tv show (spec
+ * 0098), keyed by tmdbId → season number → the TMDB `/tv/{id}/season/{n}`
+ * `episodes[]`. These MUST line up with `MockPlexClient.listEpisodes` (Breaking
+ * Bad S1E1 watched + S1E2 unwatched): both episodes carry a NON-NULL `air_date`
+ * so neither is dropped by the null-air_date skip, letting on-device episode-doc
+ * creation + mirror mark S1E1 watched immediately. If the mock Plex library
+ * episode numbers change, this map, `plex.client.mock.ts`, and the e2e route
+ * fixtures must change together (spec 0098 "Mock-fixture id coupling" risk).
+ */
+const SEASON_EPISODES: Record<number, Record<number, unknown[]>> = {
+  1396: {
+    1: [
+      {
+        episode_number: 1,
+        season_number: 1,
+        name: 'Pilot',
+        air_date: '2008-01-20',
+      },
+      {
+        episode_number: 2,
+        season_number: 1,
+        name: "Cat's in the Bag...",
+        air_date: '2008-01-27',
+      },
+    ],
   },
 };
 
@@ -198,6 +237,27 @@ function createMockFetch(): typeof fetch {
       );
     }
 
+    // TV season: /tv/{id}/season/{n}[?...] — MUST be checked before the generic
+    // /tv/{id} detail match below, or the season URL is captured as a detail
+    // request (spec 0098). Serves the deterministic season episode list for the
+    // Plex mock-library show so on-device episode-doc creation is stable.
+    const seasonMatch = /\/tv\/(\d+)\/season\/(\d+)/.exec(url);
+    if (seasonMatch) {
+      const id = Number(seasonMatch[1]);
+      const season = Number(seasonMatch[2]);
+      const episodes = SEASON_EPISODES[id]?.[season];
+      if (!episodes) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ status_message: 'Not Found' }), {
+            status: 404,
+          }),
+        );
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ episodes }), { status: 200 }),
+      );
+    }
+
     // TV detail: /tv/{id}[?...]
     const tvMatch = /\/tv\/(\d+)/.exec(url);
     if (tvMatch) {
@@ -214,6 +274,7 @@ function createMockFetch(): typeof fetch {
               overview: extra.overview,
               poster_path: extra.poster_path,
               vote_average: extra.vote_average,
+              number_of_seasons: extra.number_of_seasons,
             }),
             { status: 200 },
           ),
