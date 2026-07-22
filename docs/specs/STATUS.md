@@ -10,10 +10,10 @@
 
 # Spec status ledger
 
-Total specs: 95
+Total specs: 96
 
 - done: 92
-- approved: 3
+- approved: 4
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -112,3 +112,4 @@ Total specs: 95
 | 93 | fix-detail-action-button-sizing | Equalize the untracked title-detail action buttons — reset the `ion-button` host box-model so both flex siblings render the same width | approved | slice:title-detail | scope:mobile |
 | 94 | fix-also-available-on-spacing | Fix the extra whitespace above "Also Available On" in the title-detail Where to Watch card | done | slice:title-detail | scope:mobile |
 | 95 | fix-watchlist-filter-sheet-scroll-drift | Fix the Watchlist filter sheet drifting off-screen when the list is scrolled — anchor it to the viewport via `slot="fixed"` | approved | slice:watchlist | scope:mobile |
+| 96 | unify-tab-headers | Unify the four tab headers into a shared VultusAppHeader and fix Today's taller header | approved | slice:today, slice:watchlist, slice:search, slice:settings | scope:shared, scope:mobile |
