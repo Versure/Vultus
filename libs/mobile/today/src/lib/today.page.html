@@ -1,20 +1,10 @@
-<ion-header>
-  <ion-toolbar>
-    <ion-title>
-      <span class="brand-mark">
-        <ion-icon name="film-outline" class="brand-icon"></ion-icon>
-        Vultus
-      </span>
-    </ion-title>
-    <ion-buttons slot="end">
-      <!-- Non-interactive account placeholder (no handler / no route), matching
-           the existing watchlist header. Today has NO refresh + NO bell. -->
-      <ion-button aria-label="Account">
-        <ion-icon name="person-circle-outline" slot="icon-only"></ion-icon>
-      </ion-button>
-    </ion-buttons>
-  </ion-toolbar>
-</ion-header>
+<vultus-app-header>
+  <!-- Non-interactive account placeholder (no handler / no route), matching
+       the existing watchlist header. Today has NO refresh + NO bell. -->
+  <ion-button aria-label="Account">
+    <ion-icon name="person-circle-outline" slot="icon-only"></ion-icon>
+  </ion-button>
+</vultus-app-header>
 
 <ion-content>
   @if ((vm$ | async); as state) { @if (state.error) {
