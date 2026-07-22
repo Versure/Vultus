@@ -12,9 +12,8 @@
 
 Total specs: 95
 
-- done: 92
+- done: 93
 - approved: 2
-- implementing: 1
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -110,6 +109,6 @@ Total specs: 95
 | 90 | plex-link-code-actions | Add copy-code + "Open plex.tv/link" actions to the Plex link-code stage (onboarding parity + both pages) | done | slice:onboarding, slice:settings | scope:mobile |
 | 91 | fix-watch-today-header | Shrink the Watch Today hero title/subtitle to match other pages' headings | done | slice:today | scope:mobile |
 | 92 | fix-header-back-navigation | Make the title-detail and notifications header back button return to the page you came from | done | — | scope:mobile |
-| 93 | fix-detail-action-button-sizing | Equalize the untracked title-detail action buttons — reset the `ion-button` host box-model so both flex siblings render the same width | implementing | slice:title-detail | scope:mobile |
+| 93 | fix-detail-action-button-sizing | Equalize the untracked title-detail action buttons — reset the `ion-button` host box-model so both flex siblings render the same width | done | slice:title-detail | scope:mobile |
 | 94 | fix-also-available-on-spacing | Fix the extra whitespace above "Also Available On" in the title-detail Where to Watch card | done | slice:title-detail | scope:mobile |
 | 95 | fix-watchlist-filter-sheet-scroll-drift | Fix the Watchlist filter sheet drifting off-screen when the list is scrolled — anchor it to the viewport via `slot="fixed"` | approved | slice:watchlist | scope:mobile |

@@ -2,7 +2,7 @@
 number: 0093
 slug: fix-detail-action-button-sizing
 title: Equalize the untracked title-detail action buttons — reset the `ion-button` host box-model so both flex siblings render the same width
-status: implementing
+status: done
 slices: [slice:title-detail]
 scopes: [scope:mobile]
 created: 2026-07-22
