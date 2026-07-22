@@ -10,9 +10,10 @@
 
 # Spec status ledger
 
-Total specs: 98
+Total specs: 99
 
 - done: 98
+- approved: 1
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -114,3 +115,4 @@ Total specs: 98
 | 96 | unify-tab-headers | Unify the four tab headers into a shared VultusAppHeader and fix Today's taller header | done | slice:today, slice:watchlist, slice:search, slice:settings | scope:shared, scope:mobile |
 | 97 | fix-plex-sync-unmatched-shows | Fix Plex sync dropping unmatched shows (issue | done | slice:settings | scope:mobile, scope:shared |
 | 98 | fix-plex-episode-watch-sync | Fix Plex sync — create missing episode docs on-device so watched episodes mark immediately | done | slice:settings | scope:mobile |
+| 99 | watchmode-availability-fallback | Watchmode streaming-availability fallback for TMDB provider gaps | approved | slice:sync-titles | scope:functions, scope:shared |
