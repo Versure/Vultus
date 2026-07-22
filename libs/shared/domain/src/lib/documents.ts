@@ -17,6 +17,12 @@ export interface NotificationPrefs {
   episodeAired: boolean;
   movieAvailable: boolean;
   cameToPlatform: boolean;
+  /** Alert when a tracked MOVIE loses all flatrate providers in the user's
+   *  region (spec 0057). Default true; legacy docs missing it → true. */
+  movieLeavingPlatform: boolean;
+  /** Alert when a tracked TV SHOW loses all flatrate providers (spec 0057).
+   *  Default true; legacy docs missing it → true. */
+  showLeavingPlatform: boolean;
   // Quiet-hours delivery preference (spec 0051). `null` = any time / no
   // preference; a number 0–23 restricts delivery to that UTC hour. Required
   // field: legacy docs lacking it map to `null` via the converter's `?? null`.

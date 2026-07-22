@@ -108,6 +108,8 @@ const DEFAULT_PREFS = {
   episodeAired: true,
   movieAvailable: true,
   cameToPlatform: true,
+  movieLeavingPlatform: true,
+  showLeavingPlatform: true,
   deliveryHour: null,
 };
 
@@ -323,6 +325,9 @@ describe('OnboardingService', () => {
           episodeAired: false,
           movieAvailable: false,
           cameToPlatform: false,
+          // Independent per-kind toggles (spec 0057) preserved at default true.
+          movieLeavingPlatform: true,
+          showLeavingPlatform: true,
           deliveryHour: 9,
         },
       });
@@ -343,6 +348,8 @@ describe('OnboardingService', () => {
           episodeAired: true,
           movieAvailable: true,
           cameToPlatform: true,
+          movieLeavingPlatform: true,
+          showLeavingPlatform: true,
           deliveryHour: 9,
         },
       });

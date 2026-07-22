@@ -31,6 +31,8 @@ function defaultPrefs(): User['notificationPrefs'] {
     episodeAired: true,
     movieAvailable: true,
     cameToPlatform: true,
+    movieLeavingPlatform: true,
+    showLeavingPlatform: true,
     deliveryHour: null,
   };
 }
@@ -266,11 +268,16 @@ export class OnboardingService {
     if (uid === null) {
       return;
     }
+    const current = this._prefs();
     const prefs: User['notificationPrefs'] = {
       episodeAired: enabled,
       movieAvailable: enabled,
       cameToPlatform: enabled,
-      deliveryHour: this._prefs().deliveryHour,
+      // Independent per-kind toggles (spec 0057) — NOT folded into the global
+      // enable/disable projection; preserve their current values.
+      movieLeavingPlatform: current.movieLeavingPlatform,
+      showLeavingPlatform: current.showLeavingPlatform,
+      deliveryHour: current.deliveryHour,
     };
     await updateDoc(doc(this.firestore, userPath(uid)), {
       notificationPrefs: prefs,
@@ -294,6 +301,8 @@ export class OnboardingService {
       episodeAired: current.episodeAired,
       movieAvailable: current.movieAvailable,
       cameToPlatform: current.cameToPlatform,
+      movieLeavingPlatform: current.movieLeavingPlatform,
+      showLeavingPlatform: current.showLeavingPlatform,
       deliveryHour: hour,
     };
     await updateDoc(doc(this.firestore, userPath(uid)), {

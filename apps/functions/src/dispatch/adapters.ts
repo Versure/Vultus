@@ -59,6 +59,9 @@ export function createFirestoreWatchlistStore(db: Firestore): WatchlistStore {
           uid,
           titleId,
           region: userData.region,
+          // Pass prefs through unchanged: the core's isKindEnabled reads the
+          // two spec-0057 leaving-platform kinds with `!== false`, so a legacy
+          // doc missing them already resolves as enabled — no backfill here.
           notificationPrefs: userData.notificationPrefs,
           fcmTokens: userData.fcmTokens ?? [],
           // legacy/malformed doc missing status → notifiable (spec 0088)
@@ -138,6 +141,15 @@ function buildNotification(
     return {
       title: 'New episode available',
       body: `${titleStr} has a new episode on ${PLATFORM_FALLBACK}`,
+    };
+  }
+  // movie-leaving-platform + show-leaving-platform: a title is losing all
+  // flatrate providers (spec 0057). Distinct "leaving"-toned copy so the OS
+  // push is not mislabelled as availability.
+  if (kind === 'movie-leaving-platform' || kind === 'show-leaving-platform') {
+    return {
+      title: 'Leaving your streaming service',
+      body: `${titleStr} is leaving ${PLATFORM_FALLBACK} — watch it soon`,
     };
   }
   // movie-available + show-came-to-platform share the availability copy.

@@ -23,7 +23,10 @@ providers only (rent/buy changes are ignored):
 
 - `0 → ≥1` flatrate = `appeared` → `movie-available` (movie) or
   `show-came-to-platform` (tv). Id: `${tmdbId}-${region}-${kind}`.
-- `≥1 → 0` flatrate = `removed` → **no notification** (decision 1C).
+- `≥1 → 0` flatrate = `removed` → `movie-leaving-platform` (movie) or
+  `show-leaving-platform` (tv) — spec 0057 reopened spec 0012 decision 1C, so a
+  removal now notifies (behind a per-kind opt-in, default on). Id:
+  `${tmdbId}-${region}-${kind}`.
 - `unchanged` → no availability kind.
 
 The availability path **no longer emits `episode-aired`** and no longer reads
@@ -54,7 +57,19 @@ carry the show title; the FCM body's show name is bound per-title in the sender
 by the airing-scan wiring (`apps/functions`).
 
 Each kind is gated by the user's `NotificationPrefs` opt-in
-(`movieAvailable` / `cameToPlatform` / `episodeAired`).
+(`movieAvailable` / `cameToPlatform` / `episodeAired` /
+`movieLeavingPlatform` / `showLeavingPlatform`).
+
+**Legacy-tolerant gate for the leaving-platform kinds (spec 0057).** The three
+original per-kind opt-ins are read strictly (`prefs.movieAvailable`, etc.) —
+they are always present on every doc that reached the dispatcher (spec 0011
+eager create). The two new leaving-platform opt-ins are read with **`!== false`
+semantics** instead: `prefs.movieLeavingPlatform !== false` /
+`prefs.showLeavingPlatform !== false`. A legacy doc (pre-0057) whose
+`notificationPrefs` omits these fields reads `undefined`, which `!== false` is
+**true** → enabled. Only an explicit `false` opts out. This makes the feature
+opt-out by default (decision 4) without the adapter having to backfill missing
+fields.
 
 ## Completed/dropped suppression (spec 0088)
 

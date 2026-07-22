@@ -431,8 +431,9 @@ On mount, `SettingsPage` calls `SettingsService.load()`, which reads
 `users/{uid}` (path + wire mapping via `@vultus/shared/firestore-schema`'s
 `userPath` / `dataToUser` / `userToData`). If the doc is absent it is created
 with defaults `{ region: 'NL', notificationPrefs: { episodeAired: true,
-movieAvailable: true, cameToPlatform: true }, fcmTokens: [] }`, guaranteeing
-downstream slices can assume it exists.
+movieAvailable: true, cameToPlatform: true, movieLeavingPlatform: true,
+showLeavingPlatform: true, deliveryHour: null }, fcmTokens: [], myProviderIds:
+[], hasPlex: false }`, guaranteeing downstream slices can assume it exists.
 
 The page exposes:
 
@@ -453,6 +454,18 @@ The page exposes:
   global Notifications toggle is off (no pushes to schedule). Pushes are only
   sent during the chosen UTC hour; notifications still appear in the in-app
   inbox.
+- two **leaving-platform** `ion-toggle` rows (spec 0057) — "Movie leaving your
+  platform" and "Show leaving your platform", the per-kind opt-ins over
+  `notificationPrefs.movieLeavingPlatform` / `showLeavingPlatform` (both default
+  `true`; legacy docs missing them read as `true` via the converter). They are
+  **independent per-kind rows**, NOT folded into the global Notifications
+  projection, and stay enabled regardless of the global toggle. Each row reuses
+  the Notifications row's `.settings-card` / `.settings-row*` silhouette
+  (film / tv icon tile → `body-lg` label → `body-md` helper); changing one calls
+  `SettingsService.setMovieLeavingPlatform` / `setShowLeavingPlatform` (wired via
+  the page's `onMovieLeavingPlatformChange` / `onShowLeavingPlatformChange`
+  handlers). Grouped with the Notifications and Notification-time cards. Stitch
+  screen `projects/13590348714018893783/screens/81945ff3381e453dafcc4e5ce896fcfa`.
 - a **My Providers** card (spec 0060) — a wrapping grid of tappable provider
   chips (a `<button>` per catalog entry, `aria-pressed`, NOT an
   `ion-segment`/`ion-select`) placed **between** the Region and Notifications
@@ -544,20 +557,29 @@ The `mock` build profile seeds `hasPlex: true` so `mobile:serve-mock` renders th
 Plex chip selected. The Plex chip toggle is wired through `onPlexToggle()` on the
 page (distinct from 0060's `onProviderToggle`).
 
-### Preserve-other-prefs write rule (spec 0051)
+### Preserve-other-prefs write rule (spec 0051 / 0057)
 
-`notificationPrefs` now has four fields (`episodeAired`, `movieAvailable`,
-`cameToPlatform`, `deliveryHour`). The service tracks the full object in state so
-**both** setters rebuild and write the WHOLE `notificationPrefs` object,
-preserving the other setter's data:
+`notificationPrefs` now has **six** fields (`episodeAired`, `movieAvailable`,
+`cameToPlatform`, `movieLeavingPlatform`, `showLeavingPlatform`, `deliveryHour`).
+The service tracks the full object in `_prefs` state so **every** setter rebuilds
+and writes the WHOLE `notificationPrefs` object, preserving the other setters'
+data — no setter clobbers another's fields:
 
-- `setNotificationsEnabled(enabled)` sets the three booleans to `enabled` while
-  preserving the current `deliveryHour`.
+- `setNotificationsEnabled(enabled)` sets the three original booleans to
+  `enabled` while preserving the current `deliveryHour` **and** the two
+  leaving-platform opt-ins. The global toggle is a projection over the three
+  original booleans only; the two leaving-platform prefs are carried through
+  unchanged, never reset (spec 0057).
 - `setDeliveryHour(hour)` sets `deliveryHour` (a number 0–23, or `null` for "Any
-  time") while preserving the three booleans.
+  time") while preserving the three original booleans **and** the two
+  leaving-platform opt-ins.
+- `setMovieLeavingPlatform(enabled)` / `setShowLeavingPlatform(enabled)`
+  (spec 0057) each set their one field while preserving the three original
+  booleans, `deliveryHour`, and the sibling leaving-platform pref. Null-uid
+  guarded.
 
-Neither setter touches `fcmTokens`. The eager-create default writes
-`deliveryHour: null`.
+No setter touches `fcmTokens`. The eager-create default writes
+`movieLeavingPlatform: true, showLeavingPlatform: true, deliveryHour: null`.
 
 Writes happen on user interaction (no Save button). The form is render-gated on
 `load()`:

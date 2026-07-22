@@ -79,6 +79,8 @@ describe('converters — round-trip identity', () => {
         episodeAired: true,
         movieAvailable: false,
         cameToPlatform: true,
+        movieLeavingPlatform: true,
+        showLeavingPlatform: true,
         deliveryHour: null,
       },
       fcmTokens: [
@@ -107,6 +109,8 @@ describe('converters — round-trip identity', () => {
         episodeAired: true,
         movieAvailable: true,
         cameToPlatform: false,
+        movieLeavingPlatform: true,
+        showLeavingPlatform: true,
         deliveryHour: 8,
       },
       fcmTokens: [],
@@ -126,6 +130,8 @@ describe('converters — round-trip identity', () => {
         episodeAired: false,
         movieAvailable: false,
         cameToPlatform: true,
+        movieLeavingPlatform: true,
+        showLeavingPlatform: true,
         deliveryHour: null,
       },
       fcmTokens: [],
@@ -146,6 +152,8 @@ describe('converters — round-trip identity', () => {
         episodeAired: true,
         movieAvailable: false,
         cameToPlatform: true,
+        movieLeavingPlatform: true,
+        showLeavingPlatform: true,
         deliveryHour: 14,
       },
       fcmTokens: [],
@@ -161,6 +169,79 @@ describe('converters — round-trip identity', () => {
     expect(result.notificationPrefs.deliveryHour).toBeNull();
   });
 
+  it('User: movieLeavingPlatform/showLeavingPlatform true round-trip unchanged (spec 0057)', () => {
+    const user: User = {
+      region: 'NL',
+      notificationPrefs: {
+        episodeAired: true,
+        movieAvailable: true,
+        cameToPlatform: true,
+        movieLeavingPlatform: true,
+        showLeavingPlatform: true,
+        deliveryHour: null,
+      },
+      fcmTokens: [],
+      myProviderIds: [8],
+      hasPlex: false,
+      plexSync: null,
+    };
+    const result = dataToUser(simulateStored(userToData(user)) as never);
+    expect(result).toEqual(user);
+    expect(result.notificationPrefs.movieLeavingPlatform).toBe(true);
+    expect(result.notificationPrefs.showLeavingPlatform).toBe(true);
+  });
+
+  it('User: movieLeavingPlatform/showLeavingPlatform false round-trip as false (spec 0057)', () => {
+    const user: User = {
+      region: 'DE',
+      notificationPrefs: {
+        episodeAired: false,
+        movieAvailable: false,
+        cameToPlatform: false,
+        movieLeavingPlatform: false,
+        showLeavingPlatform: false,
+        deliveryHour: null,
+      },
+      fcmTokens: [],
+      myProviderIds: [],
+      hasPlex: false,
+      plexSync: null,
+    };
+    const result = dataToUser(simulateStored(userToData(user)) as never);
+    expect(result).toEqual(user);
+    expect(result.notificationPrefs.movieLeavingPlatform).toBe(false);
+    expect(result.notificationPrefs.showLeavingPlatform).toBe(false);
+  });
+
+  it('User: backward-compat — legacy notificationPrefs missing both leaving-platform flags maps to true (spec 0057)', () => {
+    // Simulates a doc written before spec 0057 (no movieLeavingPlatform /
+    // showLeavingPlatform in stored prefs). The opt-out default is true, so a
+    // legacy user receives the new alerts without touching Settings.
+    const user: User = {
+      region: 'GB',
+      notificationPrefs: {
+        episodeAired: true,
+        movieAvailable: false,
+        cameToPlatform: true,
+        movieLeavingPlatform: false,
+        showLeavingPlatform: false,
+        deliveryHour: 14,
+      },
+      fcmTokens: [],
+      myProviderIds: [8],
+      hasPlex: false,
+      plexSync: null,
+    };
+    const stored = simulateStored(userToData(user)) as Record<string, unknown>;
+    // Delete both fields to simulate a pre-0057 stored doc.
+    const storedPrefs = stored['notificationPrefs'] as Record<string, unknown>;
+    delete storedPrefs['movieLeavingPlatform'];
+    delete storedPrefs['showLeavingPlatform'];
+    const result = dataToUser(stored as never);
+    expect(result.notificationPrefs.movieLeavingPlatform).toBe(true);
+    expect(result.notificationPrefs.showLeavingPlatform).toBe(true);
+  });
+
   it('User: myProviderIds populated round-trips', () => {
     const user: User = {
       region: 'NL',
@@ -168,6 +249,8 @@ describe('converters — round-trip identity', () => {
         episodeAired: true,
         movieAvailable: true,
         cameToPlatform: true,
+        movieLeavingPlatform: true,
+        showLeavingPlatform: true,
         deliveryHour: null,
       },
       fcmTokens: [],
@@ -187,6 +270,8 @@ describe('converters — round-trip identity', () => {
         episodeAired: false,
         movieAvailable: false,
         cameToPlatform: false,
+        movieLeavingPlatform: true,
+        showLeavingPlatform: true,
         deliveryHour: null,
       },
       fcmTokens: [],
@@ -207,6 +292,8 @@ describe('converters — round-trip identity', () => {
         episodeAired: true,
         movieAvailable: false,
         cameToPlatform: true,
+        movieLeavingPlatform: true,
+        showLeavingPlatform: true,
         deliveryHour: null,
       },
       fcmTokens: [],
@@ -227,6 +314,8 @@ describe('converters — round-trip identity', () => {
         episodeAired: true,
         movieAvailable: true,
         cameToPlatform: true,
+        movieLeavingPlatform: true,
+        showLeavingPlatform: true,
         deliveryHour: null,
       },
       fcmTokens: [],
@@ -246,6 +335,8 @@ describe('converters — round-trip identity', () => {
         episodeAired: false,
         movieAvailable: false,
         cameToPlatform: false,
+        movieLeavingPlatform: true,
+        showLeavingPlatform: true,
         deliveryHour: null,
       },
       fcmTokens: [],
@@ -266,6 +357,8 @@ describe('converters — round-trip identity', () => {
         episodeAired: true,
         movieAvailable: false,
         cameToPlatform: true,
+        movieLeavingPlatform: true,
+        showLeavingPlatform: true,
         deliveryHour: null,
       },
       fcmTokens: [],
@@ -286,6 +379,8 @@ describe('converters — round-trip identity', () => {
         episodeAired: true,
         movieAvailable: true,
         cameToPlatform: true,
+        movieLeavingPlatform: true,
+        showLeavingPlatform: true,
         deliveryHour: null,
       },
       fcmTokens: [],
@@ -314,6 +409,8 @@ describe('converters — round-trip identity', () => {
         episodeAired: false,
         movieAvailable: false,
         cameToPlatform: false,
+        movieLeavingPlatform: true,
+        showLeavingPlatform: true,
         deliveryHour: null,
       },
       fcmTokens: [],
@@ -334,6 +431,8 @@ describe('converters — round-trip identity', () => {
         episodeAired: true,
         movieAvailable: false,
         cameToPlatform: true,
+        movieLeavingPlatform: true,
+        showLeavingPlatform: true,
         deliveryHour: null,
       },
       fcmTokens: [],
@@ -359,6 +458,8 @@ describe('converters — round-trip identity', () => {
         episodeAired: true,
         movieAvailable: true,
         cameToPlatform: true,
+        movieLeavingPlatform: true,
+        showLeavingPlatform: true,
         deliveryHour: null,
       },
       fcmTokens: [],
@@ -394,6 +495,8 @@ describe('converters — round-trip identity', () => {
         episodeAired: false,
         movieAvailable: false,
         cameToPlatform: false,
+        movieLeavingPlatform: true,
+        showLeavingPlatform: true,
         deliveryHour: null,
       },
       fcmTokens: [],

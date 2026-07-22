@@ -13,7 +13,10 @@ The barrel (`src/index.ts`) re-exports:
 
 - **`./lib/enums`** — union types and their `as const` source arrays:
   `Region`/`REGIONS`, `WatchStatus`/`WATCH_STATUSES`,
-  `NotificationKind`/`NOTIFICATION_KINDS`, `TitleType`. Also
+  `NotificationKind`/`NOTIFICATION_KINDS` (members: `episode-aired`,
+  `movie-available`, `show-came-to-platform`, plus `movie-leaving-platform` /
+  `show-leaving-platform` — a tracked movie/show losing all flatrate providers
+  in the user's region, spec 0057), `TitleType`. Also
   `REGION_DISPLAY_NAMES: Record<Region, string>` and
   `regionDisplayName(region: Region): string` (spec 0079) — the human-readable
   native endonym for each region (`NL → Nederland`, `DE → Deutschland`,
@@ -39,7 +42,7 @@ The barrel (`src/index.ts`) re-exports:
 PlexSyncMeta | null` — the per-user Plex sync cursor + link metadata (spec
     0073); OPTIONAL/nullable so legacy docs and never-linked users need no
     migration; absent/`null` = never linked or unlinked; coalesced `?? null` via
-    the converter), `NotificationPrefs` (per-kind opt-in toggles plus `deliveryHour: number | null` — quiet-hours delivery preference, spec 0051; `null` = any time, a number 0–23 = that UTC hour), `FcmToken`
+    the converter), `NotificationPrefs` (per-kind opt-in booleans `episodeAired` / `movieAvailable` / `cameToPlatform`, plus `movieLeavingPlatform` / `showLeavingPlatform` — the leaving-your-platform opt-ins, spec 0057; both required, default `true`, legacy docs missing them coalesce to `true` via the converter — plus `deliveryHour: number | null` — quiet-hours delivery preference, spec 0051; `null` = any time, a number 0–23 = that UTC hour), `FcmToken`
   - `PlexSyncMeta` — per-user Plex sync cursor + link metadata (spec 0073):
     `linkedAt` (ISO 8601 link time), `lastSyncAt: string | null` (ISO 8601 — the
     additions cursor; `null` until the first sync completes), `serverName: string
