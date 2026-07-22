@@ -2,7 +2,7 @@
 number: 0095
 slug: fix-watchlist-filter-sheet-scroll-drift
 title: Fix the Watchlist filter sheet drifting off-screen when the list is scrolled — anchor it to the viewport via `slot="fixed"`
-status: implementing
+status: done
 slices: [slice:watchlist]
 scopes: [scope:mobile]
 created: 2026-07-22
