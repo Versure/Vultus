@@ -154,6 +154,179 @@ describe('createTmdbDetailClient — getDetail', () => {
   });
 });
 
+describe('createTmdbDetailClient — getTvSeasonCount (spec 0098)', () => {
+  it('maps number_of_seasons from a /tv/{id} payload', async () => {
+    const fetch = makeFetch({
+      id: 1396,
+      name: 'Breaking Bad',
+      number_of_seasons: 5,
+    });
+    const client = createTmdbDetailClient(config, fetch);
+    const count = await client.getTvSeasonCount(1396);
+    expect(count).toBe(5);
+    const url = fetch.mock.calls[0][0] as string;
+    expect(url).toContain('/tv/1396?');
+    expect(url).toContain('api_key=test-key');
+  });
+
+  it('returns null when number_of_seasons is absent', async () => {
+    const fetch = makeFetch({ id: 1396, name: 'Breaking Bad' });
+    const client = createTmdbDetailClient(config, fetch);
+    expect(await client.getTvSeasonCount(1396)).toBeNull();
+  });
+
+  it('returns null on a TMDB 404 (does not throw)', async () => {
+    const fetch = makeFetch({ status_message: 'Not Found' }, 404);
+    const client = createTmdbDetailClient(config, fetch);
+    expect(await client.getTvSeasonCount(999999)).toBeNull();
+  });
+
+  it('throws TmdbDetailError on a 500 (not null)', async () => {
+    const fetch = makeFetch({ status_message: 'Server Error' }, 500);
+    const client = createTmdbDetailClient(config, fetch);
+    await expect(client.getTvSeasonCount(1396)).rejects.toBeInstanceOf(
+      TmdbDetailError,
+    );
+  });
+
+  it('sends the bearer header when configured, no api_key', async () => {
+    const fetch = makeFetch({ id: 1396, number_of_seasons: 1 });
+    const client = createTmdbDetailClient(
+      { ...config, auth: { kind: 'bearer', token: 'tok123' } },
+      fetch,
+    );
+    await client.getTvSeasonCount(1396);
+    const init = fetch.mock.calls[0][1] as RequestInit;
+    expect((init.headers as Record<string, string>)['Authorization']).toBe(
+      'Bearer tok123',
+    );
+    expect(fetch.mock.calls[0][0] as string).not.toContain('api_key');
+  });
+});
+
+describe('createTmdbDetailClient — getSeasonEpisodes (spec 0098)', () => {
+  it('maps a season payload → Episode[] (season/episode/title/airDate)', async () => {
+    const fetch = makeFetch({
+      episodes: [
+        {
+          episode_number: 1,
+          season_number: 1,
+          name: 'Pilot',
+          air_date: '2008-01-20',
+        },
+        {
+          episode_number: 2,
+          season_number: 1,
+          name: "Cat's in the Bag...",
+          air_date: '2008-01-27',
+        },
+      ],
+    });
+    const client = createTmdbDetailClient(config, fetch);
+    const episodes = await client.getSeasonEpisodes(1396, 1);
+    expect(episodes).toEqual([
+      {
+        season: 1,
+        episode: 1,
+        title: 'Pilot',
+        airDate: new Date('2008-01-20T00:00:00.000Z').toISOString(),
+      },
+      {
+        season: 1,
+        episode: 2,
+        title: "Cat's in the Bag...",
+        airDate: new Date('2008-01-27T00:00:00.000Z').toISOString(),
+      },
+    ]);
+    const url = fetch.mock.calls[0][0] as string;
+    expect(url).toContain('/tv/1396/season/1?');
+    expect(url).toContain('api_key=test-key');
+  });
+
+  it('skips episodes with null/empty/missing air_date', async () => {
+    const fetch = makeFetch({
+      episodes: [
+        {
+          episode_number: 1,
+          season_number: 1,
+          name: 'Aired',
+          air_date: '2008-01-20',
+        },
+        {
+          episode_number: 2,
+          season_number: 1,
+          name: 'Null date',
+          air_date: null,
+        },
+        {
+          episode_number: 3,
+          season_number: 1,
+          name: 'Empty date',
+          air_date: '',
+        },
+        { episode_number: 4, season_number: 1, name: 'Missing date' },
+      ],
+    });
+    const client = createTmdbDetailClient(config, fetch);
+    const episodes = await client.getSeasonEpisodes(1396, 1);
+    expect(episodes).toHaveLength(1);
+    expect(episodes?.[0].episode).toBe(1);
+  });
+
+  it('falls back to the season argument when season_number is absent', async () => {
+    const fetch = makeFetch({
+      episodes: [
+        { episode_number: 5, name: 'No season_number', air_date: '2010-03-21' },
+      ],
+    });
+    const client = createTmdbDetailClient(config, fetch);
+    const episodes = await client.getSeasonEpisodes(1396, 3);
+    expect(episodes?.[0].season).toBe(3);
+  });
+
+  it('sets title to null when name is absent', async () => {
+    const fetch = makeFetch({
+      episodes: [
+        { episode_number: 1, season_number: 1, air_date: '2008-01-20' },
+      ],
+    });
+    const client = createTmdbDetailClient(config, fetch);
+    const episodes = await client.getSeasonEpisodes(1396, 1);
+    expect(episodes?.[0].title).toBeNull();
+  });
+
+  it('returns null on a TMDB 404 (does not throw)', async () => {
+    const fetch = makeFetch({ status_message: 'Not Found' }, 404);
+    const client = createTmdbDetailClient(config, fetch);
+    expect(await client.getSeasonEpisodes(1396, 99)).toBeNull();
+  });
+
+  it('throws TmdbDetailError on a 500 (not null)', async () => {
+    const fetch = makeFetch({ status_message: 'Server Error' }, 500);
+    const client = createTmdbDetailClient(config, fetch);
+    await expect(client.getSeasonEpisodes(1396, 1)).rejects.toBeInstanceOf(
+      TmdbDetailError,
+    );
+  });
+
+  it('uses type tv explicitly and the injected fetch with bearer auth', async () => {
+    const fetch = makeFetch({ episodes: [] });
+    const client = createTmdbDetailClient(
+      { ...config, auth: { kind: 'bearer', token: 'tok123' } },
+      fetch,
+    );
+    await client.getSeasonEpisodes(1396, 1);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const url = fetch.mock.calls[0][0] as string;
+    expect(url).toContain('/tv/1396/season/1?');
+    expect(url).not.toContain('api_key');
+    const init = fetch.mock.calls[0][1] as RequestInit;
+    expect((init.headers as Record<string, string>)['Authorization']).toBe(
+      'Bearer tok123',
+    );
+  });
+});
+
 describe('createTmdbDetailClient — findByExternalId (spec 0097)', () => {
   it('tvdb id (tv) → returns tv_results[0].id', async () => {
     const fetch = makeFetch({
