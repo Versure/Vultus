@@ -91,6 +91,12 @@ Evaluate the spec against each of these and record concrete findings:
    orphaned.
 10. **Risks** — are the real risks (data-source accuracy, PLAN conflicts)
     surfaced?
+11. **Nx project names (non-blocking)** — any `nx` command in the spec (test
+    plan, DoD, tasks) must use the real project name from the touched lib's
+    `project.json` (`mobile-settings`, not the bare slice name `settings`;
+    apps are `mobile` / `mobile-e2e` / `functions`). Flag bare-slice-name
+    commands — they don't resolve and cost the implementer a retry
+    (spec 0098).
 
 ## Output
 

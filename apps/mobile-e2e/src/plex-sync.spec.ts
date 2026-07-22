@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { test, expect } from '@playwright/test';
 import {
   clearAll,
@@ -174,6 +176,15 @@ test('connect flow', async ({ page }) => {
 // library addition), AND a watched mock movie already on the watchlist flips to
 // `completed` (Fight Club, 550 — pre-seeded `planned`, mock viewCount 1).
 //
+// Spec 0098 extension — on-device episode-doc creation: the UNTRACKED mock tv
+// show (Breaking Bad, 1396, with a watched S1E1 and unwatched S1E2 in the mock
+// Plex library) has NO episode docs before the sync. In the SAME sync pass
+// PlexSyncService fetches TMDB (routed below: /tv/1396 season count +
+// /tv/1396/season/1 episode list), creates the missing docs insert-only, then
+// mirrors the Plex watch state — so `s01e001` lands `watched: true`, `s01e002`
+// `watched: false`, and the show reaches `watching` (watch-implies-add) on the
+// FIRST sync, with the title-detail episodes rendering "1/2 watched".
+//
 // PRE-LINKED SEED (per-test writeDocument, NOT the shared fixture):
 //   - `plex_token` in on-device storage (localStorage `CapacitorStorage.*`) so
 //     `isLinked()` → true (connected block renders) AND `sync()` runs (it no-ops
@@ -203,6 +214,35 @@ test('sync outcome', async ({ page }) => {
   // so unrouted calls would hit the real network and fail (poster stays null).
   await routeTmdbMovie(page, 550, 'tmdb-movie-detail-550.json');
   await routeTmdbMovie(page, 335984, 'tmdb-movie-detail-335984.json');
+
+  // TV route fixtures for Breaking Bad (1396) — spec 0098. The on-device episode
+  // creation (PlexSyncService.ensureEpisodeDocs) now fetches TMDB during the sync:
+  //   - GET /tv/1396          → number_of_seasons (season count)
+  //   - GET /tv/1396/season/1 → the season's episode list
+  // The `development` config e2e uses has NO fetch mock, so both must be routed
+  // BEFORE boot or the calls hit the real network and no episode docs are created.
+  // Register the DETAIL route first and the SEASON route LAST: Playwright gives
+  // later-registered routes priority, and the broad `**/tv/1396**` detail glob
+  // also matches the season URL — registering season last makes it win for
+  // `/tv/1396/season/**` while detail still serves `/tv/1396` (+ watch/providers).
+  const tvDetailFixture = JSON.parse(
+    readFileSync(
+      join(__dirname, '..', 'fixtures', 'tmdb-tv-detail-1396.json'),
+      'utf-8',
+    ),
+  ) as Record<string, unknown>;
+  const tvSeasonFixture = JSON.parse(
+    readFileSync(
+      join(__dirname, '..', 'fixtures', 'tmdb-tv-season-1396-s1.json'),
+      'utf-8',
+    ),
+  ) as Record<string, unknown>;
+  await page.route('**/tv/1396**', (route) =>
+    route.fulfill({ json: tvDetailFixture }),
+  );
+  await page.route('**/tv/1396/season/**', (route) =>
+    route.fulfill({ json: tvSeasonFixture }),
+  );
 
   // Boot; the app signs in anonymously against the Auth emulator.
   await page.goto('/');
@@ -352,4 +392,104 @@ test('sync outcome', async ({ page }) => {
     /image\.tmdb\.org\/.+\/\S+/,
   );
   await expect(fightClubCard.locator('.poster-fallback')).toHaveCount(0);
+
+  // ---- Assert the TV episode outcomes (spec 0098) ----
+  //
+  // Breaking Bad (1396) is UNTRACKED before the sync and its watched Plex episode
+  // (S1E1) has no local episode doc. So PlexSyncService fetches TMDB on-device
+  // (/tv/1396 → number_of_seasons; /tv/1396/season/1 → the episode list, both
+  // routed above), creates the MISSING docs insert-only (`watched: false`), then
+  // the existing mirror flips S1E1 to `watched: true` in the SAME pass. The show
+  // reaches `watching` via the watch-implies-add mapping (untracked + a watched
+  // episode → added as `watching`), NOT a count-driven `deriveStatus`.
+
+  // (c) s01e001 created on-device AND mirrored to `watched: true`. Assert on the
+  //     emulator (deterministic). Episode doc id is `s{SS}e{EEE}` (2-digit
+  //     season, 3-digit episode) — the id scheme replicated from the functions.
+  await expect
+    .poll(
+      async () => {
+        const doc = await readDocument(
+          `users/${uid}/watchlist/1396/episodes/s01e001`,
+        );
+        if (doc === null) return 'missing';
+        return (doc.watched as { booleanValue?: boolean } | undefined)
+          ?.booleanValue;
+      },
+      { timeout: 30_000 },
+    )
+    .toBe(true);
+
+  // (d) s01e002 created insert-only and left UNWATCHED (the Plex S1E2 has
+  //     viewCount 0). It must EXIST (created) with `watched: false` — not merely
+  //     be absent — so distinguish "missing" from "created unwatched".
+  await expect
+    .poll(
+      async () => {
+        const doc = await readDocument(
+          `users/${uid}/watchlist/1396/episodes/s01e002`,
+        );
+        if (doc === null) return 'missing';
+        return (doc.watched as { booleanValue?: boolean } | undefined)
+          ?.booleanValue;
+      },
+      { timeout: 30_000 },
+    )
+    .toBe(false);
+
+  // (e) The show reached `watching` (watch-implies-add, not count-driven).
+  await expect
+    .poll(
+      async () => {
+        const doc = await readDocument(`users/${uid}/watchlist/1396`);
+        return (doc?.status as { stringValue?: string } | undefined)
+          ?.stringValue;
+      },
+      { timeout: 30_000 },
+    )
+    .toBe('watching');
+
+  // The Breaking Bad watchlist card renders as a `watching` card (we are still on
+  // the Watchlist tab from the movie assertions; the default All filter shows it).
+  const breakingBadCard = page.locator('.watchlist-card', {
+    hasText: 'Breaking Bad',
+  });
+  await expect(breakingBadCard).toBeVisible();
+  await expect(breakingBadCard).toHaveClass(/\bstatus-watching\b/);
+
+  // Navigate to the title-detail page for 1396 (the card click routes there).
+  await breakingBadCard.click();
+  await expect(page).toHaveURL(/\/tabs\/title-detail\/1396/);
+
+  // The episodes section renders (tv detail loaded via the routed /tv/1396
+  // fixture; the episodes$ stream reads the two on-device-created docs).
+  await expect(page.locator('[data-test="episodes-section"]')).toBeVisible();
+
+  // The Season 1 header shows the EXACT per-season count string (NO
+  // whitespace-normalization): 1 of 2 episodes watched. Same copy the component
+  // contract asserts, keeping unit + e2e consistent on the string.
+  await expect(page.locator('[data-test="season-count"]')).toHaveText(
+    '1/2 watched',
+  );
+
+  // Per-episode watched state via the STABLE `[data-test="episode-watched-toggle"]`
+  // hook (consistent with the suite's data-test convention), NOT the
+  // `.watched-toggle` / `[class.is-watched]` class. The toggle's `aria-label`
+  // encodes the current watched state: a WATCHED episode's toggle offers the
+  // "unwatched" action ("Mark episode N unwatched"), an UNWATCHED one offers
+  // "watched" ("Mark episode N watched"). So S1E1 (watched) → "…1 unwatched" and
+  // S1E2 (unwatched) → "…2 watched".
+  await expect(
+    page.locator('[data-test="episode-watched-toggle"]'),
+  ).toHaveCount(2);
+  await expect(
+    page.locator(
+      '[data-test="episode-watched-toggle"][aria-label="Mark episode 1 unwatched"]',
+    ),
+  ).toBeVisible();
+  await expect(
+    page.locator(
+      '[data-test="episode-watched-toggle"][aria-label="Mark episode 2 watched"]',
+    ),
+  ).toBeVisible();
 });

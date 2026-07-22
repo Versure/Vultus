@@ -48,7 +48,16 @@ The TMDB detail client itself (`createTmdbDetailClient`, `TmdbDetailClient`,
 **slice-internal** — not barrel-exported. It is a **deliberate per-slice
 duplicate** of the search / title-detail clients (spec 0016 decision 2,
 reaffirmed by spec 0086); the settings slice must not import
-`@vultus/mobile/search` or `@vultus/mobile/title-detail`.
+`@vultus/mobile/search` or `@vultus/mobile/title-detail`. Besides `getDetail`, it
+exposes two methods used only by the on-device episode-doc creation (spec 0098):
+
+- `getTvSeasonCount(tmdbId, signal?)` — `GET /tv/{id}` → `number_of_seasons`;
+  `null` on TMDB 404, throws `TmdbDetailError` on other non-2xx.
+- `getSeasonEpisodes(tmdbId, season, signal?)` — `GET /tv/{id}/season/{n}` → the
+  season's `Episode[]` (the `scope:shared` shape), **skipping episodes with a
+  null/empty/missing `air_date`** (`EpisodeDoc.airDate` is non-null); `null` on a
+  404, throws on other non-2xx. Replicates the functions' `getSeasonEpisodes` +
+  `mapSeasonEpisodes`.
 
 `SettingsService` and `SyncStatusService` are internal data-access services used
 only by `SettingsPage` / its cards and are intentionally **not** barrel-exported
@@ -217,10 +226,53 @@ watching` on ≥1 watched episode, `watching → completed` when all present
 - **Watch-implies-add**: a watched, untracked tmdb-GUID item is added (movie →
   `completed`, show → `watching`), `watchingViaPlex: true`, `traktId: null`.
 - **Episode mirror writes EXISTING docs only** (`updateDoc`); it NEVER creates an
-  episode doc — a Plex-watched episode with no local doc is a no-op. The doc id is
-  `s{SS}e{EEE}` (season padded to 2, episode to 3, e.g. `s01e001`) — replicated
-  from `sync-episodes`' `episode-id.ts` (a `scope:functions` lib this slice cannot
-  import), derived from Plex `parentIndex` (season) + `index` (episode).
+  episode doc — a Plex-watched episode with no local doc is a no-op at this step.
+  The doc id is `s{SS}e{EEE}` (season padded to 2, episode to 3, e.g. `s01e001`) —
+  replicated from `sync-episodes`' `episode-id.ts` (a `scope:functions` lib this
+  slice cannot import), derived from Plex `parentIndex` (season) + `index`
+  (episode). Missing docs are created just before the mirror by the on-device
+  creator (below), so a freshly-imported show's episodes mark watched in the
+  **same** pass.
+
+**On-device episode-doc creation (spec 0098, issue #255).** For a `tv` item the
+sync now fetches the Plex episode list **once** (`listPlexEpisodes`) and, before
+mirroring, creates any **missing** episode docs on-device from TMDB
+(`ensureEpisodeDocs` / `ensureEpisodeDocsSafe`) so watched episodes mark
+**immediately** on the first sync instead of waiting for the server's async
+episode trigger / daily cron (the two-sync latency #255 rejected). This
+**deliberately relaxes** the app-wide "episode docs are created only by Cloud
+Functions" invariant (specs 0034/0050/0053) — **for the Plex path only** — and
+extends the two new slice-local TMDB client methods (`getTvSeasonCount`,
+`getSeasonEpisodes`; see the client note above). Properties:
+
+- **Insert-only + race-safe.** It uses the SAME TMDB source, the SAME
+  `episodeToData` converter, and the SAME `s{SS}e{EEE}` id scheme as the
+  functions, so the docs it writes are byte-for-byte what the functions write. It
+  reads the existing episode-id set (`getDocs(episodesPath(...))`) and writes
+  **only** ids not already present — it never overwrites a doc's
+  `watched`/`watchedAt`. It is therefore idempotent and race-safe with the
+  server's insert-only on-create trigger / daily cron (whichever writes a given id
+  first, the other skips it).
+- **Create → mirror separation (do NOT collapse).** Inserts start
+  `watched: false`; the existing `mirrorEpisodes` then flips them to
+  `watched: true` in the same pass (Firestore read-your-writes). The creator never
+  writes watched state — this separation is what the idempotency / race-safety
+  argument rests on.
+- **Gap-guard (self-limiting).** It reaches for TMDB **only** when a WATCHED Plex
+  episode (`viewCount > 0`) lacks a local doc. A show whose watched episodes
+  already have docs is never re-fetched — no per-show TMDB episode-list fetch on
+  every sync.
+- **null-air_date skip.** Episodes TMDB has no `air_date` for are skipped
+  (`EpisodeDoc.airDate` is non-null), matching the functions' mapper — so a
+  genuinely-unaired-but-watched-in-Plex episode still can't be marked (rare;
+  documented in the spec Risks, not a regression).
+- **Failure isolation.** `ensureEpisodeDocsSafe` wraps the fetch + creation
+  (mirroring `fetchDetailSafe`): on ANY failure it logs a **redacted** diagnostic
+  via `describeTmdbError` (never the raw error — may echo the `api_key`, spec 0068) and returns without throwing, so a TMDB outage never fails the mirror, the
+  status write, or the rest of the sync loop; the pass stays `ok`.
+- **Sticky-`dropped` preserved.** A dropped show still gets its episode docs
+  created + mirrored (`watched: true` written), but its status is never
+  auto-changed.
 
 **Poster / rating denormalization (spec 0086, issue #229).** Plex GUIDs yield
 only a `tmdbId`, so the sync fetches `posterPath` / `voteAverage` from TMDB via
