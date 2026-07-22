@@ -193,7 +193,9 @@ export class TodayPage {
    */
   navigateToDetail(titleId: string, type: TitleType): void {
     this.router
-      .navigate(['tabs', 'title-detail', titleId], { queryParams: { type } })
+      .navigate(['tabs', 'title-detail', titleId], {
+        queryParams: { type, origin: 'today' },
+      })
       .catch(() => {
         /* graceful no-op — route may not be registered in isolation */
       });

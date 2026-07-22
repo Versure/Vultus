@@ -724,7 +724,9 @@ export class WatchlistPage {
    */
   navigateToDetail(titleId: string, type: TitleType): void {
     this.router
-      .navigate(['tabs', 'title-detail', titleId], { queryParams: { type } })
+      .navigate(['tabs', 'title-detail', titleId], {
+        queryParams: { type, origin: 'watchlist' },
+      })
       .catch(() => {
         /* graceful no-op */
       });

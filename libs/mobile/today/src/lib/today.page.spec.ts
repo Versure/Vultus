@@ -516,7 +516,7 @@ describe('TodayPage', () => {
     card?.click();
     expect(router.navigate).toHaveBeenCalledWith(
       ['tabs', 'title-detail', '42'],
-      { queryParams: { type: 'tv' } },
+      { queryParams: { type: 'tv', origin: 'today' } },
     );
   });
 });

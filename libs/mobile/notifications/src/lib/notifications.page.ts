@@ -2,7 +2,6 @@ import { AsyncPipe } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import {
-  IonBackButton,
   IonButton,
   IonButtons,
   IonContent,
@@ -17,9 +16,11 @@ import {
   IonRefresherContent,
   IonTitle,
   IonToolbar,
+  NavController,
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
 import {
+  arrowBack,
   filmOutline,
   notificationsOffOutline,
   playCircleOutline,
@@ -51,7 +52,6 @@ interface NotificationVm extends NotificationRow {
     IonTitle,
     IonButtons,
     IonButton,
-    IonBackButton,
     IonContent,
     IonIcon,
     IonItem,
@@ -70,6 +70,7 @@ interface NotificationVm extends NotificationRow {
 export class NotificationsPage {
   private readonly service = inject(NotificationsService);
   private readonly router = inject(Router);
+  private readonly nav = inject(NavController);
 
   /**
    * View model for the list. `rows` is `null` until the first emission of the
@@ -100,6 +101,7 @@ export class NotificationsPage {
 
   constructor() {
     addIcons({
+      arrowBack,
       notificationsOffOutline,
       trash,
       filmOutline,
@@ -159,6 +161,16 @@ export class NotificationsPage {
       default:
         return `Update${on}`;
     }
+  }
+
+  /**
+   * Header back — return to Watchlist deterministically (notifications has a
+   * single entry point today). Uses `NavController.navigateBack` rather than
+   * `ion-back-button`'s `defaultHref` stack-fallback, which is ambiguous under
+   * page-instance reuse / deep links (issue #253, spec 0092).
+   */
+  goBack(): void {
+    void this.nav.navigateBack('/tabs/watchlist');
   }
 
   /** Row tap → mark read + deep-link to the title (string route, no slice import). */

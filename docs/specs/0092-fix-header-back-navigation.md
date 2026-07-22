@@ -2,7 +2,7 @@
 number: 0092
 slug: fix-header-back-navigation
 title: Make the title-detail and notifications header back button return to the page you came from
-status: approved
+status: done
 slices:
   [
     slice:title-detail,
@@ -435,13 +435,13 @@ Tailored from PLAN §5 / CLAUDE.md. Every checkbox maps to a task (T1–T6).
       import; the five slices still communicate only via string-segment nav + query
       params; no `sheriff.config.ts` change. (T1–T5)
 - [ ] **title-detail back button** replaced with a custom `<ion-button
-  (click)="goBack()">` + `arrow-back` icon; `goBack()` resolves
+(click)="goBack()">` + `arrow-back` icon; `goBack()` resolves
       `watchlist→/tabs/watchlist`, `today→/tabs/today`, `search→/tabs/search`,
       missing/unrecognized→`/tabs/watchlist`, via `NavController.navigateBack`;
       `IonBackButton` import removed; origin read reactively (no stale snapshot).
       (T1)
 - [ ] **notifications back button** replaced with a custom `<ion-button
-  (click)="goBack()">` + `arrow-back` icon → `navigateBack('/tabs/watchlist')`;
+(click)="goBack()">` + `arrow-back` icon → `navigateBack('/tabs/watchlist')`;
       `IonBackButton` import removed. (T2)
 - [ ] **`origin` threaded** in `watchlist.page.ts` (`'watchlist'`),
       `today.page.ts` (`'today'`), `search.page.ts` (`'search'`) navigate calls,
