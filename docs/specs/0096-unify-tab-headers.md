@@ -2,7 +2,7 @@
 number: 0096
 slug: unify-tab-headers
 title: Unify the four tab headers into a shared VultusAppHeader and fix Today's taller header
-status: implementing
+status: done
 slices: [slice:today, slice:watchlist, slice:search, slice:settings]
 scopes: [scope:shared, scope:mobile]
 created: 2026-07-22
