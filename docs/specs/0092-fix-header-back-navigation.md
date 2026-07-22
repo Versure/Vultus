@@ -2,7 +2,7 @@
 number: 0092
 slug: fix-header-back-navigation
 title: Make the title-detail and notifications header back button return to the page you came from
-status: implementing
+status: done
 slices:
   [
     slice:title-detail,
