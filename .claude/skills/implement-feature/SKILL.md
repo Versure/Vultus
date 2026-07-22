@@ -63,6 +63,15 @@ around them rather than being surprised.
 - **Bash cwd resets** to the primary checkout between calls. Never rely on a
   persisted working directory — always use **absolute paths** / `git -C $wt` /
   `cd $wt && …` **within the same call**.
+- **A session restart can lose an in-flight agent's completion record** (the
+  notification arrives as "stopped / no completion record"). For the
+  **read-only agents** (feature-reviewer, qa-runner) simply **re-dispatch
+  fresh** — their work is idempotent and costs only time. For an
+  **implementer**, first check the worktree (`git status --short` + the task's
+  file manifest) for partial writes before re-dispatching, and tell the re-run
+  what may already exist. A restart-loss does **not** count against the
+  2-retry bound (observed on spec 0098: qa-runner lost to a restart, re-ran
+  clean).
 - **Permission-classifier context sensitivity.** An earlier denied action (e.g.
   the Step-2 `.env.local` seed copy) has been observed to influence the
   classifier's judgment on **later, unrelated actions** in the same session (even
@@ -100,9 +109,12 @@ around them rather than being surprised.
   ```
   `git worktree prune`; if `$wt` registered → reuse; elif branch exists →
   `git worktree add --force $wt feat/NNNN-slug`; else
-  `git worktree add -b feat/NNNN-slug $wt main`. Branch must not be active in the
-  primary checkout. Set `status: implementing` **in the worktree** (worktree-local
-  only — `main` advances `approved → done`).
+  `git fetch origin main` and `git worktree add -b feat/NNNN-slug $wt origin/main` —
+  base on **`origin/main`, not local `main`** (observed on spec 0098: the local
+  `main` was several merges behind and did not even contain the spec file; a
+  worktree based on it starts stale and guarantees a bigger Step-7 merge). Branch
+  must not be active in the primary checkout. Set `status: implementing` **in the
+  worktree** (worktree-local only — `main` advances `approved → done`).
 - **Regenerate + stage the ledger on this status flip (group A.1).** The
   `approved → implementing` change edits a `docs/specs/*.md` file, so the local
   pre-commit hook's `gen-spec-status.mjs --check` will fail unless the ledger is
@@ -250,6 +262,14 @@ around them rather than being surprised.
   (infra) + schema/converters runs as sequential foundation; native Capacitor →
   infra, plugin calls in a component → frontend. Each agent gets the spec path,
   the absolute `$wt`, and its task subset (+ manifest).
+- **Resolve real Nx project names before writing agent prompts.** Project names
+  carry the scope-dir prefix (`mobile-settings`, `mobile-title-detail` — **not**
+  the bare slice name `settings`); the apps are `mobile` / `mobile-e2e` /
+  `functions`. Specs routinely write `nx test settings` (spec 0098 did), and an
+  agent given that verbatim burns a retry discovering it doesn't resolve. Read
+  the touched libs' `project.json` `name` fields once, and state the corrected
+  names **explicitly in every implementer/qa prompt** rather than propagating
+  the spec's wording. (Memory: `nx-project-names-prefixed`.)
 
 ### 3a. Bootstrap mode (first features only)
 
@@ -302,8 +322,8 @@ around them rather than being surprised.
   itself. A WIP commit is fine — the PR is squash-merged. Implementer subagents do
   **not** self-commit: they would race the git index in a shared worktree. This
   committed diff is an explicit **precondition of Step 5** — feature-reviewer
-  computes `git -C $wt diff main...HEAD`, so it **must run against a committed
-  diff**; if the working tree is dirty at Step 5, commit first.
+  computes `git -C $wt diff origin/main...HEAD`, so it **must run against a
+  committed diff**; if the working tree is dirty at Step 5, commit first.
 - **First commit of a cold/fresh worktree needs a long/backgrounded timeout
   (group C; cf. CLAUDE.md's cold-hook note).** On the **first commit of a fresh
   worktree**, husky + lint-staged
@@ -332,11 +352,13 @@ around them rather than being surprised.
 ### 5. Auto-review → bounded rework
 
 - **Precondition (group B): feature-reviewer must run against a committed diff.**
-  The reviewer computes `git -C $wt diff main...HEAD`; if the work is still in the
-  working tree, that diff is empty and the reviewer returns a bogus blocking
+  The reviewer computes `git -C $wt diff origin/main...HEAD`; if the work is still
+  in the working tree, that diff is empty and the reviewer returns a bogus blocking
   `NEEDS_REWORK`. If the working tree is dirty at this point, **commit first**
   (Step 4 already commits at fan-in).
-- Spawn **feature-reviewer** on the diff (`git -C $wt diff main...HEAD`). For
+- Spawn **feature-reviewer** on the diff (`git -C $wt diff origin/main...HEAD` —
+  **`origin/main`, not local `main`**, matching the Step-2 base; a stale local
+  `main` makes `main...HEAD` include unrelated upstream commits). For
   `NEEDS_REWORK`, dispatch the appropriate specialist(s) by scope tag (you handle
   shared-file fixes), re-review, up to the bound; then record open findings.
 
@@ -372,6 +394,22 @@ around them rather than being surprised.
   Resolve any `STATUS.md` conflict by **regenerating** the ledger
   (`node tools/scripts/gen-spec-status.mjs` in `$wt`) and staging the regenerated
   file — **not** by hand-editing the ledger.
+- **Slice-source merge conflicts → dispatch a specialist, never hand-resolve
+  (group A.5).** If the `origin/main` merge conflicts in slice source (observed
+  on spec 0098: a sibling spec — 0097 — merged mid-run editing the **same**
+  service loop), the orchestrator-never-writes-slice-source rule **still
+  applies**: dispatch the scope-tagged specialist to resolve, giving it (a) the
+  conflicted file list, (b) the spec's coordination notes if it names the
+  sibling spec (e.g. "whichever merges second rebases onto the first"), and
+  (c) instructions to `git add` the resolved files but **not commit** — the
+  orchestrator completes the merge commit and still owns the `STATUS.md`
+  regeneration. Reading the conflict regions yourself to write a precise prompt
+  is fine; resolving them yourself is not (even "trivial unions"). After
+  resolution the agent must re-run the affected gates (typecheck / lint / unit
+  for the touched projects) before the merge commit — a reconciliation is a
+  code change, and the pre-merge review/QA passes no longer vouch for it. If
+  the reconciled loop changed materially, prefer a fresh feature-reviewer pass
+  over assuming the earlier PASS still holds.
 - Flip the spec to `status: done` **in the diff** by reading the frontmatter and
   setting `status:` (inserting it if absent — don't assume a line exists).
   Merging marks it done. **Regenerate + stage the ledger on this status flip

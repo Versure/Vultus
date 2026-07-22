@@ -132,7 +132,12 @@ Body sections, in this order — keep each tight and concrete:
    implement-feature uses to fan out agents safely.
 8. **Test plan** — concrete tests per the PLAN §5 pyramid: unit (what logic),
    component (which components with non-trivial state), e2e (which named flows,
-   if any). **Rendered-text assertions:** component/unit tests that assert on
+   if any). **Use real Nx project names in any `nx` command** — read the touched
+   lib's `project.json` `name`; names carry the scope-dir prefix
+   (`mobile-settings`, **not** the bare slice name `settings`; apps are
+   `mobile` / `mobile-e2e` / `functions`). A bare-slice-name command (e.g.
+   `nx test settings`) doesn't resolve and costs the implementer a wasted retry
+   (happened on spec 0098). **Rendered-text assertions:** component/unit tests that assert on
    **rendered UI text** must assert the **exact string** — do **not** whitespace-
    normalize (e.g. `.replace(/\s+/g,' ').trim()`) before asserting, which masks
    rendering defects like a stray leading/trailing space. Keep the component/unit
