@@ -10,10 +10,10 @@
 
 # Spec status ledger
 
-Total specs: 91
+Total specs: 92
 
 - done: 90
-- approved: 1
+- approved: 2
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -108,3 +108,4 @@ Total specs: 91
 | 89 | fix-automatic-notification-dispatch | Fix automatic notification dispatch — daily-sync rate-limit hardening and a daily episode-aired airing-scan | done | slice:sync-titles, slice:dispatch-notifications | scope:functions |
 | 90 | plex-link-code-actions | Add copy-code + "Open plex.tv/link" actions to the Plex link-code stage (onboarding parity + both pages) | done | slice:onboarding, slice:settings | scope:mobile |
 | 91 | fix-watch-today-header | Shrink the Watch Today hero title/subtitle to match other pages' headings | done | slice:today | scope:mobile |
+| 94 | fix-also-available-on-spacing | Fix the extra whitespace above "Also Available On" in the title-detail Where to Watch card | approved | slice:title-detail | scope:mobile |
