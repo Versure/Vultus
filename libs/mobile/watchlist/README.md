@@ -141,8 +141,18 @@ declarations (`opacity: 1` / `translateY(0)`) are bound directly on
 `.filter-sheet-backdrop`/`.filter-sheet-panel` via their own `[class.open]`
 bindings — **not** via a nested `.filter-sheet.open` descendant selector, which
 failed to win the cascade in-browser (spec 0087, issue #230) — so the open panel
-reliably reaches `translateY(0)` and is not clipped by the 0082
-`overflow: hidden`.
+reliably reaches `translateY(0)`. The `.filter-sheet` wrapper carries
+`slot="fixed"` (spec 0095, #230 reopen / follow-up to 0087) so Ionic projects it
+as a sibling of the scroll host `[part="scroll"]` — anchoring the sheet to the
+visual viewport and making it immune to the list's `scrollTop`, instead of the
+pre-0095 default-slot placement that anchored its `inset: 0` box to
+scrolled-content coordinates and let the whole sheet drift off-screen by the
+scroll offset on a non-empty, scrolled list. Because the sheet is now projected
+outside the scroll host, spec 0082's `overflow: hidden` clip is no longer
+load-bearing (a `slot="fixed"` closed panel cannot leak scrollable overflow into
+`ion-content`) and was **removed with proof**: verified live on serve-mock
+(spec 0095 D5) that with it gone the empty-watchlist closed-sheet check still holds
+(`ion-content` inner-scroll `scrollHeight === clientHeight`, 699 === 699).
 
 The slice-local grouping/filtering/sort helpers (`groupByStatus`, `filterByType`,
 `sortItems`, `getAvailableProviders`, the `WatchlistSort` type,

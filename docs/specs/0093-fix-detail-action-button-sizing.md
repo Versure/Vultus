@@ -2,7 +2,7 @@
 number: 0093
 slug: fix-detail-action-button-sizing
 title: Equalize the untracked title-detail action buttons — reset the `ion-button` host box-model so both flex siblings render the same width
-status: approved
+status: done
 slices: [slice:title-detail]
 scopes: [scope:mobile]
 created: 2026-07-22
@@ -421,10 +421,10 @@ Tailored from the PLAN §5 checklist. Every checkbox maps to the single Task.
   implementer STOP and flag it to the orchestrator as scope-changing new
   information.
 - **No PLAN conflict.** A CSS-only fix to one existing `scope:mobile` slice; no
-new field/collection/dependency, no `scope:shared` change, no cross-slice
-import, no `User` field (F4 N/A). Fully consistent with PLAN §3 vertical-slice
-and the "no shared extraction below 3 slices" rule (no shared button atom is
-introduced).
-</content>
+  new field/collection/dependency, no `scope:shared` change, no cross-slice
+  import, no `User` field (F4 N/A). Fully consistent with PLAN §3 vertical-slice
+  and the "no shared extraction below 3 slices" rule (no shared button atom is
+  introduced).
+  </content>
 
 </invoke>

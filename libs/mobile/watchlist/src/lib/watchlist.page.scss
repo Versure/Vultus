@@ -319,19 +319,30 @@ vultus-error-state.fill-state {
 // chip rows.
 // -----------------------------------------------------------------------------
 .filter-sheet {
+  // Projected via `slot="fixed"` in the template (spec 0095, #230 reopen /
+  // follow-up to 0087): Ionic renders `slot="fixed"` content as a SIBLING of the
+  // scroll host `[part="scroll"]`, outside `.inner-scroll`, so this box's
+  // containing block is the viewport-anchored fixed host — NOT the scrollable
+  // content. `inset: 0` therefore fills the visual viewport regardless of the
+  // list's `scrollTop`. (Before 0095 this was a default-slot child inside
+  // `[part="scroll"]`, so `inset: 0` anchored to scrolled-content coordinates and
+  // the whole sheet+panel box drifted off-screen by the scroll offset — 0087's
+  // `translateY(0)` open state stayed correct but rode along with that drift.)
   position: absolute;
   inset: 0;
   z-index: 60;
   visibility: hidden;
   pointer-events: none;
-  // Clip the closed panel within the sheet's own inset:0 box. The closed
-  // `.filter-sheet-panel` is `translateY(100%)` (~277px below its box); since
-  // spec 0076 made `ion-content::part(scroll)` a flex column, that off-screen
-  // panel otherwise leaks scrollable overflow into `ion-content` (visibility:hidden
-  // does NOT exclude an element from scrollable overflow — only ancestor clipping
-  // does), so the empty page scrolls. `overflow: hidden` stops that leak without
-  // affecting the open panel (translateY(0), within this box). Issue #159 follow-up.
-  overflow: hidden;
+  // Spec 0082's `overflow: hidden` clip (issue #159) was REMOVED here with proof.
+  // 0082 added it because a default-slot `.filter-sheet` lived INSIDE the flex-column
+  // scroll host (`[part="scroll"]`, spec 0076), so the closed panel's
+  // `translateY(100%)` box (~277px below) leaked scrollable overflow into
+  // `ion-content` and let the empty page scroll. Now that the sheet is `slot="fixed"`
+  // it is projected OUTSIDE the scroll host entirely, so its closed panel can no
+  // longer contribute to that container's `scrollHeight` — the clip is no longer
+  // load-bearing. Verified live on serve-mock (spec 0095 D5): with the declaration
+  // gone (computed `overflow: visible`) the empty-watchlist closed-sheet check still
+  // holds — `ion-content` inner-scroll `scrollHeight === clientHeight` (699 === 699).
 
   // Same-element toggle (the sheet's own visibility/pointer-events) — this rule
   // matches on the very element whose class flips, so it applies reliably.
