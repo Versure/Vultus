@@ -2,7 +2,7 @@
 number: 0094
 slug: fix-also-available-on-spacing
 title: Fix the extra whitespace above "Also Available On" in the title-detail Where to Watch card
-status: implementing
+status: done
 slices: [slice:title-detail]
 scopes: [scope:mobile]
 created: 2026-07-22
@@ -372,7 +372,7 @@ Tailored from the PLAN §5 checklist. Every checkbox maps to Task A.
       cross-scope edge; single existing `scope:mobile` slice; no
       `sheriff.config.ts` change. (Task A)
 - [ ] **Scoped SCSS rule added:** `.provider-groups > .group-divider {
-  margin-top: 0; }` (with the issue-#252 comment) in `title-detail.page.scss`;
+margin-top: 0; }` (with the issue-#252 comment) in `title-detail.page.scss`;
       the base `.group-divider` `border-top` / `margin-top` / `padding-top`
       declarations, `.provider-groups`, the `--vultus-space-*` tokens, and every
       other rule are untouched; **no `!important`**; the stale `.group-divider`
