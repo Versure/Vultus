@@ -3,29 +3,24 @@ import { Router } from '@angular/router';
 import {
   AlertController,
   IonButton,
-  IonButtons,
   IonContent,
-  IonHeader,
   IonIcon,
   IonSelect,
   IonSelectOption,
   IonSkeletonText,
   IonSpinner,
-  IonTitle,
   IonToggle,
-  IonToolbar,
   ToastController,
 } from '@ionic/angular/standalone';
 import { regionDisplayName } from '@vultus/shared/domain';
 import type { CatalogProvider, Region } from '@vultus/shared/domain';
-import { VultusErrorState } from '@vultus/shared/ui-kit';
+import { VultusAppHeader, VultusErrorState } from '@vultus/shared/ui-kit';
 import { addIcons } from 'ionicons';
 import {
   albumsOutline,
   checkmarkCircle,
   chevronDownOutline,
   chevronForward,
-  filmOutline,
   globeOutline,
   notificationsOutline,
   personCircleOutline,
@@ -50,10 +45,7 @@ const TMDB_LOGO_BASE = 'https://image.tmdb.org/t/p/w92';
   selector: 'lib-settings',
   providers: [...SETTINGS_PROVIDERS],
   imports: [
-    IonHeader,
-    IonToolbar,
-    IonTitle,
-    IonButtons,
+    VultusAppHeader,
     IonButton,
     IonContent,
     IonIcon,
@@ -102,7 +94,6 @@ export class SettingsPage implements OnInit {
     addIcons({
       globeOutline,
       notificationsOutline,
-      filmOutline,
       personCircleOutline,
       timeOutline,
       albumsOutline,

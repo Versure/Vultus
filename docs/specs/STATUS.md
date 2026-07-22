@@ -12,8 +12,8 @@
 
 Total specs: 98
 
-- done: 95
-- approved: 3
+- done: 96
+- approved: 2
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -112,6 +112,6 @@ Total specs: 98
 | 93 | fix-detail-action-button-sizing | Equalize the untracked title-detail action buttons — reset the `ion-button` host box-model so both flex siblings render the same width | done | slice:title-detail | scope:mobile |
 | 94 | fix-also-available-on-spacing | Fix the extra whitespace above "Also Available On" in the title-detail Where to Watch card | done | slice:title-detail | scope:mobile |
 | 95 | fix-watchlist-filter-sheet-scroll-drift | Fix the Watchlist filter sheet drifting off-screen when the list is scrolled — anchor it to the viewport via `slot="fixed"` | done | slice:watchlist | scope:mobile |
-| 96 | unify-tab-headers | Unify the four tab headers into a shared VultusAppHeader and fix Today's taller header | approved | slice:today, slice:watchlist, slice:search, slice:settings | scope:shared, scope:mobile |
+| 96 | unify-tab-headers | Unify the four tab headers into a shared VultusAppHeader and fix Today's taller header | done | slice:today, slice:watchlist, slice:search, slice:settings | scope:shared, scope:mobile |
 | 97 | fix-plex-sync-unmatched-shows | Fix Plex sync dropping unmatched shows (issue | done | slice:settings | scope:mobile, scope:shared |
 | 98 | fix-plex-episode-watch-sync | Fix Plex sync — create missing episode docs on-device so watched episodes mark immediately | approved | slice:settings | scope:mobile |

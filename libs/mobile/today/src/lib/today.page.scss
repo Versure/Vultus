@@ -1,9 +1,10 @@
 // Watch Today tab styles (spec 0083). Pinned from the primary Stitch screen
-// `812340847a604f8a968021183690bf54` ("Watch Today - Vultus"): header h-16,
-// hero mb-10, sections mb-10, card h-44 / w-32 poster / p-4 body, availability
-// pill, "Ready to watch" tag. All colors/type/spacing consume the `--vultus-*` /
+// `812340847a604f8a968021183690bf54` ("Watch Today - Vultus"): hero mb-10,
+// sections mb-10, card h-44 / w-32 poster / p-4 body, availability pill,
+// "Ready to watch" tag. All colors/type/spacing consume the `--vultus-*` /
 // `--ion-*` theme vars (shared/ui-kit theme.scss / docs/design/vultus-design-system.md)
-// — NO hand-transcribed hex.
+// — NO hand-transcribed hex. The header is now the shared `VultusAppHeader`
+// (spec 0096); its chrome lives in that component, not here.
 
 // Shared keyboard-focus ring — a 2px primary-Emerald outline at ~50% opacity
 // (mirrors watchlist's `%vultus-focus-ring`).
@@ -11,46 +12,6 @@
   outline: none;
   box-shadow: 0 0 0 2px
     color-mix(in srgb, var(--vultus-primary) 50%, transparent);
-}
-
-// -----------------------------------------------------------------------------
-// Header — h-16 (64px), `--vultus-surface` bg, 1px bottom border
-// `--vultus-outline-variant`, 16px horizontal inset. Brand mark + a single
-// non-interactive account button (mirrors the existing watchlist header for
-// cross-tab consistency; the screen's brand uses `movie_filter` / display-lg —
-// we keep `film-outline` + watchlist's brand scale, see PR notes).
-// -----------------------------------------------------------------------------
-ion-header {
-  ion-toolbar {
-    --background: var(--vultus-surface);
-    --border-width: 0 0 1px 0;
-    --border-color: var(--vultus-outline-variant);
-    --border-style: solid;
-    --box-shadow: none;
-    --min-height: 64px;
-
-    ion-title {
-      padding-inline: 16px;
-    }
-  }
-}
-
-.brand-mark {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--vultus-space-sm);
-  color: var(--vultus-primary);
-  font-family: var(--vultus-font-family);
-  font-weight: 700;
-  font-size: 1.125rem;
-}
-
-.brand-icon {
-  font-size: 1.25rem;
-  color: var(--vultus-primary);
-  flex-shrink: 0;
-  position: relative;
-  top: -1px;
 }
 
 // -----------------------------------------------------------------------------
