@@ -30,7 +30,9 @@ The barrel (`@vultus/mobile/settings`) exports:
   (`Capacitor.isNativePlatform()` → real, else mock). There is **no
   `PLEX_PROVIDERS`** export and **no `plex.providers.ts`** — the shell factory is
   the single client selector.
-- `PlexSyncSummary` (type) — the `{ added, updated, skipped }` outcome of a sync.
+- `PlexSyncSummary` (type) — the `{ added, updated, skipped, unmatched }` outcome
+  of a sync (`unmatched` added in spec 0097 = titles that couldn't be resolved to
+  a TMDB id this pass).
 - `SETTINGS_TMDB_CONFIG` (token, spec 0086) — an
   `InjectionToken<TmdbDetailConfig>` the shell's `app.config.ts` wires from
   `environment.tmdb` (the same value `TMDB_SEARCH_CONFIG` / `TMDB_DETAIL_CONFIG`
@@ -97,14 +99,22 @@ reads). Two impls live in this slice:
   (`/library/sections/{id}/all`) is fetched with **`includeGuids=1`** — WITHOUT
   it Plex omits the external `Guid[]` (`tmdb://`) and every `tmdbId` parses as
   `null`, so every item is skipped and nothing ever syncs (the original
-  episodes-not-marked bug); `tmdbIdFromGuids` also accepts the legacy
-  `themoviedb://<id>` agent GUID. Every native call carries a connect/read
+  episodes-not-marked bug); `externalIdsFromGuids` parses `tmdb://`, `tvdb://`
+  (spec 0097) and `imdb://` ids (plus the legacy `themoviedb://<id>` agent GUID
+  for TMDB) — a `tvdb`/`imdb`-only item has `tmdbId: null` and is resolved by
+  `PlexSyncService` via the TMDB `/find` external-id fallback. A missing `addedAt`
+  maps to `null` (spec 0097 — NO epoch-0 fallback, which used to make an unwatched
+  addition skip-forever), and pagination keeps going when PMS omits `totalSize`
+  (until a short/empty page) instead of stopping after page 1. Every native call
+  carries a connect/read
   **timeout** so a stale/black-holed local connection URI can't hang the request
   and wedge the sync's `running` guard.
 - `MockPlexClient` — deterministic fixtures (pin auto-authorizes; a small library
   with a watched tmdb-GUID movie, a planned tmdb-GUID movie, a partially-watched
-  tmdb-GUID show, and one GUID-less item; a two-episode show with the first
-  watched). Selected for every non-native surface (web / dev / e2e / serve-mock).
+  tmdb-GUID show, a **tvdb-only** show — `tmdbId: null`, `tvdbId` set — to exercise
+  the spec 0097 `/find` fallback, and one fully GUID-less item → a `no-guid`
+  unmatched entry; a two-episode show with the first watched). Selected for every
+  non-native surface (web / dev / e2e / serve-mock).
 
 ### `PlexLinkService` (`providedIn: 'root'`)
 
@@ -114,7 +124,9 @@ discovery, and the `hasPlex` / `plexSync` Firestore link metadata. Surface:
 - signals `stage` (`idle`|`code`|`waiting`|`connected`|`error`), `errorReason`
   (`expired`|`no-server`|`network`|`null`), `code`, `server`, `expiresInSeconds`,
   `countdown` (mm:ss), plus the settings-card state `linked`, `serverName`,
-  `lastSyncAt`;
+  `lastSyncAt`, and `unmatched` (spec 0097 — the `PlexUnmatchedTitle[]` read from
+  `plexSync.unmatched`, `[]` when clean; reset on `unlink()` AND on `loadState()`'s
+  half-linked self-heal branch so a self-healed device shows no stale diagnostics);
 - `requestCode()` (→ `code`, starts the countdown + polling), `regenerateCode()`,
   `cancel()`, `isLinked()`, `loadState()` (loads the card state), `unlink()`.
 
@@ -158,18 +170,45 @@ the "Sync now" spinner/disabled state.
 
 `sync()` returns a discriminated **`PlexSyncResult`** and **never throws** — so
 the caller can give real feedback (the settings page toasts it; the boot/resume
-trigger ignores it): `ok` (with the `{ added, updated, skipped }` summary),
-`skipped` with a reason (`busy` = a sync already running, `not-linked` = uid null
-or no Preferences token, `no-server` = discovery found none), or `error` (a
-plex.tv/PMS/Firestore call threw — network / HTTP / timeout). Previously it
+trigger ignores it): `ok` (with the `{ added, updated, skipped, unmatched }`
+summary), `skipped` with a reason (`busy` = a sync already running, `not-linked` =
+uid null or no Preferences token, `no-server` = discovery found none), or `error`
+(a plex.tv/PMS/Firestore call threw — network / HTTP / timeout). Previously it
 returned only a summary and swallowed every failure, so a silent skip and a hard
 failure were indistinguishable and the "Sync now" button gave no feedback. The
-cursor is advanced ONLY on `ok`.
+cursor (`plexSync.lastSyncAt`) advances whenever the library pass runs to
+**completion** (spec 0097 — with per-item isolation, item errors no longer abort
+the pass, so a completed-with-errors pass still advances the cursor).
 
 Key invariants:
 
-- **GUID matching**: `tmdb://603` → tmdbId 603; a GUID-less item is SKIPPED
-  (counted, never fuzzy-matched, no write).
+- **GUID matching + TMDB `/find` fallback (spec 0097)**: `tmdb://603` → tmdbId
+  603 (used directly). An item with NO `tmdb://` id but a `tvdb://`/`imdb://` id
+  is resolved deterministically **ID→ID** via TMDB `GET /find/{id}
+?external_source=tvdb_id|imdb_id` (tvdb preferred for shows; the `/find` result
+  must be of the MATCHING media type — `tv_results` for shows, `movie_results`
+  for movies). This is NOT fuzzy title matching (0073's rule stands). An item that
+  still can't be resolved is recorded in the pass's `unmatched` list with a reason
+  — `no-guid` (no tmdb/tvdb/imdb id at all), `guid-unresolved` (had a tvdb/imdb id
+  but `/find` returned no matching-type result — INCLUDING a movie carrying only a
+  tvdb id, which is show-only), or `error` (a `/find` call threw) — never
+  fuzzy-matched, no write. `findExternalIdSafe` mirrors `fetchDetailSafe`: a thrown
+  `/find` is caught and counted `error`, distinct from a resolved `null`
+  (`guid-unresolved`).
+- **Per-item error isolation (spec 0097)**: each item's processing is wrapped in
+  try/catch; a single failing item (e.g. a `listEpisodes` 404) is recorded reason
+  `error` and the loop continues — it no longer aborts every later item.
+- **Unmatched-titles diagnostics (spec 0097)**: on pass completion the engine
+  persists `plexSync.unmatched` (capped 50 via `slice(0, 50)`, REPLACED wholesale
+  each pass — `[]` when the pass matched everything) alongside
+  `plexSync.lastSyncAt` in the single `updateDoc`. `PlexLinkService.loadState()`
+  reads it into the `unmatched` signal; the Settings connected card renders a
+  "Couldn't match N titles" list from it. `summary.unmatched` = the count pushed
+  this pass; `skipped` keeps its 0073/0086 meaning (old-cursor unwatched +
+  sticky-dropped).
+- **Missing `addedAt` (spec 0097)**: a missing Plex `addedAt` (client returns
+  `null`) is treated as **new** for the cursor comparison (admitted as a `planned`
+  addition), not epoch-0/skip-forever.
 - **Status derivation is REPLICATED locally** (the slice cannot import
   `TitleDetailService`): movie `viewCount > 0` → `completed`; show `planned →
 watching` on ≥1 watched episode, `watching → completed` when all present
@@ -275,6 +314,17 @@ text button (disabled + "Syncing…" while `plexSync.running()`), and a
 "Disconnect" text button (confirm alert → `unlink()`). The logo tile uses a
 `--vultus-*` surface token; the Plex brand colour lives only in
 `/assets/plex-logo.svg`.
+
+The connected block also carries an **unmatched-titles list** (spec 0097), placed
+after the background-sync controls and before the Disconnect footer, gated on
+`@if (plexLink.unmatched().length > 0)` (hidden when empty). It is a
+static/non-interactive `<ul>`: a muted heading (reusing `settings-row__helper`)
+reading "Couldn't match N titles" (singular "Couldn't match 1 title"), then one
+row per entry — the Plex `title` (body-md, ellipsized) + a trailing reason label
+(label-sm, `--vultus-on-surface-variant`) mapping `no-guid` → "Not identified",
+`guid-unresolved` → "No TMDB match", `error` → "Sync error". Tokens only, no new
+hex. The "Sync now" completion toast also appends an "N couldn't be matched" count
+when `summary.unmatched > 0`.
 
 The connected block also carries the background-sync controls (spec 0085),
 between the sync-row and the footer: a "Sync in background" `ion-toggle` bound to

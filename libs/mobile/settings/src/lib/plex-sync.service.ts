@@ -13,6 +13,7 @@ import { AUTH_UID, PLEX_CLIENT } from '@vultus/shared/domain/tokens';
 import type {
   PlexLibraryItem,
   PlexServer,
+  PlexUnmatchedTitle,
   TitleType,
   WatchStatus,
   WatchlistItem,
@@ -35,12 +36,22 @@ import { describePlexError, describeTmdbError } from './plex-errors';
 import { createTmdbDetailClient } from './tmdb-detail.client';
 import { SETTINGS_TMDB_CONFIG } from './tokens';
 
-/** Small per-sync outcome summary (logging + the mock e2e assertions). */
+/** Small per-sync outcome summary (logging + the mock e2e assertions).
+ *  `unmatched` (spec 0097) = titles this pass could NOT resolve to a TMDB id (no
+ *  GUID at all, an unresolvable tvdb/imdb GUID, or a per-item error); `skipped`
+ *  keeps its 0073/0086 meaning (old-cursor unwatched + sticky-dropped). */
 export interface PlexSyncSummary {
   added: number;
   updated: number;
   skipped: number;
+  unmatched: number;
 }
+
+/** Result of resolving a Plex item to a TMDB id (spec 0097): the id when found,
+ *  else a classification for the unmatched list. */
+type ItemResolution =
+  | { tmdbId: number }
+  | { tmdbId: null; reason: PlexUnmatchedTitle['reason'] };
 
 /**
  * Discriminated outcome of a `sync()` call, so the caller can give the user real
@@ -143,11 +154,19 @@ export class PlexSyncService {
       }
       const cursor = await this.readCursor(uid);
       const library = await this.client.listLibrary(server);
-      const summary = await this.processLibrary(uid, server, library, cursor);
-      // Advance the cursor on success (nested field-path update; leave
-      // linkedAt / serverName intact).
+      const { summary, unmatched } = await this.processLibrary(
+        uid,
+        server,
+        library,
+        cursor,
+      );
+      // Advance the cursor on completion (nested field-path update; leave
+      // linkedAt / serverName intact) AND persist this pass's unmatched titles
+      // (spec 0097): capped at 50, REPLACED wholesale each pass, [] when the pass
+      // matched everything (which clears the Settings "couldn't match" list).
       await updateDoc(doc(this.firestore, userPath(uid)), {
         'plexSync.lastSyncAt': new Date().toISOString(),
+        'plexSync.unmatched': unmatched.slice(0, 50),
       });
       return { status: 'ok', summary };
     } catch (err) {
@@ -182,105 +201,202 @@ export class PlexSyncService {
     server: PlexServer,
     library: PlexLibraryItem[],
     cursor: number,
-  ): Promise<PlexSyncSummary> {
+  ): Promise<{ summary: PlexSyncSummary; unmatched: PlexUnmatchedTitle[] }> {
     let added = 0;
     let updated = 0;
     let skipped = 0;
+    const unmatched: PlexUnmatchedTitle[] = [];
 
     for (const item of library) {
-      // GUID matching: a GUID-less item is SKIPPED (counted, no write, never
-      // fuzzy-matched).
-      if (item.tmdbId === null) {
-        skipped += 1;
-        continue;
-      }
-      const tmdbId = item.tmdbId;
-      const current = await this.currentTracked(uid, tmdbId);
-      // Mirror the show's episode docs FIRST (full mirror for matched titles,
-      // NOT cursor-gated) so status derivation reads fresh watched-counts. A
-      // movie's "watched" is its own viewCount. The mirror is a no-op for a
-      // brand-new (untracked) show — no episode docs exist yet.
-      const watched =
-        item.type === 'movie'
-          ? item.viewCount > 0
-          : (await this.mirrorEpisodes(uid, server, item, tmdbId)).anyWatched;
-
-      if (current === null) {
-        // Not tracked yet.
-        const isNewAddition = item.addedAt
-          ? new Date(item.addedAt).getTime() > cursor
-          : false;
-        if (watched) {
-          // Watch-implies-add (NOT cursor-gated): a watched, untracked item is
-          // added — movie → completed, show → watching (episodes already
-          // mirrored above; they land on the next daily sync once docs exist).
-          await this.addItem(
-            uid,
-            item,
-            tmdbId,
-            item.type === 'movie' ? 'completed' : 'watching',
-          );
-          added += 1;
-        } else if (isNewAddition) {
-          // Cursor library addition (unwatched, newer than cursor) → planned.
-          await this.addItem(uid, item, tmdbId, 'planned');
-          added += 1;
-        } else {
-          // Older-than-cursor unwatched item → ignored.
-          skipped += 1;
+      // Per-item error isolation (spec 0097): a single failing item (e.g. a
+      // listEpisodes 404, a Firestore write throwing) must NOT abort the rest of
+      // the pass. It is recorded reason 'error' and the loop continues so the
+      // cursor still advances and later items still process.
+      try {
+        // Resolve a TMDB id: the item's tmdb:// GUID, else the tvdb/imdb /find
+        // external-id fallback. An unresolved item is recorded (with a reason)
+        // and skipped — never fuzzy-matched (0073's no-fuzzy rule stands).
+        const resolution = await this.resolveTmdbId(item);
+        if (resolution.tmdbId === null) {
+          unmatched.push({ title: item.title, reason: resolution.reason });
+          continue;
         }
-        continue;
-      }
+        const tmdbId = resolution.tmdbId;
+        const current = await this.currentTracked(uid, tmdbId);
+        // Mirror the show's episode docs FIRST (full mirror for matched titles,
+        // NOT cursor-gated) so status derivation reads fresh watched-counts. A
+        // movie's "watched" is its own viewCount. The mirror is a no-op for a
+        // brand-new (untracked) show — no episode docs exist yet.
+        const watched =
+          item.type === 'movie'
+            ? item.viewCount > 0
+            : (await this.mirrorEpisodes(uid, server, item, tmdbId)).anyWatched;
 
-      // Already tracked. POSTER BACKFILL runs FIRST and UNCONDITIONALLY of
-      // status (spec 0086): a tracked item whose stored posterPath is null (the
-      // exact issue #229 bug for Plex-synced titles) gets its TMDB
-      // posterPath/voteAverage fetched and written — this is display-data
-      // enrichment, NOT a status change, so it happens even for a sticky-dropped
-      // item (the dropped guard below skips only the STATUS write). A strict
-      // `=== null` check, NOT a falsy check: an empty-string posterPath is a real
-      // value and must NOT trigger a redundant fetch. Skip the TMDB call entirely
-      // when posterPath is already non-null (self-limiting: once healed, never
-      // re-fetched). A pure poster backfill does NOT increment `updated` (which
-      // means "status changed").
-      if (current.posterPath === null) {
-        const detail = await this.fetchDetailSafe(tmdbId, item.type);
-        if (detail !== null) {
+        if (current === null) {
+          // Not tracked yet. A MISSING addedAt is treated as "new" (spec 0097):
+          // a data gap is not evidence the item is old, and erring toward
+          // inclusion matches the bug's intent (do not silently drop).
+          const isNewAddition =
+            item.addedAt === null
+              ? true
+              : new Date(item.addedAt).getTime() > cursor;
+          if (watched) {
+            // Watch-implies-add (NOT cursor-gated): a watched, untracked item is
+            // added — movie → completed, show → watching (episodes already
+            // mirrored above; they land on the next daily sync once docs exist).
+            await this.addItem(
+              uid,
+              item,
+              tmdbId,
+              item.type === 'movie' ? 'completed' : 'watching',
+            );
+            added += 1;
+          } else if (isNewAddition) {
+            // Cursor library addition (unwatched, newer than cursor) → planned.
+            await this.addItem(uid, item, tmdbId, 'planned');
+            added += 1;
+          } else {
+            // Older-than-cursor unwatched item → ignored.
+            skipped += 1;
+          }
+          continue;
+        }
+
+        // Already tracked. POSTER BACKFILL runs FIRST and UNCONDITIONALLY of
+        // status (spec 0086): a tracked item whose stored posterPath is null (the
+        // exact issue #229 bug for Plex-synced titles) gets its TMDB
+        // posterPath/voteAverage fetched and written — this is display-data
+        // enrichment, NOT a status change, so it happens even for a sticky-dropped
+        // item (the dropped guard below skips only the STATUS write). A strict
+        // `=== null` check, NOT a falsy check: an empty-string posterPath is a real
+        // value and must NOT trigger a redundant fetch. Skip the TMDB call entirely
+        // when posterPath is already non-null (self-limiting: once healed, never
+        // re-fetched). A pure poster backfill does NOT increment `updated` (which
+        // means "status changed").
+        if (current.posterPath === null) {
+          const detail = await this.fetchDetailSafe(tmdbId, item.type);
+          if (detail !== null) {
+            await updateDoc(
+              doc(this.firestore, watchlistItemPath(uid, String(tmdbId))),
+              {
+                posterPath: detail.posterPath,
+                voteAverage: detail.voteAverage,
+              },
+            );
+          }
+        }
+
+        // Sticky-dropped: NEVER auto-change a dropped status; the episode mirror
+        // has already written above for a show, and the poster backfill above has
+        // already run (a dropped item still gets its poster healed).
+        if (current.status === 'dropped') {
+          skipped += 1;
+          continue;
+        }
+
+        const derived = await this.deriveStatus(
+          uid,
+          item,
+          tmdbId,
+          current.status,
+          watched,
+        );
+        if (derived !== null && derived !== current.status) {
           await updateDoc(
             doc(this.firestore, watchlistItemPath(uid, String(tmdbId))),
-            {
-              posterPath: detail.posterPath,
-              voteAverage: detail.voteAverage,
-            },
+            { status: derived },
           );
+          updated += 1;
         }
-      }
-
-      // Sticky-dropped: NEVER auto-change a dropped status; the episode mirror
-      // has already written above for a show, and the poster backfill above has
-      // already run (a dropped item still gets its poster healed).
-      if (current.status === 'dropped') {
-        skipped += 1;
-        continue;
-      }
-
-      const derived = await this.deriveStatus(
-        uid,
-        item,
-        tmdbId,
-        current.status,
-        watched,
-      );
-      if (derived !== null && derived !== current.status) {
-        await updateDoc(
-          doc(this.firestore, watchlistItemPath(uid, String(tmdbId))),
-          { status: derived },
+      } catch (err) {
+        // A plex.tv/PMS/Firestore call threw for THIS item. Log a REDACTED
+        // diagnostic (never the raw error — may echo secrets, spec 0068) and
+        // record it as reason 'error' so the pass continues (per-item isolation).
+        console.error(
+          `[plex-sync] item "${item.title}" failed: ${describePlexError(err)}`,
         );
-        updated += 1;
+        unmatched.push({ title: item.title, reason: 'error' });
       }
     }
 
-    return { added, updated, skipped };
+    return {
+      summary: { added, updated, skipped, unmatched: unmatched.length },
+      unmatched,
+    };
+  }
+
+  /**
+   * Resolve a Plex item to a TMDB id (spec 0097). Order: the item's tmdb:// GUID
+   * first; else the tvdb:// GUID (shows only — tvdb is show-only) via TMDB /find;
+   * else the imdb:// GUID via /find. Returns the id when found, else a reason:
+   * - 'no-guid': no tmdb/tvdb/imdb id at all → nothing to resolve;
+   * - 'guid-unresolved': had a tvdb/imdb id but /find returned no matching-media-
+   *   type result — INCLUDING a movie whose only external id is a tvdb id (never
+   *   sent to /find, since tvdb is show-only), classified deliberately here;
+   * - 'error': a /find call threw (network / HTTP / timeout), via
+   *   `findExternalIdSafe`.
+   */
+  private async resolveTmdbId(item: PlexLibraryItem): Promise<ItemResolution> {
+    if (item.tmdbId !== null) {
+      return { tmdbId: item.tmdbId };
+    }
+    const tvdbId = item.tvdbId ?? null;
+    const imdbId = item.imdbId ?? null;
+    if (tvdbId === null && imdbId === null) {
+      return { tmdbId: null, reason: 'no-guid' };
+    }
+    // tvdb is show-only: use it only for shows, preferred over imdb.
+    if (item.type === 'tv' && tvdbId !== null) {
+      const found = await this.findExternalIdSafe(
+        String(tvdbId),
+        'tvdb_id',
+        'tv',
+      );
+      if (found.status === 'error') {
+        return { tmdbId: null, reason: 'error' };
+      }
+      if (found.id !== null) {
+        return { tmdbId: found.id };
+      }
+    }
+    if (imdbId !== null) {
+      const found = await this.findExternalIdSafe(imdbId, 'imdb_id', item.type);
+      if (found.status === 'error') {
+        return { tmdbId: null, reason: 'error' };
+      }
+      if (found.id !== null) {
+        return { tmdbId: found.id };
+      }
+    }
+    // Had a tvdb/imdb id but nothing resolved to a matching-type TMDB result.
+    return { tmdbId: null, reason: 'guid-unresolved' };
+  }
+
+  /**
+   * Wrap `findByExternalId` mirroring `fetchDetailSafe`: a thrown /find call is
+   * caught and reported as `{ status: 'error' }` (→ reason 'error'), distinct
+   * from a successful call returning `null` (→ 'guid-unresolved'). Logs a REDACTED
+   * diagnostic via `describeTmdbError` — NEVER the raw error (may echo the
+   * `api_key` query param or a header token, spec 0068).
+   */
+  private async findExternalIdSafe(
+    externalId: string,
+    source: 'tvdb_id' | 'imdb_id',
+    type: TitleType,
+  ): Promise<{ status: 'ok'; id: number | null } | { status: 'error' }> {
+    try {
+      const id = await this.tmdbClient.findByExternalId(
+        externalId,
+        source,
+        type,
+      );
+      return { status: 'ok', id };
+    } catch (err) {
+      console.error(
+        `[plex-sync] tmdb find ${source} ${externalId} failed: ${describeTmdbError(err)}`,
+      );
+      return { status: 'error' };
+    }
   }
 
   /**

@@ -301,6 +301,31 @@
               </div>
             </div>
           </div>
+          <!--
+            Unmatched-titles diagnostics (spec 0097) — the read-only "couldn't
+            match" list from the most recent completed sync pass. Sits AFTER the
+            background-sync controls and BEFORE the Disconnect footer, hidden
+            entirely when empty. Static/non-interactive: no tap targets, no
+            navigation — it just names dropped titles + why. Reuses the muted
+            `settings-row__helper` class for the heading; tokens only, no new hex.
+          -->
+          @if (plexLink.unmatched().length > 0) {
+          <div class="plex-unmatched">
+            <p class="settings-row__helper">
+              {{ unmatchedHeading(plexLink.unmatched().length) }}
+            </p>
+            <ul class="plex-unmatched__list">
+              @for (entry of plexLink.unmatched(); track $index) {
+              <li class="plex-unmatched__row">
+                <span class="plex-unmatched__title">{{ entry.title }}</span>
+                <span class="plex-unmatched__reason"
+                  >{{ unmatchedReasonLabel(entry.reason) }}</span
+                >
+              </li>
+              }
+            </ul>
+          </div>
+          }
           <div class="plex-connected__footer">
             <button
               type="button"

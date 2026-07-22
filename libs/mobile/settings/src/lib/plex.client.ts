@@ -94,11 +94,18 @@ function epochSecondsToIso(value: unknown): string | null {
   return new Date(seconds * 1000).toISOString();
 }
 
-/** Parse a TMDB id from a Plex GUID list; null when no TMDB GUID present.
- *  Matches BOTH the new Plex agent's external GUID `tmdb://<id>` (returned only
+/** Parse the external ids from a Plex GUID list (spec 0097). Matches BOTH the new
+ *  Plex agent's external GUIDs (`tmdb://`, `tvdb://`, `imdb://` — returned only
  *  when the section listing is fetched with `includeGuids=1`) AND the legacy
- *  agent's `com.plexapp.agents.themoviedb://<id>?lang=en` form. */
-function tmdbIdFromGuids(item: Record<string, unknown>): number | null {
+ *  agent's `com.plexapp.agents.themoviedb://<id>?lang=en` form for TMDB. Each id
+ *  is `null` when no GUID of that source is present; a `tvdb://`/`imdb://`-only
+ *  item (no `tmdb://`) has `tmdbId: null` and lets `PlexSyncService` resolve a
+ *  TMDB id via the TMDB `/find` external-id fallback. */
+function externalIdsFromGuids(item: Record<string, unknown>): {
+  tmdbId: number | null;
+  tvdbId: number | null;
+  imdbId: string | null;
+} {
   // PMS returns either a top-level `guid` string or a `Guid[]` of `{ id }`.
   const candidates: string[] = [];
   const topGuid = item['guid'];
@@ -111,13 +118,30 @@ function tmdbIdFromGuids(item: Record<string, unknown>): number | null {
       candidates.push(id);
     }
   }
+  let tmdbId: number | null = null;
+  let tvdbId: number | null = null;
+  let imdbId: string | null = null;
   for (const guid of candidates) {
-    const match = /(?:tmdb|themoviedb):\/\/(\d+)/.exec(guid);
-    if (match) {
-      return Number(match[1]);
+    if (tmdbId === null) {
+      const m = /(?:tmdb|themoviedb):\/\/(\d+)/.exec(guid);
+      if (m) {
+        tmdbId = Number(m[1]);
+      }
+    }
+    if (tvdbId === null) {
+      const m = /tvdb:\/\/(\d+)/.exec(guid);
+      if (m) {
+        tvdbId = Number(m[1]);
+      }
+    }
+    if (imdbId === null) {
+      const m = /imdb:\/\/(tt\d+)/.exec(guid);
+      if (m) {
+        imdbId = m[1];
+      }
     }
   }
-  return null;
+  return { tmdbId, tvdbId, imdbId };
 }
 
 /**
@@ -355,20 +379,34 @@ export class CapacitorHttpPlexClient implements PlexClient {
       const metadata = asArray(container['Metadata']);
       for (const raw of metadata) {
         const item = asRecord(raw);
+        const { tmdbId, tvdbId, imdbId } = externalIdsFromGuids(item);
         out.push({
           type,
-          tmdbId: tmdbIdFromGuids(item),
+          tmdbId,
+          tvdbId,
+          imdbId,
           title: str(item['title']),
-          addedAt:
-            epochSecondsToIso(item['addedAt']) ?? new Date(0).toISOString(),
+          // Missing `addedAt` → null (spec 0097): NO epoch-0 fallback, which made
+          // an unwatched addition always older than the cursor and skip-forever.
+          addedAt: epochSecondsToIso(item['addedAt']),
           viewCount: num(item['viewCount']),
           lastViewedAt: epochSecondsToIso(item['lastViewedAt']),
           ratingKey: str(item['ratingKey']),
         });
       }
-      const totalSize = num(container['totalSize']) || metadata.length;
+      // Pagination continuation (spec 0097): when PMS OMITS `totalSize`, do not
+      // let it collapse to the first page's length (which stopped paging after
+      // page 1) — treat it as unbounded and keep paging until a short/empty page.
+      const totalSize =
+        container['totalSize'] !== undefined
+          ? num(container['totalSize'])
+          : Number.POSITIVE_INFINITY;
       start += metadata.length;
-      if (metadata.length === 0 || start >= totalSize) {
+      if (
+        metadata.length === 0 ||
+        metadata.length < pageSize ||
+        start >= totalSize
+      ) {
         break;
       }
     }

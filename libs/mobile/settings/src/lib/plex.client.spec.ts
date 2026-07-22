@@ -270,6 +270,148 @@ describe('CapacitorHttpPlexClient', () => {
       // Both the new-agent tmdb:// GUID and the legacy themoviedb:// GUID parse.
       expect(items.map((i) => i.tmdbId)).toEqual([1396, 999]);
     });
+
+    it('parses tvdb:// and imdb:// external ids alongside tmdb:// (Guid[] + legacy top-level guid)', async () => {
+      httpGet.mockImplementation((opts: HttpCall) => {
+        if (opts.url.endsWith('/library/sections')) {
+          return Promise.resolve(
+            res(200, {
+              MediaContainer: { Directory: [{ type: 'show', key: '1' }] },
+            }),
+          );
+        }
+        if (opts.url.includes('/library/sections/1/all')) {
+          return Promise.resolve(
+            res(200, {
+              MediaContainer: {
+                totalSize: 3,
+                Metadata: [
+                  {
+                    title: 'All Three',
+                    ratingKey: '10',
+                    Guid: [
+                      { id: 'tmdb://1396' },
+                      { id: 'tvdb://81189' },
+                      { id: 'imdb://tt0903747' },
+                    ],
+                  },
+                  {
+                    title: 'Tvdb Only',
+                    ratingKey: '11',
+                    Guid: [{ id: 'tvdb://78901' }],
+                  },
+                  {
+                    title: 'Legacy Imdb',
+                    ratingKey: '12',
+                    guid: 'com.plexapp.agents.imdb://tt0111161?lang=en',
+                  },
+                ],
+              },
+            }),
+          );
+        }
+        return Promise.resolve(res(200, {}));
+      });
+
+      const items = await new CapacitorHttpPlexClient().listLibrary(SERVER);
+      expect(items[0]).toMatchObject({
+        tmdbId: 1396,
+        tvdbId: 81189,
+        imdbId: 'tt0903747',
+      });
+      expect(items[1]).toMatchObject({
+        tmdbId: null,
+        tvdbId: 78901,
+        imdbId: null,
+      });
+      expect(items[2]).toMatchObject({
+        tmdbId: null,
+        tvdbId: null,
+        imdbId: 'tt0111161',
+      });
+    });
+
+    it('missing addedAt → addedAt null (no epoch-0 fallback)', async () => {
+      httpGet.mockImplementation((opts: HttpCall) => {
+        if (opts.url.endsWith('/library/sections')) {
+          return Promise.resolve(
+            res(200, {
+              MediaContainer: { Directory: [{ type: 'movie', key: '2' }] },
+            }),
+          );
+        }
+        if (opts.url.includes('/library/sections/2/all')) {
+          return Promise.resolve(
+            res(200, {
+              MediaContainer: {
+                totalSize: 1,
+                Metadata: [
+                  {
+                    title: 'No Date',
+                    ratingKey: '20',
+                    Guid: [{ id: 'tmdb://550' }],
+                  },
+                ],
+              },
+            }),
+          );
+        }
+        return Promise.resolve(res(200, {}));
+      });
+
+      const items = await new CapacitorHttpPlexClient().listLibrary(SERVER);
+      expect(items[0].addedAt).toBeNull();
+    });
+
+    it('pagination: keeps paging when totalSize is ABSENT until a short page', async () => {
+      const pageSize = 100;
+      const fullPage = Array.from({ length: pageSize }, (_v, i) => ({
+        title: `T${i}`,
+        ratingKey: `k${i}`,
+        Guid: [{ id: `tmdb://${i}` }],
+      }));
+      let allCalls = 0;
+      httpGet.mockImplementation((opts: HttpCall) => {
+        if (opts.url.endsWith('/library/sections')) {
+          return Promise.resolve(
+            res(200, {
+              MediaContainer: { Directory: [{ type: 'movie', key: '3' }] },
+            }),
+          );
+        }
+        if (opts.url.includes('/library/sections/3/all')) {
+          allCalls += 1;
+          // Page 1: a FULL page with NO totalSize (the bug: totalSize used to
+          // collapse to metadata.length and stop paging here). Page 2: a short
+          // page that ends the loop.
+          if (allCalls === 1) {
+            return Promise.resolve(
+              res(200, { MediaContainer: { Metadata: fullPage } }),
+            );
+          }
+          return Promise.resolve(
+            res(200, {
+              MediaContainer: {
+                Metadata: [
+                  {
+                    title: 'last',
+                    ratingKey: 'last',
+                    Guid: [{ id: 'tmdb://999' }],
+                  },
+                ],
+              },
+            }),
+          );
+        }
+        return Promise.resolve(res(200, {}));
+      });
+
+      const items = await new CapacitorHttpPlexClient().listLibrary(SERVER);
+      // BOTH pages returned (101 items) — paging did NOT stop after page 1.
+      expect(items.length).toBe(pageSize + 1);
+      expect(items[items.length - 1].tmdbId).toBe(999);
+      expect(allCalls).toBe(2);
+    });
   });
 
   describe('client identifier', () => {

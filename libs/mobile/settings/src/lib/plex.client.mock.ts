@@ -20,8 +20,10 @@ import type {
  *   `authToken`) — the mock link flow never waits on a human;
  * - `discoverServer()` returns a fixed local-network server;
  * - `listLibrary()` returns a small fixture: a tmdb-GUID movie (watched), a
- *   tmdb-GUID tv show (partially watched), a planned tmdb-GUID movie, and one
- *   GUID-less item (`tmdbId: null`) so the sync engine's skip path is exercised;
+ *   tmdb-GUID tv show (partially watched), a planned tmdb-GUID movie, a
+ *   tvdb-ONLY show (`tmdbId: null`, `tvdbId` set) so the spec 0097 TMDB `/find`
+ *   external-id fallback is exercised, and one fully GUID-less item (all ids
+ *   null) so the sync engine's `no-guid` unmatched path is exercised;
  * - `listEpisodes()` returns two episodes for the fixture show, the first
  *   watched — so the mirror + first-episode `planned → watching` flip is exercised.
  *
@@ -61,10 +63,13 @@ export class MockPlexClient implements PlexClient {
   listLibrary(_server: PlexServer): Promise<PlexLibraryItem[]> {
     const items: PlexLibraryItem[] = [
       // Watched tmdb-GUID movie (Fight Club, 550) — drives watch-implies-add →
-      // completed OR flips an already-tracked movie to completed.
+      // completed OR flips an already-tracked movie to completed. Also carries
+      // tvdb/imdb ids as a real new-agent item would (tmdb:// still wins).
       {
         type: 'movie',
         tmdbId: 550,
+        tvdbId: null,
+        imdbId: 'tt0137523',
         title: 'Fight Club',
         addedAt: MINUTES_AGO(9),
         viewCount: 1,
@@ -76,6 +81,8 @@ export class MockPlexClient implements PlexClient {
       {
         type: 'movie',
         tmdbId: 335984,
+        tvdbId: null,
+        imdbId: 'tt1856101',
         title: 'Blade Runner 2049',
         addedAt: MINUTES_AGO(7),
         viewCount: 0,
@@ -87,19 +94,36 @@ export class MockPlexClient implements PlexClient {
       {
         type: 'tv',
         tmdbId: 1396,
+        tvdbId: 81189,
+        imdbId: 'tt0903747',
         title: 'Breaking Bad',
         addedAt: MINUTES_AGO(5),
         viewCount: 1,
         lastViewedAt: MINUTES_AGO(2),
         ratingKey: MOCK_SHOW_RATING_KEY,
       },
-      // GUID-less legacy-agent item (no tmdb:// GUID) — SKIPPED by the sync
-      // engine (counted, never fuzzy-matched, no write).
+      // tvdb-ONLY show (no tmdb:// GUID) — exercises the spec 0097 TMDB /find
+      // external-id fallback (resolves via tvdb_id on-device).
+      {
+        type: 'tv',
+        tmdbId: null,
+        tvdbId: 78901,
+        imdbId: null,
+        title: 'Lucky',
+        addedAt: MINUTES_AGO(4),
+        viewCount: 0,
+        lastViewedAt: null,
+        ratingKey: 'show-tvdb-only',
+      },
+      // GUID-less legacy-agent item (no tmdb/tvdb/imdb GUID) — recorded UNMATCHED
+      // with reason 'no-guid' by the sync engine (counted, never fuzzy-matched).
       {
         type: 'movie',
         tmdbId: null,
+        tvdbId: null,
+        imdbId: null,
         title: 'Home Movie 2019',
-        addedAt: MINUTES_AGO(4),
+        addedAt: MINUTES_AGO(3),
         viewCount: 0,
         lastViewedAt: null,
         ratingKey: 'guidless',

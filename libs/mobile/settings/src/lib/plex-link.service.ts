@@ -8,7 +8,7 @@ import {
 } from '@angular/fire/firestore';
 import { Preferences } from '@capacitor/preferences';
 import { AUTH_UID, PLEX_CLIENT } from '@vultus/shared/domain/tokens';
-import type { PlexServer } from '@vultus/shared/domain';
+import type { PlexServer, PlexUnmatchedTitle } from '@vultus/shared/domain';
 import { dataToUser, userPath } from '@vultus/shared/firestore-schema';
 import type { UserReadData } from '@vultus/shared/firestore-schema';
 import { PlexBackgroundService } from './plex-background.service';
@@ -87,6 +87,9 @@ export class PlexLinkService {
   private readonly _linked = signal<boolean>(false);
   private readonly _serverName = signal<string | null>(null);
   private readonly _lastSyncAt = signal<string | null>(null);
+  // Diagnostics from the most recent completed sync pass (spec 0097): the titles
+  // that couldn't be matched to a TMDB id. Read from `plexSync.unmatched`.
+  private readonly _unmatched = signal<PlexUnmatchedTitle[]>([]);
 
   /** Current PIN-link stage (the connect page renders ONE stage from it). */
   readonly stage = this._stage.asReadonly();
@@ -104,6 +107,9 @@ export class PlexLinkService {
   readonly serverName = this._serverName.asReadonly();
   /** Last successful sync ISO (from `plexSync.lastSyncAt`); null until first sync. */
   readonly lastSyncAt = this._lastSyncAt.asReadonly();
+  /** Titles the last completed sync pass couldn't match (from
+   *  `plexSync.unmatched`); `[]` when clean / not yet synced (spec 0097). */
+  readonly unmatched = this._unmatched.asReadonly();
   /** `mm:ss` string derived from `expiresInSeconds` for the countdown label. */
   readonly countdown = computed(() => {
     const total = this._expiresInSeconds();
@@ -151,10 +157,14 @@ export class PlexLinkService {
       this._linked.set(false);
       this._serverName.set(null);
       this._lastSyncAt.set(null);
+      // Reset diagnostics too (spec 0097): a self-healed device must not render a
+      // stale "couldn't match" list from the dropped link.
+      this._unmatched.set([]);
       return;
     }
     this._serverName.set(meta?.serverName ?? null);
     this._lastSyncAt.set(meta?.lastSyncAt ?? null);
+    this._unmatched.set(meta?.unmatched ?? []);
   }
 
   /**
@@ -226,6 +236,7 @@ export class PlexLinkService {
     this._linked.set(false);
     this._serverName.set(null);
     this._lastSyncAt.set(null);
+    this._unmatched.set([]);
   }
 
   /** One poll tick: check the PIN, and on an authToken complete the link. */

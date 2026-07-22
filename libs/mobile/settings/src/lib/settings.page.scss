@@ -588,6 +588,54 @@ ion-content {
   }
 }
 
+// ── Unmatched-titles diagnostics (spec 0097) ────────────────────────────────
+// A read-only "couldn't match N titles" list inside the connected block, after
+// the background-sync controls and before the Disconnect footer. Static — no
+// hover/focus/press affordance. Aligns to the same left inset as the sibling
+// background-sync rows so the block reads as one column. Tokens only, no new hex.
+.plex-unmatched {
+  // 8px grid step above the section (the heading owns the rest of its rhythm).
+  padding-top: 8px;
+
+  &__list {
+    list-style: none;
+    margin: var(--vultus-space-sm) 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--vultus-space-sm);
+  }
+
+  &__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--vultus-space-sm);
+  }
+
+  // Plex title — body-md (14px) on-surface, single line, ellipsized.
+  &__title {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: var(--vultus-text-body-md-size);
+    font-weight: var(--vultus-text-body-md-weight);
+    line-height: var(--vultus-text-body-md-line);
+    color: var(--vultus-on-surface);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  // Trailing reason — label-sm (11px) on-surface-variant.
+  &__reason {
+    flex: 0 0 auto;
+    font-size: var(--vultus-text-label-sm-size);
+    font-weight: var(--vultus-text-label-sm-weight);
+    line-height: var(--vultus-text-label-sm-line);
+    color: var(--vultus-on-surface-variant);
+  }
+}
+
 // Plex text buttons — "Sync now" (label-sm bold primary) and "Disconnect"
 // (label-md semibold error). Both hover:opacity-80.
 .plex-text-button {
