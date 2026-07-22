@@ -417,13 +417,29 @@ ion-content {
   gap: var(--vultus-space-sm);
 }
 
-// Hairline divider between the two subgroups (`border-t outline-variant/10`,
-// mt-md/pt-md rhythm). Also the seam where the spec-0061 group will sit below.
+// Hairline divider (`border-t outline-variant/10`) used in two places that
+// reuse this same class: (a) the subgroup divider between "On Your Providers"
+// and "Also Available On", a flex child of `.provider-groups` — there the top
+// spacing comes from the parent flex `gap` (see the `.provider-groups >
+// .group-divider` override below, issue #252), so its own margin-top is zeroed;
+// and (b) the spec-0061 plex-divider, a block-flow child of `.glass-panel`
+// (no flex-gap sibling) — there this base `margin-top` is the ONLY source of
+// top spacing and must stay. Keep the `pt-md` padding-top for both.
 .group-divider {
   border-top: 1px solid
     color-mix(in srgb, var(--vultus-outline-variant) 10%, transparent);
   margin-top: var(--vultus-space-md);
   padding-top: var(--vultus-space-md);
+}
+
+// Issue #252: the subgroup divider is a flex child of `.provider-groups`
+// (gap: lg), which already supplies the `space-y-6` rhythm above it — matching
+// the Stitch mock, whose higher-specificity `space-y-6` rule superseded the
+// divider's own `mt-md`. Its own margin-top double-counts, so zero it here.
+// (The plex-divider reuses `.group-divider` but is a block-flow child of
+// `.glass-panel` with no flex-gap sibling, so it KEEPS the base margin-top.)
+.provider-groups > .group-divider {
+  margin-top: 0;
 }
 
 .group-label {

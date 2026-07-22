@@ -140,7 +140,7 @@ describe('SearchPage', () => {
     body?.click();
     expect(router.navigate).toHaveBeenCalledWith(
       ['tabs', 'title-detail', String(mockResult.tmdbId)],
-      { queryParams: { type: mockResult.type } },
+      { queryParams: { type: mockResult.type, origin: 'search' } },
     );
   });
 
@@ -154,7 +154,7 @@ describe('SearchPage', () => {
     poster?.click();
     expect(router.navigate).toHaveBeenCalledWith(
       ['tabs', 'title-detail', String(mockResult.tmdbId)],
-      { queryParams: { type: mockResult.type } },
+      { queryParams: { type: mockResult.type, origin: 'search' } },
     );
   });
 

@@ -2,6 +2,7 @@ import { type WritableSignal, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import {
+  NavController,
   ToastController,
   provideIonicAngular,
 } from '@ionic/angular/standalone';
@@ -174,6 +175,11 @@ function mockToastCtrl() {
   return { create, present };
 }
 
+/** A NavController stub with a spied `navigateBack` (spec 0092 header back). */
+function mockNavController() {
+  return { navigateBack: vi.fn(() => Promise.resolve(true)) };
+}
+
 /** A pull-to-refresh `ionRefresh` CustomEvent with a spied `detail.complete`. */
 function fakeRefreshEvent() {
   const complete = vi.fn();
@@ -201,15 +207,16 @@ async function setup(
   initialType?: string,
   syncState: MockSyncState = mockSyncState(),
   toast = mockToastCtrl(),
+  initialOrigin?: string,
+  nav = mockNavController(),
 ) {
   paramMap$ = new BehaviorSubject(
     convertToParamMap({ titleId: initialTitleId }),
   );
-  queryParamMap$ = new BehaviorSubject(
-    initialType
-      ? convertToParamMap({ type: initialType })
-      : convertToParamMap({}),
-  );
+  const queryParams: Record<string, string> = {};
+  if (initialType) queryParams['type'] = initialType;
+  if (initialOrigin) queryParams['origin'] = initialOrigin;
+  queryParamMap$ = new BehaviorSubject(convertToParamMap(queryParams));
   const svc = makeService(o);
   await TestBed.configureTestingModule({
     imports: [TitleDetailPage],
@@ -219,6 +226,7 @@ async function setup(
       { provide: AUTH_UID, useValue: signal<string | null>('user-123') },
       { provide: SyncStateService, useValue: syncState },
       { provide: ToastController, useValue: toast },
+      { provide: NavController, useValue: nav },
       {
         provide: ActivatedRoute,
         useValue: {
@@ -234,7 +242,7 @@ async function setup(
   const fixture = TestBed.createComponent(TitleDetailPage);
   await fixture.whenStable();
   fixture.detectChanges();
-  return { fixture, svc, syncState, toast };
+  return { fixture, svc, syncState, toast, nav };
 }
 
 describe('TitleDetailPage', () => {
@@ -266,6 +274,103 @@ describe('TitleDetailPage', () => {
     it('passes undefined to service.detail$ when ?type is invalid (anime)', async () => {
       const { svc } = await setup({}, '27205', 'anime');
       expect(svc.detail$).toHaveBeenCalledWith(27205, undefined);
+    });
+  });
+
+  // --- spec 0092: header back button resolves the origin tab (issue #253) ---
+  describe('goBack() origin resolution (spec 0092)', () => {
+    it('origin=watchlist → navigateBack("/tabs/watchlist")', async () => {
+      const { fixture, nav } = await setup(
+        {},
+        '27205',
+        undefined,
+        mockSyncState(),
+        mockToastCtrl(),
+        'watchlist',
+      );
+      fixture.componentInstance.goBack();
+      expect(nav.navigateBack).toHaveBeenCalledTimes(1);
+      expect(nav.navigateBack).toHaveBeenCalledWith('/tabs/watchlist');
+    });
+
+    it('origin=today → navigateBack("/tabs/today")', async () => {
+      const { fixture, nav } = await setup(
+        {},
+        '27205',
+        undefined,
+        mockSyncState(),
+        mockToastCtrl(),
+        'today',
+      );
+      fixture.componentInstance.goBack();
+      expect(nav.navigateBack).toHaveBeenCalledWith('/tabs/today');
+    });
+
+    it('origin=search → navigateBack("/tabs/search")', async () => {
+      const { fixture, nav } = await setup(
+        {},
+        '27205',
+        undefined,
+        mockSyncState(),
+        mockToastCtrl(),
+        'search',
+      );
+      fixture.componentInstance.goBack();
+      expect(nav.navigateBack).toHaveBeenCalledWith('/tabs/search');
+    });
+
+    it('origin absent → falls back to navigateBack("/tabs/watchlist")', async () => {
+      const { fixture, nav } = await setup();
+      fixture.componentInstance.goBack();
+      expect(nav.navigateBack).toHaveBeenCalledWith('/tabs/watchlist');
+    });
+
+    it('origin unrecognized (bogus) → falls back to navigateBack("/tabs/watchlist")', async () => {
+      const { fixture, nav } = await setup(
+        {},
+        '27205',
+        undefined,
+        mockSyncState(),
+        mockToastCtrl(),
+        'bogus',
+      );
+      fixture.componentInstance.goBack();
+      expect(nav.navigateBack).toHaveBeenCalledWith('/tabs/watchlist');
+    });
+
+    it('the header back button click invokes goBack → navigateBack(origin target)', async () => {
+      const { fixture, nav } = await setup(
+        {},
+        '27205',
+        undefined,
+        mockSyncState(),
+        mockToastCtrl(),
+        'today',
+      );
+      const el = fixture.nativeElement as HTMLElement;
+      const backBtn = el.querySelector<HTMLElement>('.back-button');
+      expect(backBtn).toBeTruthy();
+      backBtn?.click();
+      expect(nav.navigateBack).toHaveBeenCalledWith('/tabs/today');
+    });
+
+    // Stale-snapshot guard (spec 0037): a later origin emission on the same
+    // instance (Ionic page reuse) must resolve the CURRENT origin, not the first.
+    it('re-emitting origin on the same instance uses the new origin', async () => {
+      const { fixture, nav } = await setup(
+        {},
+        '27205',
+        undefined,
+        mockSyncState(),
+        mockToastCtrl(),
+        'watchlist',
+      );
+      queryParamMap$.next(convertToParamMap({ origin: 'search' }));
+      await fixture.whenStable();
+      fixture.detectChanges();
+      fixture.componentInstance.goBack();
+      expect(nav.navigateBack).toHaveBeenCalledWith('/tabs/search');
+      expect(nav.navigateBack).not.toHaveBeenCalledWith('/tabs/watchlist');
     });
   });
 
@@ -443,7 +548,18 @@ describe('TitleDetailPage', () => {
       const elsewhere = el.querySelector('[data-test="group-elsewhere"]');
       expect(mine).toBeTruthy();
       expect(elsewhere).toBeTruthy();
-      expect(el.querySelector('[data-test="group-divider"]')).toBeTruthy();
+      const divider = el.querySelector('[data-test="group-divider"]');
+      expect(divider).toBeTruthy();
+      // Issue #252: the subgroup divider must be a DIRECT child of
+      // `.provider-groups` — this is the precondition the scoped
+      // `.provider-groups > .group-divider { margin-top: 0 }` fix relies on. If
+      // a refactor moved it out, the fix would silently stop applying.
+      expect(
+        el.querySelector('.provider-groups > [data-test="group-divider"]'),
+      ).toBeTruthy();
+      expect(
+        divider?.parentElement?.classList.contains('provider-groups'),
+      ).toBe(true);
       // Mine group appears before elsewhere in DOM order.
       if (mine && elsewhere) {
         expect(
@@ -1091,6 +1207,49 @@ describe('TitleDetailPage', () => {
         }
       },
     );
+
+    // Issue #252 regression guard: when BOTH the two-subgroup split and the
+    // Plex "Personal Tracking" section render, the plex-divider reuses the same
+    // `.group-divider` class but is a block-flow child of the `.glass-panel`
+    // "Where to Watch" card — NOT a child of `.provider-groups`. This proves the
+    // scoped `.provider-groups > .group-divider { margin-top: 0 }` fix does NOT
+    // touch the plex-divider (which keeps the base margin-top on purpose).
+    it('plex-divider is present but is NOT a child of .provider-groups (base margin-top preserved)', async () => {
+      const { fixture } = await setup({
+        hasPlex: true,
+        myProviderIds: [8],
+        providers: {
+          flatrate: [
+            { providerId: 8, name: 'Netflix', type: 'flatrate' },
+            { providerId: 9, name: 'Prime Video', type: 'flatrate' },
+          ],
+          rent: [],
+          buy: [],
+        },
+        tracked: trackedItem(false),
+      });
+      const el = fixture.nativeElement as HTMLElement;
+      // The subgroup split AND the plex section both render.
+      expect(el.querySelector('[data-test="group-mine"]')).toBeTruthy();
+      expect(el.querySelector('[data-test="group-elsewhere"]')).toBeTruthy();
+      // The subgroup divider IS a child of `.provider-groups`.
+      expect(
+        el.querySelector('.provider-groups > [data-test="group-divider"]'),
+      ).toBeTruthy();
+      // The plex-divider is present…
+      const plexDivider = el.querySelector('[data-test="plex-divider"]');
+      expect(plexDivider).toBeTruthy();
+      // …but is NOT a child of `.provider-groups` (so the scoped fix skips it)…
+      expect(
+        el.querySelector('.provider-groups > [data-test="plex-divider"]'),
+      ).toBeNull();
+      expect(
+        plexDivider?.parentElement?.classList.contains('provider-groups'),
+      ).toBe(false);
+      // …and it IS a descendant of the `.glass-panel` "Where to Watch" card.
+      expect(plexDivider?.closest('[data-test="providers"]')).toBeTruthy();
+      expect(plexDivider?.closest('.provider-groups')).toBeNull();
+    });
   });
 
   describe('revertIfNewEpisodes page-init wire-up (spec 0050)', () => {
