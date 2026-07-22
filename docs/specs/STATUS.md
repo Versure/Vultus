@@ -12,8 +12,8 @@
 
 Total specs: 98
 
-- done: 96
-- approved: 2
+- done: 97
+- approved: 1
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -114,4 +114,4 @@ Total specs: 98
 | 95 | fix-watchlist-filter-sheet-scroll-drift | Fix the Watchlist filter sheet drifting off-screen when the list is scrolled — anchor it to the viewport via `slot="fixed"` | done | slice:watchlist | scope:mobile |
 | 96 | unify-tab-headers | Unify the four tab headers into a shared VultusAppHeader and fix Today's taller header | done | slice:today, slice:watchlist, slice:search, slice:settings | scope:shared, scope:mobile |
 | 97 | fix-plex-sync-unmatched-shows | Fix Plex sync dropping unmatched shows (issue | done | slice:settings | scope:mobile, scope:shared |
-| 98 | fix-plex-episode-watch-sync | Fix Plex sync — create missing episode docs on-device so watched episodes mark immediately | approved | slice:settings | scope:mobile |
+| 98 | fix-plex-episode-watch-sync | Fix Plex sync — create missing episode docs on-device so watched episodes mark immediately | done | slice:settings | scope:mobile |
