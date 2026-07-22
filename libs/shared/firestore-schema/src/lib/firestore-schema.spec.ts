@@ -352,6 +352,66 @@ describe('converters — round-trip identity', () => {
     expect(result.plexSync).toBeNull();
   });
 
+  it('User: plexSync.unmatched entries (all three reasons) round-trip unchanged (spec 0097)', () => {
+    const user: User = {
+      region: 'NL',
+      notificationPrefs: {
+        episodeAired: true,
+        movieAvailable: true,
+        cameToPlatform: true,
+        deliveryHour: null,
+      },
+      fcmTokens: [],
+      myProviderIds: [8],
+      hasPlex: true,
+      plexSync: {
+        linkedAt: '2026-07-03T10:00:00.000Z',
+        lastSyncAt: '2026-07-22T11:30:00.000Z',
+        serverName: 'Home PMS',
+        unmatched: [
+          { title: 'Lucky', reason: 'no-guid' },
+          { title: 'The Legacy Show', reason: 'guid-unresolved' },
+          { title: 'Flaky Documentary', reason: 'error' },
+        ],
+      },
+    };
+    const result = dataToUser(simulateStored(userToData(user)) as never);
+    expect(result).toEqual(user);
+    // The unmatched array is plain strings/enums — no Timestamp coercion.
+    expect(result.plexSync?.unmatched).toEqual([
+      { title: 'Lucky', reason: 'no-guid' },
+      { title: 'The Legacy Show', reason: 'guid-unresolved' },
+      { title: 'Flaky Documentary', reason: 'error' },
+    ]);
+  });
+
+  it('User: legacy plexSync WITHOUT unmatched round-trips to itself — field stays absent (spec 0097)', () => {
+    // A plexSync written before spec 0097 has no `unmatched` field. The
+    // pass-through converter must NOT coalesce it to null/[] — it must stay absent.
+    const user: User = {
+      region: 'DE',
+      notificationPrefs: {
+        episodeAired: false,
+        movieAvailable: false,
+        cameToPlatform: false,
+        deliveryHour: null,
+      },
+      fcmTokens: [],
+      myProviderIds: [],
+      hasPlex: true,
+      plexSync: {
+        linkedAt: '2026-07-03T10:00:00.000Z',
+        lastSyncAt: '2026-07-03T11:30:00.000Z',
+        serverName: 'Home PMS',
+      },
+    };
+    const result = dataToUser(simulateStored(userToData(user)) as never);
+    expect(result).toEqual(user);
+    // No coalesce is added: the field must stay absent, not become null/[].
+    expect(result.plexSync).not.toBeNull();
+    expect('unmatched' in (result.plexSync as object)).toBe(false);
+  });
+
   it('WatchlistItem: addedAt round-trips; traktId null survives', () => {
     const item: WatchlistItem = {
       type: 'tv',

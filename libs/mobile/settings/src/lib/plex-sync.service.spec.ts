@@ -7,6 +7,7 @@ import type {
   PlexEpisodeItem,
   PlexLibraryItem,
   PlexServer,
+  PlexUnmatchedTitle,
 } from '@vultus/shared/domain';
 import {
   episodePath,
@@ -240,6 +241,18 @@ async function syncOk(service: PlexSyncService): Promise<PlexSyncSummary> {
   return (result as { status: 'ok'; summary: PlexSyncSummary }).summary;
 }
 
+/** The `plexSync.unmatched` array persisted by the pass's single userPath write. */
+function readPersistedUnmatched(): PlexUnmatchedTitle[] {
+  const write = updateDocMock.mock.calls.find(
+    ([ref, payload]) =>
+      ref.path === userPath(UID) &&
+      Object.prototype.hasOwnProperty.call(payload, 'plexSync.unmatched'),
+  );
+  return (write?.[1] as Record<string, PlexUnmatchedTitle[]>)[
+    'plexSync.unmatched'
+  ];
+}
+
 /** dataToWatchlistItem reads `status`; the read-data shape only needs it here. */
 function movieItem(
   tmdbId: number,
@@ -334,16 +347,162 @@ describe('PlexSyncService', () => {
     ).toBe(false);
   });
 
-  it('GUID-less item is skipped: counted, no write, never fuzzy-matched', async () => {
+  it('no-guid: an item with no tmdb/tvdb/imdb id is UNMATCHED (no-guid), not skipped, no write', async () => {
     seedFirestore({});
     const service = makeService(
       mockClient([movieItem(0, { tmdbId: null, viewCount: 1 })]),
     );
     const summary = await syncOk(service);
 
-    expect(summary.skipped).toBe(1);
+    // Moved from summary.skipped → summary.unmatched (spec 0097 T3).
+    expect(summary.unmatched).toBe(1);
+    expect(summary.skipped).toBe(0);
     expect(summary.added).toBe(0);
     expect(setDocMock).not.toHaveBeenCalled();
+    expect(readPersistedUnmatched()).toEqual([
+      { title: 'Movie 0', reason: 'no-guid' },
+    ]);
+  });
+
+  it('/find fallback: a tvdb-only show resolves via /find and is added like a tmdb item', async () => {
+    seedFirestore({});
+    tmdbFetchMock.mockImplementation((url: string) => {
+      if (url.includes('/find/')) {
+        return Promise.resolve(
+          tmdbResponse({ tv_results: [{ id: 1396 }], movie_results: [] }),
+        );
+      }
+      return Promise.resolve(
+        tmdbResponse({
+          id: 1396,
+          name: 'Breaking Bad',
+          poster_path: '/bb.jpg',
+          vote_average: 8.9,
+        }),
+      );
+    });
+    const service = makeService(
+      mockClient([tvItem(0, { tmdbId: null, tvdbId: 81189 })], { 'rk-0': [] }),
+    );
+    const summary = await syncOk(service);
+
+    expect(summary.added).toBe(1);
+    expect(summary.unmatched).toBe(0);
+    // Written at the RESOLVED tmdb id, exactly as a tmdb:// item would be.
+    const call = setDocMock.mock.calls.find(
+      ([ref]) => ref.path === watchlistItemPath(UID, '1396'),
+    );
+    expect(call).toBeTruthy();
+    expect((call?.[1] as { status: string }).status).toBe('planned');
+    expect(readPersistedUnmatched()).toEqual([]);
+  });
+
+  it('guid-unresolved: a tvdb-only show whose /find returns no matching-type result is recorded guid-unresolved', async () => {
+    seedFirestore({});
+    // Default tmdbFetchMock body carries NO tv_results → findByExternalId null.
+    const service = makeService(
+      mockClient([tvItem(0, { tmdbId: null, tvdbId: 81189 })], { 'rk-0': [] }),
+    );
+    const summary = await syncOk(service);
+
+    expect(summary.unmatched).toBe(1);
+    expect(summary.added).toBe(0);
+    expect(setDocMock).not.toHaveBeenCalled();
+    expect(readPersistedUnmatched()).toEqual([
+      { title: 'Show 0', reason: 'guid-unresolved' },
+    ]);
+  });
+
+  it('guid-unresolved: a MOVIE with ONLY a tvdb id is guid-unresolved, not no-guid (tvdb is show-only, /find never called)', async () => {
+    seedFirestore({});
+    const service = makeService(
+      mockClient([movieItem(0, { tmdbId: null, tvdbId: 12345 })]),
+    );
+    const summary = await syncOk(service);
+
+    expect(summary.unmatched).toBe(1);
+    expect(readPersistedUnmatched()).toEqual([
+      { title: 'Movie 0', reason: 'guid-unresolved' },
+    ]);
+    // A movie never sends its tvdb id to /find (tvdb is show-only) and has no
+    // imdb id, so /find is not called at all.
+    expect(tmdbFetchMock).not.toHaveBeenCalled();
+  });
+
+  it('per-item isolation: one item throwing is recorded "error" and LATER items still process', async () => {
+    seedFirestore({});
+    // The show's episode fetch throws; the movie after it must still be added.
+    const client = mockClient([tvItem(1396, { viewCount: 1 }), movieItem(550)]);
+    client.listEpisodes = vi
+      .fn()
+      .mockRejectedValue(new Error('listEpisodes 404'));
+    const service = makeService(client);
+    const summary = await syncOk(service);
+
+    expect(summary.unmatched).toBe(1);
+    expect(summary.added).toBe(1);
+    // The subsequent movie's write happened despite the earlier item throwing.
+    const movieWrite = setDocMock.mock.calls.find(
+      ([ref]) => ref.path === watchlistItemPath(UID, '550'),
+    );
+    expect(movieWrite).toBeTruthy();
+    expect(readPersistedUnmatched()).toEqual([
+      { title: 'Show 1396', reason: 'error' },
+    ]);
+  });
+
+  it('cursor advances on completion WITH item errors (plexSync.lastSyncAt still written)', async () => {
+    seedFirestore({});
+    const client = mockClient([tvItem(1396, { viewCount: 1 })]);
+    client.listEpisodes = vi.fn().mockRejectedValue(new Error('boom'));
+    const service = makeService(client);
+    const summary = await syncOk(service);
+
+    expect(summary.unmatched).toBe(1);
+    const cursorWrite = updateDocMock.mock.calls.find(
+      ([ref, payload]) =>
+        ref.path === userPath(UID) &&
+        Object.prototype.hasOwnProperty.call(payload, 'plexSync.lastSyncAt'),
+    );
+    expect(cursorWrite).toBeTruthy();
+  });
+
+  it('missing addedAt: an unwatched item with addedAt null is added planned (not skip-forever)', async () => {
+    seedFirestore({});
+    const service = makeService(
+      mockClient([movieItem(550, { addedAt: null })]),
+    );
+    const summary = await syncOk(service);
+
+    expect(summary.added).toBe(1);
+    const call = setDocMock.mock.calls.find(
+      ([ref]) => ref.path === watchlistItemPath(UID, '550'),
+    );
+    expect((call?.[1] as { status: string }).status).toBe('planned');
+  });
+
+  it('unmatched persistence: a >50 pass truncates plexSync.unmatched to 50 (capped)', async () => {
+    seedFirestore({});
+    const items = Array.from({ length: 60 }, (_v, i) =>
+      movieItem(0, {
+        tmdbId: null,
+        title: `No ${i}`,
+        ratingKey: `rk-none-${i}`,
+      }),
+    );
+    const service = makeService(mockClient(items));
+    const summary = await syncOk(service);
+
+    expect(summary.unmatched).toBe(60);
+    expect(readPersistedUnmatched().length).toBe(50);
+  });
+
+  it('unmatched persistence: a clean pass writes [] (clears the list)', async () => {
+    seedFirestore({});
+    const service = makeService(mockClient([movieItem(550)]));
+    await syncOk(service);
+
+    expect(readPersistedUnmatched()).toEqual([]);
   });
 
   it('watch-implies-add: a watched, untracked movie is added completed', async () => {

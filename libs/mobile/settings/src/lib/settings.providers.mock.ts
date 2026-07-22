@@ -3,6 +3,7 @@ import {
   REGIONS,
   type CatalogProvider,
   type PlexServer,
+  type PlexUnmatchedTitle,
   type Region,
   type SyncRun,
 } from '@vultus/shared/domain';
@@ -207,6 +208,12 @@ class MockPlexLinkServiceImpl {
   private readonly _lastSyncAt = signal<string | null>(
     new Date(Date.now() - 12 * 60 * 1000).toISOString(),
   );
+  // Seeded diagnostics (spec 0097) so `mobile:serve-mock` renders the "couldn't
+  // match" list without running a sync — one entry per reason.
+  private readonly _unmatched = signal<PlexUnmatchedTitle[]>([
+    { title: 'Lucky', reason: 'guid-unresolved' },
+    { title: 'Home Movie 2019', reason: 'no-guid' },
+  ]);
 
   readonly stage = this._stage.asReadonly();
   readonly errorReason = this._errorReason.asReadonly();
@@ -222,6 +229,7 @@ class MockPlexLinkServiceImpl {
   readonly linked = this._linked.asReadonly();
   readonly serverName = this._serverName.asReadonly();
   readonly lastSyncAt = this._lastSyncAt.asReadonly();
+  readonly unmatched = this._unmatched.asReadonly();
 
   isLinked(): Promise<boolean> {
     return Promise.resolve(this._linked());
@@ -261,6 +269,7 @@ class MockPlexLinkServiceImpl {
     this._linked.set(false);
     this._serverName.set(null);
     this._lastSyncAt.set(null);
+    this._unmatched.set([]);
     this._stage.set('idle');
     return Promise.resolve();
   }
@@ -280,7 +289,10 @@ class MockPlexSyncServiceImpl {
     this._running.set(true);
     await new Promise((resolve) => setTimeout(resolve, 800));
     this._running.set(false);
-    return { status: 'ok', summary: { added: 0, updated: 0, skipped: 0 } };
+    return {
+      status: 'ok',
+      summary: { added: 0, updated: 0, skipped: 0, unmatched: 0 },
+    };
   }
 }
 

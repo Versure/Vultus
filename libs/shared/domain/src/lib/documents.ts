@@ -23,6 +23,20 @@ export interface NotificationPrefs {
   deliveryHour: number | null;
 }
 
+/** One title the most recent completed Plex sync pass could NOT match to a
+ *  TMDB id (or that errored). Diagnostic output for the Settings "couldn't
+ *  match" list (spec 0097). NOT a user preference. */
+export interface PlexUnmatchedTitle {
+  /** The Plex library item's title (display only). */
+  title: string;
+  /** Why it wasn't matched:
+   *  - 'no-guid': no tmdb/tvdb/imdb GUID at all → nothing to resolve;
+   *  - 'guid-unresolved': had a tvdb/imdb GUID but TMDB /find returned no
+   *    matching-media-type result;
+   *  - 'error': processing the item threw (network / HTTP / timeout). */
+  reason: 'no-guid' | 'guid-unresolved' | 'error';
+}
+
 /** Per-user Plex sync cursor + link metadata (spec 0073). The X-Plex-Token is
  *  NOT stored here — it lives on-device in @capacitor/preferences. This holds
  *  only the multi-device-safe additions cursor + display info. Absent/null =
@@ -37,6 +51,12 @@ export interface PlexSyncMeta {
   lastSyncAt: string | null;
   /** Human-readable PMS name for the connected-state UI; null if unknown. */
   serverName: string | null;
+  /** Titles the most recent completed sync pass could not match to a TMDB id
+   *  (or that errored). Capped at 50, replaced wholesale each completed pass
+   *  (never appended); `[]` clears the UI. OPTIONAL: legacy `plexSync` docs and
+   *  pre-0097 links lack it (absent/`undefined` = no diagnostics yet). Spec
+   *  0097. */
+  unmatched?: PlexUnmatchedTitle[];
 }
 
 export interface User {

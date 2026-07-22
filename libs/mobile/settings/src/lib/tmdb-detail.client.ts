@@ -51,6 +51,19 @@ export interface TmdbDetailClient {
     typeHint?: TitleType,
     signal?: AbortSignal,
   ): Promise<TmdbDetail>;
+
+  /** Resolve a TMDB id from an external id via GET /find/{externalId}
+   *  ?external_source=tvdb_id|imdb_id. Returns the FIRST result of the matching
+   *  media type (tv_results for 'tv', movie_results for 'movie'), or null when the
+   *  matching-type results array is empty. Throws TmdbDetailError on non-2xx and
+   *  rethrows transport/abort errors (so the caller can distinguish
+   *  'guid-unresolved' from 'error'). */
+  findByExternalId(
+    externalId: string,
+    source: 'tvdb_id' | 'imdb_id',
+    type: TitleType,
+    signal?: AbortSignal,
+  ): Promise<number | null>;
 }
 
 /** A typed error so the caller can map a TMDB failure without inspecting fetch internals. */
@@ -73,6 +86,13 @@ interface RawTmdbDetail {
   overview?: string;
   poster_path?: string | null;
   vote_average?: number;
+}
+
+/** TMDB `/find` response: results bucketed by media type. Only the id of the
+ *  first matching-type result is read (spec 0097). */
+interface RawFindResponse {
+  movie_results?: { id?: number }[];
+  tv_results?: { id?: number }[];
 }
 
 function parseYear(date: string | undefined): number | null {
@@ -164,6 +184,37 @@ export function createTmdbDetailClient(
         }
         throw err; // 5xx / network / abort → surface as error, not a wrong title
       }
+    },
+
+    async findByExternalId(
+      externalId: string,
+      source: 'tvdb_id' | 'imdb_id',
+      type: TitleType,
+      signal?: AbortSignal,
+    ): Promise<number | null> {
+      const { headers, apiKey } = authParts();
+      const params = new URLSearchParams({
+        external_source: source,
+        language: 'en-US',
+      });
+      if (apiKey) {
+        params.set('api_key', apiKey);
+      }
+      const url = `${config.apiBaseUrl}/find/${externalId}?${params.toString()}`;
+      const response = await doFetch(url, { headers, signal });
+      if (!response.ok) {
+        throw new TmdbDetailError(
+          `TMDB find failed: ${response.status}`,
+          response.status,
+        );
+      }
+      const body = (await response.json()) as RawFindResponse;
+      // Take the FIRST result of the MATCHING media type only — a tvdb/imdb id
+      // whose /find yields only the wrong bucket (e.g. movie_results for a 'tv'
+      // request) is treated as no match (→ the caller counts 'guid-unresolved').
+      const results = type === 'tv' ? body.tv_results : body.movie_results;
+      const first = results?.[0]?.id;
+      return typeof first === 'number' ? first : null;
     },
   };
 }

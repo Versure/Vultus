@@ -155,11 +155,18 @@ export class SettingsPage implements OnInit {
   private async presentSyncToast(result: PlexSyncResult): Promise<void> {
     let message: string;
     if (result.status === 'ok') {
-      const { added, updated } = result.summary;
-      message =
-        added + updated > 0
-          ? `Plex sync complete — ${added} added, ${updated} updated`
-          : 'Plex sync complete — already up to date';
+      const { added, updated, unmatched } = result.summary;
+      // Four pinned forms (spec 0097): with/without changes × with/without an
+      // "couldn't be matched" count. Component tests assert these EXACT strings.
+      if (added + updated > 0 && unmatched > 0) {
+        message = `Plex sync complete — ${added} added, ${updated} updated, ${unmatched} couldn't be matched`;
+      } else if (added + updated > 0) {
+        message = `Plex sync complete — ${added} added, ${updated} updated`;
+      } else if (unmatched > 0) {
+        message = `Plex sync complete — ${unmatched} couldn't be matched`;
+      } else {
+        message = 'Plex sync complete — already up to date';
+      }
     } else if (result.status === 'error') {
       message =
         "Couldn't reach Plex. Make sure your Plex server is running and on the same network as this device, then try again.";
@@ -258,6 +265,30 @@ export class SettingsPage implements OnInit {
       position: 'bottom',
     });
     await toast.present();
+  }
+
+  /**
+   * Human label for an unmatched-title reason (spec 0097). Pinned exact strings
+   * — component tests assert them verbatim.
+   */
+  protected unmatchedReasonLabel(
+    reason: 'no-guid' | 'guid-unresolved' | 'error',
+  ): string {
+    switch (reason) {
+      case 'no-guid':
+        return 'Not identified';
+      case 'guid-unresolved':
+        return 'No TMDB match';
+      case 'error':
+        return 'Sync error';
+    }
+  }
+
+  /** Heading for the unmatched list (spec 0097): exact singular / plural forms. */
+  protected unmatchedHeading(count: number): string {
+    return count === 1
+      ? "Couldn't match 1 title"
+      : `Couldn't match ${count} titles`;
   }
 
   /** "Sync in background" toggle → persist + (re)configure the periodic task. */

@@ -2,7 +2,7 @@
 number: 0097
 slug: fix-plex-sync-unmatched-shows
 title: Fix Plex sync dropping unmatched shows (issue #256)
-status: approved
+status: implementing
 slices: [slice:settings]
 scopes: [scope:mobile, scope:shared]
 created: 2026-07-22
