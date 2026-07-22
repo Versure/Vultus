@@ -83,6 +83,8 @@ function assertKindExhaustive(k: NotificationKind): void {
     case 'episode-aired':
     case 'movie-available':
     case 'show-came-to-platform':
+    case 'movie-leaving-platform':
+    case 'show-leaving-platform':
       return;
     default: {
       const _never: never = k;
@@ -105,6 +107,8 @@ const _user = {
     episodeAired: true,
     movieAvailable: false,
     cameToPlatform: true,
+    movieLeavingPlatform: true,
+    showLeavingPlatform: true,
     deliveryHour: null,
   },
   fcmTokens: [
@@ -122,6 +126,8 @@ const _userWithPlexSync = {
     episodeAired: true,
     movieAvailable: false,
     cameToPlatform: true,
+    movieLeavingPlatform: true,
+    showLeavingPlatform: true,
     deliveryHour: null,
   },
   fcmTokens: [],

@@ -131,6 +131,12 @@ export class NotificationsPage {
         return 'film-outline';
       case 'show-came-to-platform':
         return 'play-circle-outline';
+      // Leaving-platform kinds (spec 0057) reuse the title-type glyph so movie
+      // vs show stays visually distinguishable; the body copy conveys "leaving".
+      case 'movie-leaving-platform':
+        return 'film-outline';
+      case 'show-leaving-platform':
+        return 'tv-outline';
       default:
         return 'notifications-off-outline';
     }
@@ -158,6 +164,9 @@ export class NotificationsPage {
         return `Now available${on}`;
       case 'show-came-to-platform':
         return `Now streaming${on}`;
+      case 'movie-leaving-platform':
+      case 'show-leaving-platform':
+        return `Leaving your platform${on}`;
       default:
         return `Update${on}`;
     }

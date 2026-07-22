@@ -51,9 +51,11 @@ whole-object).
   `myProviderIds` array. Empty selection is a valid, completable state (Continue
   is always enabled). A chip grid mirrors the Settings "My Providers" markup.
 - **Step 3 — Notifications:** a global toggle (`setNotificationsEnabled` sets all
-  three per-type booleans at once) + a delivery-hour picker (`setDeliveryHour`,
-  disabled while the global toggle is off — spec 0051 parity). "Notifications
-  off" is a valid, completable state.
+  three original per-type booleans at once) + a delivery-hour picker
+  (`setDeliveryHour`, disabled while the global toggle is off — spec 0051
+  parity). "Notifications off" is a valid, completable state. The two
+  leaving-platform opt-ins (`movieLeavingPlatform` / `showLeavingPlatform`, spec 0057) are **not** surfaced here — they default `true` and are carried through
+  the wizard silently (both setters preserve them); they are toggled Settings-only.
 - **Step 4 — Plex link:** injects `OnboardingPlexLinkService` and renders ONE of
   its stages. The link is **user-initiated**: the step opens in the `idle` stage
   showing a **"Connect Plex"** button (it is NOT auto-started on step entry —

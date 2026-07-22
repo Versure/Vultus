@@ -49,6 +49,8 @@ Each FCM message carries two blocks:
     `{ title: 'Now available to stream', body: '<title> is available on a streaming platform' }`
   - `episode-aired` →
     `{ title: 'New episode available', body: '<title> has a new episode on a streaming platform' }`
+  - `movie-leaving-platform` / `show-leaving-platform` (spec 0057) →
+    `{ title: 'Leaving your streaming service', body: '<title> is leaving a streaming platform — watch it soon' }`
 
   `<title>` is the cached display title. `providerName` is **not** carried in the
   FCM `data` record, so the body uses the generic phrase `a streaming platform`;

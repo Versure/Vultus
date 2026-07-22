@@ -60,6 +60,11 @@ export function dataToUser(data: UserReadData): User {
       episodeAired: data.notificationPrefs.episodeAired,
       movieAvailable: data.notificationPrefs.movieAvailable,
       cameToPlatform: data.notificationPrefs.cameToPlatform,
+      // Legacy docs (pre-0057) lack these per-kind opt-ins; coalesce missing →
+      // true (opt-out default: existing users receive the new alerts unless
+      // they turn them off — spec 0057).
+      movieLeavingPlatform: data.notificationPrefs.movieLeavingPlatform ?? true,
+      showLeavingPlatform: data.notificationPrefs.showLeavingPlatform ?? true,
       // Legacy docs (pre-0051) lack deliveryHour; coalesce missing → null.
       deliveryHour: data.notificationPrefs.deliveryHour ?? null,
     },

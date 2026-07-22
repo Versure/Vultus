@@ -362,6 +362,59 @@
       </div>
 
       <!--
+        Movie leaving-platform row (spec 0057) — an INDEPENDENT per-kind opt-in
+        `ion-toggle` (NOT folded into the global Notifications projection). Same
+        `.settings-card` / `.settings-row*` silhouette as the Notifications row.
+      -->
+      <div class="settings-card">
+        <div class="settings-row">
+          <div class="settings-row__icon" aria-hidden="true">
+            <ion-icon name="film-outline"></ion-icon>
+          </div>
+          <div class="settings-row__body">
+            <ion-toggle
+              class="settings-row__toggle"
+              justify="space-between"
+              [checked]="service.movieLeavingPlatform()"
+              (ionChange)="onMovieLeavingPlatformChange($event)"
+            >
+              Movie leaving your platform
+            </ion-toggle>
+            <p class="settings-row__helper">
+              Get notified when a tracked movie is about to leave your streaming
+              service.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!--
+        Show leaving-platform row (spec 0057) — the tv-show sibling of the row
+        above; same independent per-kind opt-in pattern and card silhouette.
+      -->
+      <div class="settings-card">
+        <div class="settings-row">
+          <div class="settings-row__icon" aria-hidden="true">
+            <ion-icon name="tv-outline"></ion-icon>
+          </div>
+          <div class="settings-row__body">
+            <ion-toggle
+              class="settings-row__toggle"
+              justify="space-between"
+              [checked]="service.showLeavingPlatform()"
+              (ionChange)="onShowLeavingPlatformChange($event)"
+            >
+              Show leaving your platform
+            </ion-toggle>
+            <p class="settings-row__helper">
+              Get notified when a tracked show is about to leave your streaming
+              service.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!--
         Notification time (delivery hour) row — `ion-select` carries the real
         behaviour (spec 0051). Disabled while the global Notifications toggle is
         off, since there are no pushes to schedule.

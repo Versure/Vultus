@@ -49,6 +49,8 @@ export const NOTIFICATION_KINDS = [
   'episode-aired',
   'movie-available',
   'show-came-to-platform',
+  'movie-leaving-platform',
+  'show-leaving-platform',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

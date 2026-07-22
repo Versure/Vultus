@@ -64,13 +64,19 @@ export class SettingsService {
   private readonly _region = signal<Region | null>(null);
   private readonly _notificationsEnabled = signal<boolean>(true);
   private readonly _deliveryHour = signal<number | null>(null);
-  // Full per-type prefs tracked in state so both `setNotificationsEnabled` and
-  // `setDeliveryHour` can rebuild and write all four `notificationPrefs` fields
-  // together — neither setter clobbers the other's data.
+  // Leaving-platform per-kind opt-ins (spec 0057); default on. Independent of
+  // the global Notifications projection — they are their own toggle rows.
+  private readonly _movieLeavingPlatform = signal<boolean>(true);
+  private readonly _showLeavingPlatform = signal<boolean>(true);
+  // Full per-type prefs tracked in state so every setter can rebuild and write
+  // all SIX `notificationPrefs` fields together — no setter clobbers another's
+  // data. (spec 0057 added the two leaving-platform booleans.)
   private readonly _prefs = signal<User['notificationPrefs']>({
     episodeAired: true,
     movieAvailable: true,
     cameToPlatform: true,
+    movieLeavingPlatform: true,
+    showLeavingPlatform: true,
     deliveryHour: null,
   });
   private readonly _loaded = signal<boolean>(false);
@@ -97,6 +103,16 @@ export class SettingsService {
   readonly notificationsEnabled = this._notificationsEnabled.asReadonly();
   /** Current persisted delivery hour (UTC), or null for "Any time". */
   readonly deliveryHour = this._deliveryHour.asReadonly();
+  /**
+   * Persisted per-kind opt-in for "a tracked MOVIE is leaving your platform"
+   * (spec 0057); default true. Independent of the global Notifications toggle.
+   */
+  readonly movieLeavingPlatform = this._movieLeavingPlatform.asReadonly();
+  /**
+   * Persisted per-kind opt-in for "a tracked SHOW is leaving your platform"
+   * (spec 0057); default true. Independent of the global Notifications toggle.
+   */
+  readonly showLeavingPlatform = this._showLeavingPlatform.asReadonly();
   /** True once `load()` has resolved (render-gate for the page). */
   readonly loaded = this._loaded.asReadonly();
   /**
@@ -164,6 +180,8 @@ export class SettingsService {
             episodeAired: true,
             movieAvailable: true,
             cameToPlatform: true,
+            movieLeavingPlatform: true,
+            showLeavingPlatform: true,
             deliveryHour: null,
           },
           fcmTokens: [],
@@ -179,6 +197,10 @@ export class SettingsService {
         projectNotifications(user.notificationPrefs),
       );
       this._deliveryHour.set(user.notificationPrefs.deliveryHour);
+      this._movieLeavingPlatform.set(
+        user.notificationPrefs.movieLeavingPlatform,
+      );
+      this._showLeavingPlatform.set(user.notificationPrefs.showLeavingPlatform);
       this._myProviderIds.set(user.myProviderIds);
       this._hasPlex.set(user.hasPlex);
       this._loaded.set(true);
@@ -337,10 +359,12 @@ export class SettingsService {
   }
 
   /**
-   * Persists the global notifications toggle: sets ALL THREE per-type
+   * Persists the global notifications toggle: sets ALL THREE original per-type
    * notificationPrefs to `enabled` (decision 2), while PRESERVING the current
-   * `deliveryHour` (spec 0051) — the whole `notificationPrefs` object is
-   * rewritten from state so the delivery-hour setter is never clobbered.
+   * `deliveryHour` (spec 0051) AND the two leaving-platform opt-ins (spec 0057)
+   * — the whole `notificationPrefs` object is rewritten from state so no other
+   * setter's data is clobbered. The two leaving-platform prefs are INDEPENDENT
+   * of this global projection; they are only carried through, never set here.
    * `fcmTokens` is never touched here.
    */
   async setNotificationsEnabled(enabled: boolean): Promise<void> {
@@ -348,10 +372,13 @@ export class SettingsService {
     if (uid === null) {
       return;
     }
+    const current = this._prefs();
     const prefs: User['notificationPrefs'] = {
       episodeAired: enabled,
       movieAvailable: enabled,
       cameToPlatform: enabled,
+      movieLeavingPlatform: current.movieLeavingPlatform,
+      showLeavingPlatform: current.showLeavingPlatform,
       deliveryHour: this._deliveryHour(),
     };
     await updateDoc(doc(this.firestore, userPath(uid)), {
@@ -363,9 +390,9 @@ export class SettingsService {
 
   /**
    * Persists the quiet-hours delivery preference (spec 0051). Rewrites the
-   * WHOLE `notificationPrefs` object, PRESERVING the three per-type booleans
-   * from state and setting `deliveryHour` to `hour` (null = "Any time").
-   * `fcmTokens` is never touched here.
+   * WHOLE `notificationPrefs` object, PRESERVING the three original booleans
+   * and the two leaving-platform opt-ins (spec 0057) from state and setting
+   * `deliveryHour` to `hour` (null = "Any time"). `fcmTokens` is never touched.
    */
   async setDeliveryHour(hour: number | null): Promise<void> {
     const uid = this.uid();
@@ -377,6 +404,8 @@ export class SettingsService {
       episodeAired: current.episodeAired,
       movieAvailable: current.movieAvailable,
       cameToPlatform: current.cameToPlatform,
+      movieLeavingPlatform: current.movieLeavingPlatform,
+      showLeavingPlatform: current.showLeavingPlatform,
       deliveryHour: hour,
     };
     await updateDoc(doc(this.firestore, userPath(uid)), {
@@ -384,6 +413,62 @@ export class SettingsService {
     });
     this._prefs.set(prefs);
     this._deliveryHour.set(hour);
+  }
+
+  /**
+   * Persists the "movie leaving your platform" per-kind opt-in (spec 0057).
+   * Rewrites the WHOLE `notificationPrefs` object from state with only
+   * `movieLeavingPlatform` changed, so the three original booleans,
+   * `deliveryHour`, and the sibling `showLeavingPlatform` are all preserved.
+   * Null-uid guarded; `fcmTokens` is never touched.
+   */
+  async setMovieLeavingPlatform(enabled: boolean): Promise<void> {
+    const uid = this.uid();
+    if (uid === null) {
+      return;
+    }
+    const current = this._prefs();
+    const prefs: User['notificationPrefs'] = {
+      episodeAired: current.episodeAired,
+      movieAvailable: current.movieAvailable,
+      cameToPlatform: current.cameToPlatform,
+      movieLeavingPlatform: enabled,
+      showLeavingPlatform: current.showLeavingPlatform,
+      deliveryHour: current.deliveryHour,
+    };
+    await updateDoc(doc(this.firestore, userPath(uid)), {
+      notificationPrefs: prefs,
+    });
+    this._prefs.set(prefs);
+    this._movieLeavingPlatform.set(enabled);
+  }
+
+  /**
+   * Persists the "show leaving your platform" per-kind opt-in (spec 0057).
+   * Rewrites the WHOLE `notificationPrefs` object from state with only
+   * `showLeavingPlatform` changed, so the three original booleans,
+   * `deliveryHour`, and the sibling `movieLeavingPlatform` are all preserved.
+   * Null-uid guarded; `fcmTokens` is never touched.
+   */
+  async setShowLeavingPlatform(enabled: boolean): Promise<void> {
+    const uid = this.uid();
+    if (uid === null) {
+      return;
+    }
+    const current = this._prefs();
+    const prefs: User['notificationPrefs'] = {
+      episodeAired: current.episodeAired,
+      movieAvailable: current.movieAvailable,
+      cameToPlatform: current.cameToPlatform,
+      movieLeavingPlatform: current.movieLeavingPlatform,
+      showLeavingPlatform: enabled,
+      deliveryHour: current.deliveryHour,
+    };
+    await updateDoc(doc(this.firestore, userPath(uid)), {
+      notificationPrefs: prefs,
+    });
+    this._prefs.set(prefs);
+    this._showLeavingPlatform.set(enabled);
   }
 }
 

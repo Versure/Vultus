@@ -30,6 +30,8 @@ const allPrefs = (
   episodeAired: true,
   movieAvailable: true,
   cameToPlatform: true,
+  movieLeavingPlatform: true,
+  showLeavingPlatform: true,
   deliveryHour: null,
   ...overrides,
 });
@@ -233,16 +235,170 @@ describe('createNotificationDispatcher', () => {
     expect(stores.sent).toHaveLength(0);
   });
 
-  it('removed transition: no availability notification written', async () => {
+  // Spec 0057 reopens spec 0012 decision 1C: a 'removed' transition now notifies
+  // (the leaving-platform kind), so this canonical 'removed' coverage asserts a
+  // doc + send, replacing the pre-0057 length-0 expectation.
+  it('removed transition (movie): one movie-leaving-platform doc + one FCM send', async () => {
     const stores = makeStores({ users: [user()] });
     const summary = await makeDispatcher(stores).dispatch(
-      makeChange({ previousProviders: [flatrate(1)], newProviders: [] }),
+      makeChange({
+        type: 'movie',
+        previousProviders: [flatrate(1)],
+        newProviders: [],
+      }),
     );
 
-    expect(stores.written).toHaveLength(0);
-    expect(stores.sent).toHaveLength(0);
+    expect(stores.written).toHaveLength(1);
+    const { uid, id, doc } = stores.written[0];
+    expect(uid).toBe('u1');
+    expect(id).toBe('100-NL-movie-leaving-platform');
+    expect(doc.kind).toBe('movie-leaving-platform');
+    expect(doc.payload.tmdbId).toBe(100);
+    expect(doc.payload.region).toBe('NL');
+    expect(doc.payload.titleId).toBe('title-1');
+
+    expect(stores.sent).toHaveLength(1);
+    expect(stores.sent[0].token).toBe('tok-1');
+    expect(stores.sent[0].data).toEqual({
+      notificationId: '100-NL-movie-leaving-platform',
+      titleId: 'title-1',
+      kind: 'movie-leaving-platform',
+      region: 'NL',
+      tmdbId: '100',
+    });
+
     expect(summary.transition).toBe('removed');
     expect(summary.usersConsidered).toBe(1);
+    expect(summary.notificationsWritten).toBe(1);
+    expect(summary.fcmSent).toBe(1);
+  });
+
+  it('removed transition (tv): one show-leaving-platform doc + one FCM send', async () => {
+    const stores = makeStores({ users: [user()] });
+    const summary = await makeDispatcher(stores).dispatch(
+      makeChange({
+        type: 'tv',
+        previousProviders: [flatrate(1)],
+        newProviders: [],
+      }),
+    );
+
+    expect(stores.written).toHaveLength(1);
+    const { id, doc } = stores.written[0];
+    expect(id).toBe('100-NL-show-leaving-platform');
+    expect(doc.kind).toBe('show-leaving-platform');
+
+    expect(stores.sent).toHaveLength(1);
+    expect(stores.sent[0].data.kind).toBe('show-leaving-platform');
+    expect(stores.sent[0].data.notificationId).toBe(
+      '100-NL-show-leaving-platform',
+    );
+
+    expect(summary.transition).toBe('removed');
+    expect(summary.usersConsidered).toBe(1);
+    expect(summary.notificationsWritten).toBe(1);
+    expect(summary.fcmSent).toBe(1);
+  });
+
+  it('removed transition never emits episode-aired', async () => {
+    const stores = makeStores({ users: [user()] });
+    await makeDispatcher(stores).dispatch(
+      makeChange({
+        type: 'tv',
+        previousProviders: [flatrate(1)],
+        newProviders: [],
+      }),
+    );
+    const kinds = stores.written.map((w) => w.doc.kind);
+    expect(kinds).not.toContain('episode-aired');
+    expect(kinds).toEqual(['show-leaving-platform']);
+  });
+
+  describe('leaving-platform prefs gate (spec 0057)', () => {
+    const removedMovie = () =>
+      makeChange({
+        type: 'movie',
+        previousProviders: [flatrate(1)],
+        newProviders: [],
+      });
+
+    it('movieLeavingPlatform=false suppresses; true delivers', async () => {
+      const off = makeStores({
+        users: [
+          user({
+            notificationPrefs: allPrefs({ movieLeavingPlatform: false }),
+          }),
+        ],
+      });
+      const offSummary = await makeDispatcher(off).dispatch(removedMovie());
+      expect(off.written).toHaveLength(0);
+      expect(off.sent).toHaveLength(0);
+      expect(offSummary.notificationsWritten).toBe(0);
+
+      const on = makeStores({
+        users: [
+          user({ notificationPrefs: allPrefs({ movieLeavingPlatform: true }) }),
+        ],
+      });
+      await makeDispatcher(on).dispatch(removedMovie());
+      expect(on.written).toHaveLength(1);
+      expect(on.sent).toHaveLength(1);
+    });
+
+    it('showLeavingPlatform=false suppresses the tv leaving kind', async () => {
+      const off = makeStores({
+        users: [
+          user({
+            notificationPrefs: allPrefs({ showLeavingPlatform: false }),
+          }),
+        ],
+      });
+      await makeDispatcher(off).dispatch(
+        makeChange({
+          type: 'tv',
+          previousProviders: [flatrate(1)],
+          newProviders: [],
+        }),
+      );
+      expect(off.written).toHaveLength(0);
+      expect(off.sent).toHaveLength(0);
+    });
+
+    it('legacy prefs missing the new fields → enabled (the !== false core check)', async () => {
+      // Pre-0057 doc: notificationPrefs omits movie/showLeavingPlatform. The
+      // core `!== false` semantics treats undefined as enabled.
+      const legacyPrefs = {
+        episodeAired: true,
+        movieAvailable: true,
+        cameToPlatform: true,
+        deliveryHour: null,
+      } as unknown as NotificationPrefs;
+      const stores = makeStores({
+        users: [user({ notificationPrefs: legacyPrefs })],
+      });
+      const summary = await makeDispatcher(stores).dispatch(removedMovie());
+
+      expect(stores.written).toHaveLength(1);
+      expect(stores.written[0].doc.kind).toBe('movie-leaving-platform');
+      expect(stores.sent).toHaveLength(1);
+      expect(summary.notificationsWritten).toBe(1);
+    });
+
+    it('delivery window still gates the send for a removed kind (doc written, FCM skipped outside window)', async () => {
+      const FIXED = '2024-03-15T08:30:00.000Z'; // UTC hour 8
+      const stores = makeStores({
+        users: [user({ notificationPrefs: allPrefs({ deliveryHour: 10 }) })],
+      });
+      const summary = await makeDispatcher(stores, FIXED).dispatch(
+        removedMovie(),
+      );
+
+      expect(stores.written).toHaveLength(1);
+      expect(stores.written[0].doc.kind).toBe('movie-leaving-platform');
+      expect(stores.sent).toHaveLength(0);
+      expect(summary.notificationsWritten).toBe(1);
+      expect(summary.fcmSent).toBe(0);
+    });
   });
 
   it('multiple users: 3 in-region → 3 considered, one notification + send each', async () => {

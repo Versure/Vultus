@@ -93,9 +93,25 @@ describe('decideKinds', () => {
     ]);
   });
 
-  it('removed → [] (no notification)', () => {
-    expect(decideKinds({ type: 'movie', transition: 'removed' })).toEqual([]);
-    expect(decideKinds({ type: 'tv', transition: 'removed' })).toEqual([]);
+  it('removed + movie → ["movie-leaving-platform"]', () => {
+    expect(decideKinds({ type: 'movie', transition: 'removed' })).toEqual([
+      'movie-leaving-platform',
+    ]);
+  });
+
+  it('removed + tv → ["show-leaving-platform"]', () => {
+    expect(decideKinds({ type: 'tv', transition: 'removed' })).toEqual([
+      'show-leaving-platform',
+    ]);
+  });
+
+  it('removed does NOT add "episode-aired" (owned by the airing-scan)', () => {
+    expect(decideKinds({ type: 'movie', transition: 'removed' })).not.toContain(
+      'episode-aired',
+    );
+    expect(decideKinds({ type: 'tv', transition: 'removed' })).not.toContain(
+      'episode-aired',
+    );
   });
 
   it('unchanged → [] (no availability kind)', () => {

@@ -21,10 +21,12 @@ import {
   checkmarkCircle,
   chevronDownOutline,
   chevronForward,
+  filmOutline,
   globeOutline,
   notificationsOutline,
   personCircleOutline,
   timeOutline,
+  tvOutline,
 } from 'ionicons/icons';
 import { PlexBackgroundService } from './plex-background.service';
 import { PlexLinkService } from './plex-link.service';
@@ -100,6 +102,9 @@ export class SettingsPage implements OnInit {
       checkmarkCircle,
       chevronForward,
       chevronDownOutline,
+      // spec 0057: glyphs for the two leaving-platform toggle rows.
+      filmOutline,
+      tvOutline,
     });
 
     // Raise a toast whenever a region change prunes ≥1 provider from the user's
@@ -305,6 +310,20 @@ export class SettingsPage implements OnInit {
   protected onDeliveryHourChange(event: CustomEvent): void {
     void this.service.setDeliveryHour(
       (event.detail as { value: number | null }).value,
+    );
+  }
+
+  /** "Movie leaving your platform" toggle → persist the per-kind opt-in. */
+  protected onMovieLeavingPlatformChange(event: CustomEvent): void {
+    void this.service.setMovieLeavingPlatform(
+      (event.detail as { checked: boolean }).checked,
+    );
+  }
+
+  /** "Show leaving your platform" toggle → persist the per-kind opt-in. */
+  protected onShowLeavingPlatformChange(event: CustomEvent): void {
+    void this.service.setShowLeavingPlatform(
+      (event.detail as { checked: boolean }).checked,
     );
   }
 

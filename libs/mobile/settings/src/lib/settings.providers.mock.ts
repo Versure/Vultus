@@ -20,13 +20,16 @@ import { SyncStatusService } from './sync-status.service';
  * extend `SettingsService` (that injects `Firestore` / `AUTH_UID` /
  * `GET_WATCH_PROVIDERS`); it structurally mirrors the public surface:
  * - option lists `regions`, `deliveryHours`;
- * - signals `region`, `notificationsEnabled`, `deliveryHour`, `loaded`,
- *   `loadFailed`, the "My Providers" (spec 0060) signals `providerCatalog`,
- *   `myProviderIds`, `catalogLoading`, `lastPrunedCount`, and the Plex
- *   (spec 0061) signal `hasPlex`;
+ * - signals `region`, `notificationsEnabled`, `deliveryHour`, the
+ *   leaving-platform (spec 0057) per-kind opt-ins `movieLeavingPlatform` /
+ *   `showLeavingPlatform`, `loaded`, `loadFailed`, the "My Providers"
+ *   (spec 0060) signals `providerCatalog`, `myProviderIds`, `catalogLoading`,
+ *   `lastPrunedCount`, and the Plex (spec 0061) signal `hasPlex`;
  * - methods `load`, `setRegion`, `setNotificationsEnabled`, `setDeliveryHour`,
- *   `retryLoad`, the "My Providers" methods `loadProviderCatalog`,
- *   `toggleProvider`, and the Plex method `toggleHasPlex`.
+ *   the leaving-platform setters `setMovieLeavingPlatform` /
+ *   `setShowLeavingPlatform` (spec 0057), `retryLoad`, the "My Providers"
+ *   methods `loadProviderCatalog`, `toggleProvider`, and the Plex method
+ *   `toggleHasPlex`.
  *
  * `loaded` is pre-resolved (no spinner). The provider catalog is seeded with a
  * plausible set (Netflix, Disney Plus, Max, Prime Video) and `myProviderIds`
@@ -77,6 +80,10 @@ class MockSettingsServiceImpl {
   private readonly _notificationsEnabled = signal<boolean>(true);
   // Seeded to "Any time" (null) so `mobile:serve-mock` renders the default.
   private readonly _deliveryHour = signal<number | null>(null);
+  // Leaving-platform opt-ins (spec 0057) seeded ON so `mobile:serve-mock`
+  // renders both new toggle rows in their default checked state.
+  private readonly _movieLeavingPlatform = signal<boolean>(true);
+  private readonly _showLeavingPlatform = signal<boolean>(true);
   private readonly _loaded = signal<boolean>(true);
   private readonly _loadFailed = signal<boolean>(false);
 
@@ -93,6 +100,8 @@ class MockSettingsServiceImpl {
   readonly region = this._region.asReadonly();
   readonly notificationsEnabled = this._notificationsEnabled.asReadonly();
   readonly deliveryHour = this._deliveryHour.asReadonly();
+  readonly movieLeavingPlatform = this._movieLeavingPlatform.asReadonly();
+  readonly showLeavingPlatform = this._showLeavingPlatform.asReadonly();
   readonly loaded = this._loaded.asReadonly();
   readonly loadFailed = this._loadFailed.asReadonly();
   readonly providerCatalog = this._providerCatalog.asReadonly();
@@ -121,6 +130,16 @@ class MockSettingsServiceImpl {
 
   setDeliveryHour(hour: number | null): Promise<void> {
     this._deliveryHour.set(hour);
+    return Promise.resolve();
+  }
+
+  setMovieLeavingPlatform(enabled: boolean): Promise<void> {
+    this._movieLeavingPlatform.set(enabled);
+    return Promise.resolve();
+  }
+
+  setShowLeavingPlatform(enabled: boolean): Promise<void> {
+    this._showLeavingPlatform.set(enabled);
     return Promise.resolve();
   }
 
