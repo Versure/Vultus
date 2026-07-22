@@ -1,7 +1,9 @@
 <ion-header class="notifications-header">
   <ion-toolbar>
     <ion-buttons slot="start">
-      <ion-back-button defaultHref="tabs/watchlist"></ion-back-button>
+      <ion-button class="back-button" aria-label="Go back" (click)="goBack()">
+        <ion-icon name="arrow-back" slot="icon-only"></ion-icon>
+      </ion-button>
     </ion-buttons>
     <ion-title>Notifications</ion-title>
     @if (vm$ | async; as vm) { @if (vm.unreadIds.length > 0) {
