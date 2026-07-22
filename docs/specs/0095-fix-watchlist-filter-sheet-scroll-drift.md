@@ -2,7 +2,7 @@
 number: 0095
 slug: fix-watchlist-filter-sheet-scroll-drift
 title: Fix the Watchlist filter sheet drifting off-screen when the list is scrolled — anchor it to the viewport via `slot="fixed"`
-status: approved
+status: implementing
 slices: [slice:watchlist]
 scopes: [scope:mobile]
 created: 2026-07-22
@@ -181,7 +181,7 @@ are visible AND within the viewport (**reuse** the existing
   the standard e2e viewport. Use distinct `tmdbId` doc ids that do not collide with
   the seeded `2`/`3`.
 - **Scroll** via Playwright `page.mouse.wheel` or a `locator.evaluate(el =>
-  el.scrollBy(...))`-equivalent on the **actual scrollable host** — the
+el.scrollBy(...))`-equivalent on the **actual scrollable host** — the
   `ion-content`'s shadow `[part="scroll"]` element (reachable in Playwright via
   `page.locator('ion-content').locator('css=[part="scroll"]')` or by evaluating
   into the shadow root). Pick whichever is idiomatic for this codebase's existing
@@ -190,7 +190,7 @@ are visible AND within the viewport (**reuse** the existing
   real conditions/locators per this repo's e2e convention (see the existing file's
   own comments on this).
 - **Confirm the EXISTING test in that file** (`'watchlist filter sheet opens
-  visible and closes'`, the unscrolled / single-item case) still passes
+visible and closes'`, the unscrolled / single-item case) still passes
   **unmodified**.
 
 **D3. Component test coverage.** No new component-level assertion is strictly
@@ -282,10 +282,10 @@ green build alone.
 
 ## Affected slices & Sheriff tags
 
-| Project          | Path                    | Sheriff tags                      | Change                                                                                                                                                                                        |
-| ---------------- | ----------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Project          | Path                    | Sheriff tags                      | Change                                                                                                                                                                                           |
+| ---------------- | ----------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | mobile-watchlist | `libs/mobile/watchlist` | `scope:mobile`, `slice:watchlist` | `watchlist.page.html`: add `slot="fixed"` to `.filter-sheet` wrapper. `watchlist.page.scss`: comment update + conditional `overflow: hidden` removal (if proven safe). `README.md`: 1-line note. |
-| mobile-e2e       | `apps/mobile-e2e`       | (e2e app; not slice-tagged)       | Extend existing `src/watchlist-filter-sheet.spec.ts` with the scrolled-open scenario (ad-hoc overflow docs via `writeDocument`/`encodeFields`) (D2).                                          |
+| mobile-e2e       | `apps/mobile-e2e`       | (e2e app; not slice-tagged)       | Extend existing `src/watchlist-filter-sheet.spec.ts` with the scrolled-open scenario (ad-hoc overflow docs via `writeDocument`/`encodeFields`) (D2).                                             |
 
 - **No cross-slice / cross-scope import.** A single existing `scope:mobile` slice
   owns its page html/scss/README; the e2e app is the project's standard e2e
@@ -438,7 +438,7 @@ visible after the list is scrolled"** — implementing the D2 flow:
    and the `bootSeededWatchlist`-style boot (goto `/` → `resolveAnonUid` →
    `seedFor(uid, 'seeded')`); then **before reloading**, write **6-8 ad-hoc extra
    `users/{uid}/watchlist/{tmdbId}` docs** via `writeDocument(path,
-   encodeFields(data))` (both from `./support`), each using the existing
+encodeFields(data))` (both from `./support`), each using the existing
    `WatchlistItemWriteData` shape (`type`/`tmdbId`/`traktId`/`title`/`addedAt`
    `{ __timestamp }`/`status`/`posterPath`/`voteAverage`/`releaseDate`/
    `nextUnwatchedEpisodeAirDate`/`watchingViaPlex`), with distinct `tmdbId` ids not
@@ -452,7 +452,7 @@ visible after the list is scrolled"** — implementing the D2 flow:
    condition (e.g. the host's `scrollTop` reaching a target), **no fixed sleep**.
 3. Open the sheet via `getByRole('button', { name: 'Sort and filter' })`; wait for
    the open transition to settle (`await expect(panel).toHaveCSS('transform',
-   'matrix(1, 0, 0, 1, 0, 0)')` and backdrop `opacity: 1`, exactly as the existing
+'matrix(1, 0, 0, 1, 0, 0)')` and backdrop `opacity: 1`, exactly as the existing
    test does — no sleep); then assert via the **existing**
    `expectVisibleWithinViewport` helper that the panel, the Sort By heading + first
    chip, and the Provider heading are all visible **and within the viewport**.
@@ -491,10 +491,10 @@ is a `scope:mobile` change to a **critical user-facing action** (the filter/sort
 control) that is unusable when the list is scrolled — an e2e flow is required.
 
 - **Existing named flow (unchanged, must still pass):** `'watchlist filter sheet
-  opens visible and closes'` — boots at `scrollTop: 0`, opens, asserts within
+opens visible and closes'` — boots at `scrollTop: 0`, opens, asserts within
   viewport, Done closes.
 - **New named flow (this spec):** `'watchlist filter sheet opens visible after the
-  list is scrolled'` — seed `seeded` + 6-8 ad-hoc overflow docs → scroll the
+list is scrolled'` — seed `seeded` + 6-8 ad-hoc overflow docs → scroll the
   `[part="scroll"]` host down → open the sheet → assert `.filter-sheet-panel` +
   Sort By heading/chip + Provider heading are visible **and within the viewport**
   (via the existing `expectVisibleWithinViewport`, a check strong enough to catch
@@ -538,7 +538,7 @@ Tailored from the PLAN §5 checklist. Every checkbox maps to Task A or Task B.
       `expectVisibleWithinViewport`), Done closes it; no fixed sleeps;
       un-skippable (not `test.fixme`); green in CI against the emulator. (Task B)
 - [ ] **Existing e2e unchanged & green:** the original `'watchlist filter sheet
-      opens visible and closes'` test is unmodified and passes; `watchlist-refresh`
+  opens visible and closes'` test is unmodified and passes; `watchlist-refresh`
       and `mark-watched` still pass. (Task B)
 - [ ] **D3: no fake jsdom layout assertion** added to `watchlist.page.spec.ts`;
       the existing 0087 component specs still pass. (Task A — verify only)
@@ -588,7 +588,7 @@ Tailored from the PLAN §5 checklist. Every checkbox maps to Task A or Task B.
   scope-changing new information — do NOT fall back to `position: fixed`,
   `!important`, or a scroll-reset hack** (D1/D5, all explicitly rejected/deferred).
 - **Regressing 0082's empty-watchlist scroll-leak fix.** Removing `overflow:
-  hidden` without proof could reintroduce the empty-page scroll leak.
+hidden` without proof could reintroduce the empty-page scroll leak.
   **Mitigation:** D1 requires the empirical `scrollHeight === clientHeight` check
   before any removal, and defaults to **keeping** `overflow: hidden` (harmless
   defense-in-depth) if removal can't be conclusively verified; D5 re-runs the same

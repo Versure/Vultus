@@ -1,5 +1,11 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
-import { resolveAnonUid, seedFor, clearAll } from './support';
+import {
+  resolveAnonUid,
+  seedFor,
+  clearAll,
+  writeDocument,
+  encodeFields,
+} from './support';
 
 /**
  * Spec 0087 (D2) — the Watchlist "Sort & Filter" bottom sheet opens fully
@@ -192,4 +198,158 @@ test('watchlist filter sheet opens visible and closes', async ({ page }) => {
   // so the closed end-state is genuinely reached, not merely visibility-hidden
   // mid-animation. `toHaveCSS` polls the computed style — no fixed sleep.
   await expect(backdrop).toHaveCSS('opacity', '0');
+});
+
+/**
+ * Spec 0095 (D2) — the SCROLLED-open scenario. This is the exact CI gap that let
+ * the #230 reopen ship: 0087's test above only ever opened the sheet at
+ * `scrollTop: 0` (right after boot), so it never exercised a scrolled list.
+ *
+ * Root cause (fixed in the slice by the `slot="fixed"` move): `.filter-sheet`
+ * was a default-slot child of `<ion-content>`, rendering INSIDE Ionic's shadow
+ * `[part="scroll"]` container. Its `inset: 0` therefore anchored it to the
+ * scroll host's SCROLLED-CONTENT coordinate space, so the whole sheet+panel box
+ * slid up by `scrollTop` (measured 1:1 in the investigation), leaving only a
+ * sliver on-screen — even though 0087's `translateY(0)` panel transform stayed
+ * correct. Projecting the wrapper into `slot="fixed"` renders it OUTSIDE
+ * `[part="scroll"]`, anchored to the visual viewport regardless of scroll.
+ *
+ * The check that catches this is the SAME `expectVisibleWithinViewport` used
+ * above: a drifted panel is still DOM-present and `visibility: visible`, so a
+ * plain `toBeVisible()` would pass — only the bounding-box viewport-containment
+ * assertion fails when the panel is shifted off-screen by the scroll offset.
+ *
+ * The shared `seeded` fixture (one item) is NOT modified — it is consumed by
+ * other specs whose card-count assertions would break. Instead this test writes
+ * ad-hoc extra `users/{uid}/watchlist/{tmdbId}` docs (via `writeDocument` +
+ * `encodeFields`) to force real overflow on the 375×812 e2e viewport.
+ */
+
+/**
+ * Ad-hoc overflow watchlist items, written directly to the emulator for THIS
+ * test only. Each matches the `WatchlistItemWriteData` shape from
+ * `libs/shared/firestore-schema/src/lib/converters.ts` (`watchlistItemToData`):
+ * type / tmdbId / traktId / title / addedAt ({ __timestamp } marker) / status /
+ * posterPath / voteAverage / releaseDate / nextUnwatchedEpisodeAirDate /
+ * watchingViaPlex. The `tmdbId`s (9001+) are chosen to NOT collide with the
+ * seeded fixture ids (2 = Breaking Bad, 3 = The Bear).
+ */
+const OVERFLOW_ITEMS = Array.from({ length: 8 }, (_, i) => ({
+  tmdbId: 9001 + i,
+  title: `Overflow Title ${i + 1}`,
+}));
+
+test('watchlist filter sheet opens visible after the list is scrolled', async ({
+  page,
+}) => {
+  // Boot + seed the shared `seeded` fixture under the LIVE anon uid (R3), then —
+  // BEFORE reloading — write the ad-hoc overflow docs so the reloaded watchlist
+  // stream renders enough cards to overflow the viewport.
+  await page.goto('/');
+  const uid = await resolveAnonUid(page);
+  await seedFor(uid, 'seeded');
+
+  for (const item of OVERFLOW_ITEMS) {
+    await writeDocument(
+      `users/${uid}/watchlist/${item.tmdbId}`,
+      encodeFields({
+        type: 'movie',
+        tmdbId: item.tmdbId,
+        traktId: null,
+        title: item.title,
+        // addedAt IS a Firestore Timestamp on the wire — use the __timestamp
+        // marker (matching the seeded watchlist items and plex-sync.spec.ts).
+        addedAt: { __timestamp: '2026-06-24T10:00:00.000Z' },
+        status: 'planned',
+        posterPath: null,
+        voteAverage: null,
+        releaseDate: null,
+        nextUnwatchedEpisodeAirDate: null,
+        watchingViaPlex: false,
+      }),
+    );
+  }
+
+  // Reload so the freshly-seeded + ad-hoc docs are picked up by the stream, then
+  // navigate to the Watchlist tab.
+  await page.reload();
+  await expect(page).toHaveURL(/\/tabs\/today$/);
+  await page.locator('ion-tab-button[tab="watchlist"]').click();
+  await expect(page).toHaveURL(/\/tabs\/watchlist$/);
+
+  // Assert enough cards rendered to overflow the 812px-tall viewport. Threshold
+  // (>= 7) is well below the 9 expected (1 seeded + 8 ad-hoc) but far above what
+  // a single screen fits — no exact count, so the test is robust to the fixture
+  // gaining/losing a default item.
+  await expect
+    .poll(async () => page.locator('.watchlist-card').count())
+    .toBeGreaterThanOrEqual(7);
+
+  // Scroll the ACTUAL scrollable host — Ionic's shadow `[part="scroll"]` inside
+  // `ion-content` (Playwright's CSS engine pierces the open shadow root). This is
+  // the container whose `scrollTop` shifted the pre-fix sheet off-screen.
+  const scrollHost = page.locator('ion-content').locator('css=[part="scroll"]');
+  const TARGET_SCROLL = 400;
+  await scrollHost.evaluate((el, top) => {
+    (el as HTMLElement).scrollTop = top;
+  }, TARGET_SCROLL);
+
+  // Gate on the scroll actually landing (no fixed sleep) — the host's scrollTop
+  // must reach the target before we open the sheet, so we genuinely exercise the
+  // scrolled-content coordinate space that produced the #230 drift.
+  await expect
+    .poll(async () =>
+      scrollHost.evaluate((el) => (el as HTMLElement).scrollTop),
+    )
+    .toBeGreaterThanOrEqual(TARGET_SCROLL - 1);
+
+  const panel = page.locator('.filter-sheet-panel');
+  const backdrop = page.locator('.filter-sheet-backdrop');
+  await expect(panel).toBeHidden();
+
+  // Open the sheet via the trigger's accessible name (NOT icon/CSS class).
+  await page.getByRole('button', { name: 'Sort and filter' }).click();
+
+  // Wait for the OPEN transition to settle before measuring geometry — exactly
+  // as the unscrolled test does: `toHaveCSS` polls the computed style until the
+  // panel reaches `translateY(0)` and the backdrop `opacity: 1`. No fixed sleep.
+  await expect(panel).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)');
+  await expect(backdrop).toHaveCSS('opacity', '1');
+
+  // THE assertion that catches the pre-fix regression: with the list scrolled to
+  // a non-zero offset, the panel must still be visible AND within the viewport.
+  // Pre-fix the whole sheet box was shifted up by `scrollTop` (~400px here), so
+  // its bounding box fell off-screen while remaining `visibility: visible` — a
+  // plain `toBeVisible()` would NOT have caught it, but the bounding-box
+  // containment check does.
+  await expectVisibleWithinViewport(page, panel, 'filter-sheet panel');
+
+  // Sort By section: heading + first chip, visible and within the viewport.
+  const sortSection = page
+    .locator('.filter-section')
+    .filter({ hasText: 'Sort By' });
+  await expectVisibleWithinViewport(
+    page,
+    sortSection.locator('.filter-section-heading'),
+    'Sort By heading',
+  );
+  await expectVisibleWithinViewport(
+    page,
+    sortSection.locator('.filter-chip').first(),
+    'Sort By chip',
+  );
+
+  // Provider heading: proves the lower part of the panel is on-screen too.
+  await expectVisibleWithinViewport(
+    page,
+    page
+      .locator('.filter-section')
+      .filter({ hasText: 'Provider' })
+      .locator('.filter-section-heading'),
+    'Provider heading',
+  );
+
+  // Close via Done; the panel returns hidden (sheet flips to visibility: hidden).
+  await panel.locator('.filter-sheet-done').click();
+  await expect(panel).toBeHidden();
 });
