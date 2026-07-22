@@ -42,6 +42,11 @@ function existingDoc(data: {
     episodeAired: boolean;
     movieAvailable: boolean;
     cameToPlatform: boolean;
+    // spec 0057 leaving-platform opt-ins; optional so a test can simulate a
+    // legacy (pre-0057) stored doc that omits them (→ `dataToUser` coalesces
+    // them to `true`).
+    movieLeavingPlatform?: boolean;
+    showLeavingPlatform?: boolean;
     deliveryHour?: number | null;
   };
   myProviderIds?: number[];
@@ -136,6 +141,8 @@ describe('SettingsService', () => {
         episodeAired: true,
         movieAvailable: true,
         cameToPlatform: true,
+        movieLeavingPlatform: true,
+        showLeavingPlatform: true,
         deliveryHour: null,
       },
       fcmTokens: [],
@@ -234,6 +241,8 @@ describe('SettingsService', () => {
         episodeAired: false,
         movieAvailable: false,
         cameToPlatform: false,
+        movieLeavingPlatform: true,
+        showLeavingPlatform: true,
         deliveryHour: null,
       },
     });
@@ -252,6 +261,8 @@ describe('SettingsService', () => {
         episodeAired: true,
         movieAvailable: true,
         cameToPlatform: true,
+        movieLeavingPlatform: true,
+        showLeavingPlatform: true,
         deliveryHour: null,
       },
     });
@@ -284,6 +295,8 @@ describe('SettingsService', () => {
         episodeAired: false,
         movieAvailable: false,
         cameToPlatform: false,
+        movieLeavingPlatform: true,
+        showLeavingPlatform: true,
         deliveryHour: 14,
       },
     });
@@ -317,6 +330,8 @@ describe('SettingsService', () => {
         episodeAired: false,
         movieAvailable: true,
         cameToPlatform: false,
+        movieLeavingPlatform: true,
+        showLeavingPlatform: true,
         deliveryHour: 8,
       },
     });
@@ -347,6 +362,8 @@ describe('SettingsService', () => {
         episodeAired: true,
         movieAvailable: true,
         cameToPlatform: true,
+        movieLeavingPlatform: true,
+        showLeavingPlatform: true,
         deliveryHour: null,
       },
     });
@@ -370,6 +387,220 @@ describe('SettingsService', () => {
     await service.load();
 
     expect(service.deliveryHour()).toBe(21);
+  });
+
+  // ── Leaving-platform per-kind opt-ins (spec 0057) ────────────────────────
+
+  it('setMovieLeavingPlatform(false) writes the whole prefs, preserving every other field', async () => {
+    // Load a doc whose fields are all DISTINCT so preservation is provable.
+    getDocMock.mockResolvedValue(
+      existingDoc({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: false,
+          movieAvailable: true,
+          cameToPlatform: false,
+          movieLeavingPlatform: true,
+          showLeavingPlatform: true,
+          deliveryHour: 14,
+        },
+      }),
+    );
+    const service = createService(UID);
+    await service.load();
+
+    await service.setMovieLeavingPlatform(false);
+
+    expect(updateDocMock).toHaveBeenCalledTimes(1);
+    const [ref, payload] = updateDocMock.mock.calls[0];
+    expect(ref).toEqual({ path: USER_DOC });
+    expect(payload).toEqual({
+      notificationPrefs: {
+        episodeAired: false,
+        movieAvailable: true,
+        cameToPlatform: false,
+        movieLeavingPlatform: false,
+        showLeavingPlatform: true,
+        deliveryHour: 14,
+      },
+    });
+    expect(Object.keys(payload as object)).not.toContain('fcmTokens');
+    expect(service.movieLeavingPlatform()).toBe(false);
+    // The sibling leaving-platform pref is untouched.
+    expect(service.showLeavingPlatform()).toBe(true);
+  });
+
+  it('setShowLeavingPlatform(false) writes the whole prefs, preserving every other field', async () => {
+    getDocMock.mockResolvedValue(
+      existingDoc({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: false,
+          cameToPlatform: true,
+          movieLeavingPlatform: true,
+          showLeavingPlatform: true,
+          deliveryHour: 9,
+        },
+      }),
+    );
+    const service = createService(UID);
+    await service.load();
+
+    await service.setShowLeavingPlatform(false);
+
+    const [, payload] = updateDocMock.mock.calls[0];
+    expect(payload).toEqual({
+      notificationPrefs: {
+        episodeAired: true,
+        movieAvailable: false,
+        cameToPlatform: true,
+        movieLeavingPlatform: true,
+        showLeavingPlatform: false,
+        deliveryHour: 9,
+      },
+    });
+    expect(service.showLeavingPlatform()).toBe(false);
+    // The sibling leaving-platform pref is untouched.
+    expect(service.movieLeavingPlatform()).toBe(true);
+  });
+
+  it('setNotificationsEnabled preserves the two leaving-platform prefs (spec 0057)', async () => {
+    getDocMock.mockResolvedValue(
+      existingDoc({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+          movieLeavingPlatform: false,
+          showLeavingPlatform: true,
+          deliveryHour: 14,
+        },
+      }),
+    );
+    const service = createService(UID);
+    await service.load();
+
+    await service.setNotificationsEnabled(false);
+
+    const [, payload] = updateDocMock.mock.calls[0];
+    expect(payload).toEqual({
+      notificationPrefs: {
+        episodeAired: false,
+        movieAvailable: false,
+        cameToPlatform: false,
+        movieLeavingPlatform: false,
+        showLeavingPlatform: true,
+        deliveryHour: 14,
+      },
+    });
+    // The independent per-kind prefs are carried through, not reset.
+    expect(service.movieLeavingPlatform()).toBe(false);
+    expect(service.showLeavingPlatform()).toBe(true);
+  });
+
+  it('setDeliveryHour preserves the two leaving-platform prefs (spec 0057)', async () => {
+    getDocMock.mockResolvedValue(
+      existingDoc({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: false,
+          cameToPlatform: true,
+          movieLeavingPlatform: false,
+          showLeavingPlatform: true,
+          deliveryHour: null,
+        },
+      }),
+    );
+    const service = createService(UID);
+    await service.load();
+
+    await service.setDeliveryHour(8);
+
+    const [, payload] = updateDocMock.mock.calls[0];
+    expect(payload).toEqual({
+      notificationPrefs: {
+        episodeAired: true,
+        movieAvailable: false,
+        cameToPlatform: true,
+        movieLeavingPlatform: false,
+        showLeavingPlatform: true,
+        deliveryHour: 8,
+      },
+    });
+  });
+
+  it('load() reads the two leaving-platform prefs into their signals', async () => {
+    getDocMock.mockResolvedValue(
+      existingDoc({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+          movieLeavingPlatform: false,
+          showLeavingPlatform: true,
+        },
+      }),
+    );
+    const service = createService(UID);
+
+    await service.load();
+
+    expect(service.movieLeavingPlatform()).toBe(false);
+    expect(service.showLeavingPlatform()).toBe(true);
+  });
+
+  it('load() defaults both leaving-platform prefs to true for a legacy doc missing them', async () => {
+    getDocMock.mockResolvedValue(
+      existingDoc({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+          // no movieLeavingPlatform/showLeavingPlatform → converter → true
+        },
+      }),
+    );
+    const service = createService(UID);
+
+    await service.load();
+
+    expect(service.movieLeavingPlatform()).toBe(true);
+    expect(service.showLeavingPlatform()).toBe(true);
+  });
+
+  it('eager-create writes both leaving-platform prefs as true', async () => {
+    getDocMock.mockResolvedValue(missingDoc);
+    const service = createService(UID);
+
+    await service.load();
+
+    const [, payload] = setDocMock.mock.calls[0];
+    const prefs = (
+      payload as {
+        notificationPrefs: {
+          movieLeavingPlatform: boolean;
+          showLeavingPlatform: boolean;
+        };
+      }
+    ).notificationPrefs;
+    expect(prefs.movieLeavingPlatform).toBe(true);
+    expect(prefs.showLeavingPlatform).toBe(true);
+    expect(service.movieLeavingPlatform()).toBe(true);
+    expect(service.showLeavingPlatform()).toBe(true);
+  });
+
+  it('null-uid guard: no Firestore write on setMovieLeavingPlatform / setShowLeavingPlatform', async () => {
+    const service = createService(null);
+
+    await service.setMovieLeavingPlatform(false);
+    await service.setShowLeavingPlatform(false);
+
+    expect(updateDocMock).not.toHaveBeenCalled();
   });
 
   it('deliveryHours exposes the 24 UTC hours 0..23', () => {
