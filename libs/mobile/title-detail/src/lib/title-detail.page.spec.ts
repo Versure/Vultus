@@ -548,7 +548,18 @@ describe('TitleDetailPage', () => {
       const elsewhere = el.querySelector('[data-test="group-elsewhere"]');
       expect(mine).toBeTruthy();
       expect(elsewhere).toBeTruthy();
-      expect(el.querySelector('[data-test="group-divider"]')).toBeTruthy();
+      const divider = el.querySelector('[data-test="group-divider"]');
+      expect(divider).toBeTruthy();
+      // Issue #252: the subgroup divider must be a DIRECT child of
+      // `.provider-groups` — this is the precondition the scoped
+      // `.provider-groups > .group-divider { margin-top: 0 }` fix relies on. If
+      // a refactor moved it out, the fix would silently stop applying.
+      expect(
+        el.querySelector('.provider-groups > [data-test="group-divider"]'),
+      ).toBeTruthy();
+      expect(
+        divider?.parentElement?.classList.contains('provider-groups'),
+      ).toBe(true);
       // Mine group appears before elsewhere in DOM order.
       if (mine && elsewhere) {
         expect(
@@ -1196,6 +1207,49 @@ describe('TitleDetailPage', () => {
         }
       },
     );
+
+    // Issue #252 regression guard: when BOTH the two-subgroup split and the
+    // Plex "Personal Tracking" section render, the plex-divider reuses the same
+    // `.group-divider` class but is a block-flow child of the `.glass-panel`
+    // "Where to Watch" card — NOT a child of `.provider-groups`. This proves the
+    // scoped `.provider-groups > .group-divider { margin-top: 0 }` fix does NOT
+    // touch the plex-divider (which keeps the base margin-top on purpose).
+    it('plex-divider is present but is NOT a child of .provider-groups (base margin-top preserved)', async () => {
+      const { fixture } = await setup({
+        hasPlex: true,
+        myProviderIds: [8],
+        providers: {
+          flatrate: [
+            { providerId: 8, name: 'Netflix', type: 'flatrate' },
+            { providerId: 9, name: 'Prime Video', type: 'flatrate' },
+          ],
+          rent: [],
+          buy: [],
+        },
+        tracked: trackedItem(false),
+      });
+      const el = fixture.nativeElement as HTMLElement;
+      // The subgroup split AND the plex section both render.
+      expect(el.querySelector('[data-test="group-mine"]')).toBeTruthy();
+      expect(el.querySelector('[data-test="group-elsewhere"]')).toBeTruthy();
+      // The subgroup divider IS a child of `.provider-groups`.
+      expect(
+        el.querySelector('.provider-groups > [data-test="group-divider"]'),
+      ).toBeTruthy();
+      // The plex-divider is present…
+      const plexDivider = el.querySelector('[data-test="plex-divider"]');
+      expect(plexDivider).toBeTruthy();
+      // …but is NOT a child of `.provider-groups` (so the scoped fix skips it)…
+      expect(
+        el.querySelector('.provider-groups > [data-test="plex-divider"]'),
+      ).toBeNull();
+      expect(
+        plexDivider?.parentElement?.classList.contains('provider-groups'),
+      ).toBe(false);
+      // …and it IS a descendant of the `.glass-panel` "Where to Watch" card.
+      expect(plexDivider?.closest('[data-test="providers"]')).toBeTruthy();
+      expect(plexDivider?.closest('.provider-groups')).toBeNull();
+    });
   });
 
   describe('revertIfNewEpisodes page-init wire-up (spec 0050)', () => {
