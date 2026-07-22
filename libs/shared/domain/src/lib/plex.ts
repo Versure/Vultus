@@ -20,9 +20,11 @@ export interface PlexServer {
  *  GUID (null when GUID-less → skipped), plus addedAt + watch state. */
 export interface PlexLibraryItem {
   type: 'movie' | 'tv';
-  tmdbId: number | null; // null = GUID-less legacy agent → skip
+  tmdbId: number | null; // tmdb:// GUID; null → try tvdb/imdb via /find
+  tvdbId?: number | null; // tvdb:// GUID id (spec 0097); optional/nullable
+  imdbId?: string | null; // imdb:// GUID id, e.g. 'tt0111161' (spec 0097)
   title: string;
-  addedAt: string; // ISO 8601 (from Plex epoch seconds)
+  addedAt: string | null; // ISO 8601; null when Plex reports none (spec 0097)
   viewCount: number; // movie/show-level; >0 = watched (movie)
   lastViewedAt: string | null; // ISO 8601 or null
   ratingKey: string; // Plex item id, for episode fetch

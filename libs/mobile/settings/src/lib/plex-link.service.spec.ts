@@ -400,6 +400,123 @@ describe('PlexLinkService', () => {
     expect(service.lastSyncAt()).toBe(lastSyncAt);
   });
 
+  it('loadState populates unmatched() from plexSync.unmatched (spec 0097)', async () => {
+    prefsGetMock.mockResolvedValue({ value: 'device-token' });
+    getDocMock.mockResolvedValue(
+      snap({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+          deliveryHour: null,
+        },
+        fcmTokens: [],
+        myProviderIds: [],
+        hasPlex: true,
+        plexSync: {
+          linkedAt: new Date().toISOString(),
+          lastSyncAt: new Date().toISOString(),
+          serverName: 'My PMS',
+          unmatched: [
+            { title: 'Lucky', reason: 'guid-unresolved' },
+            { title: 'Home Movie 2019', reason: 'no-guid' },
+          ],
+        },
+      }),
+    );
+    const service = makeService(makeClient());
+    await service.loadState();
+
+    expect(service.unmatched()).toEqual([
+      { title: 'Lucky', reason: 'guid-unresolved' },
+      { title: 'Home Movie 2019', reason: 'no-guid' },
+    ]);
+  });
+
+  it('loadState defaults unmatched() to [] when plexSync omits it (legacy doc)', async () => {
+    prefsGetMock.mockResolvedValue({ value: 'device-token' });
+    getDocMock.mockResolvedValue(
+      snap({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+          deliveryHour: null,
+        },
+        fcmTokens: [],
+        myProviderIds: [],
+        hasPlex: true,
+        plexSync: {
+          linkedAt: new Date().toISOString(),
+          lastSyncAt: new Date().toISOString(),
+          serverName: 'My PMS',
+        },
+      }),
+    );
+    const service = makeService(makeClient());
+    await service.loadState();
+
+    expect(service.unmatched()).toEqual([]);
+  });
+
+  it('unlink clears unmatched() to [] (spec 0097)', async () => {
+    prefsGetMock.mockResolvedValue({ value: 'device-token' });
+    getDocMock.mockResolvedValue(
+      snap({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+          deliveryHour: null,
+        },
+        fcmTokens: [],
+        myProviderIds: [],
+        hasPlex: true,
+        plexSync: {
+          linkedAt: new Date().toISOString(),
+          lastSyncAt: new Date().toISOString(),
+          serverName: 'My PMS',
+          unmatched: [{ title: 'Lucky', reason: 'guid-unresolved' }],
+        },
+      }),
+    );
+    const service = makeService(makeClient());
+    await service.loadState();
+    expect(service.unmatched()).toHaveLength(1);
+
+    await service.unlink();
+    expect(service.unmatched()).toEqual([]);
+  });
+
+  it('loadState self-heal branch resets unmatched() to [] on a half-linked device', async () => {
+    // Token present but NO plexSync → half-linked; self-heal drops token AND any
+    // stale diagnostics (spec 0097).
+    prefsGetMock.mockResolvedValue({ value: 'orphan-token' });
+    getDocMock.mockResolvedValue(
+      snap({
+        region: 'NL',
+        notificationPrefs: {
+          episodeAired: true,
+          movieAvailable: true,
+          cameToPlatform: true,
+          deliveryHour: null,
+        },
+        fcmTokens: [],
+        myProviderIds: [],
+        hasPlex: true,
+        // No plexSync.
+      }),
+    );
+    const service = makeService(makeClient());
+    await service.loadState();
+
+    expect(service.linked()).toBe(false);
+    expect(service.unmatched()).toEqual([]);
+  });
+
   it('cancel stops the flow and returns to idle', async () => {
     const client = makeClient({
       checkPin: vi

@@ -10,21 +10,11 @@
   Sign Out) are decorative/deferred features and are intentionally NOT rendered
   or wired (spec 0018 decision 4 / Out of scope).
 -->
-<ion-header>
-  <ion-toolbar>
-    <ion-title>
-      <span class="brand-mark">
-        <ion-icon name="film-outline" class="brand-icon"></ion-icon>
-        Vultus
-      </span>
-    </ion-title>
-    <ion-buttons slot="end">
-      <ion-button aria-label="Account">
-        <ion-icon name="person-circle-outline" slot="icon-only"></ion-icon>
-      </ion-button>
-    </ion-buttons>
-  </ion-toolbar>
-</ion-header>
+<vultus-app-header>
+  <ion-button aria-label="Account">
+    <ion-icon name="person-circle-outline" slot="icon-only"></ion-icon>
+  </ion-button>
+</vultus-app-header>
 
 <ion-content>
   @if (service.loadFailed()) {
@@ -311,6 +301,31 @@
               </div>
             </div>
           </div>
+          <!--
+            Unmatched-titles diagnostics (spec 0097) — the read-only "couldn't
+            match" list from the most recent completed sync pass. Sits AFTER the
+            background-sync controls and BEFORE the Disconnect footer, hidden
+            entirely when empty. Static/non-interactive: no tap targets, no
+            navigation — it just names dropped titles + why. Reuses the muted
+            `settings-row__helper` class for the heading; tokens only, no new hex.
+          -->
+          @if (plexLink.unmatched().length > 0) {
+          <div class="plex-unmatched">
+            <p class="settings-row__helper">
+              {{ unmatchedHeading(plexLink.unmatched().length) }}
+            </p>
+            <ul class="plex-unmatched__list">
+              @for (entry of plexLink.unmatched(); track $index) {
+              <li class="plex-unmatched__row">
+                <span class="plex-unmatched__title">{{ entry.title }}</span>
+                <span class="plex-unmatched__reason"
+                  >{{ unmatchedReasonLabel(entry.reason) }}</span
+                >
+              </li>
+              }
+            </ul>
+          </div>
+          }
           <div class="plex-connected__footer">
             <button
               type="button"

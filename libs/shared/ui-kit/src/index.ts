@@ -22,6 +22,11 @@ export { VultusSkeletonHero } from './lib/skeleton-hero/vultus-skeleton-hero.com
 export { VultusEmptyState } from './lib/empty-state/vultus-empty-state.component';
 export { VultusErrorState } from './lib/error-state/vultus-error-state.component';
 
+// Shared tab-page header (spec 0096) — the fixed Vultus brand mark plus a
+// projected trailing-buttons slot, used by all four tab pages (today,
+// watchlist, search, settings). Self-registers only its brand icon.
+export { VultusAppHeader } from './lib/app-header/vultus-app-header.component';
+
 // Manual-sync cooldown state for the toolbar "refresh now" trigger (spec 0025),
 // shared by the watchlist and title-detail slices (spec 0052). Imports only
 // `@angular/core`, `@vultus/shared/domain/tokens`, and `firebase/app` — all

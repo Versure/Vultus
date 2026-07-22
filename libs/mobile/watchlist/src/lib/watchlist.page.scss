@@ -21,41 +21,6 @@
   border-radius: var(--vultus-radius-pill);
 }
 
-// -----------------------------------------------------------------------------
-// Header
-// -----------------------------------------------------------------------------
-ion-header {
-  ion-toolbar {
-    --background: var(--vultus-surface);
-    --border-width: 0 0 1px 0;
-    --border-color: var(--vultus-border);
-    --border-style: solid;
-    --box-shadow: none;
-
-    ion-title {
-      padding-inline: 16px;
-    }
-  }
-}
-
-.brand-mark {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: #4edea3;
-  font-family: var(--vultus-font-family);
-  font-weight: 700;
-  font-size: 1.125rem;
-}
-
-.brand-icon {
-  font-size: 1.25rem;
-  color: #4edea3;
-  flex-shrink: 0;
-  position: relative;
-  top: -1px;
-}
-
 ion-content {
   --background: var(--vultus-surface);
 

@@ -43,8 +43,16 @@ PlexSyncMeta | null` — the per-user Plex sync cursor + link metadata (spec
   - `PlexSyncMeta` — per-user Plex sync cursor + link metadata (spec 0073):
     `linkedAt` (ISO 8601 link time), `lastSyncAt: string | null` (ISO 8601 — the
     additions cursor; `null` until the first sync completes), `serverName: string
-| null`. The X-Plex-Token is NOT stored here — it lives on-device in
-    `@capacitor/preferences`.
+| null`, plus `unmatched?: PlexUnmatchedTitle[]` — the titles the most recent
+    completed sync pass could not match to a TMDB id (spec 0097); capped at 50,
+    replaced wholesale each pass (never appended), `[]` clears the UI; OPTIONAL
+    so legacy/pre-0097 `plexSync` docs need no migration (absent = no
+    diagnostics yet). The X-Plex-Token is NOT stored here — it lives on-device
+    in `@capacitor/preferences`.
+  - `PlexUnmatchedTitle` — one title a completed Plex sync pass could not match
+    (spec 0097): `title` (display only) + `reason: 'no-guid' | 'guid-unresolved'
+| 'error'`. Diagnostic output for the Settings "couldn't match" list, NOT a
+    user preference.
   - `WatchlistItem` (fields: `type`, `tmdbId`, `traktId`, `title`, `addedAt`,
     `status`, `posterPath`/`voteAverage`/`releaseDate` (all nullable/optional),
     plus `nextUnwatchedEpisodeAirDate?: string | null` — the air date (ISO 8601,
@@ -69,8 +77,11 @@ PlexSyncMeta | null` — the per-user Plex sync cursor + link metadata (spec
   Firebase import** — shared owns the vocabulary, the slice owns the protocol.
   - `PlexPin` (`id`, `code` — 4-char link code, `authToken: string | null`),
     `PlexServer` (`name`, `baseUrl`, `accessToken`), `PlexLibraryItem` (`type`
-    'movie' | 'tv', `tmdbId: number | null` — `null` = GUID-less → skip, `title`,
-    `addedAt` ISO 8601, `viewCount`, `lastViewedAt: string | null`, `ratingKey`),
+    'movie' | 'tv', `tmdbId: number | null` — `tmdb://` GUID, `null` → try
+    tvdb/imdb via TMDB `/find`; `tvdbId?: number | null` / `imdbId?: string |
+null` — the `tvdb://` / `imdb://` GUID ids, optional/nullable, spec 0097;
+    `title`, `addedAt: string | null` — ISO 8601, `null` when Plex reports none
+    (spec 0097), `viewCount`, `lastViewedAt: string | null`, `ratingKey`),
     `PlexEpisodeItem` (`season`, `episode`, `viewCount`, `lastViewedAt`).
   - `PlexClient` — the interface both client impls implement: `requestPin`,
     `checkPin`, `discoverServer`, `listLibrary`, `listEpisodes`.

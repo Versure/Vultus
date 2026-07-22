@@ -10,6 +10,7 @@ import {
   REGIONS,
   regionDisplayName,
   type CatalogProvider,
+  type PlexUnmatchedTitle,
   type Region,
 } from '@vultus/shared/domain';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -100,6 +101,7 @@ interface MockPlexLink {
   linked: WritableSignal<boolean>;
   serverName: WritableSignal<string | null>;
   lastSyncAt: WritableSignal<string | null>;
+  unmatched: WritableSignal<PlexUnmatchedTitle[]>;
   loadState: ReturnType<typeof vi.fn>;
   unlink: ReturnType<typeof vi.fn>;
 }
@@ -121,6 +123,7 @@ function mockPlexLink(linked: boolean): MockPlexLink {
     linked: signal<boolean>(linked),
     serverName: signal<string | null>('Vultus Media Server'),
     lastSyncAt: signal<string | null>(new Date().toISOString()),
+    unmatched: signal<PlexUnmatchedTitle[]>([]),
     loadState: vi.fn().mockResolvedValue(undefined),
     unlink: vi.fn().mockResolvedValue(undefined),
   };
@@ -130,7 +133,7 @@ function mockPlexSync(): MockPlexSync {
     running: signal<boolean>(false),
     sync: vi.fn().mockResolvedValue({
       status: 'ok',
-      summary: { added: 0, updated: 0, skipped: 0 },
+      summary: { added: 0, updated: 0, skipped: 0, unmatched: 0 },
     }),
   };
 }
@@ -840,5 +843,174 @@ describe('SettingsPage', () => {
       new CustomEvent('ionChange', { detail: { value: 180 } }),
     );
     expect(bg.setIntervalMinutes).toHaveBeenCalledWith(180);
+  });
+
+  // ── Sync toast wording (spec 0097) ───────────────────────────────────────
+  // The four `ok` branches, asserted as EXACT strings (no whitespace-collapse).
+
+  async function setupConnectedToast(summary: {
+    added: number;
+    updated: number;
+    skipped: number;
+    unmatched: number;
+  }) {
+    const service = mockService(true);
+    const link = mockPlexLink(true);
+    const plexSync: MockPlexSync = {
+      running: signal<boolean>(false),
+      sync: vi.fn().mockResolvedValue({ status: 'ok', summary }),
+    };
+    const toastPresent = vi.fn().mockResolvedValue(undefined);
+    const toastController = {
+      create: vi.fn().mockResolvedValue({ present: toastPresent }),
+    };
+    await TestBed.configureTestingModule({
+      imports: [SettingsPage],
+      providers: [
+        provideIonicAngular(),
+        { provide: SettingsService, useValue: service },
+        { provide: PlexLinkService, useValue: link },
+        { provide: PlexSyncService, useValue: plexSync },
+        { provide: PlexBackgroundService, useValue: mockPlexBackground() },
+        { provide: Router, useValue: { navigate: vi.fn() } },
+        {
+          provide: AlertController,
+          useValue: { create: vi.fn().mockResolvedValue({ present: vi.fn() }) },
+        },
+        { provide: ToastController, useValue: toastController },
+      ],
+    })
+      .overrideComponent(SettingsPage, { set: { providers: [] } })
+      .compileComponents();
+    const fixture = TestBed.createComponent(SettingsPage);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    return { el, toastController };
+  }
+
+  /** Click "Sync now" and flush the async syncPlexNow() → toast chain. */
+  async function syncAndReadToastMessage(
+    el: HTMLElement,
+    toastController: { create: ReturnType<typeof vi.fn> },
+  ): Promise<string> {
+    (
+      el.querySelectorAll('.plex-text-button--primary')[0] as HTMLElement
+    ).click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(toastController.create).toHaveBeenCalledTimes(1);
+    return (toastController.create.mock.calls[0][0] as { message: string })
+      .message;
+  }
+
+  it('toast: added+updated>0 and unmatched=0 → "N added, M updated"', async () => {
+    const { el, toastController } = await setupConnectedToast({
+      added: 2,
+      updated: 1,
+      skipped: 0,
+      unmatched: 0,
+    });
+    expect(await syncAndReadToastMessage(el, toastController)).toBe(
+      'Plex sync complete — 2 added, 1 updated',
+    );
+  });
+
+  it("toast: added+updated>0 and unmatched>0 → appends the couldn't-be-matched count", async () => {
+    const { el, toastController } = await setupConnectedToast({
+      added: 2,
+      updated: 1,
+      skipped: 0,
+      unmatched: 3,
+    });
+    expect(await syncAndReadToastMessage(el, toastController)).toBe(
+      "Plex sync complete — 2 added, 1 updated, 3 couldn't be matched",
+    );
+  });
+
+  it("toast: added+updated=0 and unmatched>0 → couldn't-be-matched only", async () => {
+    const { el, toastController } = await setupConnectedToast({
+      added: 0,
+      updated: 0,
+      skipped: 0,
+      unmatched: 5,
+    });
+    expect(await syncAndReadToastMessage(el, toastController)).toBe(
+      "Plex sync complete — 5 couldn't be matched",
+    );
+  });
+
+  it('toast: added+updated=0 and unmatched=0 → "already up to date"', async () => {
+    const { el, toastController } = await setupConnectedToast({
+      added: 0,
+      updated: 0,
+      skipped: 0,
+      unmatched: 0,
+    });
+    expect(await syncAndReadToastMessage(el, toastController)).toBe(
+      'Plex sync complete — already up to date',
+    );
+  });
+
+  // ── Unmatched-titles list (spec 0097) ────────────────────────────────────
+
+  it('connected: renders the unmatched list heading + rows with EXACT reason labels (2 entries)', async () => {
+    const { el, fixture, plexLink } = await setupWithService(
+      mockService(true),
+      {
+        plexLinked: true,
+      },
+    );
+    plexLink.unmatched.set([
+      { title: 'Lucky', reason: 'guid-unresolved' },
+      { title: 'Home Movie 2019', reason: 'no-guid' },
+    ]);
+    fixture.detectChanges();
+
+    const block = el.querySelector('.plex-unmatched');
+    expect(block).toBeTruthy();
+    expect(
+      block?.querySelector('.settings-row__helper')?.textContent?.trim(),
+    ).toBe("Couldn't match 2 titles");
+    const rows = block?.querySelectorAll('.plex-unmatched__row') ?? [];
+    expect(rows.length).toBe(2);
+    expect(rows[0].querySelector('.plex-unmatched__title')?.textContent).toBe(
+      'Lucky',
+    );
+    expect(rows[0].querySelector('.plex-unmatched__reason')?.textContent).toBe(
+      'No TMDB match',
+    );
+    expect(rows[1].querySelector('.plex-unmatched__title')?.textContent).toBe(
+      'Home Movie 2019',
+    );
+    expect(rows[1].querySelector('.plex-unmatched__reason')?.textContent).toBe(
+      'Not identified',
+    );
+  });
+
+  it('connected: SINGULAR heading "Couldn\'t match 1 title" + "Sync error" label for a 1-entry fixture', async () => {
+    const { el, fixture, plexLink } = await setupWithService(
+      mockService(true),
+      {
+        plexLinked: true,
+      },
+    );
+    plexLink.unmatched.set([{ title: 'Solo', reason: 'error' }]);
+    fixture.detectChanges();
+
+    const block = el.querySelector('.plex-unmatched');
+    expect(
+      block?.querySelector('.settings-row__helper')?.textContent?.trim(),
+    ).toBe("Couldn't match 1 title");
+    expect(block?.querySelector('.plex-unmatched__reason')?.textContent).toBe(
+      'Sync error',
+    );
+  });
+
+  it('connected: the unmatched list is HIDDEN (element absent) when unmatched() is empty', async () => {
+    const { el, plexLink } = await setupWithService(mockService(true), {
+      plexLinked: true,
+    });
+    expect(plexLink.unmatched().length).toBe(0);
+    expect(el.querySelector('.plex-unmatched')).toBeFalsy();
   });
 });

@@ -326,3 +326,63 @@ describe('createTmdbDetailClient — getSeasonEpisodes (spec 0098)', () => {
     );
   });
 });
+
+describe('createTmdbDetailClient — findByExternalId (spec 0097)', () => {
+  it('tvdb id (tv) → returns tv_results[0].id', async () => {
+    const fetch = makeFetch({
+      tv_results: [{ id: 1396 }, { id: 999 }],
+      movie_results: [],
+    });
+    const client = createTmdbDetailClient(config, fetch);
+    const id = await client.findByExternalId('81189', 'tvdb_id', 'tv');
+    expect(id).toBe(1396);
+    // Builds /find/{id}?external_source=... with the same api_key auth.
+    const url = fetch.mock.calls[0][0] as string;
+    expect(url).toContain('/find/81189?');
+    expect(url).toContain('external_source=tvdb_id');
+    expect(url).toContain('api_key=test-key');
+  });
+
+  it('imdb id (movie) → returns movie_results[0].id', async () => {
+    const fetch = makeFetch({
+      movie_results: [{ id: 550 }],
+      tv_results: [],
+    });
+    const client = createTmdbDetailClient(config, fetch);
+    const id = await client.findByExternalId('tt0137523', 'imdb_id', 'movie');
+    expect(id).toBe(550);
+    const url = fetch.mock.calls[0][0] as string;
+    expect(url).toContain('external_source=imdb_id');
+  });
+
+  it('media-type mismatch: a tvdb id yielding only movie_results for a tv request → null', async () => {
+    const fetch = makeFetch({ movie_results: [{ id: 550 }], tv_results: [] });
+    const client = createTmdbDetailClient(config, fetch);
+    const id = await client.findByExternalId('81189', 'tvdb_id', 'tv');
+    expect(id).toBeNull();
+  });
+
+  it('empty results → null', async () => {
+    const fetch = makeFetch({ movie_results: [], tv_results: [] });
+    const client = createTmdbDetailClient(config, fetch);
+    expect(
+      await client.findByExternalId('tt0000000', 'imdb_id', 'movie'),
+    ).toBeNull();
+  });
+
+  it('non-2xx → throws TmdbDetailError (→ caller counts "error")', async () => {
+    const fetch = makeFetch({}, 429);
+    const client = createTmdbDetailClient(config, fetch);
+    await expect(
+      client.findByExternalId('81189', 'tvdb_id', 'tv'),
+    ).rejects.toBeInstanceOf(TmdbDetailError);
+  });
+
+  it('transport error (fetch rejects) → rethrows', async () => {
+    const fetch = vi.fn().mockRejectedValue(new Error('network down'));
+    const client = createTmdbDetailClient(config, fetch);
+    await expect(
+      client.findByExternalId('81189', 'tvdb_id', 'tv'),
+    ).rejects.toThrow('network down');
+  });
+});
