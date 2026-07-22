@@ -12,8 +12,7 @@
 
 Total specs: 98
 
-- done: 97
-- implementing: 1
+- done: 98
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -73,7 +72,7 @@ Total specs: 98
 | 54 | advanced-watchlist-filters | Restyle the watchlist filter/search controls to the Advanced Watchlist Stitch design | done | slice:watchlist | scope:mobile |
 | 55 | android-cutout-runtime-theme | Instrument the Android running-window theme to diagnose the still-visible camera-cutout letterbox, then apply the data-indicated fix | done | — | scope:mobile |
 | 56 | title-detail-mark-watched | Add a "Mark as Watched" action for untracked titles on the title-detail page | done | slice:title-detail | scope:mobile |
-| 57 | leaving-platform-notifications | Notify when a tracked title loses flatrate availability in the user's region | implementing | slice:dispatch-notifications, slice:notifications, slice:settings | scope:functions, scope:mobile, scope:shared |
+| 57 | leaving-platform-notifications | Notify when a tracked title loses flatrate availability in the user's region | done | slice:dispatch-notifications, slice:notifications, slice:settings | scope:functions, scope:mobile, scope:shared |
 | 58 | doc-integrity-guards | Deterministic documentation integrity: spec-status ledger + CI drift guards | done | — | — |
 | 59 | audit-docs-skill | /audit-docs skill: LLM-judgment documentation drift audit | done | — | — |
 | 60 | provider-preferences | Let users pick their subscribed providers and flag "on your platform" availability | done | slice:settings, slice:watchlist, slice:title-detail, slice:sync-titles | scope:mobile, scope:functions, scope:shared |

@@ -2,7 +2,7 @@
 number: 0057
 slug: leaving-platform-notifications
 title: Notify when a tracked title loses flatrate availability in the user's region
-status: implementing
+status: done
 slices: [slice:dispatch-notifications, slice:notifications, slice:settings]
 scopes: [scope:functions, scope:mobile, scope:shared]
 created: 2026-07-01
@@ -853,8 +853,8 @@ Tailored from the PLAN §5 checklist to the projects touched. Affected projects:
 dependent build).
 
 - [ ] `pnpm nx typecheck shared-domain shared-firestore-schema
-    functions-dispatch-notifications functions mobile-notifications
-    mobile-settings` passes — the two kinds, the exhaustive switch, the two
+  functions-dispatch-notifications functions mobile-notifications
+  mobile-settings` passes — the two kinds, the exhaustive switch, the two
       prefs, the converter, the dispatcher branches, the inbox branches, and the
       settings toggles compile.
 - [ ] `pnpm nx lint <same projects>` passes **with Sheriff active**: the
