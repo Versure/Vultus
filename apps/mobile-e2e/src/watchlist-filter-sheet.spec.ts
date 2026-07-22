@@ -288,7 +288,9 @@ test('watchlist filter sheet opens visible after the list is scrolled', async ({
   // Scroll the ACTUAL scrollable host — Ionic's shadow `[part="scroll"]` inside
   // `ion-content` (Playwright's CSS engine pierces the open shadow root). This is
   // the container whose `scrollTop` shifted the pre-fix sheet off-screen.
-  const scrollHost = page.locator('ion-content').locator('css=[part="scroll"]');
+  const scrollHost = page
+    .locator('lib-watchlist ion-content')
+    .locator('css=[part="scroll"]');
   const TARGET_SCROLL = 400;
   await scrollHost.evaluate((el, top) => {
     (el as HTMLElement).scrollTop = top;
