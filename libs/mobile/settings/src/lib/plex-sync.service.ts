@@ -106,8 +106,9 @@ export function plexEpisodeId(season: number, episode: number): string {
  * - show: `planned → watching` on ≥1 present watched episode; `→ completed` when
  *   ALL present episodes watched (only reachable via watching);
  * - movie: `viewCount > 0 → completed` (unless dropped);
- * - watch-implies-add: a watched, untracked tmdb-GUID item is added (movie →
- *   completed, show → watching + mirror), `watchingViaPlex: true`.
+ * - watch-implies-add: a watched, untracked tmdb-GUID item is added + mirrored
+ *   (movie → completed; show → the DERIVED status: completed when all present
+ *   episode docs are watched, else watching), `watchingViaPlex: true`.
  *
  * WRITE INVARIANTS (spec §4): episode mirror `updateDoc`s EXISTING docs only —
  * NEVER `setDoc`/creates an episode doc; a Plex-watched episode with no local doc
@@ -257,14 +258,26 @@ export class PlexSyncService {
               : new Date(item.addedAt).getTime() > cursor;
           if (watched) {
             // Watch-implies-add (NOT cursor-gated): a watched, untracked item is
-            // added — movie → completed, show → watching (episode docs already
-            // created on-device + mirrored above in this same pass, spec 0098).
-            await this.addItem(
-              uid,
-              item,
-              tmdbId,
-              item.type === 'movie' ? 'completed' : 'watching',
-            );
+            // added. Movie → completed. TV → the DERIVED status from the existing
+            // completion predicate: 'completed' iff every present episode doc is
+            // watched (total > 0 && watched === total), else 'watching'. Episode
+            // docs are already created on-device + mirrored above in this same
+            // pass (spec 0098), so the counts are fresh — this removes the
+            // two-sync latency where a fully-watched ended show landed at
+            // 'watching' on the first sync and only healed on a later sync (issue
+            // #277). A show with any unwatched (incl. scheduled/future) episode
+            // doc keeps watched < total → stays 'watching'.
+            let status: WatchStatus;
+            if (item.type === 'movie') {
+              status = 'completed';
+            } else {
+              const counts = await this.episodeCounts(uid, tmdbId);
+              status =
+                counts.total > 0 && counts.watched === counts.total
+                  ? 'completed'
+                  : 'watching';
+            }
+            await this.addItem(uid, item, tmdbId, status);
             added += 1;
           } else if (isNewAddition) {
             // Cursor library addition (unwatched, newer than cursor) → planned.
