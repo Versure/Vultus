@@ -22,7 +22,10 @@ The barrel (`src/index.ts`) re-exports:
   native endonym for each region (`NL → Nederland`, `DE → Deutschland`,
   `GB → United Kingdom`, …), for display only. The persisted `region` field keeps
   the raw ISO code; the `Record<Region, string>` typing makes a future `REGIONS`
-  addition a compile error until its display name is added.
+  addition a compile error until its display name is added. Also
+  `AvailabilitySource` (`'tmdb' | 'watchmode'`) — which data source produced the
+  current providers on an availability doc (spec 0099); provenance/diagnostics
+  only, not a transition input.
 - **`./lib/entities`** — non-document domain entities: `Title` (movie/tv
   discriminated union), `WatchProvider`, `CatalogProvider` (one provider in a
   region's TMDB watch-provider catalog — `providerId`, `name`, `logoPath`;
@@ -71,7 +74,15 @@ PlexSyncMeta | null` — the per-user Plex sync cursor + link metadata (spec
     the converter), `EpisodeDoc` (fields: `season`, `episode`, `title` (nullable, spec 0034), `airDate`, `watched`, `watchedAt`)
   - `NotificationDoc`, `NotificationPayload`
   - `SyncRun` — one completed sync-pipeline run (global `sync-runs/{runId}`); written by Cloud Functions, read by the settings slice (spec 0049)
-  - `TitleCacheEntry`, `TitleMetadata`, `RegionAvailability`
+  - `TitleCacheEntry` (fields: `type`, `traktId`, `metadata`, `lastSyncedAt`,
+    plus `watchmodeId?: number | null` — the cached Watchmode title id resolved
+    once from the TMDB id so subsequent daily syncs skip the id-resolution call,
+    spec 0099; `null` = not resolved / no Watchmode match; optional, legacy docs
+    missing it coalesce to `null` via the converter), `TitleMetadata`,
+    `RegionAvailability` (fields: `providers`, `lastSyncedAt`, `previousSnapshot`,
+    plus `source?: AvailabilitySource` — which source produced `providers` this
+    pass, spec 0099; optional, legacy docs missing it coalesce to `'tmdb'` via the
+    converter)
   - `ProviderCatalogDoc` — the global, function-written `provider-catalog/{region}` cache (`providers: CatalogProvider[]`, `lastSyncedAt` ISO 8601); mirrors `title-cache` as a shared, function-written cache (spec 0060)
 - **`./lib/plex`** — protocol-agnostic Plex vocabulary (spec 0073). Pure
   structural types describing the PMS / plex.tv surface Vultus consumes, so both

@@ -10,6 +10,7 @@ import type {
 } from '@vultus/shared/domain';
 import type { TmdbClient } from '../tmdb/tmdb-client';
 import type { TraktClient } from '../trakt/trakt-client';
+import type { WatchmodeClient } from '../watchmode/watchmode-client';
 import type { TitleCacheStore } from './store';
 
 /** One title to sync. The engine does NOT know the watchlist — the caller (#12)
@@ -34,6 +35,12 @@ export interface SyncEngineConfig {
   retryErroredPasses?: number;
   /** Cooldown before each retry pass, ms. Default 0. Injectable for tests. */
   retryDelayMs?: number;
+  /** Optional Watchmode gap-fill client (spec 0099). Absent → the fallback is
+   *  skipped entirely (TMDB-only; byte-for-byte graceful no-key degrade). */
+  watchmode?: WatchmodeClient;
+  /** Regions to consider for the Watchmode fallback: the union of all users'
+   *  regions (spec 0099). Default []; a region not here is never gap-filled. */
+  activeRegions?: Region[];
 }
 
 export interface SyncEngine {

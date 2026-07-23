@@ -75,6 +75,8 @@ vi.mock('firebase-admin/firestore', () => ({
       ({
         // The cron path enumerates the global watchlist union (empty here).
         collectionGroup: () => ({ get: () => Promise.resolve({ docs: [] }) }),
+        // The cron path also scans `users` for activeRegions (spec 0099).
+        collection: () => ({ get: () => Promise.resolve({ docs: [] }) }),
       }) as never,
   ),
 }));

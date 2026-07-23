@@ -255,6 +255,8 @@ describe.skipIf(!EMULATOR)(
         traktId: null,
         metadata: MOVIE_META,
         lastSyncedAt: NOW_ISO,
+        // The converter now emits watchmodeId (?? null) on read (spec 0099).
+        watchmodeId: null,
       };
       expect(movieEntry).toEqual(expectedMovie);
 
@@ -266,6 +268,7 @@ describe.skipIf(!EMULATOR)(
         traktId: TV_TRAKT_ID,
         metadata: TV_META,
         lastSyncedAt: NOW_ISO,
+        watchmodeId: null,
       };
       expect(tvEntry).toEqual(expectedTv);
 
@@ -278,6 +281,8 @@ describe.skipIf(!EMULATOR)(
         providers: [NETFLIX],
         previousSnapshot: [],
         lastSyncedAt: NOW_ISO,
+        // The converter now emits source (?? 'tmdb') on read (spec 0099).
+        source: 'tmdb',
       };
       expect(avail).toEqual(expectedAvail);
     });

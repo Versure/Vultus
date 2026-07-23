@@ -24,6 +24,7 @@ import {
   createSyncEngine,
   createTmdbClient,
   createTraktClient,
+  createWatchmodeClient,
   createFirestoreTitleCacheStore,
   gatherUserWatchlistTitles,
 } from '@vultus/functions/sync-titles';
@@ -60,6 +61,7 @@ import { filterStale } from './lib/staleness';
 import { isRateLimited } from './lib/rate-limit';
 import {
   gatherWatchlistTitles,
+  gatherActiveRegions,
   readSyncState,
   writeSyncState,
   writeSyncRun,
@@ -84,6 +86,12 @@ if (getApps().length === 0) {
 const SYNC_SHARED_SECRET = defineSecret('SYNC_SHARED_SECRET');
 const TMDB_READ_TOKEN = defineSecret('TMDB_READ_TOKEN');
 const TRAKT_CLIENT_ID = defineString('TRAKT_CLIENT_ID');
+// Watchmode gap-fill API key (spec 0099). Rides the .env.vultus-cab62
+// defineString param channel (like TRAKT_CLIENT_ID), NOT defineSecret: `default:
+// ''` means an absent key never blocks deploy and degrades gracefully at runtime
+// (no client constructed → TMDB-only). Value read via .value() ONLY inside the
+// syncTitles handler; never logged. Functions-only — never exposed to mobile.
+const WATCHMODE_API_KEY = defineString('WATCHMODE_API_KEY', { default: '' });
 
 /** User-path rate-limit window: reject a second user run within 5 minutes. */
 export const RATE_LIMIT_MS = 5 * 60 * 1000;
@@ -360,6 +368,15 @@ export const syncTitles = onRequest(
   { secrets: [SYNC_SHARED_SECRET, TMDB_READ_TOKEN], timeoutSeconds: 540 },
   async (req, res) => {
     const db = ensureAdmin();
+    // Watchmode gap-fill (spec 0099): construct the client ONLY when the key is
+    // present — an empty/absent key → undefined → the engine runs TMDB-only
+    // (graceful no-key degrade). The key value is read here and never logged.
+    const watchmodeKey = WATCHMODE_API_KEY.value();
+    const watchmode = watchmodeKey
+      ? createWatchmodeClient({ apiKey: watchmodeKey })
+      : undefined;
+    // Active regions = the distinct union of all users' regions (one users scan).
+    const activeRegions = await gatherActiveRegions(db);
     const createEngine = (firestore: Firestore): SyncEngine =>
       createSyncEngine({
         tmdb: createTmdbClient({ readAccessToken: TMDB_READ_TOKEN.value() }),
@@ -371,6 +388,9 @@ export const syncTitles = onRequest(
         // `triggerSync` path is left unconfigured (never rate-limits).
         retryErroredPasses: 1,
         retryDelayMs: 2000,
+        // Spec 0099: Watchmode fallback wired into the CRON path only.
+        watchmode,
+        activeRegions,
       });
 
     const output = await runSync(

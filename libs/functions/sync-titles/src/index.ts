@@ -1,8 +1,8 @@
 // @vultus/functions/sync-titles — public surface. Exposes the TMDB client
-// (spec 0006), the Trakt calendar client (spec 0007), and the title-cache sync
-// engine (spec 0008): their factories, config/contract types, and the
-// slice-internal errors. Internal DTOs and the http/mapper internals are
-// intentionally NOT exported.
+// (spec 0006), the Trakt calendar client (spec 0007), the Watchmode fallback
+// client (spec 0099), and the title-cache sync engine (spec 0008): their
+// factories, config/contract types, and the slice-internal errors. Internal
+// DTOs, the crosswalk/mappers, and the http core are intentionally NOT exported.
 
 export { createTmdbClient } from './lib/tmdb/tmdb-client';
 export type {
@@ -11,6 +11,16 @@ export type {
   RegionProviders,
 } from './lib/tmdb/tmdb-client';
 export { TmdbError } from './lib/tmdb/tmdb-error';
+
+// Watchmode gap-fill client (spec 0099). The crosswalk + mappers + DTOs stay
+// slice-internal (consumed by the engine via relative import), like tmdb-mappers.
+export { createWatchmodeClient } from './lib/watchmode/watchmode-client';
+export type {
+  WatchmodeClient,
+  WatchmodeClientConfig,
+  WatchmodeSource,
+} from './lib/watchmode/watchmode-client';
+export { WatchmodeError } from './lib/watchmode/watchmode-error';
 
 export { createTraktClient } from './lib/trakt/trakt-client';
 export type {
