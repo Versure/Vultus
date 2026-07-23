@@ -61,6 +61,20 @@ describe('shard-size constants', () => {
   });
 });
 
+describe('QUEUE_NAMES', () => {
+  it('is fully-qualified with the europe-west1 region, never a bare function name', () => {
+    // Regression guard: getFunctions().taskQueue(name) resolves an unqualified
+    // name against the Admin SDK's own hardcoded default location
+    // (us-central1), independent of the region the function actually deployed
+    // to. A bare name here silently enqueues against the wrong region's queue
+    // and the dispatch never reaches the function (observed in production —
+    // spec 0101 post-deploy).
+    for (const value of Object.values(QUEUE_NAMES)) {
+      expect(value).toMatch(/^locations\/europe-west1\/functions\/\w+$/);
+    }
+  });
+});
+
 describe('task-name builders', () => {
   it('are deterministic: same (runId, stage, shardIndex) => same name', () => {
     expect(shardTaskName('run-1', 'titleSync', 3)).toBe(
@@ -173,7 +187,7 @@ describe('createTaskEnqueuer', () => {
     });
 
     expect(enqueued).toHaveLength(1);
-    expect(enqueued[0].queueName).toBe('titleSyncWorker');
+    expect(enqueued[0].queueName).toBe(QUEUE_NAMES.titleSync);
     expect(enqueued[0].data).toEqual(payload);
     expect(enqueued[0].opts).toEqual({ id: 'r1-titleSync-0' });
   });
@@ -188,7 +202,7 @@ describe('createTaskEnqueuer', () => {
       scheduleDelaySeconds: 7200,
     });
 
-    expect(enqueued[0].queueName).toBe('syncWatchdog');
+    expect(enqueued[0].queueName).toBe(QUEUE_NAMES.watchdog);
     expect(enqueued[0].opts).toEqual({
       id: 'r1-watchdog',
       scheduleDelaySeconds: 7200,
