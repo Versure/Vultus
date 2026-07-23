@@ -13,7 +13,8 @@
 Total specs: 101
 
 - done: 98
-- approved: 3
+- approved: 2
+- implementing: 1
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -117,4 +118,4 @@ Total specs: 101
 | 98 | fix-plex-episode-watch-sync | Fix Plex sync — create missing episode docs on-device so watched episodes mark immediately | done | slice:settings | scope:mobile |
 | 99 | watchmode-availability-fallback | Watchmode streaming-availability fallback for TMDB provider gaps | approved | slice:sync-titles | scope:functions, scope:shared |
 | 100 | indexed-dispatch-lookups | Indexed tracking-user lookups in notification dispatch | approved | — | scope:functions |
-| 101 | sync-pipeline-sharding | Shard the nightly sync pipeline (Cloud Tasks) and dedupe episode fetching | approved | — | scope:functions |
+| 101 | sync-pipeline-sharding | Shard the nightly sync pipeline (Cloud Tasks) and dedupe episode fetching | implementing | — | scope:functions |

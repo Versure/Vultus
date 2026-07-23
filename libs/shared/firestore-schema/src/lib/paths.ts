@@ -78,6 +78,18 @@ export function availabilityDocPath(tmdbId: number, region: Region): string {
   return join(availabilityPath(tmdbId), region);
 }
 
+// title-cache/{tmdbId}/episodes                (collection) — global episode cache (tv only, spec 0101)
+export function titleCacheEpisodesPath(tmdbId: number): string {
+  return join(titleCacheDocPath(tmdbId), COLLECTIONS.episodes);
+}
+// title-cache/{tmdbId}/episodes/{episodeId}    — episodeId = s{SS}e{EEE}
+export function titleCacheEpisodeDocPath(
+  tmdbId: number,
+  episodeId: string,
+): string {
+  return join(titleCacheEpisodesPath(tmdbId), episodeId);
+}
+
 // provider-catalog              (collection)
 export function providerCatalogPath(): string {
   return COLLECTIONS.providerCatalog;

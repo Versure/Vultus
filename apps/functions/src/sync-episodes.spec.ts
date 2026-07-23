@@ -471,35 +471,10 @@ describe('entry-point engine config shape (spec 0074)', () => {
     expect(config.episodes).toBeDefined();
   });
 
-  it('entry point B (syncTitles.createEpisodeEngine) builds the engine WITH a watchlistStatus port', async () => {
-    const { syncTitles } = await import('./main');
-
-    const res = {
-      status: () => res,
-      json: () => res,
-      send: () => res,
-      headersSent: false,
-    };
-    const req = {
-      method: 'POST',
-      // Matches the mocked SYNC_SHARED_SECRET.value() so the cron path runs.
-      headers: { 'x-vultus-sync-secret': 'test-secret' },
-      body: { force: true },
-    };
-
-    await (
-      syncTitles as unknown as (rq: unknown, rs: unknown) => Promise<void>
-    )(req, res);
-
-    const config = capturedConfig();
-    // The daily pass supplies the revert port (spec 0074, D5).
-    expect('watchlistStatus' in config).toBe(true);
-    expect(config.watchlistStatus).toBeDefined();
-    // And the nextWatchable port (spec 0081), alongside watchlistStatus.
-    expect('nextWatchable' in config).toBe(true);
-    expect(config.nextWatchable).toBeDefined();
-    // And the shared episode-backfill ports it has in common with entry point A.
-    expect(config.tmdb).toBeDefined();
-    expect(config.episodes).toBeDefined();
-  });
+  // NOTE (spec 0101 T2): the former "entry point B (syncTitles.createEpisodeEngine)"
+  // test was removed here. Since 0101, `syncTitles` is an enqueue COORDINATOR and no
+  // longer runs the episode pass inline — the episode fetch/fan-out moves to the
+  // Phase-2 `episodeCacheWorker` / `episodeFanoutWorker` (`onTaskDispatched`, task
+  // T6), which T6 adds tests for in this file. Entry point A (the on-add
+  // `syncWatchlistEpisodes` trigger) is unchanged and still covered above.
 });

@@ -16,6 +16,8 @@ Per-document read/write shapes for the Firestore wire boundary:
 | `FirestoreTimestampLike`      | read      | Structural — satisfied by both SDK `Timestamp`s                                                                                                                                                    |
 | `EpisodeReadData`             | read      | `title?: string \| null` (optional — pre-0034 docs lack the field)                                                                                                                                 |
 | `EpisodeWriteData`            | write     | `title: string \| null`                                                                                                                                                                            |
+| `CachedEpisodeReadData`       | read      | Global episode cache (`title-cache/{tmdbId}/episodes`, tv only, spec 0101); `airDate`/`lastSyncedAt` as `FirestoreTimestampLike`; TMDB facts only — NO `watched`/`watchedAt`                       |
+| `CachedEpisodeWriteData`      | write     | `airDate`/`lastSyncedAt` as `Date`; `title: string \| null`                                                                                                                                        |
 | `WatchlistItemReadData`       | read      | `watchingViaPlex?: boolean` (optional — legacy docs pre-0061 lack it); `nextUnwatchedEpisodeAirDate?: string \| null` (plain ISO string, NOT a Timestamp; optional — legacy docs pre-0081 lack it) |
 | `WatchlistItemWriteData`      | write     | `watchingViaPlex: boolean` (required); `nextUnwatchedEpisodeAirDate?: string \| null` (plain ISO string, NOT a Timestamp)                                                                          |
 | `UserReadData`                | read      | `myProviderIds?: number[]` (pre-0060); `hasPlex?: boolean` (pre-0061); `plexSync?: PlexSyncMeta \| null` (pre-0073) optional                                                                       |
@@ -36,6 +38,7 @@ Per-document read/write shapes for the Firestore wire boundary:
 Pure functions mapping domain types to/from their Firestore wire shapes:
 
 - `episodeToData` / `dataToEpisode` — `EpisodeDoc` ↔ `EpisodeWriteData`/`EpisodeReadData`. `title` passes through; `?? null` default handles stored docs missing the field (backward-compat, spec 0034).
+- `cachedEpisodeToData` / `dataToCachedEpisode` — the global episode cache (`title-cache/{tmdbId}/episodes`, tv only, spec 0101). Reuses the domain `Episode` type (`{ season, episode, title, airDate }` — **no domain change**) plus a `lastSyncedAt` ISO string; `cachedEpisodeToData(ep, lastSyncedAt)` returns `CachedEpisodeWriteData`, `dataToCachedEpisode` returns `Episode & { lastSyncedAt: string }`. **Both** `airDate` and `lastSyncedAt` cross the Timestamp boundary exactly as `episodeToData` does for `airDate` (ISO string → `Date` on write; `.toDate().toISOString()` on read). The cache stores **only TMDB facts** — it has **no** per-user `watched`/`watchedAt` (those stay on the per-user episode docs).
 - `watchlistItemToData` / `dataToWatchlistItem` — `watchingViaPlex` passes through on write (`?? false`); `dataToWatchlistItem` coalesces a missing field to `false` (backward-compat, spec 0061). `nextUnwatchedEpisodeAirDate` is a plain ISO date string (no Timestamp mapping — like `releaseDate`): both directions coalesce `?? null`, so an absent source field writes `null` and a legacy doc missing the field reads back as `null` (backward-compat, spec 0081).
 - `userToData` / `dataToUser` — `myProviderIds` passes through on write; `dataToUser` coalesces a missing field to `[]` (backward-compat, spec 0060). `hasPlex` passes through on write; `dataToUser` coalesces a missing field to `false` (backward-compat, spec 0061). `plexSync` is a plain nested object of ISO strings (no Timestamp mapping — passes through like `notificationPrefs`): `userToData` writes `user.plexSync ?? null`, `dataToUser` reads `data.plexSync ?? null` (a legacy doc lacking the field → `null`, backward-compat, spec 0073). The nested `plexSync.unmatched` diagnostics array (`PlexUnmatchedTitle[]`, spec 0097) rides through this same pass-through with **no converter change and no Timestamp mapping** — its `{ title, reason }` entries are plain strings/enums, so it round-trips unchanged; a legacy `plexSync` without `unmatched` stays absent (it is **not** coalesced to `null`/`[]`).
 - `notificationToData` / `dataToNotification`
@@ -50,8 +53,12 @@ Path-builder functions for every PLAN §4 Firestore path:
 
 `userPath`, `watchlistPath`, `watchlistItemPath`, `episodesPath`, `episodePath`,
 `notificationsPath`, `notificationPath`, `titleCachePath`, `titleCacheDocPath`,
-`availabilityPath`, `availabilityDocPath`, `syncRunsCollection`, `syncRunDocPath`,
-`providerCatalogPath`, `providerCatalogDocPath` (`provider-catalog/{region}`, id = Region code; spec 0060).
+`availabilityPath`, `availabilityDocPath`, `titleCacheEpisodesPath`
+(`title-cache/{tmdbId}/episodes`, collection), `titleCacheEpisodeDocPath`
+(`title-cache/{tmdbId}/episodes/{episodeId}`, `episodeId = s{SS}e{EEE}`; global
+episode cache, tv only, spec 0101 — reuses the `COLLECTIONS.episodes` segment),
+`syncRunsCollection`, `syncRunDocPath`, `providerCatalogPath`,
+`providerCatalogDocPath` (`provider-catalog/{region}`, id = Region code; spec 0060).
 
 ## Usage
 

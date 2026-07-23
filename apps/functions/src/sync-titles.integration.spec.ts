@@ -1,10 +1,14 @@
 /**
- * Automated, emulator-backed integration test for the `syncTitles` flow
- * (spec 0009, Test plan "Automated emulator integration gate").
+ * Automated, emulator-backed integration test for the SHARDED `syncTitles` flow
+ * (spec 0009 Test plan, updated for the spec-0101 Cloud Tasks fan-out).
  *
- * It wires the REAL `createSyncEngine` to the REAL
- * `createFirestoreTitleCacheStore(db)` + the REAL `collectionGroup('watchlist')`
- * gather + the REAL `runSync` handler core, against a REAL Firestore emulator.
+ * Since spec 0101 the pipeline is two SDK-agnostic cores wired against a REAL
+ * Firestore emulator here: the enqueue COORDINATOR `runSync` (REAL
+ * `collectionGroup('watchlist')` gather + dedupe + staleness + REAL `openRun` /
+ * `finalizeHealthyRun` staging writes; a FAKE enqueuer captures the `title-sync`
+ * shard payloads instead of hitting Cloud Tasks), then the title-sync WORKER
+ * `runTitleSyncShard` over each captured shard, wiring the REAL `createSyncEngine`
+ * to the REAL `createFirestoreTitleCacheStore(db)` + REAL `recordShardResult`.
  * Only the TMDB/Trakt HTTP transport is faked (plain objects implementing the
  * `TmdbClient` / `TraktClient` method shapes) — there is NO live network and NO
  * secret: the engine never constructs the real `createTmdbClient` /
@@ -60,7 +64,19 @@ import type {
   TmdbClient,
   TraktClient,
 } from '@vultus/functions/sync-titles';
-import { runSync, type RunSyncDeps, type SyncRunResponse } from './main';
+import {
+  runSync,
+  runTitleSyncShard,
+  type RunSyncDeps,
+  type RunTitleSyncShardDeps,
+  type SyncEnqueueResponse,
+} from './main';
+import { QUEUE_NAMES, type TitleSyncTask } from './lib/task-queue';
+import {
+  finalizeHealthyRun,
+  openRun,
+  recordShardResult,
+} from './lib/sync-run-tracker';
 
 const PROJECT_ID = process.env.GCLOUD_PROJECT ?? 'vultus-cab62';
 const EMULATOR = process.env.FIRESTORE_EMULATOR_HOST;
@@ -131,16 +147,27 @@ function fakeTrakt(): TraktClient {
 const NOW_MS = Date.parse('2026-06-19T12:00:00.000Z');
 const NOW_ISO = new Date(NOW_MS).toISOString();
 
-function makeDeps(db: Firestore, state: FakeState): RunSyncDeps {
+/** Coordinator deps: REAL gather/staleness/staging writes; a FAKE enqueuer that
+ *  captures the `title-sync` shard payloads (no Cloud Tasks). */
+function coordinatorDeps(
+  db: Firestore,
+  runId: string,
+  shards: TitleSyncTask[],
+): RunSyncDeps {
   return {
     db,
-    createEngine: (firestore): SyncEngine =>
-      createSyncEngine({
-        tmdb: fakeTmdb(state),
-        trakt: fakeTrakt(),
-        store: createFirestoreTitleCacheStore(firestore),
-        now: () => NOW_ISO,
-      }),
+    enqueuer: {
+      enqueue: (queueName, payload) => {
+        if (queueName === QUEUE_NAMES.titleSync) {
+          shards.push(payload as TitleSyncTask);
+        }
+        return Promise.resolve();
+      },
+    },
+    generateRunId: () => runId,
+    openRun: (params) => openRun(db, params),
+    finalizeHealthyRun: (rid, now) =>
+      finalizeHealthyRun(db, rid, now).then(() => undefined),
     // No user-token path is exercised here; cron path uses the secret only.
     verifyToken: () => Promise.reject(new Error('not used')),
     secret: SECRET,
@@ -148,6 +175,39 @@ function makeDeps(db: Firestore, state: FakeState): RunSyncDeps {
     rateLimitMs: 5 * 60 * 1000,
     stalenessWindowMs: 20 * 60 * 60 * 1000,
   };
+}
+
+/** Title-sync worker deps: REAL engine + store + shard-result recording. */
+function workerDeps(db: Firestore, state: FakeState): RunTitleSyncShardDeps {
+  return {
+    db,
+    now: () => NOW_MS,
+    createEngine: (firestore): SyncEngine =>
+      createSyncEngine({
+        tmdb: fakeTmdb(state),
+        trakt: fakeTrakt(),
+        store: createFirestoreTitleCacheStore(firestore),
+        now: () => NOW_ISO,
+      }),
+    recordShard: (params) => recordShardResult(db, params),
+    onLastShard: (rid) =>
+      finalizeHealthyRun(db, rid, NOW_MS).then(() => undefined),
+  };
+}
+
+/** Run the full sharded pass: coordinator enqueues shards → run each shard's
+ *  worker → return the coordinator's `SyncEnqueueResponse`. */
+async function runSharded(
+  db: Firestore,
+  state: FakeState,
+  runId: string,
+): Promise<SyncEnqueueResponse> {
+  const shards: TitleSyncTask[] = [];
+  const out = await runSync(coordinatorDeps(db, runId, shards), cronReq());
+  for (const shard of shards) {
+    await runTitleSyncShard(workerDeps(db, state), shard);
+  }
+  return out.body as SyncEnqueueResponse;
 }
 
 /** A cron request with the shared secret; `force` keeps the staleness filter
@@ -185,6 +245,8 @@ async function clearAll(db: Firestore): Promise<void> {
   await db.recursiveDelete(db.collection('users'));
   await db.recursiveDelete(db.collection('title-cache'));
   await db.recursiveDelete(db.collection('system'));
+  await db.recursiveDelete(db.collection('sync-run-progress'));
+  await db.recursiveDelete(db.collection('sync-runs'));
 }
 
 describe.skipIf(!EMULATOR)(
@@ -225,15 +287,14 @@ describe.skipIf(!EMULATOR)(
       await seedWatchlistItem(db, 'u2', 'm603', 'movie', MOVIE_ID);
       await seedWatchlistItem(db, 'u2', 't1396', 'tv', TV_ID);
 
-      const out = await runSync(makeDeps(db, state), cronReq());
-      const body = out.body as SyncRunResponse;
+      const body = await runSharded(db, state, 'run-a');
 
-      expect(out.status).toBe(200);
-      // Two DISTINCT titles gathered (603 deduped from two users).
+      // Two DISTINCT titles gathered (603 deduped from two users), one shard.
       expect(body.gathered).toBe(2);
-      expect(body.synced).toBe(2);
+      expect(body.toSync).toBe(2);
+      expect(body.shardCount).toBe(1);
 
-      // The shared movie was written exactly once.
+      // The shared movie was written exactly once by the title-sync worker.
       const movieSnap = await db.doc(titleCacheDocPath(MOVIE_ID)).get();
       expect(movieSnap.exists).toBe(true);
     });
@@ -243,7 +304,7 @@ describe.skipIf(!EMULATOR)(
       await seedWatchlistItem(db, 'u1', 'm603', 'movie', MOVIE_ID);
       await seedWatchlistItem(db, 'u1', 't1396', 'tv', TV_ID);
 
-      await runSync(makeDeps(db, state), cronReq());
+      await runSharded(db, state, 'run-b');
 
       // Movie entry: traktId null.
       const movieSnap = await db.doc(titleCacheDocPath(MOVIE_ID)).get();
@@ -286,13 +347,13 @@ describe.skipIf(!EMULATOR)(
     it('rolls pass 1 providers into previousSnapshot on pass 2', async () => {
       await seedWatchlistItem(db, 'u1', 'm603', 'movie', MOVIE_ID);
 
-      // Pass 1: NL = [Netflix].
+      // Pass 1: NL = [Netflix]. (Distinct runId per night.)
       state.providersByTmdbId[MOVIE_ID] = { NL: [NETFLIX] };
-      await runSync(makeDeps(db, state), cronReq());
+      await runSharded(db, state, 'run-c1');
 
       // Pass 2: NL = [Prime] — providers change between passes.
       state.providersByTmdbId[MOVIE_ID] = { NL: [PRIME] };
-      await runSync(makeDeps(db, state), cronReq());
+      await runSharded(db, state, 'run-c2');
 
       const availSnap = await db.doc(availabilityDocPath(MOVIE_ID, 'NL')).get();
       const avail = dataToAvailability(
@@ -317,7 +378,7 @@ describe.skipIf(!EMULATOR)(
         await db.doc(watchlistItemPath('u2', 't1396')).get()
       ).data();
 
-      await runSync(makeDeps(db, state), cronReq());
+      await runSharded(db, state, 'run-d');
 
       // The seeded watchlist docs are unchanged.
       expect(

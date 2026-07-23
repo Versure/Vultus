@@ -1,53 +1,52 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { logger } from 'firebase-functions';
+import { describe, expect, it, vi } from 'vitest';
 import type {
   SyncEngine,
   SyncResult,
   SyncTitleInput,
 } from '@vultus/functions/sync-titles';
+import {
+  QUEUE_NAMES,
+  type EnqueueOptions,
+  type SyncWatchdogTask,
+  type TaskEnqueuer,
+  type TitleSyncTask,
+} from './lib/task-queue';
 import type {
-  EpisodeSyncEngine,
-  EpisodeUpsertResult,
-} from '@vultus/functions/sync-episodes';
+  OpenRunParams,
+  RecordShardResultParams,
+} from './lib/sync-run-tracker';
 import {
   RATE_LIMIT_MS,
   STALENESS_WINDOW_MS,
+  WATCHDOG_DELAY_SECONDS,
   runSync,
+  runSyncWatchdog,
+  runTitleSyncShard,
   type RunSyncDeps,
+  type RunTitleSyncShardDeps,
+  type SyncEnqueueResponse,
   type SyncRequest,
-  type SyncRunResponse,
 } from './main';
 
 const SECRET = 'cron-secret';
 const NOW = Date.parse('2026-06-19T12:00:00.000Z');
+const RUN_ID = 'run-1';
 
 // --- A fake Firestore that records every write path and answers the reads the
-// flow performs (collectionGroup watchlist, title-cache getEntry, system/sync). ---
+// coordinator performs (collectionGroup watchlist, title-cache getEntry for the
+// staleness filter, system/sync for the user-path rate limit). ---
 interface FakeDoc {
   // For title-cache reads via the store's getEntry (data.lastSyncedAt.toDate()).
   lastSyncedAtMs?: number;
-  // For system/sync reads.
-  lastRunAt?: number;
 }
 
 function createFakeDb(opts: {
   watchlist: { tmdbId: number; type: 'movie' | 'tv' }[];
   titleCache?: Record<string, FakeDoc>; // keyed by full doc path
   syncState?: { lastRunAt: number } | null;
-  /** When set, `sync-runs/...doc().set()` rejects with this error (best-effort). */
-  failSyncRunWrite?: Error;
 }) {
   const writes: { path: string; data: unknown }[] = [];
   const titleCache = opts.titleCache ?? {};
-  let autoIdCounter = 0;
-
-  const docRef = (path: string) => ({
-    get: () => Promise.resolve(makeSnapshot(path)),
-    set: (data: unknown) => {
-      writes.push({ path, data });
-      return Promise.resolve();
-    },
-  });
 
   function makeSnapshot(path: string) {
     if (path === 'system/sync') {
@@ -87,30 +86,32 @@ function createFakeDb(opts: {
         });
       },
     }),
-    doc: (path: string) => docRef(path),
-    collection: (path: string) => ({
-      get: () =>
-        Promise.resolve({ docs: [] as { id: string; data: () => unknown }[] }),
-      // Auto-id child doc — supports writeSyncRun's `.doc().set()`.
-      doc: () => {
-        const id = `auto-${++autoIdCounter}`;
-        const childPath = `${path}/${id}`;
-        return {
-          id,
-          set: (data: unknown) => {
-            if (path === 'sync-runs' && opts.failSyncRunWrite) {
-              return Promise.reject(opts.failSyncRunWrite);
-            }
-            writes.push({ path: childPath, data });
-            return Promise.resolve();
-          },
-        };
+    doc: (path: string) => ({
+      get: () => Promise.resolve(makeSnapshot(path)),
+      set: (data: unknown) => {
+        writes.push({ path, data });
+        return Promise.resolve();
       },
-      _path: path,
     }),
   };
 
   return { db: db as unknown as RunSyncDeps['db'], writes };
+}
+
+// A fake Cloud Tasks enqueuer: records every enqueue (queue, payload, options).
+function createFakeEnqueuer() {
+  const calls: {
+    queueName: string;
+    payload: unknown;
+    options?: EnqueueOptions;
+  }[] = [];
+  const enqueuer: TaskEnqueuer = {
+    enqueue: (queueName, payload, options) => {
+      calls.push({ queueName, payload, options });
+      return Promise.resolve();
+    },
+  };
+  return { enqueuer, calls };
 }
 
 // A fake engine: records the inputs it was given and returns scripted results.
@@ -129,53 +130,60 @@ function syncedResult(input: SyncTitleInput): SyncResult {
   return { ...input, outcome: 'synced', transitions: [] };
 }
 
-function baseDeps(
-  overrides: Partial<RunSyncDeps> & {
-    db: RunSyncDeps['db'];
-    createEngine: RunSyncDeps['createEngine'];
-  },
-): RunSyncDeps {
-  return {
+function coordinatorDeps(
+  overrides: Partial<RunSyncDeps> & { db: RunSyncDeps['db'] },
+): {
+  deps: RunSyncDeps;
+  openRunCalls: OpenRunParams[];
+  finalizeHealthyRunCalls: { runId: string; now: number }[];
+} {
+  const openRunCalls: OpenRunParams[] = [];
+  const finalizeHealthyRunCalls: { runId: string; now: number }[] = [];
+  const deps: RunSyncDeps = {
     verifyToken: vi.fn(() => Promise.resolve({ uid: 'u1' })),
     secret: SECRET,
     now: () => NOW,
     rateLimitMs: RATE_LIMIT_MS,
     stalenessWindowMs: STALENESS_WINDOW_MS,
+    enqueuer: createFakeEnqueuer().enqueuer,
+    generateRunId: () => RUN_ID,
+    openRun: (params) => {
+      openRunCalls.push(params);
+      return Promise.resolve();
+    },
+    finalizeHealthyRun: (runId, now) => {
+      finalizeHealthyRunCalls.push({ runId, now });
+      return Promise.resolve();
+    },
     ...overrides,
   };
+  return { deps, openRunCalls, finalizeHealthyRunCalls };
 }
 
 function req(over: Partial<SyncRequest> = {}): SyncRequest {
   return { method: 'POST', headers: {}, body: undefined, ...over };
 }
 
-describe('runSync handler wiring', () => {
-  let engineFactory: ReturnType<typeof createFakeEngine>;
-  let createEngine: RunSyncDeps['createEngine'];
-
-  beforeEach(() => {
-    engineFactory = createFakeEngine((inputs) => inputs.map(syncedResult));
-    createEngine = () => engineFactory.engine;
-  });
-
-  it('cron path: trigger cron, rate limit bypassed, force honored, deduped+filtered union, system/sync written, 200', async () => {
-    // Two users track 603; 1396 fresh (would be filtered) — but force keeps all.
-    const recentMs = NOW - 60 * 1000; // 1 min ago → fresh
+describe('runSync — enqueue coordinator', () => {
+  it('cron+force: opens staging doc, enqueues watchdog + one title shard, returns SyncEnqueueResponse, writes NO sync-runs doc', async () => {
+    const recentMs = NOW - 60 * 1000; // fresh — but force keeps it
     const { db, writes } = createFakeDb({
       watchlist: [
         { tmdbId: 603, type: 'movie' },
-        { tmdbId: 603, type: 'movie' },
+        { tmdbId: 603, type: 'movie' }, // dup — deduped
         { tmdbId: 1396, type: 'tv' },
       ],
-      titleCache: {
-        'title-cache/1396': { lastSyncedAtMs: recentMs },
-      },
-      // recent run → would 429 a user, but cron bypasses.
-      syncState: { lastRunAt: NOW - 1000 },
+      titleCache: { 'title-cache/1396': { lastSyncedAtMs: recentMs } },
+      syncState: { lastRunAt: NOW - 1000 }, // cron bypasses the rate limit
+    });
+    const { enqueuer, calls } = createFakeEnqueuer();
+    const { deps, openRunCalls, finalizeHealthyRunCalls } = coordinatorDeps({
+      db,
+      enqueuer,
     });
 
     const out = await runSync(
-      baseDeps({ db, createEngine }),
+      deps,
       req({
         headers: { 'x-vultus-sync-secret': SECRET },
         body: { force: true },
@@ -183,24 +191,57 @@ describe('runSync handler wiring', () => {
     );
 
     expect(out.status).toBe(200);
-    const body = out.body as SyncRunResponse;
-    expect(body.trigger).toBe('cron');
-    expect(body.forced).toBe(true);
-    expect(body.gathered).toBe(2); // deduped
-    // force keeps the fresh 1396 too:
-    expect(engineFactory.calls).toHaveLength(1);
-    expect(engineFactory.calls[0]).toEqual([
-      { tmdbId: 603, type: 'movie' },
-      { tmdbId: 1396, type: 'tv' },
-    ]);
-    expect(body.synced).toBe(2);
-    expect(body.skipped).toBe(0);
-    expect(body.errored).toBe(0);
+    const body = out.body as SyncEnqueueResponse;
+    expect(body).toEqual({
+      ok: true,
+      trigger: 'cron',
+      runId: RUN_ID,
+      gathered: 2, // deduped
+      toSync: 2, // force keeps the fresh 1396 too
+      shardCount: 1,
+      forced: true,
+    });
 
+    // Staging doc opened with the title-sync shard count; no summary at enqueue.
+    expect(openRunCalls).toEqual([
+      {
+        runId: RUN_ID,
+        kind: 'cron',
+        userId: null,
+        startedAt: NOW,
+        shardCounts: { titleSync: 1 },
+      },
+    ]);
+    expect(finalizeHealthyRunCalls).toHaveLength(0);
+    expect(writes.some((w) => w.path.startsWith('sync-runs/'))).toBe(false);
     expect(writes.some((w) => w.path === 'system/sync')).toBe(true);
+
+    // Watchdog first, then the single title shard.
+    expect(calls).toHaveLength(2);
+    expect(calls[0]).toEqual({
+      queueName: QUEUE_NAMES.watchdog,
+      payload: { runId: RUN_ID } satisfies SyncWatchdogTask,
+      options: {
+        name: 'run-1-watchdog',
+        scheduleDelaySeconds: WATCHDOG_DELAY_SECONDS,
+      },
+    });
+    expect(calls[1]).toEqual({
+      queueName: QUEUE_NAMES.titleSync,
+      payload: {
+        runId: RUN_ID,
+        shardIndex: 0,
+        titles: [
+          { tmdbId: 603, type: 'movie' },
+          { tmdbId: 1396, type: 'tv' },
+        ],
+        forced: true,
+      } satisfies TitleSyncTask,
+      options: { name: 'run-1-titleSync-0' },
+    });
   });
 
-  it('cron path without force applies the staleness filter', async () => {
+  it('cron without force applies the staleness filter to the sharded titles', async () => {
     const recentMs = NOW - 60 * 1000; // fresh → dropped
     const { db } = createFakeDb({
       watchlist: [
@@ -209,54 +250,127 @@ describe('runSync handler wiring', () => {
       ],
       titleCache: { 'title-cache/1396': { lastSyncedAtMs: recentMs } },
     });
+    const { enqueuer, calls } = createFakeEnqueuer();
+    const { deps } = coordinatorDeps({ db, enqueuer });
 
     const out = await runSync(
-      baseDeps({ db, createEngine }),
+      deps,
       req({ headers: { 'x-vultus-sync-secret': SECRET } }),
     );
 
-    const body = out.body as SyncRunResponse;
+    const body = out.body as SyncEnqueueResponse;
     expect(body.gathered).toBe(2);
-    expect(engineFactory.calls[0]).toEqual([{ tmdbId: 603, type: 'movie' }]);
-    expect(body.synced).toBe(1);
-    expect(body.skipped).toBe(1); // staleness-skipped
+    expect(body.toSync).toBe(1); // 1396 filtered
+    expect(body.shardCount).toBe(1);
+    expect(body.forced).toBe(false);
+    // The title shard carries ONLY the surviving title.
+    const shard = calls.find((c) => c.queueName === QUEUE_NAMES.titleSync)
+      ?.payload as TitleSyncTask;
+    expect(shard.titles).toEqual([{ tmdbId: 603, type: 'movie' }]);
+    expect(shard.forced).toBe(false);
   });
 
-  it('user path: valid token, last run > 5 min ago → runs', async () => {
+  it('healthy no-op (0 toSync): opens staging, enqueues ONLY the watchdog, finalizes immediately, shardCount 0', async () => {
+    const recentMs = NOW - 60 * 1000; // every title fresh → filtered
+    const { db, writes } = createFakeDb({
+      watchlist: [{ tmdbId: 1396, type: 'tv' }],
+      titleCache: { 'title-cache/1396': { lastSyncedAtMs: recentMs } },
+    });
+    const { enqueuer, calls } = createFakeEnqueuer();
+    const { deps, openRunCalls, finalizeHealthyRunCalls } = coordinatorDeps({
+      db,
+      enqueuer,
+    });
+
+    const out = await runSync(
+      deps,
+      req({ headers: { 'x-vultus-sync-secret': SECRET } }),
+    );
+
+    const body = out.body as SyncEnqueueResponse;
+    expect(body.gathered).toBe(1);
+    expect(body.toSync).toBe(0);
+    expect(body.shardCount).toBe(0);
+
+    expect(openRunCalls[0].shardCounts).toEqual({ titleSync: 0 });
+    // Immediate healthy finalization (not a watchdog error summary).
+    expect(finalizeHealthyRunCalls).toEqual([{ runId: RUN_ID, now: NOW }]);
+    // Only the watchdog is enqueued — no title shards.
+    expect(calls).toHaveLength(1);
+    expect(calls[0].queueName).toBe(QUEUE_NAMES.watchdog);
+    expect(writes.some((w) => w.path.startsWith('sync-runs/'))).toBe(false);
+  });
+
+  it('empty watchlist is also a healthy no-op (gathered 0, shardCount 0, finalized immediately)', async () => {
+    const { db } = createFakeDb({ watchlist: [] });
+    const { enqueuer, calls } = createFakeEnqueuer();
+    const { deps, finalizeHealthyRunCalls } = coordinatorDeps({ db, enqueuer });
+
+    const out = await runSync(
+      deps,
+      req({ headers: { 'x-vultus-sync-secret': SECRET } }),
+    );
+
+    const body = out.body as SyncEnqueueResponse;
+    expect(body.gathered).toBe(0);
+    expect(body.toSync).toBe(0);
+    expect(body.shardCount).toBe(0);
+    expect(finalizeHealthyRunCalls).toHaveLength(1);
+    expect(calls).toHaveLength(1); // watchdog only
+  });
+
+  it('fans a large title union into ceil(N / SHARD_SIZE_TITLES) shards', async () => {
+    // 1200 distinct titles → 3 shards of 500/500/200 (SHARD_SIZE_TITLES = 500).
+    const watchlist = Array.from({ length: 1200 }, (_, i) => ({
+      tmdbId: i + 1,
+      type: 'movie' as const,
+    }));
+    const { db } = createFakeDb({ watchlist });
+    const { enqueuer, calls } = createFakeEnqueuer();
+    const { deps, openRunCalls } = coordinatorDeps({ db, enqueuer });
+
+    const out = await runSync(
+      deps,
+      req({
+        headers: { 'x-vultus-sync-secret': SECRET },
+        body: { force: true },
+      }),
+    );
+
+    const body = out.body as SyncEnqueueResponse;
+    expect(body.shardCount).toBe(3);
+    expect(openRunCalls[0].shardCounts).toEqual({ titleSync: 3 });
+    const shardCalls = calls.filter(
+      (c) => c.queueName === QUEUE_NAMES.titleSync,
+    );
+    expect(shardCalls).toHaveLength(3);
+    expect((shardCalls[0].payload as TitleSyncTask).titles).toHaveLength(500);
+    expect((shardCalls[2].payload as TitleSyncTask).titles).toHaveLength(200);
+    // Shard task names are deterministic + distinct per index.
+    expect(shardCalls.map((c) => c.options?.name)).toEqual([
+      'run-1-titleSync-0',
+      'run-1-titleSync-1',
+      'run-1-titleSync-2',
+    ]);
+  });
+
+  it('user path: valid token, last run > 5 min ago → enqueues (trigger user)', async () => {
     const { db, writes } = createFakeDb({
       watchlist: [{ tmdbId: 603, type: 'movie' }],
       syncState: { lastRunAt: NOW - (RATE_LIMIT_MS + 1000) },
     });
+    const { enqueuer, calls } = createFakeEnqueuer();
+    const { deps } = coordinatorDeps({ db, enqueuer });
 
     const out = await runSync(
-      baseDeps({ db, createEngine }),
+      deps,
       req({ headers: { authorization: 'Bearer good' } }),
     );
 
     expect(out.status).toBe(200);
-    expect((out.body as SyncRunResponse).trigger).toBe('user');
-    expect(engineFactory.calls).toHaveLength(1);
+    expect((out.body as SyncEnqueueResponse).trigger).toBe('user');
+    expect(calls.some((c) => c.queueName === QUEUE_NAMES.titleSync)).toBe(true);
     expect(writes.some((w) => w.path === 'system/sync')).toBe(true);
-  });
-
-  it('user path: last run < 5 min ago → 429 and engine NOT called', async () => {
-    const { db, writes } = createFakeDb({
-      watchlist: [{ tmdbId: 603, type: 'movie' }],
-      syncState: { lastRunAt: NOW - 1000 },
-    });
-
-    const out = await runSync(
-      baseDeps({ db, createEngine }),
-      req({ headers: { authorization: 'Bearer good' } }),
-    );
-
-    expect(out.status).toBe(429);
-    expect(out.body).toEqual({
-      error: 'rate_limited',
-      retryAfterMs: RATE_LIMIT_MS - 1000,
-    });
-    expect(engineFactory.calls).toHaveLength(0);
-    expect(writes).toHaveLength(0);
   });
 
   it('user path ignores force (force only on cron)', async () => {
@@ -266,653 +380,264 @@ describe('runSync handler wiring', () => {
       titleCache: { 'title-cache/1396': { lastSyncedAtMs: recentMs } },
       syncState: { lastRunAt: NOW - (RATE_LIMIT_MS + 1000) },
     });
+    const { enqueuer } = createFakeEnqueuer();
+    const { deps, finalizeHealthyRunCalls } = coordinatorDeps({ db, enqueuer });
 
     const out = await runSync(
-      baseDeps({ db, createEngine }),
+      deps,
       req({ headers: { authorization: 'Bearer good' }, body: { force: true } }),
     );
 
-    const body = out.body as SyncRunResponse;
+    const body = out.body as SyncEnqueueResponse;
     expect(body.forced).toBe(false);
-    expect(engineFactory.calls[0]).toEqual([]); // fresh title filtered despite force
-    expect(body.skipped).toBe(1);
+    expect(body.toSync).toBe(0); // fresh title filtered despite force
+    expect(finalizeHealthyRunCalls).toHaveLength(1);
   });
 
-  it('no auth → 401, engine not called, no writes', async () => {
-    const { db, writes } = createFakeDb({ watchlist: [] });
-    const out = await runSync(baseDeps({ db, createEngine }), req());
-    expect(out.status).toBe(401);
-    expect(engineFactory.calls).toHaveLength(0);
+  it('user path: last run < 5 min ago → 429, nothing opened or enqueued', async () => {
+    const { db, writes } = createFakeDb({
+      watchlist: [{ tmdbId: 603, type: 'movie' }],
+      syncState: { lastRunAt: NOW - 1000 },
+    });
+    const { enqueuer, calls } = createFakeEnqueuer();
+    const { deps, openRunCalls } = coordinatorDeps({ db, enqueuer });
+
+    const out = await runSync(
+      deps,
+      req({ headers: { authorization: 'Bearer good' } }),
+    );
+
+    expect(out.status).toBe(429);
+    expect(out.body).toEqual({
+      error: 'rate_limited',
+      retryAfterMs: RATE_LIMIT_MS - 1000,
+    });
+    expect(openRunCalls).toHaveLength(0);
+    expect(calls).toHaveLength(0);
     expect(writes).toHaveLength(0);
   });
 
-  it('bad secret → 403', async () => {
+  it('no auth → 401; nothing opened or enqueued', async () => {
     const { db, writes } = createFakeDb({ watchlist: [] });
+    const { enqueuer, calls } = createFakeEnqueuer();
+    const { deps, openRunCalls } = coordinatorDeps({ db, enqueuer });
+    const out = await runSync(deps, req());
+    expect(out.status).toBe(401);
+    expect(openRunCalls).toHaveLength(0);
+    expect(calls).toHaveLength(0);
+    expect(writes).toHaveLength(0);
+  });
+
+  it('bad secret → 403; nothing opened or enqueued', async () => {
+    const { db, writes } = createFakeDb({ watchlist: [] });
+    const { enqueuer, calls } = createFakeEnqueuer();
+    const { deps, openRunCalls } = coordinatorDeps({ db, enqueuer });
     const out = await runSync(
-      baseDeps({ db, createEngine }),
+      deps,
       req({ headers: { 'x-vultus-sync-secret': 'wrong' } }),
     );
     expect(out.status).toBe(403);
-    expect(engineFactory.calls).toHaveLength(0);
+    expect(openRunCalls).toHaveLength(0);
+    expect(calls).toHaveLength(0);
     expect(writes).toHaveLength(0);
   });
 
   it('bad token → 403', async () => {
     const { db, writes } = createFakeDb({ watchlist: [] });
+    const { enqueuer, calls } = createFakeEnqueuer();
+    const { deps, openRunCalls } = coordinatorDeps({
+      db,
+      enqueuer,
+      verifyToken: vi.fn(() => Promise.reject(new Error('bad'))),
+    });
     const out = await runSync(
-      baseDeps({
-        db,
-        createEngine,
-        verifyToken: vi.fn(() => Promise.reject(new Error('bad'))),
-      }),
+      deps,
       req({ headers: { authorization: 'Bearer bad' } }),
     );
     expect(out.status).toBe(403);
-    expect(engineFactory.calls).toHaveLength(0);
+    expect(openRunCalls).toHaveLength(0);
+    expect(calls).toHaveLength(0);
     expect(writes).toHaveLength(0);
   });
 
   it('non-POST → 405', async () => {
     const { db, writes } = createFakeDb({ watchlist: [] });
+    const { enqueuer, calls } = createFakeEnqueuer();
+    const { deps, openRunCalls } = coordinatorDeps({ db, enqueuer });
     const out = await runSync(
-      baseDeps({ db, createEngine }),
+      deps,
       req({ method: 'GET', headers: { 'x-vultus-sync-secret': SECRET } }),
     );
     expect(out.status).toBe(405);
-    expect(engineFactory.calls).toHaveLength(0);
+    expect(openRunCalls).toHaveLength(0);
+    expect(calls).toHaveLength(0);
     expect(writes).toHaveLength(0);
   });
 
-  it('engine per-title errors are counted; handler still 200', async () => {
-    const { db } = createFakeDb({
-      watchlist: [
-        { tmdbId: 1, type: 'movie' },
-        { tmdbId: 2, type: 'movie' },
-        { tmdbId: 3, type: 'movie' },
-      ],
-    });
-    const mixed = createFakeEngine((inputs) =>
-      inputs.map((input, i) =>
-        i === 1
-          ? { ...input, outcome: 'error', transitions: [], reason: 'boom' }
-          : syncedResult(input),
-      ),
-    );
+  it('response never leaks a secret/token', async () => {
+    const { db } = createFakeDb({ watchlist: [{ tmdbId: 1, type: 'movie' }] });
+    const { enqueuer } = createFakeEnqueuer();
+    const { deps } = coordinatorDeps({ db, enqueuer });
     const out = await runSync(
-      baseDeps({ db, createEngine: () => mixed.engine }),
+      deps,
       req({
         headers: { 'x-vultus-sync-secret': SECRET },
         body: { force: true },
       }),
     );
-
-    expect(out.status).toBe(200);
-    const body = out.body as SyncRunResponse;
-    expect(body.synced).toBe(2);
-    expect(body.errored).toBe(1);
-    // Spec 0089 / D4 / NB1: the (credential-free) per-title reason IS now
-    // surfaced in `errorSample` (mirrored from the sync-runs doc), but no
-    // secret/token ever leaks.
-    expect(body.errorSample).toEqual(['boom']);
-    expect(JSON.stringify(body)).not.toMatch(/secret|token|bearer/i);
+    expect(JSON.stringify(out.body)).not.toMatch(/secret|token|bearer/i);
   });
+});
 
-  it('runs the episode pass (syncAll) AFTER the title-cache pass when createEpisodeEngine is provided; SyncRunResponse shape is unchanged', async () => {
-    const { db } = createFakeDb({
-      watchlist: [
-        { tmdbId: 603, type: 'movie' },
-        { tmdbId: 1396, type: 'tv' },
-      ],
-    });
+// --- titleSyncWorker core ------------------------------------------------------
 
-    const order: string[] = [];
-    const titleEngine = createFakeEngine((inputs) => {
-      order.push('title-sync');
-      return inputs.map(syncedResult);
-    });
-    const syncAll = vi.fn((): Promise<EpisodeUpsertResult[]> => {
-      order.push('episode-sync');
-      return Promise.resolve([
-        {
-          uid: 'u1',
-          titleId: 't1',
-          tmdbId: 1396,
-          seasonsFetched: 1,
-          episodesWritten: 2,
-          outcome: 'synced',
+describe('runTitleSyncShard — title-sync worker core', () => {
+  const task: TitleSyncTask = {
+    runId: RUN_ID,
+    shardIndex: 2,
+    titles: [
+      { tmdbId: 603, type: 'movie' },
+      { tmdbId: 1396, type: 'tv' },
+      { tmdbId: 1399, type: 'tv' },
+    ],
+    forced: false,
+  };
+
+  it('runs the engine over the shard titles and records the shard result (non-last shard → onLastShard NOT called)', async () => {
+    const engineFactory = createFakeEngine((inputs) =>
+      inputs.map((input, i) =>
+        i === 2
+          ? { ...input, outcome: 'error', transitions: [], reason: 'boom' }
+          : syncedResult(input),
+      ),
+    );
+    const recordShardCalls: RecordShardResultParams[] = [];
+    const onLastShardCalls: string[] = [];
+    await runTitleSyncShard(
+      {
+        db: {} as RunTitleSyncShardDeps['db'],
+        now: () => NOW,
+        createEngine: () => engineFactory.engine,
+        recordShard: (params) => {
+          recordShardCalls.push(params);
+          return Promise.resolve({
+            isLastShardOfStage: false,
+            finalized: false,
+          });
         },
-      ]);
+        onLastShard: (runId) => {
+          onLastShardCalls.push(runId);
+          return Promise.resolve();
+        },
+      },
+      task,
+    );
+
+    // Engine ran over exactly the shard's titles.
+    expect(engineFactory.calls[0]).toEqual([
+      { tmdbId: 603, type: 'movie' },
+      { tmdbId: 1396, type: 'tv' },
+      { tmdbId: 1399, type: 'tv' },
+    ]);
+    expect(recordShardCalls).toHaveLength(1);
+    expect(recordShardCalls[0]).toMatchObject({
+      runId: RUN_ID,
+      stage: 'titleSync',
+      shardIndex: 2,
+      synced: 2,
+      skipped: 0,
+      errored: 1,
+      errors: ['boom'],
+      counters: { titlesGathered: 3, titlesUpdated: 2 },
     });
-    const episodeEngine: EpisodeSyncEngine = {
-      syncOne: vi.fn(),
-      syncAll,
-    };
-
-    const out = await runSync(
-      baseDeps({
-        db,
-        createEngine: () => titleEngine.engine,
-        createEpisodeEngine: () => episodeEngine,
-      }),
-      req({
-        headers: { 'x-vultus-sync-secret': SECRET },
-        body: { force: true },
-      }),
-    );
-
-    expect(syncAll).toHaveBeenCalledTimes(1);
-    // Episode pass runs after the title-cache sync.
-    expect(order).toEqual(['title-sync', 'episode-sync']);
-
-    // SyncRunResponse shape is UNCHANGED — exactly these keys, no episode fields.
-    const body = out.body as SyncRunResponse;
-    expect(Object.keys(body).sort()).toEqual(
-      [
-        'durationMs',
-        'errored',
-        'errorSample',
-        'forced',
-        'gathered',
-        'ok',
-        'skipped',
-        'synced',
-        'trigger',
-      ].sort(),
-    );
+    expect(onLastShardCalls).toHaveLength(0);
   });
 
-  it('logs revertedToWatching = count of results with statusRevertedToWatching in the episode-sync-pass-complete line (spec 0074)', async () => {
-    const { db } = createFakeDb({
-      watchlist: [{ tmdbId: 1396, type: 'tv' }],
-    });
-    const episodeEngine: EpisodeSyncEngine = {
-      syncOne: vi.fn(),
-      syncAll: vi.fn(
-        (): Promise<EpisodeUpsertResult[]> =>
-          Promise.resolve([
-            {
-              uid: 'u1',
-              titleId: 't1',
-              tmdbId: 1396,
-              seasonsFetched: 1,
-              episodesWritten: 2,
-              outcome: 'synced',
-              statusRevertedToWatching: true,
-            },
-            {
-              uid: 'u1',
-              titleId: 't2',
-              tmdbId: 1400,
-              seasonsFetched: 1,
-              episodesWritten: 1,
-              outcome: 'synced',
-              statusRevertedToWatching: true,
-            },
-            {
-              uid: 'u1',
-              titleId: 't3',
-              tmdbId: 1500,
-              seasonsFetched: 1,
-              episodesWritten: 0,
-              outcome: 'synced',
-            },
-          ]),
-      ),
-    };
+  it('last shard of the stage → onLastShard(runId) is invoked (interim finalize hook)', async () => {
+    const engineFactory = createFakeEngine((inputs) =>
+      inputs.map(syncedResult),
+    );
+    const onLastShardCalls: string[] = [];
+    await runTitleSyncShard(
+      {
+        db: {} as RunTitleSyncShardDeps['db'],
+        now: () => NOW,
+        createEngine: () => engineFactory.engine,
+        recordShard: () =>
+          Promise.resolve({ isLastShardOfStage: true, finalized: false }),
+        onLastShard: (runId) => {
+          onLastShardCalls.push(runId);
+          return Promise.resolve();
+        },
+      },
+      task,
+    );
+    expect(onLastShardCalls).toEqual([RUN_ID]);
+  });
 
-    const infoSpy = vi
-      .spyOn(logger, 'info')
-      .mockImplementation(() => undefined);
-    try {
-      await runSync(
-        baseDeps({
-          db,
-          createEngine,
-          createEpisodeEngine: () => episodeEngine,
+  it('a whole-shard engine failure is caught and recorded as fully-errored (task does not throw)', async () => {
+    const recordShardCalls: RecordShardResultParams[] = [];
+    await runTitleSyncShard(
+      {
+        db: {} as RunTitleSyncShardDeps['db'],
+        now: () => NOW,
+        createEngine: (): SyncEngine => ({
+          sync: () => Promise.reject(new Error('enumeration blew up')),
         }),
-        req({
-          headers: { 'x-vultus-sync-secret': SECRET },
-          body: { force: true },
-        }),
-      );
+        recordShard: (params) => {
+          recordShardCalls.push(params);
+          return Promise.resolve({
+            isLastShardOfStage: false,
+            finalized: false,
+          });
+        },
+        onLastShard: () => Promise.resolve(),
+      },
+      task,
+    );
 
-      const passLog = infoSpy.mock.calls.find(
-        (c) => c[0] === 'episode sync pass complete',
-      );
-      expect(passLog).toBeDefined();
-      expect(passLog?.[1]).toMatchObject({
-        episodesSynced: 3,
-        episodesErrored: 0,
-        revertedToWatching: 2,
-      });
-    } finally {
-      infoSpy.mockRestore();
-    }
+    expect(recordShardCalls[0]).toMatchObject({
+      runId: RUN_ID,
+      stage: 'titleSync',
+      shardIndex: 2,
+      synced: 0,
+      errored: 3, // all titles in the shard
+      errors: ['enumeration blew up'],
+      counters: { titlesGathered: 3, titlesUpdated: 0 },
+    });
+  });
+});
+
+// --- syncWatchdog core ---------------------------------------------------------
+
+describe('runSyncWatchdog — dead-run watchdog core', () => {
+  const task: SyncWatchdogTask = { runId: RUN_ID };
+
+  it('non-finalized run → finalizeAsDead is invoked with the runId (writes the error summary)', async () => {
+    const calls: { runId: string; now: number }[] = [];
+    const finalizeAsDead = vi.fn(
+      (_db: RunSyncDeps['db'], runId: string, now: number) => {
+        calls.push({ runId, now });
+        return Promise.resolve({ wroteSummary: true });
+      },
+    );
+    await runSyncWatchdog(
+      { db: {} as RunSyncDeps['db'], now: () => NOW, finalizeAsDead },
+      task,
+    );
+    expect(calls).toEqual([{ runId: RUN_ID, now: NOW }]);
   });
 
-  it('BEST-EFFORT: an episode-pass failure (syncAll rejects) does NOT fail the run — SyncRunResponse shape is unchanged and system/sync is still written (R9 / DoD e)', async () => {
-    const { db, writes } = createFakeDb({
-      watchlist: [
-        { tmdbId: 603, type: 'movie' },
-        { tmdbId: 1396, type: 'tv' },
-      ],
-    });
-
-    const episodeEngine: EpisodeSyncEngine = {
-      syncOne: vi.fn(),
-      syncAll: vi.fn(() =>
-        Promise.reject(new Error('watchlist enumeration failed')),
+  it('already-finalized run → finalizeAsDead no-ops (wroteSummary false), watchdog still resolves', async () => {
+    const finalizeAsDead = vi.fn(() =>
+      Promise.resolve({ wroteSummary: false }),
+    );
+    await expect(
+      runSyncWatchdog(
+        { db: {} as RunSyncDeps['db'], now: () => NOW, finalizeAsDead },
+        task,
       ),
-    };
-
-    const out = await runSync(
-      baseDeps({
-        db,
-        createEngine,
-        createEpisodeEngine: () => episodeEngine,
-      }),
-      req({
-        headers: { 'x-vultus-sync-secret': SECRET },
-        body: { force: true },
-      }),
-    );
-
-    // The run still succeeds with the normal 200-shaped response.
-    expect(out.status).toBe(200);
-    const body = out.body as SyncRunResponse;
-    expect(body.ok).toBe(true);
-    expect(Object.keys(body).sort()).toEqual(
-      [
-        'durationMs',
-        'errored',
-        'errorSample',
-        'forced',
-        'gathered',
-        'ok',
-        'skipped',
-        'synced',
-        'trigger',
-      ].sort(),
-    );
-    // Sync-state persistence is unaffected by the episode-pass failure.
-    expect(writes.some((w) => w.path === 'system/sync')).toBe(true);
-  });
-
-  it('BEST-EFFORT: an episode engine whose syncAll throws synchronously is also swallowed — run still returns 200 and persists system/sync', async () => {
-    const { db, writes } = createFakeDb({
-      watchlist: [{ tmdbId: 1396, type: 'tv' }],
-    });
-
-    const episodeEngine: EpisodeSyncEngine = {
-      syncOne: vi.fn(),
-      syncAll: vi.fn((): Promise<EpisodeUpsertResult[]> => {
-        throw new Error('engine construction / enumeration blew up');
-      }),
-    };
-
-    const out = await runSync(
-      baseDeps({
-        db,
-        createEngine,
-        createEpisodeEngine: () => episodeEngine,
-      }),
-      req({
-        headers: { 'x-vultus-sync-secret': SECRET },
-        body: { force: true },
-      }),
-    );
-
-    expect(out.status).toBe(200);
-    expect((out.body as SyncRunResponse).ok).toBe(true);
-    expect(writes.some((w) => w.path === 'system/sync')).toBe(true);
-  });
-
-  it('omitting createEpisodeEngine skips the episode pass (existing-deps shape stays green)', async () => {
-    const { db } = createFakeDb({
-      watchlist: [{ tmdbId: 603, type: 'movie' }],
-    });
-    const out = await runSync(
-      baseDeps({ db, createEngine }),
-      req({
-        headers: { 'x-vultus-sync-secret': SECRET },
-        body: { force: true },
-      }),
-    );
-    expect(out.status).toBe(200);
-    // No episode fields leak into the response.
-    const body = out.body as SyncRunResponse;
-    expect('episodesSynced' in body).toBe(false);
-  });
-
-  it('BOUNDARY: across all paths only title-cache/**, system/sync and sync-runs/** are written — never users/** or notifications', async () => {
-    const { db, writes } = createFakeDb({
-      watchlist: [
-        { tmdbId: 603, type: 'movie' },
-        { tmdbId: 1396, type: 'tv' },
-      ],
-    });
-    await runSync(
-      baseDeps({ db, createEngine }),
-      req({
-        headers: { 'x-vultus-sync-secret': SECRET },
-        body: { force: true },
-      }),
-    );
-
-    // The fake engine writes nothing through the store, so the writes are
-    // system/sync + the new sync-runs record; assert NOTHING under users/** or
-    // notifications/** is written (the no-users/**-write boundary still holds).
-    for (const w of writes) {
-      expect(w.path.startsWith('users/')).toBe(false);
-      expect(w.path).not.toContain('notifications');
-      expect(
-        w.path === 'system/sync' ||
-          w.path.startsWith('title-cache/') ||
-          w.path.startsWith('sync-runs/'),
-      ).toBe(true);
-    }
-    expect(writes.some((w) => w.path === 'system/sync')).toBe(true);
-  });
-
-  it('cron path: writes a sync-runs record with kind:cron, userId:null, counts mapped, durationMs == end - start, timestamps set; SyncRunResponse unchanged', async () => {
-    const { db, writes } = createFakeDb({
-      watchlist: [
-        { tmdbId: 1, type: 'movie' },
-        { tmdbId: 2, type: 'movie' },
-        { tmdbId: 3, type: 'movie' },
-      ],
-    });
-    // Distinct start/end via a sequenced clock so durationMs is observable.
-    const start = NOW;
-    const end = NOW + 4242;
-    const clock = vi
-      .fn<() => number>()
-      .mockReturnValueOnce(start)
-      .mockReturnValue(end);
-
-    const mixed = createFakeEngine((inputs) =>
-      inputs.map((input, i) =>
-        i === 1
-          ? { ...input, outcome: 'error', transitions: [], reason: 'boom' }
-          : syncedResult(input),
-      ),
-    );
-
-    const out = await runSync(
-      baseDeps({ db, createEngine: () => mixed.engine, now: clock }),
-      req({
-        headers: { 'x-vultus-sync-secret': SECRET },
-        body: { force: true },
-      }),
-    );
-
-    // Response unchanged: exact key set.
-    const body = out.body as SyncRunResponse;
-    expect(Object.keys(body).sort()).toEqual(
-      [
-        'durationMs',
-        'errored',
-        'errorSample',
-        'forced',
-        'gathered',
-        'ok',
-        'skipped',
-        'synced',
-        'trigger',
-      ].sort(),
-    );
-
-    const runWrite = writes.find((w) => w.path.startsWith('sync-runs/'));
-    expect(runWrite).toBeDefined();
-    const data = runWrite?.data as {
-      runId: string;
-      kind: string;
-      userId: string | null;
-      startedAt: Date;
-      completedAt: Date;
-      durationMs: number;
-      titlesGathered: number;
-      titlesUpdated: number;
-      errorCount: number;
-      errors: string[];
-    };
-    expect(data.kind).toBe('cron');
-    expect(data.userId).toBeNull();
-    expect(data.runId).toBe(runWrite?.path.split('/')[1]); // runId == doc id
-    expect(data.titlesGathered).toBe(3);
-    expect(data.titlesUpdated).toBe(2);
-    expect(data.errorCount).toBe(1);
-    expect(data.durationMs).toBe(end - start);
-    expect(data.startedAt).toBeInstanceOf(Date);
-    expect(data.completedAt).toBeInstanceOf(Date);
-    expect(data.startedAt.toISOString()).toBe(new Date(start).toISOString());
-    expect(data.completedAt.toISOString()).toBe(new Date(end).toISOString());
-  });
-
-  it('cron path: sync-runs errors are credential-free and capped at 10', async () => {
-    const titles = Array.from({ length: 15 }, (_, i) => ({
-      tmdbId: i + 1,
-      type: 'movie' as const,
-    }));
-    const { db, writes } = createFakeDb({ watchlist: titles });
-
-    const allErrors = createFakeEngine((inputs) =>
-      inputs.map((input, i) => ({
-        ...input,
-        outcome: 'error' as const,
-        transitions: [],
-        reason: `reason-${i}`,
-      })),
-    );
-
-    await runSync(
-      baseDeps({ db, createEngine: () => allErrors.engine }),
-      req({
-        headers: { 'x-vultus-sync-secret': SECRET },
-        body: { force: true },
-      }),
-    );
-
-    const runWrite = writes.find((w) => w.path.startsWith('sync-runs/'));
-    const data = runWrite?.data as { errorCount: number; errors: string[] };
-    expect(data.errorCount).toBe(15);
-    expect(data.errors).toHaveLength(10); // capped
-    // No secret/token text leaks (engine reasons are credential-free).
-    expect(JSON.stringify(data.errors)).not.toMatch(/secret|token|bearer/i);
-  });
-
-  it('BEST-EFFORT: a failing sync-runs write is logged, does NOT throw, and does NOT change the response (cron still 200)', async () => {
-    const { db, writes } = createFakeDb({
-      watchlist: [{ tmdbId: 603, type: 'movie' }],
-      failSyncRunWrite: new Error('sync-runs write boom'),
-    });
-
-    const out = await runSync(
-      baseDeps({ db, createEngine }),
-      req({
-        headers: { 'x-vultus-sync-secret': SECRET },
-        body: { force: true },
-      }),
-    );
-
-    // Run still succeeds with the normal 200 response shape.
-    expect(out.status).toBe(200);
-    const body = out.body as SyncRunResponse;
-    expect(body.ok).toBe(true);
-    expect(Object.keys(body).sort()).toEqual(
-      [
-        'durationMs',
-        'errored',
-        'errorSample',
-        'forced',
-        'gathered',
-        'ok',
-        'skipped',
-        'synced',
-        'trigger',
-      ].sort(),
-    );
-    // system/sync still written exactly as before; the sync-runs write failed
-    // (so it was not recorded), but that did not regress the run.
-    expect(writes.some((w) => w.path === 'system/sync')).toBe(true);
-    expect(writes.some((w) => w.path.startsWith('sync-runs/'))).toBe(false);
-  });
-
-  it('response.errorSample equals the capped, credential-free errors array and matches the sync-runs doc (spec 0089 / D4 / NB1)', async () => {
-    const titles = Array.from({ length: 15 }, (_, i) => ({
-      tmdbId: i + 1,
-      type: 'movie' as const,
-    }));
-    const { db, writes } = createFakeDb({ watchlist: titles });
-
-    const allErrors = createFakeEngine((inputs) =>
-      inputs.map((input, i) => ({
-        ...input,
-        outcome: 'error' as const,
-        transitions: [],
-        reason: `reason-${i}`,
-      })),
-    );
-
-    const out = await runSync(
-      baseDeps({ db, createEngine: () => allErrors.engine }),
-      req({
-        headers: { 'x-vultus-sync-secret': SECRET },
-        body: { force: true },
-      }),
-    );
-
-    const body = out.body as SyncRunResponse;
-    // Capped at 10, credential-free.
-    expect(body.errorSample).toHaveLength(10);
-    expect(JSON.stringify(body.errorSample)).not.toMatch(
-      /secret|token|bearer/i,
-    );
-    // IDENTICAL content to the sync-runs doc's `errors` array (NB1).
-    const runWrite = writes.find((w) => w.path.startsWith('sync-runs/'));
-    const data = runWrite?.data as { errors: string[] };
-    expect(body.errorSample).toEqual(data.errors);
-  });
-
-  it('errorSample is an empty array on a clean run (no errored titles)', async () => {
-    const { db } = createFakeDb({
-      watchlist: [{ tmdbId: 603, type: 'movie' }],
-    });
-    const out = await runSync(
-      baseDeps({ db, createEngine }),
-      req({
-        headers: { 'x-vultus-sync-secret': SECRET },
-        body: { force: true },
-      }),
-    );
-    expect((out.body as SyncRunResponse).errorSample).toEqual([]);
-  });
-
-  it('logs a logger.error per errored title with its credential-free reason (spec 0089 / D4)', async () => {
-    const { db } = createFakeDb({
-      watchlist: [
-        { tmdbId: 1, type: 'movie' },
-        { tmdbId: 2, type: 'movie' },
-      ],
-    });
-    const mixed = createFakeEngine((inputs) =>
-      inputs.map((input, i) =>
-        i === 1
-          ? { ...input, outcome: 'error', transitions: [], reason: 'boom' }
-          : syncedResult(input),
-      ),
-    );
-    const errSpy = vi
-      .spyOn(logger, 'error')
-      .mockImplementation(() => undefined);
-    try {
-      await runSync(
-        baseDeps({ db, createEngine: () => mixed.engine }),
-        req({
-          headers: { 'x-vultus-sync-secret': SECRET },
-          body: { force: true },
-        }),
-      );
-      const titleErrLog = errSpy.mock.calls.find(
-        (c) => c[0] === '[syncTitles] title errored',
-      );
-      expect(titleErrLog).toBeDefined();
-      expect(titleErrLog?.[1]).toMatchObject({ tmdbId: 2, reason: 'boom' });
-    } finally {
-      errSpy.mockRestore();
-    }
-  });
-
-  it('invokes runEpisodeAiredScan AFTER the episode-insert pass (spec 0089 / D3, NB2)', async () => {
-    const { db } = createFakeDb({
-      watchlist: [{ tmdbId: 1396, type: 'tv' }],
-    });
-    const order: string[] = [];
-    const titleEngine = createFakeEngine((inputs) => {
-      order.push('title-sync');
-      return inputs.map(syncedResult);
-    });
-    const episodeEngine: EpisodeSyncEngine = {
-      syncOne: vi.fn(),
-      syncAll: vi.fn((): Promise<EpisodeUpsertResult[]> => {
-        order.push('episode-sync');
-        return Promise.resolve([]);
-      }),
-    };
-    const scan = vi.fn(() => {
-      order.push('airing-scan');
-      return Promise.resolve();
-    });
-
-    await runSync(
-      baseDeps({
-        db,
-        createEngine: () => titleEngine.engine,
-        createEpisodeEngine: () => episodeEngine,
-        runEpisodeAiredScan: scan,
-      }),
-      req({
-        headers: { 'x-vultus-sync-secret': SECRET },
-        body: { force: true },
-      }),
-    );
-
-    expect(scan).toHaveBeenCalledTimes(1);
-    expect(scan).toHaveBeenCalledWith(db);
-    // Strictly after the episode-insert pass (NB2: status read post-0074 revert).
-    expect(order).toEqual(['title-sync', 'episode-sync', 'airing-scan']);
-  });
-
-  it('BEST-EFFORT: an airing-scan failure does NOT fail the run (200, shape unchanged, system/sync written)', async () => {
-    const { db, writes } = createFakeDb({
-      watchlist: [{ tmdbId: 1396, type: 'tv' }],
-    });
-    const scan = vi.fn(() => Promise.reject(new Error('scan boom')));
-
-    const out = await runSync(
-      baseDeps({ db, createEngine, runEpisodeAiredScan: scan }),
-      req({
-        headers: { 'x-vultus-sync-secret': SECRET },
-        body: { force: true },
-      }),
-    );
-
-    expect(out.status).toBe(200);
-    expect((out.body as SyncRunResponse).ok).toBe(true);
-    expect(writes.some((w) => w.path === 'system/sync')).toBe(true);
-  });
-
-  it('omitting runEpisodeAiredScan skips the scan (existing-deps shape stays green)', async () => {
-    const { db } = createFakeDb({
-      watchlist: [{ tmdbId: 1396, type: 'tv' }],
-    });
-    const out = await runSync(
-      baseDeps({ db, createEngine }),
-      req({
-        headers: { 'x-vultus-sync-secret': SECRET },
-        body: { force: true },
-      }),
-    );
-    expect(out.status).toBe(200);
+    ).resolves.toBeUndefined();
+    expect(finalizeAsDead).toHaveBeenCalledWith(expect.anything(), RUN_ID, NOW);
   });
 });

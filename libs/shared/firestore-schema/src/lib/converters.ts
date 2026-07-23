@@ -8,6 +8,7 @@
 // import; no SDK Timestamp constructed.
 
 import type {
+  Episode,
   EpisodeDoc,
   FcmToken,
   NotificationDoc,
@@ -20,6 +21,8 @@ import type {
 } from '@vultus/shared/domain';
 
 import type {
+  CachedEpisodeReadData,
+  CachedEpisodeWriteData,
   EpisodeReadData,
   EpisodeWriteData,
   FcmTokenReadData,
@@ -151,6 +154,36 @@ export function dataToEpisode(data: EpisodeReadData): EpisodeDoc {
     watched: data.watched,
     watchedAt:
       data.watchedAt === null ? null : data.watchedAt.toDate().toISOString(),
+  };
+}
+
+// --- CachedEpisode (title-cache/{tmdbId}/episodes) ---
+// Converts the domain `Episode` ({ season, episode, title, airDate }) plus a
+// `lastSyncedAt` ISO string into the global-cache wire shape. Both `airDate` and
+// `lastSyncedAt` cross the Timestamp boundary exactly as `episodeToData` does for
+// `airDate` (ISO string → `Date`; read back via `.toDate().toISOString()`). The
+// cache stores ONLY TMDB facts — no per-user `watched`/`watchedAt` (spec 0101).
+export function cachedEpisodeToData(
+  ep: Episode,
+  lastSyncedAt: string,
+): CachedEpisodeWriteData {
+  return {
+    season: ep.season,
+    episode: ep.episode,
+    title: ep.title,
+    airDate: new Date(ep.airDate),
+    lastSyncedAt: new Date(lastSyncedAt),
+  };
+}
+export function dataToCachedEpisode(
+  data: CachedEpisodeReadData,
+): Episode & { lastSyncedAt: string } {
+  return {
+    season: data.season,
+    episode: data.episode,
+    title: data.title,
+    airDate: data.airDate.toDate().toISOString(),
+    lastSyncedAt: data.lastSyncedAt.toDate().toISOString(),
   };
 }
 
