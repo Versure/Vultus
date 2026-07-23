@@ -42,13 +42,22 @@ export type SyncStage =
  * function name), and `getFunctions().taskQueue(name)` enqueues by that same
  * name. So these values are the deployed worker / watchdog function names — the
  * enqueuer MUST target the function's queue or the dispatch never routes.
+ *
+ * Fully-qualified as `locations/{region}/functions/{name}` (NOT a bare name):
+ * the Admin SDK resolves an unqualified name against its own hardcoded
+ * default location (`us-central1`), independent of whatever region the
+ * function actually deployed to. All workers deploy to `europe-west1` (see the
+ * explicit `region` on each `onTaskDispatched` options block) — a bare name
+ * here would silently target the wrong region's queue and the enqueue would
+ * never reach the function.
  */
+const WORKER_REGION = 'europe-west1';
 export const QUEUE_NAMES = {
-  titleSync: 'titleSyncWorker',
-  episodeCache: 'episodeCacheWorker',
-  episodeFanout: 'episodeFanoutWorker',
-  airingScan: 'airingScanWorker',
-  watchdog: 'syncWatchdog',
+  titleSync: `locations/${WORKER_REGION}/functions/titleSyncWorker`,
+  episodeCache: `locations/${WORKER_REGION}/functions/episodeCacheWorker`,
+  episodeFanout: `locations/${WORKER_REGION}/functions/episodeFanoutWorker`,
+  airingScan: `locations/${WORKER_REGION}/functions/airingScanWorker`,
+  watchdog: `locations/${WORKER_REGION}/functions/syncWatchdog`,
 } as const;
 
 // --- Enqueue payloads (JSON, ≤ Cloud Tasks 100 KB/task — keep shards small). ---

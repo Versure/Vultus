@@ -546,6 +546,14 @@ export async function runEpisodeFanoutShard(
  */
 export const episodeCacheWorker = onTaskDispatched<EpisodeCacheTask>(
   {
+    // Explicit — do NOT rely on `setGlobalOptions` in main.ts: this module's
+    // top-level `onTaskDispatched` calls run when `main.ts`'s `export { ... }
+    // from './sync-episodes'` is resolved, which (ES module import hoisting)
+    // happens before `setGlobalOptions` executes in main.ts's own body. An
+    // implicit region here silently falls back to the SDK default
+    // (us-central1), stranding the function outside the `europe-west1` queue
+    // set the rest of the pipeline uses.
+    region: 'europe-west1',
     secrets: [TMDB_READ_TOKEN],
     retryConfig: {
       maxAttempts: 3,
@@ -601,6 +609,9 @@ export const episodeCacheWorker = onTaskDispatched<EpisodeCacheTask>(
  */
 export const episodeFanoutWorker = onTaskDispatched<EpisodeFanoutTask>(
   {
+    // Explicit for the same import-ordering reason as `episodeCacheWorker`
+    // above — do NOT rely on `setGlobalOptions` in main.ts.
+    region: 'europe-west1',
     retryConfig: {
       maxAttempts: 3,
       minBackoffSeconds: 30,

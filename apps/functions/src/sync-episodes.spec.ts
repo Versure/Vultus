@@ -26,6 +26,7 @@ import {
   enqueueFanoutAndAiringStages,
   type WatchlistCreateEvent,
 } from './sync-episodes';
+import { QUEUE_NAMES } from './lib/task-queue';
 import type { EpisodeCacheTask, EpisodeFanoutTask } from './lib/task-queue';
 
 // --- Wiring-shape seam (spec 0074) ---------------------------------------
@@ -978,8 +979,8 @@ describe('enqueueFanoutAndAiringStages', () => {
     // Both counts set (before any enqueue), no premature finalize.
     expect(order).toEqual(['set:episodeFanout=1', 'set:airingScan=1']);
     expect(calls.map((c) => c.queue)).toEqual([
-      'episodeFanoutWorker',
-      'airingScanWorker',
+      QUEUE_NAMES.episodeFanout,
+      QUEUE_NAMES.airingScan,
     ]);
     // Deterministic task names.
     expect(calls[0].name).toBe('run-1-episodeFanout-0');
@@ -1026,7 +1027,7 @@ describe('enqueueFanoutAndAiringStages', () => {
       },
       'run-1',
     );
-    expect(calls.map((c) => c.queue)).toEqual(['airingScanWorker']);
+    expect(calls.map((c) => c.queue)).toEqual([QUEUE_NAMES.airingScan]);
   });
 });
 

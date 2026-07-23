@@ -388,6 +388,13 @@ export async function runAiringScanShard(
  */
 export const airingScanWorker = onTaskDispatched<AiringScanTask>(
   {
+    // Explicit — this module's top-level `onTaskDispatched` call runs before
+    // `main.ts`'s `setGlobalOptions({ region: 'europe-west1' })` (ES module
+    // import hoisting: `main.ts`'s `export { airingScanWorker } from
+    // './dispatch-episode-aired'` evaluates this module first). Without this,
+    // the function silently falls back to the SDK default region
+    // (us-central1), stranding it outside the `europe-west1` queue set.
+    region: 'europe-west1',
     retryConfig: {
       maxAttempts: 3,
       minBackoffSeconds: 30,

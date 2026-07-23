@@ -695,6 +695,14 @@ export const syncTitles = onRequest(
  */
 export const titleSyncWorker = onTaskDispatched<TitleSyncTask>(
   {
+    // Explicit rather than relying on `setGlobalOptions` above: it currently
+    // executes before this call (same-module, textual order), but that is
+    // exactly the assumption that silently failed for the sibling workers in
+    // sync-episodes.ts / dispatch-episode-aired.ts (ES module import hoisting
+    // runs their top-level `onTaskDispatched` calls before this file's own
+    // `setGlobalOptions` line). Stated explicitly here so it can never regress
+    // the same way if main.ts's imports are reordered.
+    region: 'europe-west1',
     secrets: [TMDB_READ_TOKEN],
     retryConfig: {
       maxAttempts: 3,
@@ -767,6 +775,8 @@ export const titleSyncWorker = onTaskDispatched<TitleSyncTask>(
  */
 export const syncWatchdog = onTaskDispatched<SyncWatchdogTask>(
   {
+    // Explicit for the same reason as `titleSyncWorker` above.
+    region: 'europe-west1',
     retryConfig: {
       maxAttempts: 3,
       minBackoffSeconds: 30,
