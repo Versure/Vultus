@@ -61,7 +61,6 @@ export interface UserWriteData {
 export interface WatchlistItemReadData {
   type: TitleType;
   tmdbId: number;
-  traktId: number | null;
   title: string;
   addedAt: FirestoreTimestampLike;
   status: WatchStatus;
@@ -74,7 +73,6 @@ export interface WatchlistItemReadData {
 export interface WatchlistItemWriteData {
   type: TitleType;
   tmdbId: number;
-  traktId: number | null;
   title: string;
   addedAt: Date;
   status: WatchStatus;
@@ -140,14 +138,12 @@ export interface NotificationWriteData {
 // --- TitleCacheEntry: lastSyncedAt; metadata passes through ---
 export interface TitleCacheReadData {
   type: TitleType;
-  traktId: number | null;
   metadata: TitleMetadata;
   lastSyncedAt: FirestoreTimestampLike;
   watchmodeId?: number | null; // optional on read: legacy docs pre-0099 lack this field
 }
 export interface TitleCacheWriteData {
   type: TitleType;
-  traktId: number | null;
   metadata: TitleMetadata;
   lastSyncedAt: Date;
   watchmodeId?: number | null; // the coalesce supplies it (`?? null`)

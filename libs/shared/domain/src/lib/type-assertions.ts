@@ -143,7 +143,6 @@ const _userWithPlexSync = {
 const _watchlistItem = {
   type: 'tv',
   tmdbId: 1399,
-  traktId: null,
   title: 'Game of Thrones',
   addedAt: '2026-06-18T10:00:00.000Z',
   status: 'watching',
@@ -185,7 +184,6 @@ const _notificationDoc = {
 
 const _titleCacheEntry = {
   type: 'movie',
-  traktId: null,
   metadata: {
     title: 'Dune',
     overview: 'A noble family...',

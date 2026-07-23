@@ -23,14 +23,12 @@ export interface CatalogProvider {
 export interface Movie {
   type: 'movie';
   tmdbId: number;
-  traktId: number | null;
   title: string;
 }
 
 export interface Show {
   type: 'tv';
   tmdbId: number;
-  traktId: number | null;
   title: string;
 }
 

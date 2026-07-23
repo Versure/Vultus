@@ -103,7 +103,6 @@ export function watchlistItemToData(
   return {
     type: item.type,
     tmdbId: item.tmdbId,
-    traktId: item.traktId,
     title: item.title,
     addedAt: new Date(item.addedAt),
     status: item.status,
@@ -120,7 +119,6 @@ export function dataToWatchlistItem(
   return {
     type: data.type,
     tmdbId: data.tmdbId,
-    traktId: data.traktId,
     title: data.title,
     addedAt: data.addedAt.toDate().toISOString(),
     status: data.status,
@@ -213,7 +211,6 @@ export function dataToNotification(
 export function titleCacheToData(t: TitleCacheEntry): TitleCacheWriteData {
   return {
     type: t.type,
-    traktId: t.traktId,
     metadata: t.metadata,
     lastSyncedAt: new Date(t.lastSyncedAt),
     // Legacy/unresolved coalesces to null (spec 0099).
@@ -223,7 +220,6 @@ export function titleCacheToData(t: TitleCacheEntry): TitleCacheWriteData {
 export function dataToTitleCache(data: TitleCacheReadData): TitleCacheEntry {
   return {
     type: data.type,
-    traktId: data.traktId,
     metadata: data.metadata,
     lastSyncedAt: data.lastSyncedAt.toDate().toISOString(),
     // Legacy docs (pre-0099) lack watchmodeId; coalesce missing → null.

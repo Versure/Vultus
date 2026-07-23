@@ -99,7 +99,6 @@ export interface ProviderCatalogDoc {
 export interface WatchlistItem {
   type: TitleType; // 'movie' | 'tv'
   tmdbId: number;
-  traktId: number | null;
   title: string;
   addedAt: string; // ISO 8601
   status: WatchStatus;
@@ -183,7 +182,6 @@ export interface TitleMetadata {
 
 export interface TitleCacheEntry {
   type: TitleType;
-  traktId: number | null; // Trakt show id (tv only); null for movies and unresolved
   metadata: TitleMetadata;
   lastSyncedAt: string; // ISO 8601
   /** Cached Watchmode title id resolved once from the TMDB id (spec 0099), so
