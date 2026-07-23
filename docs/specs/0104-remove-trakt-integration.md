@@ -2,7 +2,7 @@
 number: 0104
 slug: remove-trakt-integration
 title: Remove the vestigial Trakt integration from the sync path (fixes daily-sync failures, #282)
-status: implementing
+status: done
 slices:
   [
     slice:sync-titles,
