@@ -108,8 +108,7 @@ export function plexEpisodeId(season: number, episode: number): string {
  * - movie: `viewCount > 0 → completed` (unless dropped);
  * - watch-implies-add: a watched, untracked tmdb-GUID item is added + mirrored
  *   (movie → completed; show → the DERIVED status: completed when all present
- *   episode docs are watched, else watching), `watchingViaPlex: true`,
- *   `traktId: null`.
+ *   episode docs are watched, else watching), `watchingViaPlex: true`.
  *
  * WRITE INVARIANTS (spec §4): episode mirror `updateDoc`s EXISTING docs only —
  * NEVER `setDoc`/creates an episode doc; a Plex-watched episode with no local doc
@@ -694,7 +693,6 @@ export class PlexSyncService {
     const watchlistItem: WatchlistItem = {
       type: item.type,
       tmdbId,
-      traktId: null,
       title: item.title,
       addedAt: new Date().toISOString(),
       status,

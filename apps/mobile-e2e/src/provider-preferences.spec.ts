@@ -77,7 +77,6 @@ test('shows on-your-provider vs also-on framing', async ({ page }) => {
     encodeFields({
       type: 'tv',
       tmdbId: 3,
-      traktId: null,
       title: ELSEWHERE_TITLE,
       addedAt: { __timestamp: '2026-06-24T10:05:00.000Z' },
       status: 'planned',

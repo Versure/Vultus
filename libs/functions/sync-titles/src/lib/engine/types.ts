@@ -9,7 +9,6 @@ import type {
   WatchProviderType,
 } from '@vultus/shared/domain';
 import type { TmdbClient } from '../tmdb/tmdb-client';
-import type { TraktClient } from '../trakt/trakt-client';
 import type { WatchmodeClient } from '../watchmode/watchmode-client';
 import type { TitleCacheStore } from './store';
 
@@ -23,8 +22,6 @@ export interface SyncTitleInput {
 export interface SyncEngineConfig {
   /** TMDB client (getMovie / getTvShow / getWatchProviders). */
   tmdb: TmdbClient;
-  /** Trakt client (getShowTraktId — tv only). */
-  trakt: TraktClient;
   /** Domain-typed persistence port; the engine never imports a Firebase SDK. */
   store: TitleCacheStore;
   /** Injectable clock for deterministic `lastSyncedAt`. Default
@@ -73,6 +70,6 @@ export interface SyncResult {
    *  'error'. A human-readable reason; never embeds a credential. */
   reason?: string;
   /** Set when outcome === 'error': the caught error's status if it is a
-   *  TmdbError/TraktError (for diagnostics). */
+   *  TmdbError (for diagnostics). */
   errorStatus?: number;
 }

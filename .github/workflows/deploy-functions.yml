@@ -4,21 +4,19 @@ name: Deploy Functions
 # Mirrors the local `/deploy-functions` skill: preflight-validate the pruned
 # artifact, then `firebase deploy --only functions`. Reproducible, runs in a
 # Linux env close to Cloud Build, and removes the manual node_modules-in-dist
-# and TRAKT_CLIENT_ID-prompt friction of a local deploy.
+# and env-param-prompt friction of a local deploy.
 #
 # PREREQUISITES (provision once in Settings → Secrets and variables → Actions):
 #   - Secret  FIREBASE_SERVICE_ACCOUNT — JSON key for a service account with the
 #     Firebase Admin + Cloud Functions Developer + Service Account User roles on
 #     vultus-cab62. Used for non-interactive deploy auth.
-#   - Variable TRAKT_CLIENT_ID — the (public) Trakt API client id. Written into
-#     apps/functions/.env.vultus-cab62 so the firebase-functions defineString
-#     param resolves without an interactive prompt. (The SYNC_SHARED_SECRET /
-#     TMDB_READ_TOKEN secrets live in Secret Manager and need no wiring here.)
 #   - Secret  WATCHMODE_API_KEY — the Watchmode API key for the streaming-
-#     availability fallback (spec 0099). Appended to apps/functions/.env.vultus-cab62
+#     availability fallback (spec 0099). Written into apps/functions/.env.vultus-cab62
 #     for the WATCHMODE_API_KEY defineString param. OPTIONAL: the param defaults to
 #     '' so an UNSET secret writes an empty value and the deploy still succeeds —
-#     the daily sync then runs TMDB-only (graceful no-key degrade).
+#     the daily sync then runs TMDB-only (graceful no-key degrade). (The
+#     SYNC_SHARED_SECRET / TMDB_READ_TOKEN secrets live in Secret Manager and need
+#     no wiring here.)
 # workflow_dispatch only — never fires automatically.
 
 on:
@@ -58,26 +56,19 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Write the functions env params into the env file so they ship into dist
-      # (build asset) and the defineString params resolve without a prompt.
-      # TRAKT_CLIENT_ID is required (fail fast if unset). WATCHMODE_API_KEY is
-      # OPTIONAL — the param defaults to '' so an unset secret writes an empty
-      # value and the deploy still succeeds (spec 0099 graceful no-key degrade);
-      # the key value is never echoed/logged.
-      - name: Write functions env (TRAKT_CLIENT_ID, WATCHMODE_API_KEY)
+      # Write the functions env param into the env file so it ships into dist
+      # (build asset) and the defineString param resolves without a prompt.
+      # WATCHMODE_API_KEY is OPTIONAL — the param defaults to '' so an unset
+      # secret writes an empty value and the deploy still succeeds (spec 0099
+      # graceful no-key degrade); the key value is never echoed/logged.
+      - name: Write functions env (WATCHMODE_API_KEY)
         env:
-          TRAKT_CLIENT_ID: ${{ vars.TRAKT_CLIENT_ID }}
           WATCHMODE_API_KEY: ${{ secrets.WATCHMODE_API_KEY }}
         run: |
-          if [ -z "$TRAKT_CLIENT_ID" ]; then
-            echo "::error::TRAKT_CLIENT_ID variable is not set. Add it in Settings → Secrets and variables → Actions → Variables."
-            exit 1
-          fi
-          printf 'TRAKT_CLIENT_ID=%s\n' "$TRAKT_CLIENT_ID" > apps/functions/.env.vultus-cab62
-          # Append the (optional) Watchmode key. Empty when the secret is unset →
+          # Seed the (optional) Watchmode key. Empty when the secret is unset →
           # the defineString('WATCHMODE_API_KEY', { default: '' }) resolves to ''
           # and the sync runs TMDB-only. Value is written, never printed.
-          printf 'WATCHMODE_API_KEY=%s\n' "$WATCHMODE_API_KEY" >> apps/functions/.env.vultus-cab62
+          printf 'WATCHMODE_API_KEY=%s\n' "$WATCHMODE_API_KEY" > apps/functions/.env.vultus-cab62
 
       # Build + prune + validate the deployable artifact (and leave a valid dist
       # node_modules for gen2 local discovery). Fails the deploy before upload on

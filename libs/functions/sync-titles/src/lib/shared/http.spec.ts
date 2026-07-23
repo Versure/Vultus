@@ -36,7 +36,7 @@ function sequenceFetch(steps: MockResponseInit[]) {
 }
 
 // A test error factory that carries the status so exhaustion assertions can read
-// it (mirrors TmdbError/TraktError without importing either).
+// it (mirrors TmdbError/WatchmodeError without importing either).
 function errorFactory(
   message: string,
   status: number,
@@ -201,7 +201,7 @@ describe('createHttpCore — authQuery (credential-safe query-param auth)', () =
     }
   });
 
-  it('does not append anything when authQuery is absent (TMDB/Trakt behavior unchanged)', async () => {
+  it('does not append anything when authQuery is absent (TMDB header-auth behavior unchanged)', async () => {
     const fetchMock = sequenceFetch([{ status: 200, body: { ok: true } }]);
     const http = core({ fetch: fetchMock });
     await http.request('/thing?x=1');

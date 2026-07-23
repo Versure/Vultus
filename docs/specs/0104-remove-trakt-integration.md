@@ -2,7 +2,7 @@
 number: 0104
 slug: remove-trakt-integration
 title: Remove the vestigial Trakt integration from the sync path (fixes daily-sync failures, #282)
-status: approved
+status: done
 slices:
   [
     slice:sync-titles,
@@ -581,11 +581,11 @@ Tailored from PLAN §5. Affected Nx projects: `shared-domain`,
 `mobile-notifications`.
 
 - [ ] `pnpm nx typecheck shared-domain shared-firestore-schema
-  functions-sync-titles functions` passes — the shrunk domain types, the
+functions-sync-titles functions` passes — the shrunk domain types, the
       converters, the engine config/flow, and the composition root all compile
       with no `traktId` / Trakt symbol referenced.
 - [ ] `pnpm nx lint shared-domain shared-firestore-schema functions-sync-titles
-  functions` passes **with Sheriff active** — no orphaned imports; the engine
+functions` passes **with Sheriff active** — no orphaned imports; the engine
       stays Firebase-free; boundaries unchanged.
 - [ ] `pnpm nx test shared-firestore-schema` passes — write payloads omit
       `traktId`; a legacy read-data doc carrying `traktId` still converts and the
@@ -597,7 +597,7 @@ Tailored from PLAN §5. Affected Nx projects: `shared-domain`,
       builds the engine without a `trakt` member; existing handler tests stay
       green.
 - [ ] `pnpm nx test mobile-search mobile-title-detail mobile-settings
-  mobile-watchlist mobile-today mobile-notifications` passes — no
+mobile-watchlist mobile-today mobile-notifications` passes — no
       write-payload/fixture assertion references `traktId`.
 - [ ] `pnpm nx run functions:test-integration` is green (emulator-backed,
       **CI-only** — cannot run under Claude Code tools here): the integration

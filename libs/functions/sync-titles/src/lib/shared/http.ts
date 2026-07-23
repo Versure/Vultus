@@ -1,18 +1,18 @@
-// Internal fetch/retry/throttle core shared in-slice by the TMDB client and the
-// Trakt calendar client. Not exported from the barrel. Right-sized for a
-// personal daily sync: serialized requests (effective concurrency ~1), 429
-// retried honoring `Retry-After` with an exponential-backoff-with-jitter FLOOR
-// (so a missing `Retry-After` no longer means an immediate hammer-retry), no
-// 5xx retry.
+// Internal fetch/retry/throttle core shared in-slice by the TMDB and Watchmode
+// clients. Not exported from the barrel. Right-sized for a personal daily sync:
+// serialized requests (effective concurrency ~1), 429 retried honoring
+// `Retry-After` with an exponential-backoff-with-jitter FLOOR (so a missing
+// `Retry-After` no longer means an immediate hammer-retry), no 5xx retry.
 //
 // The transport is auth-agnostic: the identifying/auth headers and base URL are
-// supplied per client (TMDB passes `Authorization: Bearer …` + `Accept`; Trakt
-// passes `trakt-api-key` + `trakt-api-version` + `Content-Type`), and the thrown
-// error type is injected via `errorFactory` so the core throws `TmdbError` for
-// TMDB and `TraktError` for Trakt without knowing either. The credential lives
-// ONLY in the caller-supplied header values — never in the url/path/logs/errors.
-// It stays in-slice (not hoisted to shared/) per the vertical-slice 3+-consumers
-// rule: there is still exactly one consuming slice.
+// supplied per client (TMDB passes `Authorization: Bearer …` + `Accept`;
+// Watchmode passes its key as an `?apiKey=…` query param), and the thrown error
+// type is injected via `errorFactory` so the core throws `TmdbError` for TMDB
+// and `WatchmodeError` for Watchmode without knowing either. The credential
+// lives ONLY in the caller-supplied header values (or the excluded authQuery) —
+// never in the url/path/logs/errors. It stays in-slice (not hoisted to shared/)
+// per the vertical-slice 3+-consumers rule: there is still exactly one consuming
+// slice.
 
 // Distinct sentinel so callers can turn a 404 into `null`/`[]` without a magic
 // value collision with a real parsed body. Client-agnostic.
@@ -39,11 +39,12 @@ export interface HttpCoreConfig {
   /** Optional auth query params appended to every request URL for the actual
    *  fetch, but EXCLUDED from the `endpoint` passed to errorFactory / logs, so a
    *  query-param credential (Watchmode `apiKey`) never leaks into an error or
-   *  log. TMDB/Trakt pass their credential in a header and omit this. Default:
+   *  log. TMDB passes its credential in a header and omits this. Default:
    *  none. */
   authQuery?: Record<string, string>;
-  /** Builds the client-specific error (`TmdbError` / `TraktError`) so the core
-   *  stays error-type-agnostic. `status` is 0 for a transport/network failure. */
+  /** Builds the client-specific error (`TmdbError` / `WatchmodeError`) so the
+   *  core stays error-type-agnostic. `status` is 0 for a transport/network
+   *  failure. */
   errorFactory: (message: string, status: number, endpoint: string) => Error;
 }
 

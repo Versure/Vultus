@@ -2,8 +2,8 @@
 
 The `sync-titles` functions slice (`scope:functions`, `slice:sync-titles`) — the
 first `libs/functions/*` slice. It contains two typed REST clients — a TMDB v3
-client (streaming availability + metadata + episodes) and a Trakt API v2
-calendar client (upcoming/aired episodes), both over a single in-slice HTTP
+client (streaming availability + metadata + episodes) and the Watchmode v1
+gap-fill fallback client (spec 0099), both over a single in-slice HTTP
 transport — and the **title-cache sync engine** (spec 0008) that orchestrates
 them: it refreshes `title-cache` metadata + per-region availability and detects
 provider transitions against the previous snapshot, writing through an injected,
@@ -35,7 +35,7 @@ Imported from `@vultus/functions/sync-titles`:
     — one multi-region call `GET /title/{watchmodeId}/sources/?regions={csv}`,
     mapped to `WatchmodeSource { sourceId, type, region }` rows (filtered to
     `REGIONS` countries + known `type`s; 404 → `null`).
-  - **Query-param auth (credential-safe).** Unlike TMDB/Trakt (header auth),
+  - **Query-param auth (credential-safe).** Unlike TMDB (header auth),
     Watchmode authenticates via `?apiKey=…`. The client passes the key to the
     http core as `authQuery`, which appends it to the fetch URL **but excludes it
     from the `WatchmodeError.endpoint` and any log** — so the credential never
@@ -64,13 +64,6 @@ Imported from `@vultus/functions/sync-titles`:
     Once `watchmodeId` is cached, later syncs make at most **one** `getTitleSources`
     per title-with-gap. A title with TMDB flatrate in every active region makes
     **zero** Watchmode calls.
-- `createTraktClient(config: TraktClientConfig): TraktClient` — factory returning
-  a client with two methods:
-  - `getCalendar(startDate, days)` → `Promise<TraktCalendarEntry[]>` — every show
-    airing in `[startDate, startDate + days)` (the all-shows calendar; filtering
-    to tracked titles is the sync engine's job).
-  - `getShowTraktId(tmdbId)` → `Promise<number | null>` — resolve a TMDB show id
-    to its Trakt show id (no match / `404` → `null`).
 - `createSyncEngine(config: SyncEngineConfig): SyncEngine` — factory returning a
   sync engine with one method:
   - `sync(titles: SyncTitleInput[])` → `Promise<SyncResult[]>` — runs one sync
@@ -98,67 +91,46 @@ Imported from `@vultus/functions/sync-titles`:
   `collectionGroup('watchlist')` scan in `apps/functions`. The `triggerSync`
   callable (`apps/functions/src/main.ts`) **consumes** this to gather the caller's
   own titles before running one force-fresh engine pass.
-- Types: `TmdbClientConfig`, `TmdbClient`, `RegionProviders`, `TraktClientConfig`,
-  `TraktClient`, `TraktCalendarEntry`, `WatchmodeClientConfig`, `WatchmodeClient`,
+- Types: `TmdbClientConfig`, `TmdbClient`, `RegionProviders`,
+  `WatchmodeClientConfig`, `WatchmodeClient`,
   `WatchmodeSource`, `SyncEngine`, `SyncEngineConfig`, `SyncTitleInput`,
   `TitleCacheStore`, `SyncResult`, `ProviderTransition`, `SyncOutcome`,
   `GatheredUserTitle`.
-- Errors: `TmdbError`, `TraktError`, `WatchmodeError` (kept distinct — each
+- Errors: `TmdbError`, `WatchmodeError` (kept distinct — each
   carries `status` + `endpoint`, none embeds its credential — for Watchmode the
   `apiKey` query param is stripped from `endpoint`).
 
 Return types are `@vultus/shared/domain` types where one exists (`TitleMetadata`,
-`WatchProvider`, `Episode`); `RegionProviders` and `TraktCalendarEntry` are thin
-slice-internal contract types added only where the domain has no matching shape.
-`TraktCalendarEntry` nests a domain `Episode` alongside the show identity
-(`traktId`, `tmdbId | null`, `showTitle`) so the sync engine can join a calendar
-entry to a tracked title by id. A `404` maps to `null` (TMDB methods,
-`getShowTraktId`) or `[]` (`getCalendar`); `TmdbError`/`TraktError` is thrown for
+`WatchProvider`, `Episode`); `RegionProviders` is a thin slice-internal contract
+type added only where the domain has no matching shape. A `404` maps to `null`
+(TMDB methods, Watchmode methods); `TmdbError`/`WatchmodeError` is thrown for
 `401`/`403`, any `5xx`, transport/network failures, and a `429` whose retries are
 exhausted.
 
 ## Usage
 
 ```ts
-import {
-  createTmdbClient,
-  createTraktClient,
-} from '@vultus/functions/sync-titles';
+import { createTmdbClient } from '@vultus/functions/sync-titles';
 
 const tmdb = createTmdbClient({ readAccessToken });
 const fightClub = await tmdb.getMovie(603);
-
-const trakt = createTraktClient({ clientId });
-const traktId = await trakt.getShowTraktId(1396);
-const airing = await trakt.getCalendar('2026-06-20', 7);
 ```
 
-Each credential — the TMDB v4 read-access token and the Trakt Client ID — is
-**injected by the caller**; this library never reads either from env or any
-secret. `fetch` is injectable via `config.fetch` (defaults to global `fetch`) so
-tests can mock HTTP. The Trakt client uses the **api-key-only** all-shows
-calendar — no OAuth, no user access token.
+The TMDB v4 read-access token is **injected by the caller**; this library never
+reads it from env or any secret. `fetch` is injectable via `config.fetch`
+(defaults to global `fetch`) so tests can mock HTTP.
 
-### Date handling: Trakt vs TMDB
+### Date handling
 
 TMDB returns **date-only** `"YYYY-MM-DD"` values that the TMDB mappers normalize
-to a full ISO-8601 UTC instant (`…T00:00:00.000Z`). Trakt's `first_aired` is
-**already a full ISO-8601 UTC instant**, so the Trakt mapper passes it through to
-`Episode.airDate` **unchanged** — no midnight synthesis, no truncation. A
-calendar entry missing `first_aired`/`episode.season`/`episode.number` is
-**skipped** (those map to required `Episode` fields).
-
-`getCalendar` validates `startDate` against `^\d{4}-\d{2}-\d{2}$` (a malformed
-string throws a plain `TypeError` before any fetch — a programming error, not an
-HTTP failure) and clamps `days` into `[1, 33]` (`Math.trunc` first).
+to a full ISO-8601 UTC instant (`…T00:00:00.000Z`).
 
 ### The sync engine
 
-`createSyncEngine({ tmdb, trakt, store, now? })` runs one sync pass. All
+`createSyncEngine({ tmdb, store, now? })` runs one sync pass. All
 dependencies are **injected**, mirroring the client factories:
 
-- `tmdb` / `trakt` — the `TmdbClient` / `TraktClient` above (or any object with
-  the same method shapes).
+- `tmdb` — the `TmdbClient` above (or any object with the same method shapes).
 - `store` — a `TitleCacheStore`: the Firebase-free persistence port the engine
   writes through. It is **domain-typed** (`@vultus/shared/domain`) and keys on
   `tmdbId` / `Region` — the exact PLAN §4 `title-cache` keys — with four methods:
@@ -212,14 +184,10 @@ for its active regions; a fully-null title with **no** active region (or no
 watch providers'` (unchanged no-fallback behavior).
 
 Per input `{ tmdbId, type }`, in order: fetch metadata (`getMovie` for movies,
-`getTvShow` for tv) — a `null` (TMDB 404) is a clean **skip** (no write); for
-**tv only**, resolve the show's `traktId` — but **reuse a cached non-null
-`traktId`** from `store.getEntry(tmdbId)` (traktId is stable, so re-resolving it
-every run is pure Trakt-call waste, spec 0089 / D2) and only call
-`getShowTraktId(tmdbId)` when the cache has a `null`/absent traktId; movies never
-resolve a traktId (`traktId` stays `null`); write the entry; then fetch
-`getWatchProviders` and, per returned region, detect transitions and write the
-rolled availability.
+`getTvShow` for tv) — a `null` (TMDB 404) is a clean **skip** (no write); write
+the entry; then fetch `getWatchProviders` and, per returned region, detect
+transitions and write the rolled availability. The cached entry is loaded only
+when a Watchmode fallback is configured (for `watchmodeId` reuse).
 
 **Second-pass retry (D2).** After the initial pass, up to `retryErroredPasses`
 additional passes re-run only the subset of titles whose result is
@@ -239,7 +207,7 @@ bucket change like flatrate→rent yields no transition in v1). The written
 first-ever sync uses `prev = []` (every provider `added`, `previousSnapshot`
 written `[]`).
 
-**Per-title error isolation.** Any throw for one title (`TmdbError`/`TraktError`
+**Per-title error isolation.** Any throw for one title (`TmdbError`
 — `errorStatus` captured from its `status` — or any other error, including a
 store-write failure) is caught and recorded as that title's
 `outcome: 'error'` with a credential-free `reason`; the batch continues. A title
@@ -247,14 +215,14 @@ that errors after its entry write is a partial success recorded as `'error'`.
 
 **Boundary: no notifications, no episodes.** The engine writes **only**
 `title-cache` entry + availability through the port. It writes no `users/**`
-document, no notification, and does not fetch the Trakt calendar or season
-episodes — those are #12 (HTTP function) / #14 (`dispatch-notifications`)
-concerns that **consume** the availability writes this engine makes.
+document, no notification, and does not fetch season episodes — those are #12
+(HTTP function) / #14 (`dispatch-notifications`) concerns that **consume** the
+availability writes this engine makes.
 
 ```ts
 import { createSyncEngine } from '@vultus/functions/sync-titles';
 
-const engine = createSyncEngine({ tmdb, trakt, store });
+const engine = createSyncEngine({ tmdb, store });
 const results = await engine.sync([
   { tmdbId: 603, type: 'movie' },
   { tmdbId: 1396, type: 'tv' },
@@ -284,8 +252,6 @@ const results = await engine.sync([
 
 - `tmdb/` — TMDB v3 client (`tmdb-client.ts`), its DTOs (`tmdb-dtos.ts`), mappers
   (`tmdb-mappers.ts`), and error (`tmdb-error.ts`) plus their specs.
-- `trakt/` — Trakt API v2 client (`trakt-client.ts`), DTOs (`trakt-dtos.ts`),
-  mappers (`trakt-mappers.ts`), and error (`trakt-error.ts`) plus their specs.
 - `watchmode/` — the Watchmode gap-fill client (`watchmode-client.ts`), its DTOs
   (`watchmode-dtos.ts`), mappers (`watchmode-mappers.ts`), error
   (`watchmode-error.ts`), and the committed region-agnostic crosswalk
@@ -293,15 +259,15 @@ const results = await engine.sync([
   factory + `WatchmodeClient`/`WatchmodeClientConfig`/`WatchmodeSource` types +
   `WatchmodeError` are barrel-exported; the DTOs, mappers, and crosswalk stay
   slice-internal (consumed by the engine via relative import).
-- `shared/` — the auth-agnostic HTTP transport (`http.ts`) consumed by all three
+- `shared/` — the auth-agnostic HTTP transport (`http.ts`) consumed by both
   clients (imported as `../shared/http`). Its optional `authQuery` config
   (spec 0099) appends query-param credentials (Watchmode's `apiKey`) to the fetch
-  URL while keeping them out of the error `endpoint`/logs; TMDB/Trakt omit it.
+  URL while keeping them out of the error `endpoint`/logs; TMDB omits it.
 - `engine/` — the title-cache sync engine: the factory + orchestration
   (`sync-engine.ts`), the pure transition-detection function (`transitions.ts`),
   the `TitleCacheStore` port (`store.ts`), and the contract types (`types.ts`)
-  plus their specs. Depends on the `tmdb/` + `trakt/` client types in-slice and
-  on `@vultus/shared/domain`; imports no Firebase SDK.
+  plus their specs. Depends on the `tmdb/` + `watchmode/` client types in-slice
+  and on `@vultus/shared/domain`; imports no Firebase SDK.
 - `store/` — the Admin-SDK persistence adapter (`firestore-title-cache-store.ts`)
   implementing the engine's `TitleCacheStore` port against `firebase-admin`
   Firestore via the spec-0005 `@vultus/shared/firestore-schema` path builders +

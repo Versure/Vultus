@@ -59,7 +59,7 @@ PlexSyncMeta | null` — the per-user Plex sync cursor + link metadata (spec
     (spec 0097): `title` (display only) + `reason: 'no-guid' | 'guid-unresolved'
 | 'error'`. Diagnostic output for the Settings "couldn't match" list, NOT a
     user preference.
-  - `WatchlistItem` (fields: `type`, `tmdbId`, `traktId`, `title`, `addedAt`,
+  - `WatchlistItem` (fields: `type`, `tmdbId`, `title`, `addedAt`,
     `status`, `posterPath`/`voteAverage`/`releaseDate` (all nullable/optional),
     plus `nextUnwatchedEpisodeAirDate?: string | null` — the air date (ISO 8601,
     same format as `EpisodeDoc.airDate`) of the EARLIEST currently-unwatched
@@ -74,7 +74,7 @@ PlexSyncMeta | null` — the per-user Plex sync cursor + link metadata (spec
     the converter), `EpisodeDoc` (fields: `season`, `episode`, `title` (nullable, spec 0034), `airDate`, `watched`, `watchedAt`)
   - `NotificationDoc`, `NotificationPayload`
   - `SyncRun` — one completed sync-pipeline run (global `sync-runs/{runId}`); written by Cloud Functions, read by the settings slice (spec 0049)
-  - `TitleCacheEntry` (fields: `type`, `traktId`, `metadata`, `lastSyncedAt`,
+  - `TitleCacheEntry` (fields: `type`, `metadata`, `lastSyncedAt`,
     plus `watchmodeId?: number | null` — the cached Watchmode title id resolved
     once from the TMDB id so subsequent daily syncs skip the id-resolution call,
     spec 0099; `null` = not resolved / no Watchmode match; optional, legacy docs

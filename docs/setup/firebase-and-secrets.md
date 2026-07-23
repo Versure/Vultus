@@ -6,7 +6,7 @@ PLAN §2/§4/§7 and the secrets table in PLAN §5 into concrete steps.
 
 > **Why this exists now.** Spec 0003 (domain types) and 0004 (firestore-schema)
 > need none of this — they're pure TypeScript. But the Firebase + emulators spec
-> and every backend slice (TMDB/Trakt clients, sync engine, FCM dispatch) are
+> and every backend slice (the TMDB client, sync engine, FCM dispatch) are
 > blocked on it. Doing it now means those specs aren't gated when we get there.
 
 ## TL;DR — what you end up with
@@ -19,11 +19,10 @@ PLAN §2/§4/§7 and the secrets table in PLAN §5 into concrete steps.
 | Cloud Messaging (FCM)          | Firebase console            | server key used by functions config                            |
 | Firebase **web app** config    | Firebase console            | `apps/mobile` env (the 6 `FIREBASE_*` values — **not secret**) |
 | TMDB API key                   | themoviedb.org              | `.env.local` + GitHub secret + functions config                |
-| Trakt client ID                | trakt.tv                    | `.env.local` + GitHub secret + functions config                |
 | Sync shared secret             | you generate it             | `.env.local` + GitHub secret + functions config                |
 | (later) deploy service account | Google Cloud console        | GitHub secret only                                             |
 
-**Hard rule:** the three real secrets (TMDB key, Trakt id, sync secret) and any
+**Hard rule:** the real secrets (TMDB key, sync secret) and any
 service-account JSON go in `.env.local` (now gitignored), GitHub Actions
 secrets, and Firebase functions config — **never** in committed source. Claude
 Code is instructed never to read or write `.env.local`.
@@ -116,20 +115,6 @@ but we still keep it out of source via env for cleanliness/portability.
    TMDB_READ_ACCESS_TOKEN=<v4 bearer token>
    ```
 
-### Trakt (calendar / upcoming episodes) — required
-
-1. Create an account at <https://trakt.tv>.
-2. <https://trakt.tv/oauth/applications> → **New Application**.
-   - Name: `Vultus`
-   - Redirect URI: `urn:ietf:wg:oauth:2.0:oob` (we only need the public
-     **Client ID** for calendar reads in v1; no user OAuth flow yet).
-3. Save and copy the **Client ID** (and Client Secret — keep it for later even
-   though v1 calendar reads only need the Client ID):
-   ```
-   TRAKT_CLIENT_ID=...
-   TRAKT_CLIENT_SECRET=...   # not used in v1, store anyway
-   ```
-
 ### (Optional) Watchmode — streaming-availability fallback (spec 0099)
 
 Per PLAN §8/§9, when TMDB's per-region provider data is missing/stale the daily
@@ -149,8 +134,8 @@ To enable it:
    ```
 3. Add it in the three locations below (`.env.local`, the GitHub Actions
    **secret** `WATCHMODE_API_KEY`, and — for local functions runs —
-   `apps/functions/.env.vultus-cab62`). It rides the same `defineString` param
-   channel as `TRAKT_CLIENT_ID` (declared `defineString('WATCHMODE_API_KEY', {
+   `apps/functions/.env.vultus-cab62`). It rides the `defineString` param
+   channel (declared `defineString('WATCHMODE_API_KEY', {
 default: '' })`), **not** `defineSecret` — so an unset key never blocks a
    deploy. The deploy workflow writes it into `apps/functions/.env.vultus-cab62`
    from the GitHub Actions secret; an unset secret writes an empty value and the
@@ -192,8 +177,6 @@ FIREBASE_APP_ID=...
 # Data-source secrets (functions only)
 TMDB_API_KEY=...
 TMDB_READ_ACCESS_TOKEN=...
-TRAKT_CLIENT_ID=...
-TRAKT_CLIENT_SECRET=...
 WATCHMODE_API_KEY=...   # optional (spec 0099); empty/absent → TMDB-only fallback disabled
 
 # Sync auth
@@ -206,7 +189,6 @@ Repo → **Settings → Secrets and variables → Actions → New repository sec
 Add (same names, uppercase):
 
 - `TMDB_API_KEY`, `TMDB_READ_ACCESS_TOKEN`
-- `TRAKT_CLIENT_ID`
 - `SYNC_SHARED_SECRET`
 - _(optional, spec 0099)_ `WATCHMODE_API_KEY` — the deploy workflow appends it to
   `apps/functions/.env.vultus-cab62`; unset → empty value → fallback disabled
@@ -222,7 +204,7 @@ Only relevant once functions exist and you've chosen Blaze. The modern approach
 is **`.env` files / parameterized config** (`firebase functions:config:set` is
 deprecated for gen-2). The functions spec will define the exact
 `functions/.env` keys; for now just keep the values ready:
-`TMDB_READ_ACCESS_TOKEN`, `TRAKT_CLIENT_ID`, `SYNC_SHARED_SECRET`.
+`TMDB_READ_ACCESS_TOKEN`, `SYNC_SHARED_SECRET`.
 
 ## 7. (Later) Service account for CI deploys — not needed yet
 
@@ -240,7 +222,7 @@ git. **Skip this until the deploy spec.**
 ## What I need _from you_ vs. what stays with you
 
 - **Stays with you, never shared in chat or committed:** every value in
-  `.env.local`, the Trakt client secret, any service-account JSON. I'm
+  `.env.local`, any service-account JSON. I'm
   instructed never to read `.env.local`.
 - **What I actually need to write the specs/code:** just _decisions_, not
   secret values —
@@ -258,7 +240,6 @@ git. **Skip this until the deploy spec.**
 - [ ] Cloud Messaging API (V1) confirmed enabled
 - [ ] Web app added; six `FIREBASE_*` values copied
 - [ ] TMDB key + read-access token obtained
-- [ ] Trakt client ID obtained
 - [ ] `SYNC_SHARED_SECRET` generated
 - [ ] `.env.local` created locally with all of the above
 - [ ] GitHub Actions secrets added

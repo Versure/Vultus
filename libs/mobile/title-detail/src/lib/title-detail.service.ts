@@ -337,7 +337,6 @@ export class TitleDetailService {
     const item: WatchlistItem = {
       type: detail.type,
       tmdbId: detail.tmdbId,
-      traktId: null,
       title: detail.title,
       addedAt: new Date().toISOString(),
       status,

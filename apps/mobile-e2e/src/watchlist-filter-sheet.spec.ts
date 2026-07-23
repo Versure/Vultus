@@ -229,7 +229,7 @@ test('watchlist filter sheet opens visible and closes', async ({ page }) => {
  * Ad-hoc overflow watchlist items, written directly to the emulator for THIS
  * test only. Each matches the `WatchlistItemWriteData` shape from
  * `libs/shared/firestore-schema/src/lib/converters.ts` (`watchlistItemToData`):
- * type / tmdbId / traktId / title / addedAt ({ __timestamp } marker) / status /
+ * type / tmdbId / title / addedAt ({ __timestamp } marker) / status /
  * posterPath / voteAverage / releaseDate / nextUnwatchedEpisodeAirDate /
  * watchingViaPlex. The `tmdbId`s (9001+) are chosen to NOT collide with the
  * seeded fixture ids (2 = Breaking Bad, 3 = The Bear).
@@ -255,7 +255,6 @@ test('watchlist filter sheet opens visible after the list is scrolled', async ({
       encodeFields({
         type: 'movie',
         tmdbId: item.tmdbId,
-        traktId: null,
         title: item.title,
         // addedAt IS a Firestore Timestamp on the wire — use the __timestamp
         // marker (matching the seeded watchlist items and plex-sync.spec.ts).

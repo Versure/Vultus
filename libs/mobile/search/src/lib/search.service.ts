@@ -130,7 +130,6 @@ export class SearchService {
     const item: WatchlistItem = {
       type: result.type,
       tmdbId: result.tmdbId,
-      traktId: null,
       title: result.title,
       addedAt: new Date().toISOString(),
       status: 'planned',

@@ -9,10 +9,9 @@
  * shard payloads instead of hitting Cloud Tasks), then the title-sync WORKER
  * `runTitleSyncShard` over each captured shard, wiring the REAL `createSyncEngine`
  * to the REAL `createFirestoreTitleCacheStore(db)` + REAL `recordShardResult`.
- * Only the TMDB/Trakt HTTP transport is faked (plain objects implementing the
- * `TmdbClient` / `TraktClient` method shapes) — there is NO live network and NO
- * secret: the engine never constructs the real `createTmdbClient` /
- * `createTraktClient`, so no read token / client id is needed.
+ * Only the TMDB HTTP transport is faked (a plain object implementing the
+ * `TmdbClient` method shape) — there is NO live network and NO secret: the engine
+ * never constructs the real `createTmdbClient`, so no read token is needed.
  *
  * This suite is EXCLUDED from the default `nx test functions` run (see
  * `vite.config.mts`'s `exclude`) and runs only via the dedicated
@@ -62,7 +61,6 @@ import type {
   RegionProviders,
   SyncEngine,
   TmdbClient,
-  TraktClient,
 } from '@vultus/functions/sync-titles';
 import {
   runSync,
@@ -82,13 +80,12 @@ const PROJECT_ID = process.env.GCLOUD_PROJECT ?? 'vultus-cab62';
 const EMULATOR = process.env.FIRESTORE_EMULATOR_HOST;
 const SECRET = 'integration-cron-secret';
 
-// --- Canned TMDB/Trakt data, controllable per pass so test (c) can mutate
+// --- Canned TMDB data, controllable per pass so test (c) can mutate
 // providers between two sequential runs. ---
 
 /** A movie (tmdbId 603) and a tv show (tmdbId 1396) seeded across users. */
 const MOVIE_ID = 603;
 const TV_ID = 1396;
-const TV_TRAKT_ID = 1390; // what the fake getShowTraktId resolves the tv to.
 
 const MOVIE_META: TitleMetadata = {
   title: 'The Matrix',
@@ -130,16 +127,6 @@ function fakeTmdb(state: FakeState): TmdbClient {
     // Not exercised by the sync engine (episodes are out of scope) — present to
     // satisfy the TmdbClient shape.
     getSeasonEpisodes: () => Promise.resolve(null),
-  };
-}
-
-/** Plain object implementing the TraktClient shape — NO network. tv → a number,
- *  everything else → null (movies never call this). */
-function fakeTrakt(): TraktClient {
-  return {
-    getCalendar: () => Promise.resolve([]),
-    getShowTraktId: (tmdbId) =>
-      Promise.resolve(tmdbId === TV_ID ? TV_TRAKT_ID : null),
   };
 }
 
@@ -195,7 +182,6 @@ function workerDeps(db: Firestore, state: FakeState): RunTitleSyncShardDeps {
     createEngine: (firestore): SyncEngine =>
       createSyncEngine({
         tmdb: fakeTmdb(state),
-        trakt: fakeTrakt(),
         store: createFirestoreTitleCacheStore(firestore),
         now: () => NOW_ISO,
       }),
@@ -241,7 +227,6 @@ function seedWatchlistItem(
     watchlistItemToData({
       type,
       tmdbId,
-      traktId: null,
       title: titleId,
       addedAt: NOW_ISO,
       status: 'watching',
@@ -309,21 +294,20 @@ describe.skipIf(!EMULATOR)(
       expect(movieSnap.exists).toBe(true);
     });
 
-    // (b) Real converter round-trip incl. traktId (number for tv, null for movie).
+    // (b) Real converter round-trip for the title-cache entries.
     it('round-trips title-cache + availability through the spec-0005 converters', async () => {
       await seedWatchlistItem(db, 'u1', 'm603', 'movie', MOVIE_ID);
       await seedWatchlistItem(db, 'u1', 't1396', 'tv', TV_ID);
 
       await runSharded(db, state, 'run-b');
 
-      // Movie entry: traktId null.
+      // Movie entry.
       const movieSnap = await db.doc(titleCacheDocPath(MOVIE_ID)).get();
       const movieEntry = dataToTitleCache(
         movieSnap.data() as TitleCacheReadData,
       );
       const expectedMovie: TitleCacheEntry = {
         type: 'movie',
-        traktId: null,
         metadata: MOVIE_META,
         lastSyncedAt: NOW_ISO,
         // The converter now emits watchmodeId (?? null) on read (spec 0099).
@@ -331,12 +315,11 @@ describe.skipIf(!EMULATOR)(
       };
       expect(movieEntry).toEqual(expectedMovie);
 
-      // Tv entry: traktId resolved to a number via the fake getShowTraktId.
+      // Tv entry.
       const tvSnap = await db.doc(titleCacheDocPath(TV_ID)).get();
       const tvEntry = dataToTitleCache(tvSnap.data() as TitleCacheReadData);
       const expectedTv: TitleCacheEntry = {
         type: 'tv',
-        traktId: TV_TRAKT_ID,
         metadata: TV_META,
         lastSyncedAt: NOW_ISO,
         watchmodeId: null,

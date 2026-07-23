@@ -92,7 +92,7 @@ jobs:
 
       # Emulator-backed integration gate (spec 0009). Runs on both pull_request
       # and push so it's a true required gate on PRs to main. Needs NO secrets:
-      # the integration spec stubs the TMDB/Trakt HTTP transport. `firebase
+      # the integration spec stubs the TMDB HTTP transport. `firebase
       # emulators:exec` boots only Firestore, sets FIRESTORE_EMULATOR_HOST for
       # the wrapped command (un-skipping the suite and pointing the Admin SDK at
       # the emulator credential-free), then tears the emulator down on exit. It

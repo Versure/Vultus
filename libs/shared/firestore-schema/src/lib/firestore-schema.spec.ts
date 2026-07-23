@@ -520,11 +520,10 @@ describe('converters — round-trip identity', () => {
     expect('unmatched' in (result.plexSync as object)).toBe(false);
   });
 
-  it('WatchlistItem: addedAt round-trips; traktId null survives', () => {
+  it('WatchlistItem: addedAt round-trips', () => {
     const item: WatchlistItem = {
       type: 'tv',
       tmdbId: 1399,
-      traktId: null,
       title: 'Game of Thrones',
       addedAt: '2026-03-04T05:06:07.000Z',
       status: 'watching',
@@ -548,7 +547,6 @@ describe('converters — round-trip identity', () => {
     const item: WatchlistItem = {
       type: 'movie',
       tmdbId: 603,
-      traktId: 1,
       title: 'The Matrix',
       addedAt: '2026-03-04T05:06:07.000Z',
       status: 'completed',
@@ -567,7 +565,6 @@ describe('converters — round-trip identity', () => {
     const item: WatchlistItem = {
       type: 'tv',
       tmdbId: 1396,
-      traktId: null,
       title: 'Breaking Bad',
       addedAt: '2026-03-04T05:06:07.000Z',
       status: 'planned',
@@ -586,7 +583,6 @@ describe('converters — round-trip identity', () => {
     const item: WatchlistItem = {
       type: 'movie',
       tmdbId: 27205,
-      traktId: 5,
       title: 'Inception',
       addedAt: '2026-03-04T05:06:07.000Z',
       status: 'watching',
@@ -610,7 +606,6 @@ describe('converters — round-trip identity', () => {
     const item: WatchlistItem = {
       type: 'movie',
       tmdbId: 1891,
-      traktId: 9,
       title: 'The Empire Strikes Back',
       addedAt: '2026-03-04T05:06:07.000Z',
       status: 'completed',
@@ -627,7 +622,6 @@ describe('converters — round-trip identity', () => {
     const item: WatchlistItem = {
       type: 'tv',
       tmdbId: 76479,
-      traktId: 11,
       title: 'The Boys',
       addedAt: '2026-03-04T05:06:07.000Z',
       status: 'watching',
@@ -648,7 +642,6 @@ describe('converters — round-trip identity', () => {
     const item: WatchlistItem = {
       type: 'movie',
       tmdbId: 603,
-      traktId: 1,
       title: 'The Matrix',
       addedAt: '2026-03-04T05:06:07.000Z',
       status: 'completed',
@@ -670,7 +663,6 @@ describe('converters — round-trip identity', () => {
     const item: WatchlistItem = {
       type: 'tv',
       tmdbId: 1396,
-      traktId: null,
       title: 'Breaking Bad',
       addedAt: '2026-03-04T05:06:07.000Z',
       status: 'planned',
@@ -693,7 +685,6 @@ describe('converters — round-trip identity', () => {
     const item: WatchlistItem = {
       type: 'tv',
       tmdbId: 1399,
-      traktId: null,
       title: 'Game of Thrones',
       addedAt: '2026-03-04T05:06:07.000Z',
       status: 'watching',
@@ -718,7 +709,6 @@ describe('converters — round-trip identity', () => {
     const item: WatchlistItem = {
       type: 'tv',
       tmdbId: 1396,
-      traktId: null,
       title: 'Breaking Bad',
       addedAt: '2026-03-04T05:06:07.000Z',
       status: 'watching',
@@ -736,6 +726,33 @@ describe('converters — round-trip identity', () => {
     delete stored['nextUnwatchedEpisodeAirDate'];
     const result = dataToWatchlistItem(stored as never);
     expect(result.nextUnwatchedEpisodeAirDate).toBeNull();
+  });
+
+  it('WatchlistItem: legacy on-disk doc still carrying traktId converts without error; output omits traktId (spec 0104)', () => {
+    // Simulates a doc written before spec 0104, when watchlist items persisted a
+    // now-removed traktId field. The read converter no longer references it, so
+    // the extra on-disk property is ignored (no throw, no leak into the domain).
+    const item: WatchlistItem = {
+      type: 'tv',
+      tmdbId: 1399,
+      title: 'Game of Thrones',
+      addedAt: '2026-03-04T05:06:07.000Z',
+      status: 'watching',
+      posterPath: null,
+      voteAverage: null,
+      releaseDate: null,
+      nextUnwatchedEpisodeAirDate: null,
+      watchingViaPlex: false,
+    };
+    const stored = simulateStored(watchlistItemToData(item)) as Record<
+      string,
+      unknown
+    >;
+    // Re-add a stale traktId to simulate a pre-0104 on-disk doc.
+    stored['traktId'] = 121361;
+    const result = dataToWatchlistItem(stored as never);
+    expect(result).toEqual(item);
+    expect(result).not.toHaveProperty('traktId');
   });
 
   it('EpisodeDoc: watchedAt set (watched true), title present', () => {
@@ -867,10 +884,9 @@ describe('converters — round-trip identity', () => {
     expect(result.payload.tmdbId).toBe(11111);
   });
 
-  it('TitleCacheEntry: lastSyncedAt; metadata posterPath/releaseDate null; traktId null; watchmodeId coalesces to null', () => {
+  it('TitleCacheEntry: lastSyncedAt; metadata posterPath/releaseDate null; watchmodeId coalesces to null', () => {
     const t: TitleCacheEntry = {
       type: 'movie',
-      traktId: null,
       metadata: {
         title: 'Dune',
         overview: 'A boy.',
@@ -884,33 +900,12 @@ describe('converters — round-trip identity', () => {
     );
     // The converter emits watchmodeId (?? null) even when the domain object omits it.
     expect(result).toEqual({ ...t, watchmodeId: null });
-    expect(result.traktId).toBeNull();
     expect(result.watchmodeId).toBeNull();
-  });
-
-  it('TitleCacheEntry: traktId number round-trips', () => {
-    const t: TitleCacheEntry = {
-      type: 'tv',
-      traktId: 42,
-      metadata: {
-        title: 'Severance',
-        overview: 'A mysterious job.',
-        posterPath: '/poster.jpg',
-        releaseDate: '2022-02-18T00:00:00.000Z',
-      },
-      lastSyncedAt: '2026-06-01T00:00:00.000Z',
-    };
-    const result = dataToTitleCache(
-      simulateStored(titleCacheToData(t)) as never,
-    );
-    expect(result).toEqual({ ...t, watchmodeId: null });
-    expect(result.traktId).toBe(42);
   });
 
   it('TitleCacheEntry: watchmodeId value round-trips (spec 0099)', () => {
     const t: TitleCacheEntry = {
       type: 'movie',
-      traktId: null,
       metadata: {
         title: 'Dune',
         overview: 'A boy.',
@@ -930,7 +925,6 @@ describe('converters — round-trip identity', () => {
   it('TitleCacheEntry: watchmodeId null round-trips as null (spec 0099)', () => {
     const t: TitleCacheEntry = {
       type: 'tv',
-      traktId: 42,
       metadata: {
         title: 'Severance',
         overview: 'A mysterious job.',
@@ -951,7 +945,6 @@ describe('converters — round-trip identity', () => {
     // Simulates a doc written before spec 0099 (no watchmodeId field stored).
     const t: TitleCacheEntry = {
       type: 'movie',
-      traktId: null,
       metadata: {
         title: 'Dune',
         overview: 'A boy.',
@@ -969,6 +962,32 @@ describe('converters — round-trip identity', () => {
     delete stored['watchmodeId'];
     const result = dataToTitleCache(stored as never);
     expect(result.watchmodeId).toBeNull();
+  });
+
+  it('TitleCacheEntry: legacy on-disk doc still carrying traktId converts without error; output omits traktId (spec 0104)', () => {
+    // Simulates a title-cache doc written before spec 0104, when entries persisted
+    // a now-removed traktId field. The read converter no longer references it, so
+    // the extra on-disk property is ignored (no throw, no leak into the domain).
+    const t: TitleCacheEntry = {
+      type: 'tv',
+      metadata: {
+        title: 'Severance',
+        overview: 'A mysterious job.',
+        posterPath: '/poster.jpg',
+        releaseDate: '2022-02-18T00:00:00.000Z',
+      },
+      lastSyncedAt: '2026-06-01T00:00:00.000Z',
+      watchmodeId: null,
+    };
+    const stored = simulateStored(titleCacheToData(t)) as Record<
+      string,
+      unknown
+    >;
+    // Re-add a stale traktId to simulate a pre-0104 on-disk doc.
+    stored['traktId'] = 42;
+    const result = dataToTitleCache(stored as never);
+    expect(result).toEqual(t);
+    expect(result).not.toHaveProperty('traktId');
   });
 
   it('RegionAvailability: providers + previousSnapshot pass through; source coalesces to tmdb', () => {
@@ -1112,7 +1131,7 @@ describe('converters — round-trip identity', () => {
       titlesGathered: 5,
       titlesUpdated: 4,
       errorCount: 2,
-      errors: ['TMDB 429 for 603', 'Trakt timeout for 1399'],
+      errors: ['TMDB 429 for 603', 'TMDB timeout for 1399'],
     };
     expect(dataToSyncRun(simulateStored(syncRunToData(run)) as never)).toEqual(
       run,
@@ -1125,7 +1144,6 @@ describe('converters — directional spot-checks', () => {
     const item: WatchlistItem = {
       type: 'movie',
       tmdbId: 603,
-      traktId: 1,
       title: 'The Matrix',
       addedAt: '2026-03-04T05:06:07.000Z',
       status: 'planned',
@@ -1165,7 +1183,6 @@ describe('converters — directional spot-checks', () => {
     const item = dataToWatchlistItem({
       type: 'movie',
       tmdbId: 603,
-      traktId: 1,
       title: 'The Matrix',
       addedAt: fakeTs(new Date(iso)),
       status: 'planned',

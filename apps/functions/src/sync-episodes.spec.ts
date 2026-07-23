@@ -105,7 +105,6 @@ vi.mock('@vultus/functions/sync-titles', async (importOriginal) => {
   return {
     ...actual,
     createTmdbClient: vi.fn(() => ({}) as never),
-    createTraktClient: vi.fn(() => ({}) as never),
     createSyncEngine: vi.fn(
       () => ({ sync: () => Promise.resolve([]) }) as never,
     ),
