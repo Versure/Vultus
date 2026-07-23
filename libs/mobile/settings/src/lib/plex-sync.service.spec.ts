@@ -615,12 +615,20 @@ describe('PlexSyncService', () => {
     expect((call?.[1] as { status: string }).status).toBe('completed');
   });
 
-  it('watch-implies-add: a watched, untracked show is added watching', async () => {
-    seedFirestore({});
+  it('watch-implies-add: a watched, untracked show with an unwatched episode doc is added watching', async () => {
+    // A watched Plex episode (s01e001) plus a present-but-unwatched episode doc
+    // (s01e002, e.g. a scheduled/future episode) → watched < total → 'watching'.
+    seedFirestore({
+      episodes: {
+        '1396/s01e001': { watched: false },
+        '1396/s01e002': { watched: false },
+      },
+    });
     const service = makeService(
       mockClient([tvItem(1396, { viewCount: 1 })], {
         'rk-1396': [
           { season: 1, episode: 1, viewCount: 1, lastViewedAt: null },
+          { season: 1, episode: 2, viewCount: 0, lastViewedAt: null },
         ],
       }),
     );
@@ -631,6 +639,83 @@ describe('PlexSyncService', () => {
       ([ref]) => ref.path === watchlistItemPath(UID, '1396'),
     );
     expect((call?.[1] as { status: string }).status).toBe('watching');
+  });
+
+  it('watch-implies-add (#277 fix): a watched, untracked show with ALL episode docs watched is added completed on the FIRST sync', async () => {
+    // Ended show, no future episodes: both episode docs already present + both
+    // watched in Plex → after the same-pass mirror, watched === total > 0, so the
+    // derived initial status is 'completed' on the very first sync (not the old
+    // hardcoded 'watching' that only self-healed on a later sync).
+    seedFirestore({
+      episodes: {
+        '1396/s01e001': { watched: false },
+        '1396/s01e002': { watched: false },
+      },
+    });
+    const service = makeService(
+      mockClient([tvItem(1396, { viewCount: 1 })], {
+        'rk-1396': [
+          { season: 1, episode: 1, viewCount: 1, lastViewedAt: null },
+          { season: 1, episode: 2, viewCount: 1, lastViewedAt: null },
+        ],
+      }),
+    );
+    const summary = await syncOk(service);
+
+    expect(summary.added).toBe(1);
+    const call = setDocMock.mock.calls.find(
+      ([ref]) => ref.path === watchlistItemPath(UID, '1396'),
+    );
+    expect((call?.[1] as { status: string }).status).toBe('completed');
+  });
+
+  it('watch-implies-add: a watched, untracked show PARTIALLY watched is added watching (not completed)', async () => {
+    // Three episode docs, only one watched in Plex → watched < total → 'watching'.
+    seedFirestore({
+      episodes: {
+        '1396/s01e001': { watched: false },
+        '1396/s01e002': { watched: false },
+        '1396/s01e003': { watched: false },
+      },
+    });
+    const service = makeService(
+      mockClient([tvItem(1396, { viewCount: 1 })], {
+        'rk-1396': [
+          { season: 1, episode: 1, viewCount: 1, lastViewedAt: null },
+          { season: 1, episode: 2, viewCount: 0, lastViewedAt: null },
+          { season: 1, episode: 3, viewCount: 0, lastViewedAt: null },
+        ],
+      }),
+    );
+    const summary = await syncOk(service);
+
+    expect(summary.added).toBe(1);
+    const call = setDocMock.mock.calls.find(
+      ([ref]) => ref.path === watchlistItemPath(UID, '1396'),
+    );
+    expect((call?.[1] as { status: string }).status).toBe('watching');
+  });
+
+  it('watch-implies-add: an unwatched-new, untracked show is added planned (unchanged regression guard)', async () => {
+    // No watched episode → not the watch-implies-add branch → the isNewAddition
+    // (planned) branch. The #277 fix must not touch this path.
+    seedFirestore({
+      episodes: { '1396/s01e001': { watched: false } },
+    });
+    const service = makeService(
+      mockClient([tvItem(1396)], {
+        'rk-1396': [
+          { season: 1, episode: 1, viewCount: 0, lastViewedAt: null },
+        ],
+      }),
+    );
+    const summary = await syncOk(service);
+
+    expect(summary.added).toBe(1);
+    const call = setDocMock.mock.calls.find(
+      ([ref]) => ref.path === watchlistItemPath(UID, '1396'),
+    );
+    expect((call?.[1] as { status: string }).status).toBe('planned');
   });
 
   it('status mapping: a watched movie already tracked (planned) flips to completed', async () => {

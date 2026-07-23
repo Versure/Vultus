@@ -2,7 +2,7 @@
 number: 0103
 slug: fix-plex-sync-mark-completed
 title: Fix Plex sync — mark a fully-watched show completed on the first sync
-status: approved
+status: implementing
 slices: [slice:settings]
 scopes: [scope:mobile]
 created: 2026-07-23
