@@ -166,6 +166,13 @@ function coordinatorDeps(
     },
     generateRunId: () => runId,
     openRun: (params) => openRun(db, params),
+    // This suite exercises only the title-sync + finalize path (the worker's
+    // `onLastShard` below finalizes directly rather than handing off to the
+    // episode-cache stage), so the staged persistence / episode-cache cascade are
+    // not consumed here — inert no-ops keep `runSync` happy without wiring the
+    // downstream stages into an emulator-only title-pass test.
+    persistStagedData: () => Promise.resolve(),
+    enqueueEpisodeCacheStage: () => Promise.resolve(),
     finalizeHealthyRun: (rid, now) =>
       finalizeHealthyRun(db, rid, now).then(() => undefined),
     // No user-token path is exercised here; cron path uses the secret only.

@@ -16,6 +16,7 @@ import {
 import type {
   OpenRunParams,
   RecordShardResultParams,
+  StagedData,
 } from './lib/sync-run-tracker';
 import {
   RATE_LIMIT_MS,
@@ -44,7 +45,14 @@ interface FakeDoc {
 }
 
 function createFakeDb(opts: {
-  watchlist: { tmdbId: number; type: 'movie' | 'tv' }[];
+  // `uid`/`titleId` default when omitted, so existing single-user tests need not
+  // spell them out; the consolidation tests set them to assert the tuples.
+  watchlist: {
+    tmdbId: number;
+    type: 'movie' | 'tv';
+    uid?: string;
+    titleId?: string;
+  }[];
   titleCache?: Record<string, FakeDoc>; // keyed by full doc path
   syncState?: { lastRunAt: number } | null;
 }) {
@@ -85,7 +93,15 @@ function createFakeDb(opts: {
       get: () => {
         expect(id).toBe('watchlist');
         return Promise.resolve({
-          docs: opts.watchlist.map((w) => ({ data: () => w })),
+          // Each doc exposes `data()` (raw tmdbId/type) AND a `ref` from which the
+          // rich gather derives `uid` (parent user doc id) + `titleId` (doc id).
+          docs: opts.watchlist.map((w) => ({
+            data: () => ({ tmdbId: w.tmdbId, type: w.type }),
+            ref: {
+              id: w.titleId ?? `title-${w.tmdbId}`,
+              parent: { parent: { id: w.uid ?? 'u-default' } },
+            },
+          })),
         });
       },
     }),
@@ -139,9 +155,13 @@ function coordinatorDeps(
   deps: RunSyncDeps;
   openRunCalls: OpenRunParams[];
   finalizeHealthyRunCalls: { runId: string; now: number }[];
+  persistStagedCalls: { runId: string; data: StagedData }[];
+  enqueueEpisodeCacheStageCalls: string[];
 } {
   const openRunCalls: OpenRunParams[] = [];
   const finalizeHealthyRunCalls: { runId: string; now: number }[] = [];
+  const persistStagedCalls: { runId: string; data: StagedData }[] = [];
+  const enqueueEpisodeCacheStageCalls: string[] = [];
   const deps: RunSyncDeps = {
     verifyToken: vi.fn(() => Promise.resolve({ uid: 'u1' })),
     secret: SECRET,
@@ -154,13 +174,27 @@ function coordinatorDeps(
       openRunCalls.push(params);
       return Promise.resolve();
     },
+    persistStagedData: (runId, data) => {
+      persistStagedCalls.push({ runId, data });
+      return Promise.resolve();
+    },
     finalizeHealthyRun: (runId, now) => {
       finalizeHealthyRunCalls.push({ runId, now });
       return Promise.resolve();
     },
+    enqueueEpisodeCacheStage: (runId) => {
+      enqueueEpisodeCacheStageCalls.push(runId);
+      return Promise.resolve();
+    },
     ...overrides,
   };
-  return { deps, openRunCalls, finalizeHealthyRunCalls };
+  return {
+    deps,
+    openRunCalls,
+    finalizeHealthyRunCalls,
+    persistStagedCalls,
+    enqueueEpisodeCacheStageCalls,
+  };
 }
 
 function req(over: Partial<SyncRequest> = {}): SyncRequest {
@@ -273,17 +307,88 @@ describe('runSync — enqueue coordinator', () => {
     expect(shard.forced).toBe(false);
   });
 
-  it('healthy no-op (0 toSync): opens staging, enqueues ONLY the watchdog, finalizes immediately, shardCount 0', async () => {
-    const recentMs = NOW - 60 * 1000; // every title fresh → filtered
-    const { db, writes } = createFakeDb({
-      watchlist: [{ tmdbId: 1396, type: 'tv' }],
-      titleCache: { 'title-cache/1396': { lastSyncedAtMs: recentMs } },
+  it('consolidated gather: emits distinct titles, TV assignments, distinct shows + uids, and persists staged data BEFORE any enqueue', async () => {
+    // Two users share movie 603 + tv 1396; u2 also tracks tv 1399; u3 tracks a
+    // movie only. force=true keeps every title (no staleness drop) so `gathered`
+    // reflects the distinct union.
+    const { db } = createFakeDb({
+      watchlist: [
+        { tmdbId: 603, type: 'movie', uid: 'u1', titleId: 'm1' },
+        { tmdbId: 1396, type: 'tv', uid: 'u1', titleId: 't1' },
+        { tmdbId: 603, type: 'movie', uid: 'u2', titleId: 'm2' },
+        { tmdbId: 1396, type: 'tv', uid: 'u2', titleId: 't2' },
+        { tmdbId: 1399, type: 'tv', uid: 'u2', titleId: 't3' },
+        { tmdbId: 550, type: 'movie', uid: 'u3', titleId: 'm4' },
+      ],
     });
     const { enqueuer, calls } = createFakeEnqueuer();
-    const { deps, openRunCalls, finalizeHealthyRunCalls } = coordinatorDeps({
+    // Capture how many enqueues had happened at persist time — must be 0, proving
+    // staged data is persisted before the watchdog + any title shard.
+    let enqueueCountAtPersist = -1;
+    const persistStagedCalls: { runId: string; data: StagedData }[] = [];
+    const { deps } = coordinatorDeps({
       db,
       enqueuer,
+      persistStagedData: (runId, data) => {
+        enqueueCountAtPersist = calls.length;
+        persistStagedCalls.push({ runId, data });
+        return Promise.resolve();
+      },
     });
+
+    const out = await runSync(
+      deps,
+      req({
+        headers: { 'x-vultus-sync-secret': SECRET },
+        body: { force: true },
+      }),
+    );
+
+    const body = out.body as SyncEnqueueResponse;
+    expect(body.gathered).toBe(4); // 603, 1396, 1399, 550 distinct
+
+    expect(persistStagedCalls).toHaveLength(1);
+    expect(persistStagedCalls[0].runId).toBe(RUN_ID);
+    expect(persistStagedCalls[0].data).toEqual({
+      // One assignment per (uid, titleId) TV entry — movies excluded.
+      assignments: [
+        { uid: 'u1', titleId: 't1', tmdbId: 1396 },
+        { uid: 'u2', titleId: 't2', tmdbId: 1396 },
+        { uid: 'u2', titleId: 't3', tmdbId: 1399 },
+      ],
+      // Distinct TV show tmdbIds (fetch each once).
+      shows: [1396, 1399],
+      // Distinct uids that track ≥1 TV title — u3 (movie only) is excluded.
+      uids: ['u1', 'u2'],
+    });
+    expect(enqueueCountAtPersist).toBe(0);
+
+    // The title shard still carries the full distinct union (movies + tv).
+    const shard = calls.find((c) => c.queueName === QUEUE_NAMES.titleSync)
+      ?.payload as TitleSyncTask;
+    expect(shard.titles).toEqual([
+      { tmdbId: 603, type: 'movie' },
+      { tmdbId: 1396, type: 'tv' },
+      { tmdbId: 1399, type: 'tv' },
+      { tmdbId: 550, type: 'movie' },
+    ]);
+  });
+
+  it('healthy no-op (0 toSync, no TV content): opens staging, enqueues ONLY the watchdog, finalizes immediately, shardCount 0', async () => {
+    const recentMs = NOW - 60 * 1000; // every title fresh → filtered
+    // A MOVIE (no episode work) that is fresh → 0 title-sync work AND 0 TV shows,
+    // so this is a genuine healthy no-op (contrast the TV case below).
+    const { db, writes } = createFakeDb({
+      watchlist: [{ tmdbId: 603, type: 'movie' }],
+      titleCache: { 'title-cache/603': { lastSyncedAtMs: recentMs } },
+    });
+    const { enqueuer, calls } = createFakeEnqueuer();
+    const {
+      deps,
+      openRunCalls,
+      finalizeHealthyRunCalls,
+      enqueueEpisodeCacheStageCalls,
+    } = coordinatorDeps({ db, enqueuer });
 
     const out = await runSync(
       deps,
@@ -296,9 +401,60 @@ describe('runSync — enqueue coordinator', () => {
     expect(body.shardCount).toBe(0);
 
     expect(openRunCalls[0].shardCounts).toEqual({ titleSync: 0 });
-    // Immediate healthy finalization (not a watchdog error summary).
+    // Immediate healthy finalization (not a watchdog error summary); no episode
+    // cascade because there is no TV content.
     expect(finalizeHealthyRunCalls).toEqual([{ runId: RUN_ID, now: NOW }]);
+    expect(enqueueEpisodeCacheStageCalls).toHaveLength(0);
     // Only the watchdog is enqueued — no title shards.
+    expect(calls).toHaveLength(1);
+    expect(calls[0].queueName).toBe(QUEUE_NAMES.watchdog);
+    expect(writes.some((w) => w.path.startsWith('sync-runs/'))).toBe(false);
+  });
+
+  it('0 toSync but TV shows present: skips title shards + healthy finalize, cascades DIRECTLY into the episode-cache stage', async () => {
+    const recentMs = NOW - 60 * 1000; // the TV title is fresh → 0 title-sync work
+    // The show is fresh (no title-sync work) but its episodes still must be
+    // cached/fanned-out/scanned this night — so the coordinator kicks off the
+    // episode-cache stage directly rather than finalizing healthy.
+    const { db, writes } = createFakeDb({
+      watchlist: [{ tmdbId: 1396, type: 'tv', uid: 'u1', titleId: 't1' }],
+      titleCache: { 'title-cache/1396': { lastSyncedAtMs: recentMs } },
+    });
+    const { enqueuer, calls } = createFakeEnqueuer();
+    const {
+      deps,
+      openRunCalls,
+      finalizeHealthyRunCalls,
+      persistStagedCalls,
+      enqueueEpisodeCacheStageCalls,
+    } = coordinatorDeps({ db, enqueuer });
+
+    const out = await runSync(
+      deps,
+      req({ headers: { 'x-vultus-sync-secret': SECRET } }),
+    );
+
+    const body = out.body as SyncEnqueueResponse;
+    expect(body.gathered).toBe(1);
+    expect(body.toSync).toBe(0);
+    expect(body.shardCount).toBe(0);
+    expect(openRunCalls[0].shardCounts).toEqual({ titleSync: 0 });
+
+    // Staged data was persisted (with the TV show) so the cache stage can read it.
+    expect(persistStagedCalls).toEqual([
+      {
+        runId: RUN_ID,
+        data: {
+          assignments: [{ uid: 'u1', titleId: 't1', tmdbId: 1396 }],
+          shows: [1396],
+          uids: ['u1'],
+        },
+      },
+    ]);
+    // Cascade to the episode-cache stage; NOT a healthy finalize.
+    expect(enqueueEpisodeCacheStageCalls).toEqual([RUN_ID]);
+    expect(finalizeHealthyRunCalls).toHaveLength(0);
+    // No title shards; only the watchdog was enqueued directly by the coordinator.
     expect(calls).toHaveLength(1);
     expect(calls[0].queueName).toBe(QUEUE_NAMES.watchdog);
     expect(writes.some((w) => w.path.startsWith('sync-runs/'))).toBe(false);
@@ -378,9 +534,11 @@ describe('runSync — enqueue coordinator', () => {
 
   it('user path ignores force (force only on cron)', async () => {
     const recentMs = NOW - 60 * 1000; // fresh → dropped for user
+    // A fresh MOVIE so the run is a true 0-work no-op (no TV episode cascade to
+    // muddy the "force is ignored on the user path" assertion).
     const { db } = createFakeDb({
-      watchlist: [{ tmdbId: 1396, type: 'tv' }],
-      titleCache: { 'title-cache/1396': { lastSyncedAtMs: recentMs } },
+      watchlist: [{ tmdbId: 603, type: 'movie' }],
+      titleCache: { 'title-cache/603': { lastSyncedAtMs: recentMs } },
       syncState: { lastRunAt: NOW - (RATE_LIMIT_MS + 1000) },
     });
     const { enqueuer } = createFakeEnqueuer();

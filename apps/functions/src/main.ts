@@ -53,12 +53,12 @@ import {
 import type { ProviderCatalogReadData } from '@vultus/shared/firestore-schema';
 import { classifyAuth } from './lib/auth';
 import type { VerifyToken } from './lib/auth';
-import { dedupeTitles } from './lib/gather';
+import { consolidateGather } from './lib/gather';
 import type { GatheredTitle } from './lib/gather';
 import { filterStale } from './lib/staleness';
 import { isRateLimited } from './lib/rate-limit';
 import {
-  gatherWatchlistTitles,
+  gatherWatchlistEntries,
   readSyncState,
   writeSyncState,
   writeSyncRun,
@@ -85,6 +85,7 @@ import {
   recordShardResult,
   finalizeHealthyRun,
   finalizeAsDead,
+  persistStagedData,
   readStagedShows,
   readStagedAssignments,
   readStagedUids,
@@ -94,6 +95,7 @@ import type {
   OpenRunParams,
   RecordShardResultParams,
   RecordShardResultOutcome,
+  StagedData,
 } from './lib/sync-run-tracker';
 import { enqueueFanoutAndAiringStages } from './sync-episodes';
 
@@ -167,8 +169,24 @@ export interface RunSyncDeps {
   /** Open the run's `sync-run-progress/{runId}` staging doc (tracker.openRun,
    *  bound to `db`, in prod). Injected so tests assert it without a transaction. */
   openRun: (params: OpenRunParams) => Promise<void>;
+  /**
+   * Persist the consolidated gather's downstream-stage inputs (TV fan-out
+   * assignments, distinct show tmdbIds, distinct uids) under the run's
+   * `sync-run-progress/{runId}/staged/*` subcollection (tracker.persistStagedData
+   * in prod). Called ONCE per run, BEFORE any shard is enqueued, so the workers'
+   * staged reads always see the data.
+   */
+  persistStagedData: (runId: string, data: StagedData) => Promise<void>;
   /** Finalize a healthy 0-shard run (tracker.finalizeHealthyRun in prod). */
   finalizeHealthyRun: (runId: string, now: number) => Promise<void>;
+  /**
+   * Kick off the episode-cache stage directly (bypassing the title stage), used
+   * when the title staleness filter left 0 title-sync work but the run still has
+   * TV shows whose episodes must be cached + fanned out + scanned this night
+   * (`enqueueEpisodeCacheStage` wired to the real deps in prod). Reads the just-
+   * persisted staged shows, so it MUST run after `persistStagedData`.
+   */
+  enqueueEpisodeCacheStage: (runId: string) => Promise<void>;
   /** Watchdog schedule delay, seconds (default `WATCHDOG_DELAY_SECONDS`). */
   watchdogDelaySeconds?: number;
 }
@@ -237,9 +255,13 @@ export async function runSync(
     }
   }
 
-  // ONE consolidated gather + dedupe to the distinct title union.
-  const gatheredRaw = await gatherWatchlistTitles(deps.db);
-  const distinct = dedupeTitles(gatheredRaw);
+  // ONE consolidated gather (spec 0101): read the whole watchlist collection group
+  // exactly once, then fold it into every downstream stage's input — the distinct
+  // title union (title-sync), the TV fan-out assignments, the distinct TV show
+  // tmdbIds (episode-cache), and the distinct TV-tracking uids (airing-scan).
+  const entries = await gatherWatchlistEntries(deps.db);
+  const consolidated = consolidateGather(entries);
+  const distinct = consolidated.titles;
   const gathered = distinct.length;
 
   // Apply the staleness window unless forced (reads `title-cache.lastSyncedAt`).
@@ -283,6 +305,18 @@ export async function runSync(
     shardCounts: { titleSync: shardCount },
   });
 
+  // Persist the consolidated gather's downstream inputs (TV fan-out assignments,
+  // distinct show tmdbIds, distinct uids) under `sync-run-progress/{runId}/staged/*`
+  // BEFORE enqueueing any shard — so the last title shard's `readStagedShows`
+  // (episode-cache handoff), and the direct episode-cache cascade below, always see
+  // the data (spec 0101 T8). Chunked into its own subcollection (not a doc field) to
+  // stay under the 1MB doc limit at design scale.
+  await deps.persistStagedData(runId, {
+    assignments: consolidated.assignments,
+    shows: consolidated.shows,
+    uids: consolidated.uids,
+  });
+
   // Enqueue the delayed dead-run watchdog ONCE. The task name is deterministic,
   // so a retried enqueue of the same run cannot double-create it.
   const watchdogPayload: SyncWatchdogTask = { runId };
@@ -292,14 +326,26 @@ export async function runSync(
   });
 
   if (shardCount === 0) {
-    // Healthy no-op: the staleness filter dropped every title (or none were
-    // tracked). There is no title-sync work and no shard to advance the run, so
-    // FINALIZE IMMEDIATELY into a normal (zero-stats) `sync-runs/{runId}` summary
-    // — a healthy empty night yields a complete summary doc, never a watchdog
-    // error summary and never a permanent "Never synced". The already-enqueued
-    // watchdog will find the run finalized and no-op. (Choice per spec 0101 T2:
-    // prefer immediate healthy finalization over letting the watchdog fire.)
-    await deps.finalizeHealthyRun(runId, deps.now());
+    // No title-sync work: the staleness filter dropped every title (all fresh) or
+    // none were tracked. BUT the episode-cache/fan-out/airing stages run per-night
+    // regardless of the TITLE staleness filter (spec 0101 T8) — a run with TV shows
+    // still needs its episodes cached, fanned out, and scanned. There are no title
+    // shards to cascade the episode-cache stage from, so kick it off DIRECTLY.
+    //
+    // `openRun` above already recorded `titleSync` shardCount 0 (a trivially-complete
+    // stage the terminal barrier will count as done), so no extra setStageShardCount
+    // is needed here.
+    if (consolidated.shows.length > 0) {
+      await deps.enqueueEpisodeCacheStage(runId);
+    } else {
+      // No TV content at all (0 shows ⟺ 0 assignments ⟺ 0 uids, see
+      // `consolidateGather`) → no per-user work exists and no shard will ever run to
+      // fire the terminal barrier, so FINALIZE IMMEDIATELY into a normal (zero-stats)
+      // `sync-runs/{runId}` summary — a healthy empty night yields a complete summary
+      // doc, never a watchdog error summary and never a permanent "Never synced". The
+      // already-enqueued watchdog will find the run finalized and no-op.
+      await deps.finalizeHealthyRun(runId, deps.now());
+    }
   } else {
     // Fan out one `title-sync` task per shard. Named → Cloud Tasks de-dupes a
     // retried enqueue of the same run/shard.
@@ -529,6 +575,39 @@ export async function runSyncWatchdog(
 }
 
 /**
+ * Build the (Admin-SDK-bound) `EnqueueEpisodeCacheStageDeps` for a run. Shared by
+ * BOTH entry points into the episode-cache stage — the title stage's last shard
+ * (`titleSyncWorker.onLastShard`) and the coordinator's direct 0-title-work cascade
+ * (`syncTitles` → `runSync.enqueueEpisodeCacheStage`) — so the two paths wire the
+ * identical staged reads / shard-count / fan-out-airing cascade. Kept as one factory
+ * to avoid divergence between the two call sites.
+ */
+function buildEpisodeCacheStageDeps(
+  db: Firestore,
+  enqueuer: TaskEnqueuer,
+): EnqueueEpisodeCacheStageDeps {
+  return {
+    enqueuer,
+    readStagedShows: (r) => readStagedShows(db, r),
+    setStageShardCount: (r, stage, n) => setStageShardCount(db, r, stage, n),
+    enqueueFanoutAndAiring: (r) =>
+      enqueueFanoutAndAiringStages(
+        {
+          enqueuer,
+          readStagedAssignments: (rid) => readStagedAssignments(db, rid),
+          readStagedUids: (rid) => readStagedUids(db, rid),
+          setStageShardCount: (rid, stage, n) =>
+            setStageShardCount(db, rid, stage, n),
+          finalizeHealthyRun: (rid, now) =>
+            finalizeHealthyRun(db, rid, now).then(() => undefined),
+          now: () => Date.now(),
+        },
+        r,
+      ),
+  };
+}
+
+/**
  * The deployable HTTPS enqueue coordinator (spec 0101). Binds `SYNC_SHARED_SECRET`
  * (auth) + `TMDB_READ_TOKEN` (bound for continuity; the coordinator itself makes no
  * TMDB call — the title work runs in `titleSyncWorker`). `timeoutSeconds: 540`
@@ -542,14 +621,23 @@ export const syncTitles = onRequest(
   },
   async (req, res) => {
     const db = ensureAdmin();
+    const enqueuer = createTaskEnqueuer();
     const output = await runSync(
       {
         db,
-        enqueuer: createTaskEnqueuer(),
+        enqueuer,
         generateRunId: () => randomUUID(),
         openRun: (params) => trackerOpenRun(db, params),
+        persistStagedData: (runId, data) => persistStagedData(db, runId, data),
         finalizeHealthyRun: (runId, now) =>
           finalizeHealthyRun(db, runId, now).then(() => undefined),
+        // 0-title-work-but-TV-shows cascade: kick off the episode-cache stage
+        // directly (same wiring the title stage's last shard uses).
+        enqueueEpisodeCacheStage: (runId) =>
+          enqueueEpisodeCacheStage(
+            buildEpisodeCacheStageDeps(db, enqueuer),
+            runId,
+          ),
         verifyToken: verifyIdToken,
         secret: SYNC_SHARED_SECRET.value(),
         now: () => Date.now(),
@@ -611,27 +699,7 @@ export const titleSyncWorker = onTaskDispatched<TitleSyncTask>(
         // barrier in `recordShardResult` (or force-finalized by the watchdog).
         onLastShard: (runId) =>
           enqueueEpisodeCacheStage(
-            {
-              enqueuer,
-              readStagedShows: (r) => readStagedShows(db, r),
-              setStageShardCount: (r, stage, n) =>
-                setStageShardCount(db, r, stage, n),
-              enqueueFanoutAndAiring: (r) =>
-                enqueueFanoutAndAiringStages(
-                  {
-                    enqueuer,
-                    readStagedAssignments: (rid) =>
-                      readStagedAssignments(db, rid),
-                    readStagedUids: (rid) => readStagedUids(db, rid),
-                    setStageShardCount: (rid, stage, n) =>
-                      setStageShardCount(db, rid, stage, n),
-                    finalizeHealthyRun: (rid, now) =>
-                      finalizeHealthyRun(db, rid, now).then(() => undefined),
-                    now: () => Date.now(),
-                  },
-                  r,
-                ),
-            },
+            buildEpisodeCacheStageDeps(db, enqueuer),
             runId,
           ),
       },
@@ -948,3 +1016,4 @@ export {
   episodeCacheWorker,
   episodeFanoutWorker,
 } from './sync-episodes';
+export { airingScanWorker } from './dispatch-episode-aired';

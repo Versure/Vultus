@@ -26,8 +26,6 @@ import {
   type TmdbEpisodeSource,
   type WatchlistNextWatchableStore,
   type WatchlistStatusStore,
-  type WatchlistTvShow,
-  type WatchlistTvSource,
 } from '@vultus/functions/sync-episodes';
 import {
   cachedEpisodeToData,
@@ -128,31 +126,6 @@ export function createEpisodeUpsertStore(db: Firestore): EpisodeStore {
         }
         await batch.commit();
       }
-    },
-  };
-}
-
-/** Lists every TV show across all users' watchlists for the daily pass (entry
- *  point B). Not deduped by `tmdbId` — one entry per (uid, titleId). */
-export function createWatchlistTvSourceAdapter(
-  db: Firestore,
-): WatchlistTvSource {
-  return {
-    async listAllTvShows(): Promise<WatchlistTvShow[]> {
-      const snap = await db.collectionGroup('watchlist').get();
-      const shows: WatchlistTvShow[] = [];
-      for (const doc of snap.docs) {
-        const data = doc.data() as { type?: string; tmdbId?: number };
-        if (data.type !== 'tv' || data.tmdbId == null) continue;
-        const parent = doc.ref.parent.parent;
-        if (!parent) continue;
-        shows.push({
-          uid: parent.id,
-          titleId: doc.ref.id,
-          tmdbId: data.tmdbId,
-        });
-      }
-      return shows;
     },
   };
 }
