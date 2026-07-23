@@ -400,8 +400,10 @@ test('sync outcome', async ({ page }) => {
   // (/tv/1396 → number_of_seasons; /tv/1396/season/1 → the episode list, both
   // routed above), creates the MISSING docs insert-only (`watched: false`), then
   // the existing mirror flips S1E1 to `watched: true` in the SAME pass. The show
-  // reaches `watching` via the watch-implies-add mapping (untracked + a watched
-  // episode → added as `watching`), NOT a count-driven `deriveStatus`.
+  // reaches `watching` via the watch-implies-add branch, now count-driven
+  // (spec 0103, issue #277): its derived initial status is `completed` only when
+  // ALL present episode docs are watched — here S1E2 stays unwatched, so
+  // `watched < total` keeps it `watching`.
 
   // (c) s01e001 created on-device AND mirrored to `watched: true`. Assert on the
   //     emulator (deterministic). Episode doc id is `s{SS}e{EEE}` (2-digit
@@ -437,7 +439,8 @@ test('sync outcome', async ({ page }) => {
     )
     .toBe(false);
 
-  // (e) The show reached `watching` (watch-implies-add, not count-driven).
+  // (e) The show reached `watching` (watch-implies-add, count-driven since
+  //     spec 0103: S1E2 is unwatched → watched < total → stays `watching`).
   await expect
     .poll(
       async () => {
