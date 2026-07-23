@@ -1,5 +1,5 @@
-// The sync engine: one factory, one method. Orchestrates the injected TMDB +
-// Trakt clients and the injected TitleCacheStore port to refresh `title-cache`
+// The sync engine: one factory, one method. Orchestrates the injected TMDB
+// client and the injected TitleCacheStore port to refresh `title-cache`
 // metadata + per-region availability and detect provider transitions against
 // the previous snapshot. Firebase-free — it speaks only domain types through
 // the port. Writes NO notifications and NO episodes (hard boundary).
@@ -10,7 +10,6 @@ import {
   type WatchProvider,
 } from '@vultus/shared/domain';
 import { TmdbError } from '../tmdb/tmdb-error';
-import { TraktError } from '../trakt/trakt-error';
 import { mapSourcesToFlatrateProviders } from '../watchmode/watchmode-mappers';
 import { WATCHMODE_TO_TMDB_PROVIDER } from '../watchmode/watchmode-provider-map';
 import { detectTransitions } from './transitions';
@@ -53,7 +52,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
-  const { tmdb, trakt, store } = config;
+  const { tmdb, store } = config;
   const watchmode = config.watchmode;
   const activeRegions = (config.activeRegions ?? []).filter((r) =>
     REGION_SET.has(r),
@@ -80,18 +79,10 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
         };
       }
 
-      // 2. Load the cached entry when we need it: tv (traktId reuse) or a
-      // configured Watchmode fallback (watchmodeId reuse/preserve). A movie with
-      // no Watchmode client never reads the entry — byte-for-byte today.
-      const cachedEntry =
-        type === 'tv' || watchmode ? await store.getEntry(tmdbId) : null;
-
-      // Trakt id (tv only). Movies never call getShowTraktId. A cached, non-null
-      // traktId is stable — reuse it and skip the (rate-limited) Trakt call.
-      let traktId: number | null = null;
-      if (type === 'tv') {
-        traktId = cachedEntry?.traktId ?? (await trakt.getShowTraktId(tmdbId));
-      }
+      // 2. Load the cached entry only when a configured Watchmode fallback needs
+      // it (watchmodeId reuse/preserve). With no Watchmode client the entry is
+      // never read — byte-for-byte today.
+      const cachedEntry = watchmode ? await store.getEntry(tmdbId) : null;
 
       // 3. Write the refreshed entry, preserving any cached Watchmode id so it
       // is not erased (the converter coalesces a missing watchmodeId → null).
@@ -99,7 +90,6 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
       let watchmodeId = cachedEntry?.watchmodeId ?? null;
       await store.putEntry(tmdbId, {
         type,
-        traktId,
         metadata,
         lastSyncedAt: entrySyncedAt,
         watchmodeId,
@@ -165,7 +155,6 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
                 // Persist the resolved id so the next sync skips resolution.
                 await store.putEntry(tmdbId, {
                   type,
-                  traktId,
                   metadata,
                   lastSyncedAt: entrySyncedAt,
                   watchmodeId,
@@ -258,7 +247,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
       return { tmdbId, type, outcome: 'synced', transitions };
     } catch (err) {
       // Per-title error isolation: catch any throw, record it, keep the batch
-      // going. Capture status from a Tmdb/Trakt error; never embed a credential.
+      // going. Capture status from a TmdbError; never embed a credential.
       const result: SyncResult = {
         tmdbId,
         type,
@@ -266,7 +255,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
         transitions: [],
         reason: errorReason(err),
       };
-      if (err instanceof TmdbError || err instanceof TraktError) {
+      if (err instanceof TmdbError) {
         result.errorStatus = err.status;
       }
       return result;
@@ -314,7 +303,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
 }
 
 function errorReason(err: unknown): string {
-  if (err instanceof TmdbError || err instanceof TraktError) {
+  if (err instanceof TmdbError) {
     return `${err.name} (status ${err.status})`;
   }
   if (err instanceof Error) {

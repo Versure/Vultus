@@ -99,7 +99,6 @@ describe('createFirestoreTitleCacheStore', () => {
             exists: true,
             data: () => ({
               type: 'movie',
-              traktId: null,
               metadata,
               lastSyncedAt: ts('2026-06-19T00:00:00.000Z'),
             }),
@@ -113,7 +112,6 @@ describe('createFirestoreTitleCacheStore', () => {
       expect(docCalls[0].path).toBe(path);
       expect(entry).toEqual<TitleCacheEntry>({
         type: 'movie',
-        traktId: null,
         metadata,
         lastSyncedAt: '2026-06-19T00:00:00.000Z',
         // Legacy doc has no watchmodeId; the converter emits it as null (spec 0099).
@@ -204,7 +202,6 @@ describe('createFirestoreTitleCacheStore', () => {
 
       const entry: TitleCacheEntry = {
         type: 'movie',
-        traktId: null,
         metadata,
         lastSyncedAt: '2026-06-19T00:00:00.000Z',
       };
@@ -214,7 +211,6 @@ describe('createFirestoreTitleCacheStore', () => {
       expect(docCalls[0].set).toHaveBeenCalledTimes(1);
       const written = docCalls[0].set.mock.calls[0][0] as {
         lastSyncedAt: unknown;
-        traktId: number | null;
       };
       // Converter output: a real Date (Admin SDK coerces Date→Timestamp), not a
       // hand-built Timestamp.
@@ -222,7 +218,6 @@ describe('createFirestoreTitleCacheStore', () => {
       expect((written.lastSyncedAt as Date).toISOString()).toBe(
         '2026-06-19T00:00:00.000Z',
       );
-      expect(written.traktId).toBeNull();
     });
   });
 
@@ -250,32 +245,26 @@ describe('createFirestoreTitleCacheStore', () => {
     });
   });
 
-  describe('traktId round-trip (spec-0008 field)', () => {
-    it.each([
-      ['a numeric traktId', 1396, 'tv' as const],
-      ['a null traktId', null, 'movie' as const],
-    ])('flows %s through put then get', async (_label, traktId, type) => {
+  describe('entry round-trip', () => {
+    it('flows an entry through put then get', async () => {
       const docPath = titleCacheDocPath(1396);
       // First a put captures the written data; then feed that back as a read
-      // snapshot to confirm dataToTitleCache restores the same traktId.
+      // snapshot to confirm dataToTitleCache restores the same entry.
       const putDb = createFakeDb({});
       const store = createFirestoreTitleCacheStore(putDb.db as never);
 
       const entry: TitleCacheEntry = {
-        type,
-        traktId,
+        type: 'tv',
         metadata,
         lastSyncedAt: '2026-06-19T00:00:00.000Z',
       };
       await store.putEntry(1396, entry);
 
       const written = putDb.docCalls[0].set.mock.calls[0][0] as {
-        type: typeof type;
-        traktId: number | null;
+        type: 'tv';
         metadata: TitleMetadata;
         lastSyncedAt: Date;
       };
-      expect(written.traktId).toBe(traktId);
 
       // Read it back: wrap the Date as a Timestamp-like read value.
       const readDb = createFakeDb({
@@ -284,7 +273,6 @@ describe('createFirestoreTitleCacheStore', () => {
             exists: true,
             data: () => ({
               type: written.type,
-              traktId: written.traktId,
               metadata: written.metadata,
               lastSyncedAt: { toDate: () => written.lastSyncedAt },
             }),
@@ -296,7 +284,6 @@ describe('createFirestoreTitleCacheStore', () => {
 
       // The read-back doc omits watchmodeId → the converter emits null (spec 0099).
       expect(restored).toEqual({ ...entry, watchmodeId: null });
-      expect(restored?.traktId).toBe(traktId);
     });
   });
 });

@@ -9,7 +9,6 @@ import type {
 import { createSyncEngine } from './sync-engine';
 import type { TitleCacheStore } from './store';
 import type { RegionProviders, TmdbClient } from '../tmdb/tmdb-client';
-import type { TraktClient } from '../trakt/trakt-client';
 import { TmdbError } from '../tmdb/tmdb-error';
 import type {
   WatchmodeClient,
@@ -51,16 +50,20 @@ const apple: WatchProvider = {
 function createFakeStore(): TitleCacheStore & {
   entries: Map<number, TitleCacheEntry>;
   availability: Map<number, Partial<Record<Region, RegionAvailability>>>;
+  getEntry: ReturnType<typeof vi.fn>;
 } {
   const entries = new Map<number, TitleCacheEntry>();
   const availability = new Map<
     number,
     Partial<Record<Region, RegionAvailability>>
   >();
+  const getEntry = vi.fn((tmdbId: number) =>
+    Promise.resolve(entries.get(tmdbId) ?? null),
+  );
   return {
     entries,
     availability,
-    getEntry: (tmdbId) => Promise.resolve(entries.get(tmdbId) ?? null),
+    getEntry,
     getAvailability: (tmdbId) =>
       Promise.resolve(availability.get(tmdbId) ?? {}),
     putEntry: (tmdbId, entry) => {
@@ -99,14 +102,6 @@ function createTmdbMock(overrides: Partial<TmdbClient> = {}) {
   return { client, getMovie, getTvShow, getWatchProviders };
 }
 
-function createTraktMock(overrides: Partial<TraktClient> = {}) {
-  const getCalendar = overrides.getCalendar ?? vi.fn(() => Promise.resolve([]));
-  const getShowTraktId =
-    overrides.getShowTraktId ?? vi.fn(() => Promise.resolve<number | null>(42));
-  const client: TraktClient = { getCalendar, getShowTraktId };
-  return { client, getShowTraktId };
-}
-
 function createWatchmodeMock(overrides: Partial<WatchmodeClient> = {}) {
   const resolveTitleId =
     overrides.resolveTitleId ??
@@ -132,26 +127,22 @@ describe('createSyncEngine', () => {
     store = createFakeStore();
   });
 
-  it('syncs a movie: writes entry with traktId null, never calls getShowTraktId', async () => {
+  it('syncs a movie: writes entry and availability', async () => {
     const tmdb = createTmdbMock();
-    const trakt = createTraktMock();
     const engine = createSyncEngine({
       tmdb: tmdb.client,
-      trakt: trakt.client,
       store,
       now: () => FIXED_NOW,
     });
 
     const results = await engine.sync([{ tmdbId: 603, type: 'movie' }]);
 
-    expect(trakt.getShowTraktId).not.toHaveBeenCalled();
     expect(store.entries.get(603)).toEqual({
       type: 'movie',
-      traktId: null,
       metadata: movieMeta,
       lastSyncedAt: FIXED_NOW,
-      // The engine now always writes watchmodeId (preserving any cached id;
-      // null here — no Watchmode configured). Spec 0099.
+      // The engine always writes watchmodeId (preserving any cached id; null
+      // here — no Watchmode configured). Spec 0099.
       watchmodeId: null,
     });
     expect(store.availability.get(603)?.NL).toEqual({
@@ -173,40 +164,40 @@ describe('createSyncEngine', () => {
     ]);
   });
 
-  it('syncs a tv show: resolves and stores traktId, calls getShowTraktId once', async () => {
+  it('syncs a tv show: writes entry + availability with only tmdb + store in the config', async () => {
     const tmdb = createTmdbMock();
-    const trakt = createTraktMock();
     const engine = createSyncEngine({
       tmdb: tmdb.client,
-      trakt: trakt.client,
-      store,
-      now: () => FIXED_NOW,
-    });
-
-    await engine.sync([{ tmdbId: 1396, type: 'tv' }]);
-
-    expect(trakt.getShowTraktId).toHaveBeenCalledTimes(1);
-    expect(trakt.getShowTraktId).toHaveBeenCalledWith(1396);
-    expect(tmdb.getTvShow).toHaveBeenCalledWith(1396);
-    expect(store.entries.get(1396)?.traktId).toBe(42);
-  });
-
-  it('stores traktId null when Trakt has no match but still syncs', async () => {
-    const tmdb = createTmdbMock();
-    const trakt = createTraktMock({
-      getShowTraktId: vi.fn(() => Promise.resolve<number | null>(null)),
-    });
-    const engine = createSyncEngine({
-      tmdb: tmdb.client,
-      trakt: trakt.client,
       store,
       now: () => FIXED_NOW,
     });
 
     const results = await engine.sync([{ tmdbId: 1396, type: 'tv' }]);
 
-    expect(store.entries.get(1396)?.traktId).toBeNull();
+    expect(tmdb.getTvShow).toHaveBeenCalledWith(1396);
+    expect(store.entries.get(1396)).toEqual({
+      type: 'tv',
+      metadata: tvMeta,
+      lastSyncedAt: FIXED_NOW,
+      watchmodeId: null,
+    });
+    expect(store.availability.get(1396)?.NL?.source).toBe('tmdb');
     expect(results[0].outcome).toBe('synced');
+  });
+
+  it('does NOT load the cache entry for a tv title when no Watchmode client is configured', async () => {
+    const tmdb = createTmdbMock();
+    const engine = createSyncEngine({
+      tmdb: tmdb.client,
+      store,
+      now: () => FIXED_NOW,
+    });
+
+    await engine.sync([{ tmdbId: 1396, type: 'tv' }]);
+
+    // A tv title no longer needs the entry loaded unless Watchmode is
+    // configured for watchmodeId reuse.
+    expect(store.getEntry).not.toHaveBeenCalled();
   });
 
   it('rolls previousSnapshot to the prior providers, not the stored previousSnapshot', async () => {
@@ -228,10 +219,8 @@ describe('createSyncEngine', () => {
         () => Promise.resolve<RegionProviders | null>({ NL: [disney, cinema] }), // B, C
       ),
     });
-    const trakt = createTraktMock();
     const engine = createSyncEngine({
       tmdb: tmdb.client,
-      trakt: trakt.client,
       store,
       now: () => FIXED_NOW,
     });
@@ -271,10 +260,8 @@ describe('createSyncEngine', () => {
         }),
       ),
     });
-    const trakt = createTraktMock();
     const engine = createSyncEngine({
       tmdb: tmdb.client,
-      trakt: trakt.client,
       store,
       now: () => FIXED_NOW,
     });
@@ -295,10 +282,8 @@ describe('createSyncEngine', () => {
         Promise.resolve<RegionProviders | null>(null),
       ),
     });
-    const trakt = createTraktMock();
     const engine = createSyncEngine({
       tmdb: tmdb.client,
-      trakt: trakt.client,
       store,
       now: () => FIXED_NOW,
     });
@@ -315,10 +300,8 @@ describe('createSyncEngine', () => {
     const tmdb = createTmdbMock({
       getMovie: vi.fn(() => Promise.resolve<TitleMetadata | null>(null)),
     });
-    const trakt = createTraktMock();
     const engine = createSyncEngine({
       tmdb: tmdb.client,
-      trakt: trakt.client,
       store,
       now: () => FIXED_NOW,
     });
@@ -344,10 +327,8 @@ describe('createSyncEngine', () => {
       .mockRejectedValueOnce(new TmdbError('boom', 500, '/movie/2'))
       .mockResolvedValueOnce(movieMeta);
     const tmdb = createTmdbMock({ getMovie });
-    const trakt = createTraktMock();
     const engine = createSyncEngine({
       tmdb: tmdb.client,
-      trakt: trakt.client,
       store,
       now: () => FIXED_NOW,
     });
@@ -366,6 +347,25 @@ describe('createSyncEngine', () => {
     expect(results[2].outcome).toBe('synced');
   });
 
+  it('maps a TmdbError status into errorStatus', async () => {
+    const tmdb = createTmdbMock({
+      getMovie: vi.fn(() =>
+        Promise.reject(new TmdbError('unauthorized', 401, '/movie/603')),
+      ),
+    });
+    const engine = createSyncEngine({
+      tmdb: tmdb.client,
+      store,
+      now: () => FIXED_NOW,
+    });
+
+    const results = await engine.sync([{ tmdbId: 603, type: 'movie' }]);
+
+    expect(results[0].outcome).toBe('error');
+    expect(results[0].errorStatus).toBe(401);
+    expect(results[0].reason).toContain('TmdbError');
+  });
+
   it('records an error when getWatchProviders throws after the entry was written', async () => {
     const tmdb = createTmdbMock({
       getWatchProviders: vi.fn(() =>
@@ -374,10 +374,8 @@ describe('createSyncEngine', () => {
         ),
       ),
     });
-    const trakt = createTraktMock();
     const engine = createSyncEngine({
       tmdb: tmdb.client,
-      trakt: trakt.client,
       store,
       now: () => FIXED_NOW,
     });
@@ -389,25 +387,6 @@ describe('createSyncEngine', () => {
     expect(store.availability.get(603)).toBeUndefined();
     expect(results[0].outcome).toBe('error');
     expect(results[0].errorStatus).toBe(503);
-  });
-
-  it('never calls getShowTraktId for a movie but always does for tv', async () => {
-    const tmdb = createTmdbMock();
-    const trakt = createTraktMock();
-    const engine = createSyncEngine({
-      tmdb: tmdb.client,
-      trakt: trakt.client,
-      store,
-      now: () => FIXED_NOW,
-    });
-
-    await engine.sync([
-      { tmdbId: 1, type: 'movie' },
-      { tmdbId: 2, type: 'tv' },
-    ]);
-
-    expect(trakt.getShowTraktId).toHaveBeenCalledTimes(1);
-    expect(trakt.getShowTraktId).toHaveBeenCalledWith(2);
   });
 
   it('uses the injected clock for every lastSyncedAt written', async () => {
@@ -422,10 +401,8 @@ describe('createSyncEngine', () => {
         }),
       ),
     });
-    const trakt = createTraktMock();
     const engine = createSyncEngine({
       tmdb: tmdb.client,
-      trakt: trakt.client,
       store,
       now,
     });
@@ -441,10 +418,8 @@ describe('createSyncEngine', () => {
 
   it('returns [] and touches nothing for an empty batch', async () => {
     const tmdb = createTmdbMock();
-    const trakt = createTraktMock();
     const engine = createSyncEngine({
       tmdb: tmdb.client,
-      trakt: trakt.client,
       store,
       now: () => FIXED_NOW,
     });
@@ -455,62 +430,7 @@ describe('createSyncEngine', () => {
     expect(tmdb.getMovie).not.toHaveBeenCalled();
     expect(tmdb.getTvShow).not.toHaveBeenCalled();
     expect(tmdb.getWatchProviders).not.toHaveBeenCalled();
-    expect(trakt.getShowTraktId).not.toHaveBeenCalled();
     expect(store.entries.size).toBe(0);
-  });
-});
-
-describe('createSyncEngine — cached-traktId dedup (D2)', () => {
-  let store: ReturnType<typeof createFakeStore>;
-
-  beforeEach(() => {
-    store = createFakeStore();
-  });
-
-  it('reuses a cached non-null traktId and does NOT call getShowTraktId', async () => {
-    store.entries.set(1396, {
-      type: 'tv',
-      traktId: 999,
-      metadata: tvMeta,
-      lastSyncedAt: 'old',
-    });
-    const tmdb = createTmdbMock();
-    const trakt = createTraktMock();
-    const engine = createSyncEngine({
-      tmdb: tmdb.client,
-      trakt: trakt.client,
-      store,
-      now: () => FIXED_NOW,
-    });
-
-    const results = await engine.sync([{ tmdbId: 1396, type: 'tv' }]);
-
-    expect(trakt.getShowTraktId).not.toHaveBeenCalled();
-    expect(store.entries.get(1396)?.traktId).toBe(999);
-    expect(results[0].outcome).toBe('synced');
-  });
-
-  it('still calls getShowTraktId when the cached traktId is null', async () => {
-    store.entries.set(1396, {
-      type: 'tv',
-      traktId: null,
-      metadata: tvMeta,
-      lastSyncedAt: 'old',
-    });
-    const tmdb = createTmdbMock();
-    const trakt = createTraktMock();
-    const engine = createSyncEngine({
-      tmdb: tmdb.client,
-      trakt: trakt.client,
-      store,
-      now: () => FIXED_NOW,
-    });
-
-    await engine.sync([{ tmdbId: 1396, type: 'tv' }]);
-
-    expect(trakt.getShowTraktId).toHaveBeenCalledTimes(1);
-    expect(trakt.getShowTraktId).toHaveBeenCalledWith(1396);
-    expect(store.entries.get(1396)?.traktId).toBe(42);
   });
 });
 
@@ -527,10 +447,8 @@ describe('createSyncEngine — second-pass retry (D2)', () => {
       .mockRejectedValueOnce(new TmdbError('rate limit', 429, '/movie/1'))
       .mockResolvedValueOnce(movieMeta);
     const tmdb = createTmdbMock({ getMovie });
-    const trakt = createTraktMock();
     const engine = createSyncEngine({
       tmdb: tmdb.client,
-      trakt: trakt.client,
       store,
       now: () => FIXED_NOW,
       retryErroredPasses: 1,
@@ -551,10 +469,8 @@ describe('createSyncEngine — second-pass retry (D2)', () => {
       .fn()
       .mockRejectedValue(new TmdbError('unauthorized', 401, '/movie/1'));
     const tmdb = createTmdbMock({ getMovie });
-    const trakt = createTraktMock();
     const engine = createSyncEngine({
       tmdb: tmdb.client,
-      trakt: trakt.client,
       store,
       now: () => FIXED_NOW,
       retryErroredPasses: 2,
@@ -573,10 +489,8 @@ describe('createSyncEngine — second-pass retry (D2)', () => {
       .fn()
       .mockRejectedValue(new TmdbError('rate limit', 429, '/movie/1'));
     const tmdb = createTmdbMock({ getMovie });
-    const trakt = createTraktMock();
     const engine = createSyncEngine({
       tmdb: tmdb.client,
-      trakt: trakt.client,
       store,
       now: () => FIXED_NOW,
       // retryErroredPasses omitted → default 0
@@ -598,10 +512,8 @@ describe('createSyncEngine — second-pass retry (D2)', () => {
       .mockResolvedValueOnce(movieMeta) // pass1 title3
       .mockResolvedValueOnce(movieMeta); // pass2 title2 retry
     const tmdb = createTmdbMock({ getMovie });
-    const trakt = createTraktMock();
     const engine = createSyncEngine({
       tmdb: tmdb.client,
-      trakt: trakt.client,
       store,
       now: () => FIXED_NOW,
       retryErroredPasses: 1,
@@ -637,7 +549,6 @@ describe('createSyncEngine — Watchmode fallback (spec 0099)', () => {
   ) {
     return createSyncEngine({
       tmdb,
-      trakt: createTraktMock().client,
       store,
       now: () => FIXED_NOW,
       watchmode,
@@ -877,7 +788,6 @@ describe('createSyncEngine — Watchmode fallback (spec 0099)', () => {
   it('CACHING: a cached watchmodeId is reused (no resolveTitleId call)', async () => {
     store.entries.set(603, {
       type: 'movie',
-      traktId: null,
       metadata: movieMeta,
       lastSyncedAt: 'old',
       watchmodeId: 777,

@@ -76,7 +76,6 @@ function createFakeDb(opts: {
       exists: true,
       data: () => ({
         type: 'movie',
-        traktId: null,
         metadata: {
           title: 't',
           overview: 'o',

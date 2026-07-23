@@ -33,7 +33,6 @@ function item(over: Partial<WatchlistItem>): WatchlistItem {
   return {
     type: 'movie',
     tmdbId: 1,
-    traktId: null,
     title: 'Title',
     addedAt: '2026-01-01T00:00:00.000Z',
     status: 'watching',

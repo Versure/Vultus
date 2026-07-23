@@ -32,7 +32,6 @@ import { randomUUID } from 'node:crypto';
 import {
   createSyncEngine,
   createTmdbClient,
-  createTraktClient,
   createWatchmodeClient,
   createFirestoreTitleCacheStore,
   gatherUserWatchlistTitles,
@@ -120,9 +119,8 @@ if (getApps().length === 0) {
 // the handler, never at module load, never from .env.local, never logged). ---
 const SYNC_SHARED_SECRET = defineSecret('SYNC_SHARED_SECRET');
 const TMDB_READ_TOKEN = defineSecret('TMDB_READ_TOKEN');
-const TRAKT_CLIENT_ID = defineString('TRAKT_CLIENT_ID');
 // Watchmode gap-fill API key (spec 0099). Rides the .env.vultus-cab62
-// defineString param channel (like TRAKT_CLIENT_ID), NOT defineSecret: `default:
+// defineString param channel, NOT defineSecret: `default:
 // ''` means an absent key never blocks deploy and degrades gracefully at runtime
 // (no client constructed → TMDB-only). Value read via .value() ONLY inside the
 // syncTitles handler; never logged. Functions-only — never exposed to mobile.
@@ -690,8 +688,7 @@ export const syncTitles = onRequest(
  * `rateLimits`/`retryConfig` below — the queue name equals this FUNCTION name
  * (`titleSyncWorker`, see `QUEUE_NAMES.titleSync`). Title-stage aggregate TMDB
  * throughput = maxConcurrentDispatches(10) × 4 req/s = 40 req/s (spec 0101). Binds
- * `TMDB_READ_TOKEN` (+ the `TRAKT_CLIENT_ID` param) exactly as the pre-sharding
- * `syncTitles` engine wiring did.
+ * `TMDB_READ_TOKEN` exactly as the pre-sharding `syncTitles` engine wiring did.
  */
 export const titleSyncWorker = onTaskDispatched<TitleSyncTask>(
   {
@@ -720,9 +717,8 @@ export const titleSyncWorker = onTaskDispatched<TitleSyncTask>(
           // Watchmode gap-fill (spec 0099), on the nightly (sharded) path only.
           // Build the client ONLY when the key is present — an empty/absent key
           // → undefined → the engine runs TMDB-only (graceful no-key degrade).
-          // WATCHMODE_API_KEY is a defineString param (like TRAKT_CLIENT_ID), not
-          // a secret, so it needs no `secrets:` binding; its value is read here
-          // and never logged.
+          // WATCHMODE_API_KEY is a defineString param, not a secret, so it needs
+          // no `secrets:` binding; its value is read here and never logged.
           const watchmodeKey = WATCHMODE_API_KEY.value();
           const watchmode = watchmodeKey
             ? createWatchmodeClient({ apiKey: watchmodeKey })
@@ -731,7 +727,6 @@ export const titleSyncWorker = onTaskDispatched<TitleSyncTask>(
             tmdb: createTmdbClient({
               readAccessToken: TMDB_READ_TOKEN.value(),
             }),
-            trakt: createTraktClient({ clientId: TRAKT_CLIENT_ID.value() }),
             store: createFirestoreTitleCacheStore(firestore),
             // Spec 0089 / D2: one extra pass over retryable-errored titles.
             retryErroredPasses: 1,
@@ -898,7 +893,6 @@ export const triggerSync = onCall<unknown, Promise<TriggerSyncResponse>>(
       const createEngine = (firestore: Firestore): SyncEngine =>
         createSyncEngine({
           tmdb: createTmdbClient({ readAccessToken: TMDB_READ_TOKEN.value() }),
-          trakt: createTraktClient({ clientId: TRAKT_CLIENT_ID.value() }),
           store: createFirestoreTitleCacheStore(firestore),
         });
       return await runTriggerSync({ db, createEngine }, request.auth?.uid);

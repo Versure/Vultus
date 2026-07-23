@@ -141,7 +141,6 @@ describe('NotificationsService', () => {
       docDataMock.mockReturnValue(
         of({
           type: 'movie',
-          traktId: null,
           metadata: {
             title: 'The Matrix',
             overview: '',
@@ -167,7 +166,6 @@ describe('NotificationsService', () => {
       docDataMock.mockReturnValue(
         of({
           type: 'movie',
-          traktId: null,
           metadata: {
             title: 'X',
             overview: '',

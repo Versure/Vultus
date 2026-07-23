@@ -188,7 +188,6 @@ function watchlistReadData(
   return {
     type: 'movie',
     tmdbId: 0,
-    traktId: null,
     title: 'X',
     addedAt: { toDate: () => new Date(0) },
     status,
@@ -409,7 +408,7 @@ describe('PlexSyncService', () => {
     });
   });
 
-  it('adds a new unwatched library movie as planned, watchingViaPlex, traktId null', async () => {
+  it('adds a new unwatched library movie as planned, watchingViaPlex', async () => {
     seedFirestore({});
     const service = makeService(mockClient([movieItem(550)]));
     const summary = await syncOk(service);
@@ -422,11 +421,9 @@ describe('PlexSyncService', () => {
     const payload = call?.[1] as {
       status: string;
       watchingViaPlex: boolean;
-      traktId: number | null;
     };
     expect(payload.status).toBe('planned');
     expect(payload.watchingViaPlex).toBe(true);
-    expect(payload.traktId).toBeNull();
   });
 
   it('cursor filtering: an older-than-cursor unwatched item is NOT added', async () => {

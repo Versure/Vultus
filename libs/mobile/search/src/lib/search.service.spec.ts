@@ -182,7 +182,6 @@ describe('SearchService', () => {
     expect(mockSetDoc).toHaveBeenCalled();
     const writeData = mockSetDoc.mock.calls[0][1] as Record<string, unknown>;
     expect(writeData['status']).toBe('planned');
-    expect(writeData['traktId']).toBeNull();
     expect(writeData['posterPath']).toBe('/movie-x.jpg');
     expect(writeData['voteAverage']).toBe(6.4);
     expect(writeData['releaseDate']).toBe('2021-08-12');

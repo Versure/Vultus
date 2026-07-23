@@ -657,7 +657,6 @@ describe('TitleDetailPage', () => {
       tracked: {
         type: 'movie',
         tmdbId: 27205,
-        traktId: null,
         title: 'Inception',
         addedAt: '2026-01-01T00:00:00Z',
         status: 'planned',
@@ -676,7 +675,6 @@ describe('TitleDetailPage', () => {
       tracked: {
         type: 'movie',
         tmdbId: 27205,
-        traktId: null,
         title: 'Inception',
         addedAt: '2026-01-01T00:00:00Z',
         status: 'planned',
@@ -705,7 +703,6 @@ describe('TitleDetailPage', () => {
       tracked: {
         type: 'movie',
         tmdbId: 27205,
-        traktId: null,
         title: 'Inception',
         addedAt: '2026-01-01T00:00:00Z',
         status: 'watching',
@@ -881,7 +878,6 @@ describe('TitleDetailPage', () => {
         of({
           type: 'tv',
           tmdbId: 27205,
-          traktId: null,
           title: 'Inception',
           addedAt: '2026-01-01T00:00:00Z',
           status: 'planned',
@@ -948,7 +944,6 @@ describe('TitleDetailPage', () => {
       tracked: {
         type: 'movie',
         tmdbId: 27205,
-        traktId: null,
         title: 'Inception',
         addedAt: '2026-01-01T00:00:00Z',
         status: 'watching',
@@ -1052,7 +1047,6 @@ describe('TitleDetailPage', () => {
       tracked: {
         type: 'movie',
         tmdbId: 27205,
-        traktId: null,
         title: 'Inception',
         addedAt: '2026-01-01T00:00:00Z',
         status: 'watching',
@@ -1069,7 +1063,6 @@ describe('TitleDetailPage', () => {
       tracked: {
         type: 'movie',
         tmdbId: 27205,
-        traktId: null,
         title: 'Inception',
         addedAt: '2026-01-01T00:00:00Z',
         status: 'dropped',
@@ -1088,7 +1081,6 @@ describe('TitleDetailPage', () => {
     const trackedItem = (watchingViaPlex: boolean) => ({
       type: 'movie' as const,
       tmdbId: 27205,
-      traktId: null,
       title: 'Inception',
       addedAt: '2026-01-01T00:00:00Z',
       status: 'planned' as const,
@@ -1323,7 +1315,6 @@ describe('TitleDetailPage', () => {
         tracked: {
           type: 'tv',
           tmdbId: 1396,
-          traktId: null,
           title: 'Breaking Bad',
           addedAt: '2026-01-01T00:00:00Z',
           status: 'watching',
@@ -1344,7 +1335,6 @@ describe('TitleDetailPage', () => {
         tracked: {
           type: 'movie',
           tmdbId: 27205,
-          traktId: null,
           title: 'Inception',
           addedAt: '2026-01-01T00:00:00Z',
           status: 'watching',

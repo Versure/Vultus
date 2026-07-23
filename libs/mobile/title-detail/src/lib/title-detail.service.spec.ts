@@ -155,7 +155,6 @@ function watchlistSnap(status: string | undefined) {
   return snap({
     type: 'tv',
     tmdbId: 2,
-    traktId: null,
     title: 'Breaking Bad',
     addedAt: fakeTs(new Date('2026-06-24T10:00:00Z')),
     status,
@@ -241,7 +240,6 @@ describe('TitleDetailService', () => {
     getDocMock.mockResolvedValue(
       snap({
         type: 'movie',
-        traktId: null,
         metadata: {
           title: 'Inception',
           overview: 'dream heist',
@@ -383,7 +381,6 @@ describe('TitleDetailService', () => {
       getDocMock.mockResolvedValue(
         snap({
           type: 'movie',
-          traktId: null,
           metadata: {
             title: 'Inception',
             overview: 'dream heist',
@@ -595,7 +592,6 @@ describe('TitleDetailService', () => {
       of({
         type: 'movie',
         tmdbId: 27205,
-        traktId: null,
         title: 'Inception',
         addedAt: fakeTs(new Date('2026-03-04T05:06:07Z')),
         status: 'planned',
@@ -617,7 +613,7 @@ describe('TitleDetailService', () => {
     expect(none).toBeNull();
   });
 
-  it('add() writes status planned, traktId null, id=String(tmdbId), denormalized fields', async () => {
+  it('add() writes status planned, id=String(tmdbId), denormalized fields', async () => {
     const service = createService(UID);
     await service.add(
       liveDetail({ tmdbId: 27205, posterPath: '/p.jpg', voteAverage: 8.8 }),
@@ -627,7 +623,6 @@ describe('TitleDetailService', () => {
     expect(ref).toEqual({ path: watchlistItemPath(UID, '27205') });
     const p = payload as Record<string, unknown>;
     expect(p['status']).toBe('planned');
-    expect(p['traktId']).toBeNull();
     expect(p['tmdbId']).toBe(27205);
     expect(p['posterPath']).toBe('/p.jpg');
     expect(p['voteAverage']).toBe(8.8);

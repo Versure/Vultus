@@ -224,7 +224,7 @@ watching` on ≥1 watched episode, `watching → completed` when all present
   episodes watched. **Sticky-`dropped`**: a dropped title keeps its status (no
   status write) but STILL receives the episode mirror.
 - **Watch-implies-add**: a watched, untracked tmdb-GUID item is added (movie →
-  `completed`, show → `watching`), `watchingViaPlex: true`, `traktId: null`.
+  `completed`, show → `watching`), `watchingViaPlex: true`.
 - **Episode mirror writes EXISTING docs only** (`updateDoc`); it NEVER creates an
   episode doc — a Plex-watched episode with no local doc is a no-op at this step.
   The doc id is `s{SS}e{EEE}` (season padded to 2, episode to 3, e.g. `s01e001`) —

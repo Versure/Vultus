@@ -51,22 +51,22 @@ day one so multi-user is a UI change later, not a migration.
 
 ## 2. Architecture decisions
 
-| Decision           | Choice                                                                                 | Rationale                                                                                                                                                                        |
-| ------------------ | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Frontend           | Ionic + Angular (Capacitor)                                                            | Stated constraint. Native Android via Capacitor.                                                                                                                                 |
-| Monorepo           | Nx workspace                                                                           | Stated constraint. Shared types between mobile + functions.                                                                                                                      |
-| Architecture style | Vertical slice (Nx-enforced via Sheriff)                                               | Each feature owns its UI, state, data, and types.                                                                                                                                |
-| Backend            | Firebase (Firestore + Auth + Cloud Functions + FCM)                                    | Single integrated platform; .NET dropped.                                                                                                                                        |
-| Functions runtime  | TypeScript                                                                             | End-to-end TS enables shared types via `libs/shared/domain`.                                                                                                                     |
-| Database           | Firestore                                                                              | Free tier covers personal use ~1000x over; real-time sync to client.                                                                                                             |
-| Auth               | Firebase Auth (anonymous in v1, email/password later)                                  | Userid scoping from day one.                                                                                                                                                     |
-| Push               | FCM directly (Android only)                                                            | Free, full control, simplest stack.                                                                                                                                              |
-| Daily sync trigger | GitHub Actions cron → HTTP Cloud Function                                              | Cron POSTs the shared-secret HTTP `syncTitles` function; runs on Blaze within the free tier.                                                                                     |
-| Manual refresh     | App calls a separate `triggerSync` Gen2 callable                                       | The app uses a dedicated auth-gated callable (specs 0025; 0044 CORS; 0048 error surfacing), NOT the HTTP path.                                                                   |
-| Region scope       | Multi-region from day one                                                              | Trivial in data model, painful to add later.                                                                                                                                     |
-| Data sources       | TMDB (metadata, watch providers, episode airing) + Trakt (traktId resolution, tv only) | Both free for non-commercial. In the shipped sync engine Trakt only resolves `traktId` (`getShowTraktId`, tv only); `getCalendar` has no production caller.                      |
-| UI design source   | Google Stitch — "Vultus Android App Design"                                            | Canonical screens + design system; accessed via Stitch MCP.                                                                                                                      |
-| Hosting cost       | ~€0/month target, on Blaze                                                             | Blaze pay-as-you-go (required to deploy Cloud Functions), engineered to stay within free-tier allowances; budget **alert** recommended. + GitHub Actions + TMDB/Trakt free tier. |
+| Decision           | Choice                                                                                               | Rationale                                                                                                                                                                          |
+| ------------------ | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend           | Ionic + Angular (Capacitor)                                                                          | Stated constraint. Native Android via Capacitor.                                                                                                                                   |
+| Monorepo           | Nx workspace                                                                                         | Stated constraint. Shared types between mobile + functions.                                                                                                                        |
+| Architecture style | Vertical slice (Nx-enforced via Sheriff)                                                             | Each feature owns its UI, state, data, and types.                                                                                                                                  |
+| Backend            | Firebase (Firestore + Auth + Cloud Functions + FCM)                                                  | Single integrated platform; .NET dropped.                                                                                                                                          |
+| Functions runtime  | TypeScript                                                                                           | End-to-end TS enables shared types via `libs/shared/domain`.                                                                                                                       |
+| Database           | Firestore                                                                                            | Free tier covers personal use ~1000x over; real-time sync to client.                                                                                                               |
+| Auth               | Firebase Auth (anonymous in v1, email/password later)                                                | Userid scoping from day one.                                                                                                                                                       |
+| Push               | FCM directly (Android only)                                                                          | Free, full control, simplest stack.                                                                                                                                                |
+| Daily sync trigger | GitHub Actions cron → HTTP Cloud Function                                                            | Cron POSTs the shared-secret HTTP `syncTitles` function; runs on Blaze within the free tier.                                                                                       |
+| Manual refresh     | App calls a separate `triggerSync` Gen2 callable                                                     | The app uses a dedicated auth-gated callable (specs 0025; 0044 CORS; 0048 error surfacing), NOT the HTTP path.                                                                     |
+| Region scope       | Multi-region from day one                                                                            | Trivial in data model, painful to add later.                                                                                                                                       |
+| Data sources       | TMDB (metadata, watch providers, episode airing) + Watchmode (provider gap-fill fallback, spec 0099) | TMDB is free for non-commercial; Watchmode is an optional gap-fill (spec 0099) for licensed-content provider coverage. (The vestigial Trakt integration was removed in spec 0104.) |
+| UI design source   | Google Stitch — "Vultus Android App Design"                                                          | Canonical screens + design system; accessed via Stitch MCP.                                                                                                                        |
+| Hosting cost       | ~€0/month target, on Blaze                                                                           | Blaze pay-as-you-go (required to deploy Cloud Functions), engineered to stay within free-tier allowances; budget **alert** recommended. + GitHub Actions + TMDB free tier.         |
 
 ### Why the .NET backend was dropped
 
@@ -86,9 +86,9 @@ from / writes to Firestore via the Firebase Admin .NET SDK. Not part of v1.
 
 The hardest part of this app is reliable per-region streaming-availability
 data. TMDB's `watch/providers` endpoint is JustWatch-powered and decent for
-NL but has known accuracy gaps for licensed (non-original) content. Trakt's
-calendar gives you upcoming episodes but does not include streaming
-availability per region. Mitigations baked into the design:
+NL but has known accuracy gaps for licensed (non-original) content. The
+spec-0099 Watchmode fallback gap-fills provider coverage where TMDB is thin.
+Mitigations baked into the design:
 
 - Cache TMDB watch-provider data in Firestore so we can detect _transitions_
   (yesterday: not on Netflix NL; today: on Netflix NL → notify).
@@ -169,7 +169,7 @@ vultus/
 │   │   ├── onboarding/                   # Slice (spec 0022)
 │   │   └── notifications/                # Slice (spec 0042)
 │   └── functions/                        # One slice lib per subfolder (see below)
-│       ├── sync-titles/                  # Slice: TMDB+Trakt clients, sync, HTTP handler
+│       ├── sync-titles/                  # Slice: TMDB (+ Watchmode fallback) clients, sync, HTTP handler
 │       ├── sync-episodes/                # Slice (spec 0047)
 │       └── dispatch-notifications/       # Slice
 ├── android/                              # Capacitor Android platform (spec 0020)
@@ -250,7 +250,6 @@ users/{userId}
 users/{userId}/watchlist/{titleId}
   type: "movie" | "tv"
   tmdbId: number
-  traktId: number | null
   title: string
   addedAt: timestamp
   status: "watching" | "completed" | "dropped" | "planned"
@@ -276,7 +275,6 @@ users/{userId}/notifications/{notificationId}
 # Global (read-only from client, written by functions only)
 title-cache/{tmdbId}
   type: "movie" | "tv"
-  traktId: number | null                  # top-level Trakt show id, tv only (spec 0008)
   metadata: { ... }                       # Cached TMDB metadata
   lastSyncedAt: timestamp
 
@@ -425,7 +423,6 @@ A PR is mergeable only when _all_ of:
 | Secret                           | Lives in                                                                                                 | Used by                                      |
 | -------------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
 | `TMDB_API_KEY`                   | `.env.local` (local dev via `pnpm env:tmdb`), `TMDB_API_KEY` GitHub Actions secret (CI production build) | Mobile client (injected at build time by CI) |
-| Trakt client ID                  | `.env.local`, GitHub secret, Firebase functions config                                                   | Functions only                               |
 | FCM service account              | Firebase functions config                                                                                | Functions only                               |
 | Sync HTTP function shared secret | GitHub secret + Firebase functions config                                                                | GitHub Actions cron + Function               |
 
@@ -476,44 +473,42 @@ Roughly ordered by dependency; each was sized to ~one Claude Code session.
 9. **TMDB client (in `functions/sync-titles`)** — Auth, rate-limiting,
    `getMovie`, `getTvShow`, `getWatchProviders`, `getSeasonEpisodes`. Unit
    tests with mocked HTTP.
-10. **Trakt client (in `functions/sync-titles`)** — Auth, `getCalendar`.
-    Unit tests with mocked HTTP.
-11. **Sync engine** — Given a list of `tmdbId`s, fetch metadata + providers
+10. **Sync engine** — Given a list of `tmdbId`s, fetch metadata + providers
     - episodes, compute transitions vs `previousSnapshot`, write to
       `title-cache`. Unit tests for transition detection.
-12. **HTTP sync function with shared-secret auth** — Wrap sync engine in
+11. **HTTP sync function with shared-secret auth** — Wrap sync engine in
     HTTPS callable, validate secret header, idempotent.
-13. **Daily-sync GitHub Action** — Cron schedule, calls HTTP function with
+12. **Daily-sync GitHub Action** — Cron schedule, calls HTTP function with
     secret.
-14. **Notification dispatcher (Firestore trigger)** — On `title-cache/*/
+13. **Notification dispatcher (Firestore trigger)** — On `title-cache/*/
 availability/*` write, diff against previous snapshot, find users
     tracking that title in matching region, write to `users/*/
 notifications/*` and send via FCM. Unit tests.
 
 ### Mobile slices
 
-15. **App shell + routing + Firebase init** — Ionic tabs (Watchlist,
+14. **App shell + routing + Firebase init** — Ionic tabs (Watchlist,
     Search, Settings), Firebase init in `apps/mobile`, anonymous auth on
     first launch.
-16. **`slice:settings`** — Region picker, notification prefs, FCM token
+15. **`slice:settings`** — Region picker, notification prefs, FCM token
     registration.
-17. **`slice:search`** — Search TMDB, view result, "Add to watchlist"
+16. **`slice:search`** — Search TMDB, view result, "Add to watchlist"
     action.
-18. **`slice:watchlist`** — List of tracked titles with status, swipe to
+17. **`slice:watchlist`** — List of tracked titles with status, swipe to
     remove, pull-to-refresh (calls HTTP sync function).
-19. **`slice:title-detail`** — Per-title page: metadata, current providers
+18. **`slice:title-detail`** — Per-title page: metadata, current providers
     in region, episode list (for TV), mark-watched toggle.
-20. **e2e test setup + 5–10 critical flows** — Playwright + Firebase
+19. **e2e test setup + 5–10 critical flows** — Playwright + Firebase
     emulators. Claude Code proposes the flows in a design note; you
     approve.
 
 ### Polish
 
-21. **Capacitor Android build** — App icon, splash, FCM push setup,
+20. **Capacitor Android build** — App icon, splash, FCM push setup,
     `capacitor.config.ts`, build APK locally.
-22. **Onboarding flow** — First-launch screen: pick region, grant
+21. **Onboarding flow** — First-launch screen: pick region, grant
     notification permission.
-23. **Empty states + loading states** — Across all slices.
+22. **Empty states + loading states** — Across all slices.
 
 This was ~23 items; realistically v1 grew to 60+ specs by the time small
 fixes and adjustments accumulated. That's fine — the workflow scales.
@@ -533,8 +528,6 @@ These you have to do yourself; Claude Code can't.
       Developer key. Free, instant. Add the key as a GitHub Actions secret
       named `TMDB_API_KEY` (repo → Settings → Secrets → Actions → New
       repository secret) so CI can inject it into the production build.
-- [ ] Sign up for Trakt API at trakt.tv/oauth/applications → create
-      application, get client ID. Free, instant.
 - [x] Add the deployed `syncTitles` endpoint URL as a GitHub Actions
       **variable** named `VULTUS_SYNC_URL` (repo → Settings → Secrets and
       variables → Actions → Variables) so the daily-sync cron knows where to

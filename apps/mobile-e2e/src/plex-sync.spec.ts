@@ -284,7 +284,6 @@ test('sync outcome', async ({ page }) => {
     encodeFields({
       type: 'movie',
       tmdbId: 550,
-      traktId: null,
       title: 'Fight Club',
       addedAt: { __timestamp: '2026-06-24T10:00:00.000Z' },
       status: 'planned',

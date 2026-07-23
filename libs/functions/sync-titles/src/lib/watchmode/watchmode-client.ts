@@ -1,6 +1,6 @@
 // Typed Watchmode v1 client. Mirrors the TMDB client shape: injected apiKey,
 // injectable `fetch`, the shared in-slice http core, 404 → null, WatchmodeError
-// on any other non-2xx. The one auth difference from TMDB/Trakt: Watchmode
+// on any other non-2xx. The one auth difference from TMDB: Watchmode
 // authenticates via an `?apiKey=…` QUERY param, so the key is passed to the
 // http core as `authQuery` (appended to the fetch URL, EXCLUDED from the error
 // endpoint/logs — see shared/http.ts). The client NEVER reads the key from

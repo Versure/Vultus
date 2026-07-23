@@ -429,10 +429,9 @@ describe('auth + token safety', () => {
       const headers = init.headers as Record<string, string>;
       expect(headers['Authorization']).toBe(`Bearer ${TOKEN}`);
       expect(headers['Accept']).toBe('application/json');
-      // Regression after the http.ts generalization: TMDB must NOT send any
-      // Trakt headers through the now-shared core.
-      expect(headers['trakt-api-key']).toBeUndefined();
-      expect(headers['trakt-api-version']).toBeUndefined();
+      // Regression after the http.ts generalization: TMDB sends ONLY its own two
+      // headers through the now-shared core — no extra auth headers leak in.
+      expect(Object.keys(headers).sort()).toEqual(['Accept', 'Authorization']);
     }
   });
 

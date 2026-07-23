@@ -41,14 +41,12 @@ flowchart LR
     end
     subgraph External["🌐 Outside data sources"]
         TMDB["TMDB<br/>(movie/TV metadata,<br/>streaming availability)"]
-        Trakt["Trakt<br/>(TV show IDs)"]
         Plex["Your Plex server<br/>(optional, local network)"]
     end
 
     App <--> DB
     Fn --> DB
     Fn --> TMDB
-    Fn --> Trakt
     Push --> App
     App <--> Plex
 ```
@@ -57,7 +55,7 @@ flowchart LR
 | ------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | **The mobile app**        | An Android app built with Ionic + Angular, packaged as a native app via Capacitor                             | Everything you see and tap: watchlist, search, title details, the "Watch Today" tab, notifications inbox, settings, onboarding |
 | **The Firebase backend**  | Google's cloud platform: a database (Firestore), server-side code (Cloud Functions), and push messaging (FCM) | Stores your data, runs the daily sync, and sends push notifications                                                            |
-| **External data sources** | TMDB and Trakt (free public APIs), plus optionally your own Plex server                                       | Provide movie/TV metadata, streaming availability per region, and (via Plex) what you've already watched                       |
+| **External data sources** | TMDB (a free public API), plus optionally your own Plex server                                                | Provide movie/TV metadata, streaming availability per region, and (via Plex) what you've already watched                       |
 
 There is no custom server to maintain. The backend is entirely
 "serverless" — small pieces of code that Firebase runs on demand — which keeps
@@ -212,7 +210,7 @@ dedicated deploy pipeline with its own pre-flight checks.
 
 Vultus targets **~€0/month**. Firebase's pay-as-you-go plan is required to
 run Cloud Functions, but personal-scale usage sits far inside the free
-allowances; TMDB and Trakt are free for non-commercial use; the daily timer
+allowances; TMDB is free for non-commercial use; the daily timer
 runs on GitHub Actions' free tier. The known open risk is the accuracy of
 per-region streaming-availability data (TMDB's is decent but imperfect) — the
 snapshot-comparison design softens this, and a more accurate paid-tier source

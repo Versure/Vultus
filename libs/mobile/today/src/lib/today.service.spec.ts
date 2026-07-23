@@ -48,7 +48,6 @@ function readDoc(
   return {
     type: over.type ?? 'movie',
     tmdbId: over.tmdbId ?? 1,
-    traktId: null,
     title: 'T' + (over.tmdbId ?? 1),
     addedAt: fakeTs(new Date('2026-03-04T05:06:07.000Z')),
     status: over.status ?? 'watching',
