@@ -152,7 +152,12 @@ outside the scroll host, spec 0082's `overflow: hidden` clip is no longer
 load-bearing (a `slot="fixed"` closed panel cannot leak scrollable overflow into
 `ion-content`) and was **removed with proof**: verified live on serve-mock
 (spec 0095 D5) that with it gone the empty-watchlist closed-sheet check still holds
-(`ion-content` inner-scroll `scrollHeight === clientHeight`, 699 === 699).
+(`ion-content` inner-scroll `scrollHeight === clientHeight`, 699 === 699). The
+persistent control rows (`.status-filter` / `.type-tabs` / `.search-row`) carry
+`flex-shrink: 0` because that same flex-column scroll host, combined with their
+`overflow-x: auto` (which gives a flex item an automatic minimum main-size of 0),
+otherwise squashes them to their padding under overflow pressure — measured
+48→16px and 26→4px on a populated list (spec 0102, issue #230, third fix).
 
 The slice-local grouping/filtering/sort helpers (`groupByStatus`, `filterByType`,
 `sortItems`, `getAvailableProviders`, the `WatchlistSort` type,
