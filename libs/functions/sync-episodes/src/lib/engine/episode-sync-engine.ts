@@ -3,8 +3,12 @@
 // episode ids, insert ONLY the missing ones (never overwriting watched state).
 // Firebase-free; no `slice:sync-titles` import — all I/O is a port.
 
-import type { Episode, EpisodeDoc } from '@vultus/shared/domain';
-import { episodeId, newEpisodeDoc } from './episode-id';
+import type { Episode } from '@vultus/shared/domain';
+import {
+  applyCompletedRevert,
+  applyNextWatchableRecompute,
+  computeInserts,
+} from './episode-write-helpers';
 import type {
   EpisodeSyncConfig,
   EpisodeSyncEngine,
@@ -44,12 +48,7 @@ export function createEpisodeSyncEngine(
     }
 
     const existing = await episodes.getExistingEpisodeIds(uid, titleId);
-    const toWrite: { id: string; doc: EpisodeDoc }[] = fetched
-      .filter((e) => !existing.has(episodeId(e.season, e.episode)))
-      .map((e) => ({
-        id: episodeId(e.season, e.episode),
-        doc: newEpisodeDoc(e),
-      }));
+    const toWrite = computeInserts(fetched, existing);
 
     await episodes.writeEpisodes(uid, titleId, toWrite);
 
@@ -59,14 +58,12 @@ export function createEpisodeSyncEngine(
     // surface (Watchlist tab, detail page, notifications) is correct without the
     // user re-opening the detail page. This is a SEPARATE watchlist-doc write —
     // episode docs are never touched (insert-only invariant of spec 0047).
-    let statusRevertedToWatching = false;
-    if (toWrite.length > 0 && watchlistStatus) {
-      const current = await watchlistStatus.getStatus(uid, titleId);
-      if (current === 'completed') {
-        await watchlistStatus.setStatus(uid, titleId, 'watching');
-        statusRevertedToWatching = true;
-      }
-    }
+    const statusRevertedToWatching = await applyCompletedRevert(
+      watchlistStatus,
+      uid,
+      titleId,
+      toWrite.length,
+    );
 
     // Denormalized "earliest unwatched air date" recompute (spec 0081). Wired
     // into BOTH entry points (deviation from 0074's entry-A omission — a fresh
@@ -75,16 +72,12 @@ export function createEpisodeSyncEngine(
     // watch-state AFTER writeEpisodes so it sees pre-existing docs' real watched
     // state plus the just-inserted (watched: false) docs — getExistingEpisodeIds
     // (ids only) can't supply that.
-    if (toWrite.length > 0 && nextWatchable) {
-      const eps = await nextWatchable.readEpisodeWatchState(uid, titleId);
-      const unwatched = eps.filter((e) => !e.watched).map((e) => e.airDate);
-      // Min via ISO lexical comparison (the transitions.ts idiom); null when none.
-      const next =
-        unwatched.length > 0
-          ? unwatched.reduce((min, d) => (d < min ? d : min))
-          : null;
-      await nextWatchable.setNextUnwatchedEpisodeAirDate(uid, titleId, next);
-    }
+    await applyNextWatchableRecompute(
+      nextWatchable,
+      uid,
+      titleId,
+      toWrite.length,
+    );
 
     return {
       uid,

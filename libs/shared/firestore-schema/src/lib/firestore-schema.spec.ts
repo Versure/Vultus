@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type {
   CatalogProvider,
+  Episode,
   EpisodeDoc,
   NotificationDoc,
   ProviderCatalogDoc,
@@ -15,7 +16,9 @@ import type {
 import type { FirestoreTimestampLike } from './data-types';
 import {
   availabilityToData,
+  cachedEpisodeToData,
   dataToAvailability,
+  dataToCachedEpisode,
   dataToEpisode,
   dataToNotification,
   dataToProviderCatalog,
@@ -43,6 +46,8 @@ import {
   syncRunDocPath,
   syncRunsCollection,
   titleCacheDocPath,
+  titleCacheEpisodeDocPath,
+  titleCacheEpisodesPath,
   titleCachePath,
   userPath,
   watchlistItemPath,
@@ -777,6 +782,50 @@ describe('converters — round-trip identity', () => {
     expect(dataToEpisode(stored as never)).toEqual(ep);
   });
 
+  it('CachedEpisode: season/episode/title/airDate + lastSyncedAt round-trip across the Timestamp boundary (spec 0101)', () => {
+    const ep: Episode = {
+      season: 2,
+      episode: 5,
+      title: 'Ozymandias',
+      airDate: '2026-04-01T20:00:00.000Z',
+    };
+    const lastSyncedAt = '2026-07-23T09:15:00.000Z';
+    const result = dataToCachedEpisode(
+      simulateStored(cachedEpisodeToData(ep, lastSyncedAt)) as never,
+    );
+    expect(result).toEqual({ ...ep, lastSyncedAt });
+  });
+
+  it('CachedEpisode: title null is preserved (spec 0101)', () => {
+    const ep: Episode = {
+      season: 1,
+      episode: 1,
+      title: null,
+      airDate: '2026-04-01T20:00:00.000Z',
+    };
+    const lastSyncedAt = '2026-07-23T09:15:00.000Z';
+    const result = dataToCachedEpisode(
+      simulateStored(cachedEpisodeToData(ep, lastSyncedAt)) as never,
+    );
+    expect(result).toEqual({ ...ep, lastSyncedAt });
+    expect(result.title).toBeNull();
+  });
+
+  it('CachedEpisode: write emits Date on airDate + lastSyncedAt; no watched/watchedAt (spec 0101)', () => {
+    const ep: Episode = {
+      season: 3,
+      episode: 7,
+      title: 'The Cache',
+      airDate: '2026-05-10T20:00:00.000Z',
+    };
+    const write = cachedEpisodeToData(ep, '2026-07-23T09:15:00.000Z');
+    expect(write.airDate).toBeInstanceOf(Date);
+    expect(write.lastSyncedAt).toBeInstanceOf(Date);
+    // The cache stores ONLY TMDB facts — no per-user watched/watchedAt.
+    expect('watched' in write).toBe(false);
+    expect('watchedAt' in write).toBe(false);
+  });
+
   it('NotificationDoc: readAt set; payload incl optional providerName', () => {
     const n: NotificationDoc = {
       titleId: 'title-9',
@@ -1142,6 +1191,11 @@ describe('path builders — equality', () => {
     expect(availabilityDocPath(603, 'NL')).toBe(
       'title-cache/603/availability/NL',
     );
+    // Global episode cache (spec 0101) — tv only; episodeId = s{SS}e{EEE}.
+    expect(titleCacheEpisodesPath(1399)).toBe('title-cache/1399/episodes');
+    expect(titleCacheEpisodeDocPath(1399, 's01e005')).toBe(
+      'title-cache/1399/episodes/s01e005',
+    );
     expect(syncRunsCollection()).toBe('sync-runs');
     expect(syncRunDocPath('abc')).toBe('sync-runs/abc');
     expect(providerCatalogPath()).toBe('provider-catalog');
@@ -1157,6 +1211,7 @@ describe('path builders — equality', () => {
       notificationsPath('u1'),
       titleCachePath(),
       availabilityPath(603),
+      titleCacheEpisodesPath(1399),
       syncRunsCollection(),
       providerCatalogPath(),
     ];
@@ -1167,6 +1222,7 @@ describe('path builders — equality', () => {
       notificationPath('u1', 'n2'),
       titleCacheDocPath(603),
       availabilityDocPath(603, 'NL'),
+      titleCacheEpisodeDocPath(1399, 's01e005'),
       syncRunDocPath('abc'),
       providerCatalogDocPath('NL'),
     ];

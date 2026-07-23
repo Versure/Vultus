@@ -103,6 +103,24 @@ export interface EpisodeWriteData {
   watchedAt: Date | null;
 }
 
+// --- CachedEpisode: global episode cache (title-cache/{tmdbId}/episodes) — TMDB
+// facts only, NO per-user watched/watchedAt (spec 0101). airDate is non-null
+// (null-air-date episodes are skipped, spec 0047); lastSyncedAt records the fetch. ---
+export interface CachedEpisodeReadData {
+  season: number;
+  episode: number;
+  title: string | null;
+  airDate: FirestoreTimestampLike;
+  lastSyncedAt: FirestoreTimestampLike;
+}
+export interface CachedEpisodeWriteData {
+  season: number;
+  episode: number;
+  title: string | null;
+  airDate: Date;
+  lastSyncedAt: Date;
+}
+
 // --- NotificationDoc: sentAt + nullable readAt; payload passes through ---
 export interface NotificationReadData {
   titleId: string;

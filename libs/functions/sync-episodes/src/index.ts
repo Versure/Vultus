@@ -5,10 +5,14 @@
 // this barrel.
 
 export { createEpisodeSyncEngine } from './lib/engine/episode-sync-engine';
+export { createEpisodeCacheEngine } from './lib/engine/episode-cache-engine';
 export type {
   EpisodeSyncEngine,
   EpisodeSyncConfig,
   EpisodeUpsertResult,
+  EpisodeCacheEngine,
+  EpisodeCacheEngineConfig,
+  CacheShowResult,
 } from './lib/engine/types';
 
 export { episodeId, newEpisodeDoc } from './lib/engine/episode-id';
@@ -16,6 +20,7 @@ export { episodeId, newEpisodeDoc } from './lib/engine/episode-id';
 export type {
   TmdbEpisodeSource,
   EpisodeStore,
+  TitleCacheEpisodeStore,
   WatchlistTvSource,
   WatchlistTvShow,
   WatchlistDocRef,

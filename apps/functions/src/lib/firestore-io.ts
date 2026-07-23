@@ -3,9 +3,12 @@
  * pure helpers (auth/gather/staleness/rate-limit) carry the testable logic; this
  * file only touches the SDK.
  *
- *  - `gatherWatchlistTitles` — `collectionGroup('watchlist')` scan projecting
- *    each doc to `{ tmdbId, type }` (raw fields, no converter — avoids the
- *    `addedAt` Timestamp). NO where/orderBy → needs no composite index.
+ *  - `gatherWatchlistEntries` — the ONE consolidated `collectionGroup('watchlist')`
+ *    scan (spec 0101) projecting each doc to `{ uid, titleId, tmdbId, type }` (raw
+ *    fields, no converter — avoids the `addedAt` Timestamp; `uid` = the parent user
+ *    doc id, `titleId` = the watchlist doc id). NO where/orderBy → needs no composite
+ *    index. Feeds `consolidateGather`, which folds it into the title / episode-cache /
+ *    fan-out / airing-scan stage inputs — the pipeline's single per-run gather.
  *  - `readSyncState` / `writeSyncState` — the `system/sync` rate-limit doc.
  *  - `verifyIdToken` — wraps `getAuth().verifyIdToken` for the injected verifier.
  */
@@ -17,7 +20,7 @@ import {
   syncRunToData,
 } from '@vultus/shared/firestore-schema';
 import { REGIONS, type Region, type SyncRun } from '@vultus/shared/domain';
-import type { GatheredTitle } from './gather';
+import type { GatheredEntry } from './gather';
 
 const REGION_SET = new Set<string>(REGIONS);
 
@@ -30,18 +33,36 @@ export interface SyncState {
 }
 
 /**
- * Gather every tracked title across ALL users via a collection-group scan,
- * projecting each watchlist doc to its raw `{ tmdbId, type }` fields. Not
- * deduped here — `dedupeTitles` handles that downstream.
+ * The ONE consolidated nightly gather (spec 0101): enumerate every tracked title
+ * across ALL users via a single collection-group scan, projecting each watchlist doc
+ * to its raw `{ uid, titleId, tmdbId, type }` (no converter — avoids the `addedAt`
+ * Timestamp). `uid` is the parent user doc id; `titleId` is the watchlist doc id.
+ * Not deduped/consolidated here — `consolidateGather` folds these entries into the
+ * per-stage inputs downstream. A malformed doc (missing `tmdbId`/`type`, or an
+ * unexpected top-level doc with no parent user) is skipped.
  */
-export async function gatherWatchlistTitles(
+export async function gatherWatchlistEntries(
   db: Firestore,
-): Promise<GatheredTitle[]> {
+): Promise<GatheredEntry[]> {
   const snap = await db.collectionGroup(COLLECTIONS.watchlist).get();
-  return snap.docs.map((doc) => {
-    const data = doc.data() as { tmdbId: number; type: GatheredTitle['type'] };
-    return { tmdbId: data.tmdbId, type: data.type };
-  });
+  const entries: GatheredEntry[] = [];
+  for (const doc of snap.docs) {
+    const data = doc.data() as {
+      tmdbId?: number;
+      type?: GatheredEntry['type'];
+    };
+    if (typeof data.tmdbId !== 'number') continue;
+    if (data.type !== 'movie' && data.type !== 'tv') continue;
+    const uid = doc.ref.parent.parent?.id;
+    if (!uid) continue;
+    entries.push({
+      uid,
+      titleId: doc.ref.id,
+      tmdbId: data.tmdbId,
+      type: data.type,
+    });
+  }
+  return entries;
 }
 
 /**
@@ -49,7 +70,7 @@ export async function gatherWatchlistTitles(
  * `activeRegions` (spec 0099). Plain `.get()` on the `users` collection reading
  * only the raw `region` field (no converter → avoids the `fcmTokens` Timestamps;
  * no where/orderBy → no composite index). Values not in `REGIONS` are dropped.
- * Mirrors how `gatherWatchlistTitles` scans a collection via a `COLLECTIONS`
+ * Mirrors how `gatherWatchlistEntries` scans a collection via a `COLLECTIONS`
  * constant rather than a hardcoded literal.
  */
 export async function gatherActiveRegions(db: Firestore): Promise<Region[]> {

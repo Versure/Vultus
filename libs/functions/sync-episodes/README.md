@@ -11,35 +11,96 @@ user's `users/{uid}/watchlist/{titleId}/episodes` subcollection, and inserts
   newly tracked show is backfilled immediately.
 - **Entry point B — daily-sync extension** (`runSync` in `main.ts`): after the
   title-cache pass, `syncAll` walks every TV show on every watchlist and upserts
-  new episodes, isolating per-show errors.
+  new episodes, isolating per-show errors. _(Legacy per-user path — being
+  superseded by the sharded cache/fan-out model below; retained until the workers
+  wire the new engine.)_
+- **Entry point B' — sharded cache + fan-out** (spec 0101): the daily pass is
+  split so TMDB is hit **at most once per distinct show per night**.
+  `episodeCacheWorker` calls `cacheShowEpisodes(tmdbId)` to fetch each show's
+  seasons ONCE and upsert them into the global
+  `title-cache/{tmdbId}/episodes` cache; `episodeFanoutWorker` then calls
+  `fanoutUserEpisodes(uid, titleId, tmdbId)` to write the per-user episode docs
+  **from the cache with zero TMDB calls**.
+
+### Cache-backed fetch-once / fan-out model (spec 0101)
+
+`createEpisodeCacheEngine(config)` returns two operations that together replace
+the O(users × shows) TMDB cost of the old per-user `syncAll`:
+
+- **`cacheShowEpisodes(tmdbId)`** — fetch the show's seasons ONCE via the
+  `tmdb` port (`getSeasonCount` + `getSeasonEpisodes` per season, same per-season
+  loop + null-season tolerance as the on-add engine), skip null-air-date episodes
+  (spec 0047), and upsert them into the shared cache via the
+  `TitleCacheEpisodeStore` port, keyed by `episodeId(season, episode)`
+  (`s{SS}e{EEE}`). **Idempotent** — a re-run upserts the same doc ids. Stores
+  ONLY TMDB facts (no per-user `watched`/`watchedAt`).
+- **`fanoutUserEpisodes(uid, titleId, tmdbId)`** — read the show's episodes from
+  the cache (`TitleCacheEpisodeStore.getCachedEpisodes`, **zero TMDB calls**),
+  then do the exact per-user work the on-add engine does after fetching:
+  insert-only per-user episode docs, the spec-0074 `completed→watching` revert,
+  and the spec-0081 `nextUnwatchedEpisodeAirDate` recompute. The insert-only
+  diff + both post-write steps are shared with `createEpisodeSyncEngine` via
+  `engine/episode-write-helpers.ts`, so fan-out behaves identically to the
+  per-user path and **entry point A's behavior is unchanged**.
+
+The config carries `cache` (required by both), `tmdb` (only `cacheShowEpisodes`
+needs it), `episodes` (only `fanoutUserEpisodes` needs it), and the optional
+`watchlistStatus` / `nextWatchable` ports — so a cache-only worker or a
+fan-out-only worker constructs the engine with just the ports it uses (calling
+the other operation without its port throws, like `syncAll` without `watchlist`).
 
 ## Public surface (barrel)
 
 - `createEpisodeSyncEngine(config)` → `EpisodeSyncEngine` with
   `syncOne(uid, titleId, tmdbId)` and `syncAll()`.
+- `createEpisodeCacheEngine(config)` → `EpisodeCacheEngine` with
+  `cacheShowEpisodes(tmdbId)` and `fanoutUserEpisodes(uid, titleId, tmdbId)`
+  (spec 0101, cache-backed fetch-once / fan-out — see below).
 - `EpisodeSyncEngine`, `EpisodeSyncConfig`, `EpisodeUpsertResult` — contract
   types. `EpisodeSyncConfig` carries an optional `watchlistStatus` port (spec 0074) and an optional `nextWatchable` port (spec 0081); `EpisodeUpsertResult`
   carries an optional `statusRevertedToWatching` flag (spec 0074).
+- `EpisodeCacheEngine`, `EpisodeCacheEngineConfig`, `CacheShowResult` — cache/
+  fan-out contract types (spec 0101). `fanoutUserEpisodes` returns the same
+  `EpisodeUpsertResult` shape as the on-add engine (`seasonsFetched: 0`, since
+  fan-out makes no TMDB call).
 - `episodeId(season, episode)` / `newEpisodeDoc(ep)` — id + doc helpers.
-- Ports: `TmdbEpisodeSource`, `EpisodeStore`, `WatchlistTvSource`,
-  `WatchlistTvShow`, `WatchlistDocRef`, `WatchlistStatusStore`,
-  `WatchlistNextWatchableStore`.
+- Ports: `TmdbEpisodeSource`, `EpisodeStore`, `TitleCacheEpisodeStore`,
+  `WatchlistTvSource`, `WatchlistTvShow`, `WatchlistDocRef`,
+  `WatchlistStatusStore`, `WatchlistNextWatchableStore`.
 
 ## Usage
 
 ```ts
-import { createEpisodeSyncEngine } from '@vultus/functions/sync-episodes';
+import {
+  createEpisodeSyncEngine,
+  createEpisodeCacheEngine,
+} from '@vultus/functions/sync-episodes';
 
+// Entry point A (on-add trigger) / legacy entry B (per-user daily pass):
 const engine = createEpisodeSyncEngine({ tmdb, episodes, watchlist });
 const result = await engine.syncOne(uid, titleId, tmdbId); // entry point A
-const results = await engine.syncAll(); // entry point B (needs `watchlist`)
+const results = await engine.syncAll(); // legacy entry B (needs `watchlist`)
+
+// Sharded daily pass (spec 0101), split across two workers:
+const cacheEngine = createEpisodeCacheEngine({ tmdb, cache }); // episodeCacheWorker
+await cacheEngine.cacheShowEpisodes(tmdbId); // fetch TMDB once → global cache
+
+const fanoutEngine = createEpisodeCacheEngine({
+  cache,
+  episodes,
+  watchlistStatus,
+  nextWatchable,
+}); // episodeFanoutWorker
+await fanoutEngine.fanoutUserEpisodes(uid, titleId, tmdbId); // zero TMDB
 ```
 
-`tmdb`, `episodes`, and `watchlist` are **ports** — the lib never imports the
-Firebase SDK or the sync-titles `TmdbClient`. Their concrete adapters
-(`createTmdbEpisodeSourceAdapter`, `createEpisodeUpsertStore`,
-`createWatchlistTvSourceAdapter`) live in `apps/functions/src/sync-episodes.ts`,
-the only place where the Admin SDK and `@vultus/functions/sync-titles` enter.
+`tmdb`, `episodes`, `cache`, and `watchlist` are **ports** — the lib never
+imports the Firebase SDK or the sync-titles `TmdbClient`. Their concrete
+adapters (`createTmdbEpisodeSourceAdapter`, `createEpisodeUpsertStore`,
+`createWatchlistTvSourceAdapter`, and the spec-0101 `TitleCacheEpisodeStore`
+Admin-SDK adapter over `titleCacheEpisodesPath`) live in
+`apps/functions/src/sync-episodes.ts`, the only place where the Admin SDK and
+`@vultus/functions/sync-titles` enter.
 
 ## Behavior contract
 
@@ -103,6 +164,15 @@ the only place where the Admin SDK and `@vultus/functions/sync-titles` enter.
     `nextWatchable` into **both** the on-add trigger (entry A) and the daily pass
     (entry B). The engine still no-ops safely when the port is absent (optional
     backward compatibility).
+
+- **Two episode-creation paths, both race-safe (spec 0101).** The on-add trigger
+  (**entry point A**, `syncOne`) still fetches directly from TMDB per user — it is
+  rare and user-latency-sensitive, so it is deliberately NOT routed through the
+  global cache. The nightly sharded pass (**entry point B'**) fetches each show
+  once into the cache (`cacheShowEpisodes`) and fans it out per user
+  (`fanoutUserEpisodes`). Both paths are insert-only and use the identical
+  `s{SS}e{EEE}` ids, so a show added mid-day (entry A) and later refreshed by the
+  nightly fan-out never conflict — no correctness gap.
 
 ## Sheriff boundaries
 

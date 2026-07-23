@@ -46,37 +46,43 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{"force": true}')"
           echo "Daily sync HTTP status: $status"
-          # Print the response body for observability (SyncRunResponse counts on
-          # 200; a JSON {"error":...} on a function-level failure). The function
-          # never echoes secrets, and we never print the request header.
+          # Print the response body for observability. On 2xx this is a
+          # SyncEnqueueResponse { ok, trigger, runId, gathered, toSync,
+          # shardCount, forced }; on a function-level failure a JSON
+          # {"error":...}. The function never echoes secrets, and we never
+          # print the request header.
           cat "$body_file"
           echo
           case "$status" in
             2??)
-              # D4: gate on the per-title error rate reported in the 200 body.
-              # SyncRunResponse: { ok, trigger, gathered, synced, skipped,
-              # errored, forced, durationMs, errorSample }. errorSample is the
-              # capped (<=10), credential-free list of per-title error reasons.
-              # Integer arithmetic only (no floating point): compare
-              # errored*100 >= 20*gathered instead of dividing.
+              # syncTitles is now an enqueue coordinator (spec 0101): it gathers
+              # + dedupes once, enqueues Cloud Tasks shards, and RETURNS before
+              # the pipeline runs. So this job only asserts the pipeline was
+              # successfully ENQUEUED — it can no longer see per-title outcomes
+              # (synced/skipped/errored are gone from the response). The run
+              # OUTCOME is observable in the sync-runs/{runId} Firestore doc
+              # (settings sync-health card, spec 0049), written when the run
+              # finalizes — NOT in this enqueue response.
+              # Enqueue success = a parseable non-empty runId AND either
+              # shardCount > 0 (work was fanned out) OR gathered == 0 (a healthy
+              # no-op: nothing to sync tonight).
+              runId="$(jq -r '.runId // ""' "$body_file")"
               gathered="$(jq -r '.gathered // 0' "$body_file")"
-              errored="$(jq -r '.errored // 0' "$body_file")"
-              if [ "$gathered" -eq 0 ]; then
-                echo "Daily sync: gathered 0 titles — healthy no-op."
-                exit 0
-              fi
-              if [ "$errored" -eq 0 ]; then
-                echo "Daily sync: 0 errored of $gathered gathered — healthy."
-                exit 0
-              fi
-              if [ "$((errored * 100))" -ge "$((20 * gathered))" ] || [ "$errored" -ge 20 ]; then
-                echo "::error::Daily sync error rate too high: errored=$errored of gathered=$gathered (threshold: >=20% or >=20 absolute). Per-title reasons:"
-                jq -r '.errorSample[]?' "$body_file"
+              shardCount="$(jq -r '.shardCount // 0' "$body_file")"
+              if [ -z "$runId" ] || [ "$runId" = "null" ]; then
+                echo "::error::Daily sync returned 2xx but no parseable runId — enqueue did not succeed. See the response body above."
                 exit 1
               fi
-              echo "::warning::Daily sync had $errored errored title(s) of $gathered gathered (under the failure threshold). Per-title reasons:"
-              jq -r '.errorSample[]?' "$body_file"
-              exit 0
+              if [ "$gathered" -eq 0 ]; then
+                echo "Daily sync enqueued (runId=$runId): gathered 0 titles — healthy no-op."
+                exit 0
+              fi
+              if [ "$shardCount" -gt 0 ]; then
+                echo "Daily sync enqueued (runId=$runId): $shardCount title-sync shard(s) for $gathered gathered title(s). Outcome will appear in sync-runs/$runId (sync-health)."
+                exit 0
+              fi
+              echo "::error::Daily sync returned 2xx (runId=$runId) with gathered=$gathered but shardCount=0 — titles were gathered yet no shards were enqueued. See the response body above."
+              exit 1
               ;;
             403)
               if grep -qiE 'Your client does not have permission|<title>403 Forbidden' "$body_file"; then

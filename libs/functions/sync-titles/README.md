@@ -337,17 +337,33 @@ which previously retried immediately. `HttpCoreConfig` gains
 `DEFAULT_MAX_RETRIES` in both clients is **5** (was 3); both accept a
 `backoffBaseMs?` config passed through to the transport.
 
-The HTTP sync function (PLAN §6 item 12) is **built** in spec 0009: the
-`apps/functions` `syncTitles` `onRequest` handler wires `createSyncEngine` to
-the Admin-SDK `createFirestoreTitleCacheStore(db)` adapter exported here, with
-shared-secret/Firebase-Auth dual auth, rate-limiting, a `collectionGroup`
-watchlist gather, and a staleness window. The remaining follow-ons are:
+The HTTP sync function (PLAN §6 item 12) is **built** in spec 0009 and **sharded
+over Cloud Tasks** in spec 0101: the `apps/functions` `syncTitles` `onRequest`
+handler is now an **enqueue coordinator**, not an inline pipeline. It authenticates
+(shared-secret / Firebase-Auth dual auth), rate-limits the user path, runs **ONE
+consolidated `collectionGroup('watchlist')` gather per run** — down from three
+separate gathers — and folds that single read into every downstream stage's input
+(`apps/functions/src/lib/gather.ts` `consolidateGather`): the distinct title union
+(deduped by `tmdbId`, staleness-filtered) for the **title-sync** stage, the per-user
+TV episode fan-out assignments, the distinct TV show `tmdbId`s for the
+**episode-cache** stage, and the distinct TV-tracking uids for the **airing-scan**
+stage. It opens a `sync-run-progress/{runId}` staging doc, persists the downstream
+inputs under that doc's `staged/*` subcollection, enqueues a delayed dead-run
+watchdog, and fans the title work out into `title-sync` Cloud Tasks shards — no
+pipeline work runs inline. `titleSyncWorker` (`onTaskDispatched`) is where **this
+lib's `createSyncEngine` + `createFirestoreTitleCacheStore(db)` actually run**, over
+one shard's title subset; its last shard hands off to the episode-cache stage. The
+lib's public surface (engine, clients, `gatherUserWatchlistTitles`) is **unchanged**
+by the sharding — only where/how the engine is invoked moved.
 
-- **#13 daily-sync cron** (`.github/workflows/daily-sync.yml`) — a GitHub
-  Actions schedule that `POST`s to `syncTitles` with the shared secret.
-- **#14 dispatch-notifications** — a separate slice that reacts to the
-  `title-cache` availability writes this engine makes, fanning out per-user
-  notifications. Not this slice.
+Related pieces (other slices / apps, not this lib):
+
+- **daily-sync cron** (`.github/workflows/daily-sync.yml`) — a GitHub Actions
+  schedule that `POST`s to `syncTitles` with the shared secret; since spec 0101 it
+  gates on **enqueue success** (the run's outcome is observed later in
+  `sync-runs/{runId}`), not synchronous pipeline completion.
+- **dispatch-notifications** — a separate slice that reacts to the `title-cache`
+  availability writes this engine makes, fanning out per-user notifications.
 
 ## Testing
 

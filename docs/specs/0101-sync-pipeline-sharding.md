@@ -2,7 +2,7 @@
 number: 0101
 slug: sync-pipeline-sharding
 title: Shard the nightly sync pipeline (Cloud Tasks) and dedupe episode fetching
-status: approved
+status: done
 slices: []
 scopes: [scope:functions]
 created: 2026-07-22
