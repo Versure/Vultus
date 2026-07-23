@@ -2,7 +2,7 @@
 number: 0100
 slug: indexed-dispatch-lookups
 title: Indexed tracking-user lookups in notification dispatch
-status: implementing
+status: done
 slices: []
 scopes: [scope:functions]
 created: 2026-07-22
