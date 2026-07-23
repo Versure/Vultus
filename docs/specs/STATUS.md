@@ -10,10 +10,10 @@
 
 # Spec status ledger
 
-Total specs: 103
+Total specs: 104
 
 - done: 102
-- approved: 1
+- approved: 2
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -120,3 +120,4 @@ Total specs: 103
 | 101 | sync-pipeline-sharding | Shard the nightly sync pipeline (Cloud Tasks) and dedupe episode fetching | done | — | scope:functions |
 | 102 | fix-watchlist-filter-rows-squash | Fix the Watchlist top filter rows collapsing when the list overflows — `flex-shrink: 0` on the persistent control rows | done | slice:watchlist | scope:mobile |
 | 103 | fix-plex-sync-mark-completed | Fix Plex sync — mark a fully-watched show completed on the first sync | approved | slice:settings | scope:mobile |
+| 104 | remove-trakt-integration | Remove the vestigial Trakt integration from the sync path (fixes daily-sync failures, | approved | — | scope:shared, scope:functions, scope:mobile |
