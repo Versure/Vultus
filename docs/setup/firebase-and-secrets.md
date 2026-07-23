@@ -130,11 +130,31 @@ but we still keep it out of source via env for cleanliness/portability.
    TRAKT_CLIENT_SECRET=...   # not used in v1, store anyway
    ```
 
-### (Optional, later) Watchmode — fallback only
+### (Optional) Watchmode — streaming-availability fallback (spec 0099)
 
-Per PLAN §9 risk register, if TMDB's NL provider accuracy is poor we layer in
-Watchmode (1,000 free calls/month). **Don't sign up now** — only if monitoring
-shows we need it.
+Per PLAN §8/§9, when TMDB's per-region provider data is missing/stale the daily
+sync layers in Watchmode as a **gap-filling fallback** (spec 0099). It is
+**functions-only** and **degrades gracefully**: until you provision the key the
+client is simply not constructed and the sync runs byte-for-byte TMDB-only —
+nothing errors.
+
+To enable it:
+
+1. Sign up for the Watchmode API (free tier) at <https://api.watchmode.com/> and
+   copy your **API key**.
+2. Store it as `WATCHMODE_API_KEY` (functions-only; never exposed to mobile /
+   onboarding / `inject-mobile-env.mjs`):
+   ```
+   WATCHMODE_API_KEY=<key>
+   ```
+3. Add it in the three locations below (`.env.local`, the GitHub Actions
+   **secret** `WATCHMODE_API_KEY`, and — for local functions runs —
+   `apps/functions/.env.vultus-cab62`). It rides the same `defineString` param
+   channel as `TRAKT_CLIENT_ID` (declared `defineString('WATCHMODE_API_KEY', {
+default: '' })`), **not** `defineSecret` — so an unset key never blocks a
+   deploy. The deploy workflow writes it into `apps/functions/.env.vultus-cab62`
+   from the GitHub Actions secret; an unset secret writes an empty value and the
+   deploy still succeeds (TMDB-only).
 
 ## 5. Generate the sync shared secret
 
@@ -174,6 +194,7 @@ TMDB_API_KEY=...
 TMDB_READ_ACCESS_TOKEN=...
 TRAKT_CLIENT_ID=...
 TRAKT_CLIENT_SECRET=...
+WATCHMODE_API_KEY=...   # optional (spec 0099); empty/absent → TMDB-only fallback disabled
 
 # Sync auth
 SYNC_SHARED_SECRET=...
@@ -187,6 +208,8 @@ Add (same names, uppercase):
 - `TMDB_API_KEY`, `TMDB_READ_ACCESS_TOKEN`
 - `TRAKT_CLIENT_ID`
 - `SYNC_SHARED_SECRET`
+- _(optional, spec 0099)_ `WATCHMODE_API_KEY` — the deploy workflow appends it to
+  `apps/functions/.env.vultus-cab62`; unset → empty value → fallback disabled
 - _(when CI deploys functions — later)_ `FIREBASE_SERVICE_ACCOUNT` (see §7)
 
 The `FIREBASE_*` web-config values are not secret; they can be plain repo

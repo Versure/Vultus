@@ -11,6 +11,10 @@ import type { TitleCacheStore } from './store';
 import type { RegionProviders, TmdbClient } from '../tmdb/tmdb-client';
 import type { TraktClient } from '../trakt/trakt-client';
 import { TmdbError } from '../tmdb/tmdb-error';
+import type {
+  WatchmodeClient,
+  WatchmodeSource,
+} from '../watchmode/watchmode-client';
 
 const FIXED_NOW = '2026-06-19T00:00:00.000Z';
 
@@ -103,6 +107,24 @@ function createTraktMock(overrides: Partial<TraktClient> = {}) {
   return { client, getShowTraktId };
 }
 
+function createWatchmodeMock(overrides: Partial<WatchmodeClient> = {}) {
+  const resolveTitleId =
+    overrides.resolveTitleId ??
+    vi.fn(() => Promise.resolve<number | null>(555));
+  const getTitleSources =
+    overrides.getTitleSources ??
+    vi.fn(() => Promise.resolve<WatchmodeSource[] | null>([]));
+  const client: WatchmodeClient = { resolveTitleId, getTitleSources };
+  return { client, resolveTitleId, getTitleSources };
+}
+
+// Crosswalk source_id 203 → TMDB Netflix (providerId 8); 372 → Disney Plus (337).
+const wmNetflixSource: WatchmodeSource = {
+  sourceId: 203,
+  type: 'sub',
+  region: 'NL',
+};
+
 describe('createSyncEngine', () => {
   let store: ReturnType<typeof createFakeStore>;
 
@@ -128,11 +150,16 @@ describe('createSyncEngine', () => {
       traktId: null,
       metadata: movieMeta,
       lastSyncedAt: FIXED_NOW,
+      // The engine now always writes watchmodeId (preserving any cached id;
+      // null here — no Watchmode configured). Spec 0099.
+      watchmodeId: null,
     });
     expect(store.availability.get(603)?.NL).toEqual({
       providers: [netflix],
       previousSnapshot: [],
       lastSyncedAt: FIXED_NOW,
+      // Provenance marker written on every availability doc (spec 0099).
+      source: 'tmdb',
     });
     expect(results[0].outcome).toBe('synced');
     expect(results[0].transitions).toEqual([
@@ -593,5 +620,378 @@ describe('createSyncEngine — second-pass retry (D2)', () => {
       'synced',
       'synced',
     ]);
+  });
+});
+
+describe('createSyncEngine — Watchmode fallback (spec 0099)', () => {
+  let store: ReturnType<typeof createFakeStore>;
+
+  beforeEach(() => {
+    store = createFakeStore();
+  });
+
+  function engineWith(
+    tmdb: TmdbClient,
+    watchmode: WatchmodeClient | undefined,
+    activeRegions: Region[],
+  ) {
+    return createSyncEngine({
+      tmdb,
+      trakt: createTraktMock().client,
+      store,
+      now: () => FIXED_NOW,
+      watchmode,
+      activeRegions,
+    });
+  }
+
+  it('NO GAP: TMDB flatrate in the active region → Watchmode is NOT called; source tmdb', async () => {
+    const tmdb = createTmdbMock({
+      getWatchProviders: vi.fn(() =>
+        Promise.resolve<RegionProviders | null>({ NL: [netflix] }),
+      ),
+    });
+    const wm = createWatchmodeMock();
+    const engine = engineWith(tmdb.client, wm.client, ['NL']);
+
+    const results = await engine.sync([{ tmdbId: 603, type: 'movie' }]);
+
+    expect(wm.resolveTitleId).not.toHaveBeenCalled();
+    expect(wm.getTitleSources).not.toHaveBeenCalled();
+    expect(store.availability.get(603)?.NL?.providers).toEqual([netflix]);
+    expect(store.availability.get(603)?.NL?.source).toBe('tmdb');
+    expect(results[0].outcome).toBe('synced');
+  });
+
+  it('GAP FILLED: TMDB empty in active region, Watchmode returns a sub → merged, source watchmode, added transition', async () => {
+    const tmdb = createTmdbMock({
+      getWatchProviders: vi.fn(() =>
+        Promise.resolve<RegionProviders | null>({ NL: [] }),
+      ),
+    });
+    const wm = createWatchmodeMock({
+      getTitleSources: vi.fn(() =>
+        Promise.resolve<WatchmodeSource[] | null>([wmNetflixSource]),
+      ),
+    });
+    const engine = engineWith(tmdb.client, wm.client, ['NL']);
+
+    const results = await engine.sync([{ tmdbId: 603, type: 'movie' }]);
+
+    const written = store.availability.get(603)?.NL;
+    expect(written?.providers).toEqual([
+      { providerId: 8, name: 'Netflix', type: 'flatrate' },
+    ]);
+    expect(written?.source).toBe('watchmode');
+    expect(results[0].transitions).toContainEqual({
+      region: 'NL',
+      providerId: 8,
+      name: 'Netflix',
+      type: 'flatrate',
+      kind: 'added',
+    });
+  });
+
+  it('GAP, rent/buy-only still counts as a gap → Watchmode fills flatrate on top', async () => {
+    const tmdb = createTmdbMock({
+      getWatchProviders: vi.fn(
+        () => Promise.resolve<RegionProviders | null>({ NL: [apple] }), // rent only
+      ),
+    });
+    const wm = createWatchmodeMock({
+      getTitleSources: vi.fn(() =>
+        Promise.resolve<WatchmodeSource[] | null>([wmNetflixSource]),
+      ),
+    });
+    const engine = engineWith(tmdb.client, wm.client, ['NL']);
+
+    await engine.sync([{ tmdbId: 603, type: 'movie' }]);
+
+    const written = store.availability.get(603)?.NL;
+    // TMDB rent entry preserved; Watchmode flatrate appended.
+    expect(written?.providers).toEqual([
+      apple,
+      { providerId: 8, name: 'Netflix', type: 'flatrate' },
+    ]);
+    expect(written?.source).toBe('watchmode');
+  });
+
+  it('GAP, Watchmode CONFIRMS empty (no sub) → TMDB-only written, removed fires when prev had flatrate', async () => {
+    store.availability.set(603, {
+      NL: { providers: [netflix], previousSnapshot: [], lastSyncedAt: 'old' },
+    });
+    const tmdb = createTmdbMock({
+      getWatchProviders: vi.fn(() =>
+        Promise.resolve<RegionProviders | null>({ NL: [] }),
+      ),
+    });
+    const wm = createWatchmodeMock({
+      getTitleSources: vi.fn(() =>
+        Promise.resolve<WatchmodeSource[] | null>([]),
+      ),
+    });
+    const engine = engineWith(tmdb.client, wm.client, ['NL']);
+
+    const results = await engine.sync([{ tmdbId: 603, type: 'movie' }]);
+
+    const written = store.availability.get(603)?.NL;
+    expect(written?.providers).toEqual([]); // TMDB-only (empty)
+    expect(written?.source).toBe('tmdb');
+    expect(results[0].transitions).toContainEqual({
+      region: 'NL',
+      providerId: 8,
+      name: 'Netflix',
+      type: 'flatrate',
+      kind: 'removed',
+    });
+  });
+
+  it('GAP, Watchmode UNAVAILABLE (getTitleSources → null) → write SKIPPED, no false removed', async () => {
+    store.availability.set(603, {
+      NL: { providers: [netflix], previousSnapshot: [], lastSyncedAt: 'old' },
+    });
+    const tmdb = createTmdbMock({
+      getWatchProviders: vi.fn(() =>
+        Promise.resolve<RegionProviders | null>({ NL: [] }),
+      ),
+    });
+    const wm = createWatchmodeMock({
+      getTitleSources: vi.fn(() =>
+        Promise.resolve<WatchmodeSource[] | null>(null),
+      ),
+    });
+    const engine = engineWith(tmdb.client, wm.client, ['NL']);
+
+    const results = await engine.sync([{ tmdbId: 603, type: 'movie' }]);
+
+    // The stored providers carry forward unchanged (no overwrite with []).
+    expect(store.availability.get(603)?.NL?.providers).toEqual([netflix]);
+    expect(store.availability.get(603)?.NL?.lastSyncedAt).toBe('old');
+    expect(results[0].transitions).toEqual([]);
+    expect(results[0].outcome).toBe('synced');
+  });
+
+  it('GAP, Watchmode UNAVAILABLE (resolveTitleId → null) → write SKIPPED, no removed', async () => {
+    store.availability.set(603, {
+      NL: { providers: [netflix], previousSnapshot: [], lastSyncedAt: 'old' },
+    });
+    const tmdb = createTmdbMock({
+      getWatchProviders: vi.fn(() =>
+        Promise.resolve<RegionProviders | null>({ NL: [] }),
+      ),
+    });
+    const getTitleSources = vi.fn(() =>
+      Promise.resolve<WatchmodeSource[] | null>([wmNetflixSource]),
+    );
+    const wm = createWatchmodeMock({
+      resolveTitleId: vi.fn(() => Promise.resolve<number | null>(null)),
+      getTitleSources,
+    });
+    const engine = engineWith(tmdb.client, wm.client, ['NL']);
+
+    const results = await engine.sync([{ tmdbId: 603, type: 'movie' }]);
+
+    // Unresolved id → getTitleSources never called, write skipped.
+    expect(getTitleSources).not.toHaveBeenCalled();
+    expect(store.availability.get(603)?.NL?.providers).toEqual([netflix]);
+    expect(results[0].transitions).toEqual([]);
+  });
+
+  it('GAP, Watchmode UNAVAILABLE (getTitleSources throws) → write SKIPPED, title does NOT error', async () => {
+    store.availability.set(603, {
+      NL: { providers: [netflix], previousSnapshot: [], lastSyncedAt: 'old' },
+    });
+    const tmdb = createTmdbMock({
+      getWatchProviders: vi.fn(() =>
+        Promise.resolve<RegionProviders | null>({ NL: [] }),
+      ),
+    });
+    const wm = createWatchmodeMock({
+      getTitleSources: vi.fn(() => Promise.reject(new Error('watchmode down'))),
+    });
+    const engine = engineWith(tmdb.client, wm.client, ['NL']);
+
+    const results = await engine.sync([{ tmdbId: 603, type: 'movie' }]);
+
+    expect(store.availability.get(603)?.NL?.providers).toEqual([netflix]);
+    expect(results[0].outcome).toBe('synced'); // NOT 'error'
+    expect(results[0].transitions).toEqual([]);
+  });
+
+  it('NEVER OVERRIDE: a Watchmode sub with the same providerId as a TMDB rent entry does not duplicate/replace it', async () => {
+    // TMDB rent Netflix (id 8); Watchmode sub also maps to Netflix (id 8).
+    const tmdbNetflixRent: WatchProvider = {
+      providerId: 8,
+      name: 'Netflix',
+      type: 'rent',
+    };
+    const tmdb = createTmdbMock({
+      getWatchProviders: vi.fn(() =>
+        Promise.resolve<RegionProviders | null>({ NL: [tmdbNetflixRent] }),
+      ),
+    });
+    const wm = createWatchmodeMock({
+      getTitleSources: vi.fn(() =>
+        Promise.resolve<WatchmodeSource[] | null>([wmNetflixSource]),
+      ),
+    });
+    const engine = engineWith(tmdb.client, wm.client, ['NL']);
+
+    await engine.sync([{ tmdbId: 603, type: 'movie' }]);
+
+    const written = store.availability.get(603)?.NL;
+    // The TMDB rent entry wins (kept, not replaced by the Watchmode flatrate).
+    expect(written?.providers).toEqual([tmdbNetflixRent]);
+  });
+
+  it('CACHING: a cached watchmodeId is reused (no resolveTitleId call)', async () => {
+    store.entries.set(603, {
+      type: 'movie',
+      traktId: null,
+      metadata: movieMeta,
+      lastSyncedAt: 'old',
+      watchmodeId: 777,
+    });
+    const tmdb = createTmdbMock({
+      getWatchProviders: vi.fn(() =>
+        Promise.resolve<RegionProviders | null>({ NL: [] }),
+      ),
+    });
+    const getTitleSources = vi.fn(() =>
+      Promise.resolve<WatchmodeSource[] | null>([wmNetflixSource]),
+    );
+    const wm = createWatchmodeMock({ getTitleSources });
+    const engine = engineWith(tmdb.client, wm.client, ['NL']);
+
+    await engine.sync([{ tmdbId: 603, type: 'movie' }]);
+
+    expect(wm.resolveTitleId).not.toHaveBeenCalled();
+    expect(getTitleSources).toHaveBeenCalledWith(777, ['NL']);
+    // Cached id preserved on the entry.
+    expect(store.entries.get(603)?.watchmodeId).toBe(777);
+  });
+
+  it('CACHING: a freshly resolved watchmodeId is written back to the entry', async () => {
+    const tmdb = createTmdbMock({
+      getWatchProviders: vi.fn(() =>
+        Promise.resolve<RegionProviders | null>({ NL: [] }),
+      ),
+    });
+    const wm = createWatchmodeMock({
+      resolveTitleId: vi.fn(() => Promise.resolve<number | null>(888)),
+      getTitleSources: vi.fn(() =>
+        Promise.resolve<WatchmodeSource[] | null>([wmNetflixSource]),
+      ),
+    });
+    const engine = engineWith(tmdb.client, wm.client, ['NL']);
+
+    await engine.sync([{ tmdbId: 603, type: 'movie' }]);
+
+    expect(wm.resolveTitleId).toHaveBeenCalledTimes(1);
+    expect(store.entries.get(603)?.watchmodeId).toBe(888);
+  });
+
+  it('BATCHING: multiple gap regions produce a SINGLE getTitleSources call', async () => {
+    const tmdb = createTmdbMock({
+      getWatchProviders: vi.fn(() =>
+        Promise.resolve<RegionProviders | null>({ NL: [], DE: [] }),
+      ),
+    });
+    const getTitleSources = vi.fn(() =>
+      Promise.resolve<WatchmodeSource[] | null>([
+        { sourceId: 203, type: 'sub', region: 'NL' },
+        { sourceId: 372, type: 'sub', region: 'DE' },
+      ]),
+    );
+    const wm = createWatchmodeMock({ getTitleSources });
+    const engine = engineWith(tmdb.client, wm.client, ['NL', 'DE']);
+
+    await engine.sync([{ tmdbId: 603, type: 'movie' }]);
+
+    expect(getTitleSources).toHaveBeenCalledTimes(1);
+    const [, regionsArg] = getTitleSources.mock.calls[0];
+    expect(new Set(regionsArg)).toEqual(new Set(['NL', 'DE']));
+    expect(store.availability.get(603)?.NL?.source).toBe('watchmode');
+    expect(store.availability.get(603)?.DE?.source).toBe('watchmode');
+  });
+
+  it('NON-ACTIVE region is written exactly as today (source tmdb), never gap-filled', async () => {
+    // NL (active) HAS flatrate → no gap → Watchmode never called; US is
+    // non-active and empty → written as TMDB, never gap-filled.
+    const tmdb = createTmdbMock({
+      getWatchProviders: vi.fn(() =>
+        Promise.resolve<RegionProviders | null>({ NL: [netflix], US: [] }),
+      ),
+    });
+    const wm = createWatchmodeMock();
+    const engine = engineWith(tmdb.client, wm.client, ['NL']); // active NL only
+
+    await engine.sync([{ tmdbId: 603, type: 'movie' }]);
+
+    // US (non-active) written as TMDB-empty; Watchmode not consulted at all.
+    expect(store.availability.get(603)?.US?.providers).toEqual([]);
+    expect(store.availability.get(603)?.US?.source).toBe('tmdb');
+    expect(store.availability.get(603)?.NL?.source).toBe('tmdb');
+    expect(wm.getTitleSources).not.toHaveBeenCalled();
+  });
+
+  it('NULL TMDB + active region + Watchmode → gap-filled (early return removed)', async () => {
+    const tmdb = createTmdbMock({
+      getWatchProviders: vi.fn(() =>
+        Promise.resolve<RegionProviders | null>(null),
+      ),
+    });
+    const wm = createWatchmodeMock({
+      getTitleSources: vi.fn(() =>
+        Promise.resolve<WatchmodeSource[] | null>([wmNetflixSource]),
+      ),
+    });
+    const engine = engineWith(tmdb.client, wm.client, ['NL']);
+
+    const results = await engine.sync([{ tmdbId: 603, type: 'movie' }]);
+
+    expect(store.availability.get(603)?.NL?.providers).toEqual([
+      { providerId: 8, name: 'Netflix', type: 'flatrate' },
+    ]);
+    expect(store.availability.get(603)?.NL?.source).toBe('watchmode');
+    expect(results[0].outcome).toBe('synced');
+  });
+
+  it('NULL TMDB + no active region → nothing written, synced / no watch providers', async () => {
+    const tmdb = createTmdbMock({
+      getWatchProviders: vi.fn(() =>
+        Promise.resolve<RegionProviders | null>(null),
+      ),
+    });
+    const wm = createWatchmodeMock();
+    const engine = engineWith(tmdb.client, wm.client, []); // no active regions
+
+    const results = await engine.sync([{ tmdbId: 603, type: 'movie' }]);
+
+    expect(store.availability.get(603)).toBeUndefined();
+    expect(wm.getTitleSources).not.toHaveBeenCalled();
+    expect(results[0].outcome).toBe('synced');
+    expect(results[0].reason).toBe('no watch providers');
+  });
+
+  it('NO CLIENT (no key): active-region gap is NOT expanded — behaves byte-for-byte as today', async () => {
+    store.availability.set(603, {
+      NL: { providers: [netflix], previousSnapshot: [], lastSyncedAt: 'old' },
+    });
+    // TMDB returns NL absent (null block) → with no Watchmode client and no
+    // union expansion, NL is not iterated → its stored doc is untouched.
+    const tmdb = createTmdbMock({
+      getWatchProviders: vi.fn(() =>
+        Promise.resolve<RegionProviders | null>(null),
+      ),
+    });
+    const engine = engineWith(tmdb.client, undefined, ['NL']);
+
+    const results = await engine.sync([{ tmdbId: 603, type: 'movie' }]);
+
+    // No overwrite, no false removed — exactly today's no-fallback behavior.
+    expect(store.availability.get(603)?.NL?.providers).toEqual([netflix]);
+    expect(results[0].transitions).toEqual([]);
+    expect(results[0].outcome).toBe('synced');
   });
 });

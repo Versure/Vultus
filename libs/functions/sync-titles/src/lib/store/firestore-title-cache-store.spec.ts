@@ -116,6 +116,8 @@ describe('createFirestoreTitleCacheStore', () => {
         traktId: null,
         metadata,
         lastSyncedAt: '2026-06-19T00:00:00.000Z',
+        // Legacy doc has no watchmodeId; the converter emits it as null (spec 0099).
+        watchmodeId: null,
       });
     });
 
@@ -168,11 +170,14 @@ describe('createFirestoreTitleCacheStore', () => {
           providers: [netflix],
           lastSyncedAt: '2026-06-19T00:00:00.000Z',
           previousSnapshot: [],
+          // Legacy docs have no source; the converter emits 'tmdb' (spec 0099).
+          source: 'tmdb',
         },
         US: {
           providers: [disney],
           lastSyncedAt: '2026-06-18T00:00:00.000Z',
           previousSnapshot: [netflix],
+          source: 'tmdb',
         },
       });
     });
@@ -289,7 +294,8 @@ describe('createFirestoreTitleCacheStore', () => {
       const readStore = createFirestoreTitleCacheStore(readDb.db as never);
       const restored = await readStore.getEntry(1396);
 
-      expect(restored).toEqual(entry);
+      // The read-back doc omits watchmodeId → the converter emits null (spec 0099).
+      expect(restored).toEqual({ ...entry, watchmodeId: null });
       expect(restored?.traktId).toBe(traktId);
     });
   });

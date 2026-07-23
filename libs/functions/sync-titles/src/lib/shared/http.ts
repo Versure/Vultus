@@ -36,6 +36,12 @@ export interface HttpCoreConfig {
   /** Injectable sleep so tests can assert the 429 backoff wait without real
    *  timers. Defaults to the internal `setTimeout`-based sleep. */
   sleep?: (ms: number) => Promise<void>;
+  /** Optional auth query params appended to every request URL for the actual
+   *  fetch, but EXCLUDED from the `endpoint` passed to errorFactory / logs, so a
+   *  query-param credential (Watchmode `apiKey`) never leaks into an error or
+   *  log. TMDB/Trakt pass their credential in a header and omit this. Default:
+   *  none. */
+  authQuery?: Record<string, string>;
   /** Builds the client-specific error (`TmdbError` / `TraktError`) so the core
    *  stays error-type-agnostic. `status` is 0 for a transport/network failure. */
   errorFactory: (message: string, status: number, endpoint: string) => Error;
@@ -81,6 +87,20 @@ export function createHttpCore(config: HttpCoreConfig) {
   } = config;
   const backoffBaseMs = config.backoffBaseMs ?? DEFAULT_BACKOFF_BASE_MS;
   const sleep = config.sleep ?? defaultSleep;
+  const authQueryEntries = Object.entries(config.authQuery ?? {});
+
+  // Build the actual fetch URL: baseUrl + path, then append any auth query params
+  // (merging with a query string already on `path`). The credential-free `path`
+  // is what the caller passes to errorFactory — the appended auth params never
+  // reach an error/log.
+  function buildUrl(path: string): string {
+    if (authQueryEntries.length === 0) return `${baseUrl}${path}`;
+    const separator = path.includes('?') ? '&' : '?';
+    const query = authQueryEntries
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+      .join('&');
+    return `${baseUrl}${path}${separator}${query}`;
+  }
 
   // Serialize all requests onto a single tail-chained promise, and enforce a
   // minimum interval between the start of consecutive requests.
@@ -97,7 +117,9 @@ export function createHttpCore(config: HttpCoreConfig) {
   // `path` is an API endpoint path beginning with '/', possibly with a query
   // string already appended (the query never contains the credential).
   async function request<T>(path: string): Promise<T | typeof NOT_FOUND> {
-    const url = `${baseUrl}${path}`;
+    // `url` carries the auth query (if any) for the real fetch; `path` stays
+    // credential-free and is the only thing handed to errorFactory below.
+    const url = buildUrl(path);
 
     let attempt = 0;
     // Loop covers the initial try plus up to `maxRetries` 429 retries.

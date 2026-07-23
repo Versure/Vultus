@@ -4,9 +4,15 @@
 // the previous snapshot. Firebase-free — it speaks only domain types through
 // the port. Writes NO notifications and NO episodes (hard boundary).
 
-import type { Region, WatchProvider } from '@vultus/shared/domain';
+import {
+  REGIONS,
+  type Region,
+  type WatchProvider,
+} from '@vultus/shared/domain';
 import { TmdbError } from '../tmdb/tmdb-error';
 import { TraktError } from '../trakt/trakt-error';
+import { mapSourcesToFlatrateProviders } from '../watchmode/watchmode-mappers';
+import { WATCHMODE_TO_TMDB_PROVIDER } from '../watchmode/watchmode-provider-map';
 import { detectTransitions } from './transitions';
 import type {
   ProviderTransition,
@@ -17,6 +23,22 @@ import type {
 } from './types';
 
 const DEFAULT_NOW = (): string => new Date().toISOString();
+
+const REGION_SET = new Set<string>(REGIONS);
+
+// Dedupe a provider list by providerId, keeping the FIRST occurrence. The
+// engine passes TMDB entries first so they always win over a same-providerId
+// Watchmode fill (decision 1: Watchmode never overrides/removes TMDB).
+function dedupeByProviderId(list: WatchProvider[]): WatchProvider[] {
+  const seen = new Set<number>();
+  const out: WatchProvider[] = [];
+  for (const p of list) {
+    if (seen.has(p.providerId)) continue;
+    seen.add(p.providerId);
+    out.push(p);
+  }
+  return out;
+}
 
 // A per-title error is worth re-attempting only when it is transient: a rate
 // limit (429) or a transport/network failure (status 0). A 401/403/5xx/4xx is
@@ -32,6 +54,10 @@ function sleep(ms: number): Promise<void> {
 
 export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
   const { tmdb, trakt, store } = config;
+  const watchmode = config.watchmode;
+  const activeRegions = (config.activeRegions ?? []).filter((r) =>
+    REGION_SET.has(r),
+  );
   const now = config.now ?? DEFAULT_NOW;
   const retryErroredPasses = config.retryErroredPasses ?? 0;
   const retryDelayMs = config.retryDelayMs ?? 0;
@@ -54,27 +80,164 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
         };
       }
 
-      // 2. Trakt id (tv only). Movies never call getShowTraktId. A cached,
-      // non-null traktId is stable — reuse it and skip the (rate-limited) Trakt
-      // call. A null/absent cached traktId still resolves via getShowTraktId.
+      // 2. Load the cached entry when we need it: tv (traktId reuse) or a
+      // configured Watchmode fallback (watchmodeId reuse/preserve). A movie with
+      // no Watchmode client never reads the entry — byte-for-byte today.
+      const cachedEntry =
+        type === 'tv' || watchmode ? await store.getEntry(tmdbId) : null;
+
+      // Trakt id (tv only). Movies never call getShowTraktId. A cached, non-null
+      // traktId is stable — reuse it and skip the (rate-limited) Trakt call.
       let traktId: number | null = null;
       if (type === 'tv') {
-        const cached = await store.getEntry(tmdbId);
-        // `??` short-circuits: a cached non-null traktId skips the Trakt call.
-        traktId = cached?.traktId ?? (await trakt.getShowTraktId(tmdbId));
+        traktId = cachedEntry?.traktId ?? (await trakt.getShowTraktId(tmdbId));
       }
 
-      // 3. Write the refreshed entry.
+      // 3. Write the refreshed entry, preserving any cached Watchmode id so it
+      // is not erased (the converter coalesces a missing watchmodeId → null).
+      const entrySyncedAt = now();
+      let watchmodeId = cachedEntry?.watchmodeId ?? null;
       await store.putEntry(tmdbId, {
         type,
         traktId,
         metadata,
-        lastSyncedAt: now(),
+        lastSyncedAt: entrySyncedAt,
+        watchmodeId,
       });
 
-      // 4. Availability fetch + per-region transition detection.
+      // 4. Availability fetch + per-region transition detection. A null TMDB
+      // provider block (404 / no block) is treated as an EMPTY region map (the
+      // former early return is gone) so a fully-null title is still a Watchmode
+      // gap candidate for its active regions (spec 0099).
       const regionProviders = await tmdb.getWatchProviders(tmdbId, type);
-      if (regionProviders === null) {
+      const regions = regionProviders ?? {};
+      const stored = await store.getAvailability(tmdbId);
+      const transitions: ProviderTransition[] = [];
+      let wroteAnyAvailability = false;
+
+      if (!watchmode) {
+        // No Watchmode client → behave exactly as today: iterate ONLY the
+        // regions TMDB returned; write each as source 'tmdb'. No union
+        // expansion, no gap-fill, no carry-forward (graceful no-key degrade).
+        for (const key of Object.keys(regions)) {
+          if (!REGION_SET.has(key)) continue;
+          const region = key as Region;
+          const next: WatchProvider[] = regions[region] ?? [];
+          const prev: WatchProvider[] = stored[region]?.providers ?? [];
+          transitions.push(...detectTransitions(region, prev, next));
+          await store.putAvailability(tmdbId, region, {
+            providers: next,
+            previousSnapshot: prev,
+            lastSyncedAt: now(),
+            source: 'tmdb',
+          });
+          wroteAnyAvailability = true;
+        }
+      } else {
+        // Watchmode configured → consider the union of TMDB-returned regions and
+        // the active regions, gap-filling active regions with no TMDB flatrate.
+        const activeSet = new Set<Region>(activeRegions);
+        const regionUnion = new Set<Region>();
+        for (const key of Object.keys(regions)) {
+          if (REGION_SET.has(key)) regionUnion.add(key as Region);
+        }
+        for (const region of activeSet) regionUnion.add(region);
+
+        // Gap regions = active regions with NO TMDB flatrate provider.
+        const gapRegions: Region[] = [];
+        for (const region of regionUnion) {
+          const tmdbNext = regions[region] ?? [];
+          const hasFlatrate = tmdbNext.some((p) => p.type === 'flatrate');
+          if (activeSet.has(region) && !hasFlatrate) gapRegions.push(region);
+        }
+
+        // Watchmode fill: one resolveTitleId (only if uncached) + one
+        // multi-region getTitleSources. Any throw / null / unresolved id marks
+        // Watchmode UNAVAILABLE for ALL gap regions this pass.
+        let fill: Partial<Record<Region, WatchProvider[]>> = {};
+        let watchmodeUnavailable = false;
+        if (gapRegions.length > 0) {
+          try {
+            if (watchmodeId == null) {
+              const resolved = await watchmode.resolveTitleId(tmdbId, type);
+              if (resolved != null) {
+                watchmodeId = resolved;
+                // Persist the resolved id so the next sync skips resolution.
+                await store.putEntry(tmdbId, {
+                  type,
+                  traktId,
+                  metadata,
+                  lastSyncedAt: entrySyncedAt,
+                  watchmodeId,
+                });
+              }
+            }
+            if (watchmodeId != null) {
+              const sources = await watchmode.getTitleSources(
+                watchmodeId,
+                gapRegions,
+              );
+              if (sources === null) {
+                watchmodeUnavailable = true;
+              } else {
+                fill = mapSourcesToFlatrateProviders(
+                  sources,
+                  WATCHMODE_TO_TMDB_PROVIDER,
+                ).fill;
+              }
+            } else {
+              // resolveTitleId → null (unresolved title id) → unavailable.
+              watchmodeUnavailable = true;
+            }
+          } catch {
+            // HTTP error / rate-limited / transport failure → unavailable. The
+            // title does NOT error — the fallback degrades to carry-forward.
+            watchmodeUnavailable = true;
+          }
+        }
+
+        const gapSet = new Set<Region>(gapRegions);
+        for (const region of regionUnion) {
+          const tmdbNext = regions[region] ?? [];
+          const prev: WatchProvider[] = stored[region]?.providers ?? [];
+          const isGap = gapSet.has(region);
+
+          if (isGap && watchmodeUnavailable) {
+            // Transition-safety carry-forward: TMDB empty for an active region
+            // AND Watchmode unavailable → SKIP the write entirely so a transient
+            // gap does not fire a false 'removed'. The stored providers /
+            // previousSnapshot / source carry forward unchanged (spec 0099).
+            continue;
+          }
+
+          let next: WatchProvider[];
+          let source: 'tmdb' | 'watchmode';
+          if (isGap) {
+            // Watchmode available for this gap region: merge TMDB (winning) with
+            // the fill; empty fill = Watchmode CONFIRMED zero flatrate.
+            const regionFill = fill[region] ?? [];
+            next = dedupeByProviderId([...tmdbNext, ...regionFill]);
+            source = regionFill.length > 0 ? 'watchmode' : 'tmdb';
+          } else {
+            // Non-active region, or active-with-flatrate: exactly as today.
+            next = tmdbNext;
+            source = 'tmdb';
+          }
+
+          transitions.push(...detectTransitions(region, prev, next));
+          await store.putAvailability(tmdbId, region, {
+            providers: next,
+            previousSnapshot: prev,
+            lastSyncedAt: now(),
+            source,
+          });
+          wroteAnyAvailability = true;
+        }
+      }
+
+      // A fully-null TMDB title that wrote nothing (no active region / no fill)
+      // reports the unchanged no-fallback outcome.
+      if (regionProviders === null && !wroteAnyAvailability) {
         return {
           tmdbId,
           type,
@@ -82,26 +245,6 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
           transitions: [],
           reason: 'no watch providers',
         };
-      }
-
-      const stored = await store.getAvailability(tmdbId);
-      const transitions: ProviderTransition[] = [];
-
-      for (const key of Object.keys(regionProviders)) {
-        const region = key as Region;
-        const next: WatchProvider[] = regionProviders[region] ?? [];
-        // The diff baseline is the stored CURRENT providers (NOT the stored
-        // previousSnapshot); absent → []. The new previousSnapshot is rolled to
-        // be exactly this prior `providers`.
-        const prev: WatchProvider[] = stored[region]?.providers ?? [];
-
-        transitions.push(...detectTransitions(region, prev, next));
-
-        await store.putAvailability(tmdbId, region, {
-          providers: next,
-          previousSnapshot: prev,
-          lastSyncedAt: now(),
-        });
       }
 
       return { tmdbId, type, outcome: 'synced', transitions };

@@ -147,3 +147,65 @@ describe('createHttpCore — 429 backoff', () => {
     expect(sleep.mock.calls[0][0]).toBe(60_000);
   });
 });
+
+describe('createHttpCore — authQuery (credential-safe query-param auth)', () => {
+  const SECRET = 'super-secret-key';
+
+  it('appends authQuery to the fetched URL (no existing query → ?)', async () => {
+    const fetchMock = sequenceFetch([{ status: 200, body: { ok: true } }]);
+    const http = core({ fetch: fetchMock, authQuery: { apiKey: SECRET } });
+    await http.request('/title/42/sources/');
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toBe(`https://example.test/title/42/sources/?apiKey=${SECRET}`);
+  });
+
+  it('merges authQuery with an existing query string (→ &)', async () => {
+    const fetchMock = sequenceFetch([{ status: 200, body: { ok: true } }]);
+    const http = core({ fetch: fetchMock, authQuery: { apiKey: SECRET } });
+    await http.request('/title/42/sources/?regions=NL,DE');
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toBe(
+      `https://example.test/title/42/sources/?regions=NL,DE&apiKey=${SECRET}`,
+    );
+  });
+
+  it('URL-encodes authQuery keys and values', async () => {
+    const fetchMock = sequenceFetch([{ status: 200, body: { ok: true } }]);
+    const http = core({
+      fetch: fetchMock,
+      authQuery: { apiKey: 'a b/c&d' },
+    });
+    await http.request('/thing');
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toBe('https://example.test/thing?apiKey=a%20b%2Fc%26d');
+  });
+
+  it('excludes the authQuery credential from the error endpoint on a non-2xx', async () => {
+    const fetchMock = sequenceFetch([{ status: 401 }]);
+    const http = core({ fetch: fetchMock, authQuery: { apiKey: SECRET } });
+    await expect(http.request('/title/42/sources/')).rejects.toMatchObject({
+      status: 401,
+      endpoint: '/title/42/sources/',
+    });
+    // The thrown error's endpoint must NOT contain the credential.
+    try {
+      await core({
+        fetch: sequenceFetch([{ status: 401 }]),
+        authQuery: { apiKey: SECRET },
+      }).request('/title/42/sources/');
+      throw new Error('expected throw');
+    } catch (err) {
+      const e = err as { endpoint: string; message: string };
+      expect(e.endpoint).not.toContain(SECRET);
+      expect(e.message).not.toContain(SECRET);
+    }
+  });
+
+  it('does not append anything when authQuery is absent (TMDB/Trakt behavior unchanged)', async () => {
+    const fetchMock = sequenceFetch([{ status: 200, body: { ok: true } }]);
+    const http = core({ fetch: fetchMock });
+    await http.request('/thing?x=1');
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toBe('https://example.test/thing?x=1');
+  });
+});
