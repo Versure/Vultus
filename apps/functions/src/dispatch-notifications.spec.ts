@@ -40,7 +40,7 @@ function createFakeDb(opts: {
   });
 
   const collectionGroup = () => ({
-    get: () => Promise.resolve({ docs: [] }),
+    where: () => ({ get: () => Promise.resolve({ docs: [] }) }),
   });
 
   const doc = (path: string) => ({
@@ -429,9 +429,12 @@ describe('createFirestoreNotificationStore', () => {
 // --- Watchlist store adapter: findUsersTracking reads status (spec 0088) ----
 
 /**
- * Fake `db` for `findUsersTracking`: `collectionGroup('watchlist').get()` serves
- * a single matched watchlist doc (with a parent `users/{uid}` ref), and
- * `doc('users/{uid}').get()` serves that user's doc.
+ * Fake `db` for `findUsersTracking`: `collectionGroup('watchlist').where(...)`
+ * records the equality-query args (`captured`) and its `.get()` serves a single
+ * matched watchlist doc (with a parent `users/{uid}` ref); `doc('users/{uid}')`
+ * `.get()` serves that user's doc. The `where(...).get()` result now drives the
+ * status assertions (spec 0088) — the adapter no longer scans + filters in
+ * memory (spec 0100).
  */
 function createWatchlistDb(opts: {
   tmdbId: number;
@@ -449,8 +452,15 @@ function createWatchlistDb(opts: {
     },
   };
 
+  const captured: { field?: unknown; op?: unknown; value?: unknown } = {};
+
   const collectionGroup = () => ({
-    get: () => Promise.resolve({ docs: [watchlistDoc] }),
+    where: (field: unknown, op: unknown, value: unknown) => {
+      captured.field = field;
+      captured.op = op;
+      captured.value = value;
+      return { get: () => Promise.resolve({ docs: [watchlistDoc] }) };
+    },
   });
 
   const doc = (path: string) => ({
@@ -462,7 +472,8 @@ function createWatchlistDb(opts: {
     },
   });
 
-  return { collectionGroup, doc } as unknown as Firestore;
+  const db = { collectionGroup, doc } as unknown as Firestore;
+  return { db, captured };
 }
 
 describe('createFirestoreWatchlistStore.findUsersTracking (spec 0088)', () => {
@@ -477,8 +488,25 @@ describe('createFirestoreWatchlistStore.findUsersTracking (spec 0088)', () => {
     fcmTokens: [],
   };
 
+  it("issues the indexed collection-group query where('tmdbId','==',603) (spec 0100)", async () => {
+    const { db, captured } = createWatchlistDb({
+      tmdbId: 603,
+      watchlistData: { tmdbId: 603, status: 'watching' },
+      uid: 'u1',
+      titleId: 'title-1',
+      userData,
+    });
+
+    await createFirestoreWatchlistStore(db).findUsersTracking(603);
+
+    // The O(all-docs) scan is gone: the adapter filters at the query, not in JS.
+    expect(captured.field).toBe('tmdbId');
+    expect(captured.op).toBe('==');
+    expect(captured.value).toBe(603);
+  });
+
   it("reads status off the matched watchlist doc ('completed')", async () => {
-    const db = createWatchlistDb({
+    const { db } = createWatchlistDb({
       tmdbId: 603,
       watchlistData: { tmdbId: 603, status: 'completed' },
       uid: 'u1',
@@ -495,7 +523,7 @@ describe('createFirestoreWatchlistStore.findUsersTracking (spec 0088)', () => {
   });
 
   it("maps a watchlist doc missing status to 'watching' (fallback)", async () => {
-    const db = createWatchlistDb({
+    const { db } = createWatchlistDb({
       tmdbId: 603,
       watchlistData: { tmdbId: 603 },
       uid: 'u1',
@@ -515,10 +543,10 @@ describe('createFirestoreWatchlistStore.findUsersTracking (spec 0088)', () => {
 
 /**
  * Fake `db` wiring `handleDispatch`'s full removed-transition path: serves the
- * parent `title-cache/{tmdbId}` doc (for `type` + title), the
- * `collectionGroup('watchlist')` scan (one matched doc with a parent user), and
- * the joined `users/{uid}` doc — while capturing every write path so the inbox
- * doc can be asserted.
+ * parent `title-cache/{tmdbId}` doc (for `type` + title), the indexed
+ * `collectionGroup('watchlist').where('tmdbId','==',…)` query (one matched doc
+ * with a parent user), and the joined `users/{uid}` doc — while capturing every
+ * write path so the inbox doc can be asserted.
  */
 function createRemovedDispatchDb(opts: {
   tmdbId: number;
@@ -540,7 +568,9 @@ function createRemovedDispatchDb(opts: {
   };
 
   const collectionGroup = () => ({
-    get: () => Promise.resolve({ docs: [watchlistDoc] }),
+    where: () => ({
+      get: () => Promise.resolve({ docs: [watchlistDoc] }),
+    }),
   });
 
   const doc = (path: string) => ({

@@ -26,17 +26,20 @@ import type {
 
 /**
  * Watchlist store backed by a Firestore `watchlist` collection group. Finds the
- * users tracking a title by scanning the group and matching `tmdbId`, then joins
- * each user's `users/{uid}` doc for region + prefs + tokens.
+ * users tracking a title with an indexed collection-group equality query on
+ * `tmdbId` (so each call costs O(users tracking that `tmdbId`), not O(all
+ * watchlist docs)), then joins each user's `users/{uid}` doc for region + prefs
+ * + tokens. Requires the `COLLECTION_GROUP`-scoped index on `watchlist.tmdbId`
+ * in `firestore.indexes.json`.
  */
 export function createFirestoreWatchlistStore(db: Firestore): WatchlistStore {
   return {
     async findUsersTracking(tmdbId: number): Promise<TrackingUser[]> {
-      const snap = await db.collectionGroup('watchlist').get();
-      const matches = snap.docs.filter((doc) => {
-        const data = doc.data() as { tmdbId?: number; status?: WatchStatus };
-        return data.tmdbId === tmdbId;
-      });
+      const snap = await db
+        .collectionGroup('watchlist')
+        .where('tmdbId', '==', tmdbId)
+        .get();
+      const matches = snap.docs;
 
       const users: TrackingUser[] = [];
       for (const doc of matches) {
