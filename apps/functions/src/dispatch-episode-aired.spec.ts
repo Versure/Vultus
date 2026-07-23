@@ -11,7 +11,12 @@ import type {
   WatchProvider,
   WatchStatus,
 } from '@vultus/shared/domain';
-import { runEpisodeAiredScan } from './dispatch-episode-aired';
+import {
+  runAiringScanShard,
+  runEpisodeAiredScan,
+} from './dispatch-episode-aired';
+import type { RecordShardResultParams } from './lib/sync-run-tracker';
+import type { AiringScanTask } from './lib/task-queue';
 
 // --- Time base --------------------------------------------------------------
 // now() is fixed so recency (`[now-3d, now]`) is deterministic. Hour is 12 UTC,
@@ -73,30 +78,45 @@ function createFakeDb(opts: {
   users: Record<string, FakeUser | undefined>;
   availability?: Record<string, WatchProvider[]>;
   existingNotifications?: string[];
+  /** uids whose per-uid watchlist read should REJECT (per-uid isolation test). */
+  failWatchlistUids?: string[];
 }) {
   const writes: RecordedWrite[] = [];
   const existing = new Set(opts.existingNotifications ?? []);
+  // Track any full collection-group gather so a test can assert the subset scan
+  // NEVER performs one (spec 0101: the third full watchlist gather is removed).
+  const collectionGroupCalls: string[] = [];
 
   const collectionGroup = (id: string) => ({
     get: () => {
-      expect(id).toBe('watchlist');
-      return Promise.resolve({
-        docs: opts.shows.map((s) => ({
-          id: s.titleId,
-          data: () => ({
-            tmdbId: s.tmdbId,
-            type: s.type ?? 'tv',
-            status: s.status,
-            title: s.title,
-          }),
-          ref: { id: s.titleId, parent: { parent: { id: s.uid } } },
-        })),
-      });
+      collectionGroupCalls.push(id);
+      return Promise.resolve({ docs: [] });
     },
   });
 
   const collection = (path: string) => ({
     get: () => {
+      // Per-uid watchlist subset read (spec 0101): `users/{uid}/watchlist`.
+      const wlMatch = /^users\/([^/]+)\/watchlist$/.exec(path);
+      if (wlMatch) {
+        const uid = wlMatch[1];
+        if (opts.failWatchlistUids?.includes(uid)) {
+          return Promise.reject(new Error('watchlist read failed for ' + uid));
+        }
+        const uidShows = opts.shows.filter((s) => s.uid === uid);
+        return Promise.resolve({
+          docs: uidShows.map((s) => ({
+            id: s.titleId,
+            data: () => ({
+              tmdbId: s.tmdbId,
+              type: s.type ?? 'tv',
+              status: s.status,
+              title: s.title,
+            }),
+          })),
+        });
+      }
+      // Episodes subcollection read: `users/{uid}/watchlist/{titleId}/episodes`.
       const show = opts.shows.find(
         (s) => episodesPath(s.uid, s.titleId) === path,
       );
@@ -151,7 +171,7 @@ function createFakeDb(opts: {
   });
 
   const db = { collectionGroup, collection, doc } as unknown as Firestore;
-  return { db, writes };
+  return { db, writes, collectionGroupCalls };
 }
 
 interface SentMessage {
@@ -203,7 +223,7 @@ describe('runEpisodeAiredScan', () => {
     });
     const { messaging, sent } = createFakeMessaging();
 
-    await runEpisodeAiredScan(db, messaging, now);
+    await runEpisodeAiredScan(db, messaging, ['u1'], now);
 
     // Exactly one notification doc create, at the per-episode id path.
     const expectedPath = notificationPath(
@@ -254,7 +274,7 @@ describe('runEpisodeAiredScan', () => {
     });
     const { messaging, sent } = createFakeMessaging();
 
-    await runEpisodeAiredScan(db, messaging, now);
+    await runEpisodeAiredScan(db, messaging, ['u1'], now);
 
     expect(writes.filter((w) => w.op === 'set')).toHaveLength(0);
     expect(sent).toHaveLength(0);
@@ -283,7 +303,7 @@ describe('runEpisodeAiredScan', () => {
     });
     const { messaging, sent } = createFakeMessaging();
 
-    await runEpisodeAiredScan(db, messaging, now);
+    await runEpisodeAiredScan(db, messaging, ['u1'], now);
 
     expect(writes.filter((w) => w.op === 'set')).toHaveLength(0);
     expect(sent).toHaveLength(0);
@@ -311,7 +331,7 @@ describe('runEpisodeAiredScan', () => {
     });
     const { messaging, sent } = createFakeMessaging();
 
-    await runEpisodeAiredScan(db, messaging, now);
+    await runEpisodeAiredScan(db, messaging, ['u1'], now);
 
     expect(writes.filter((w) => w.op === 'set')).toHaveLength(0);
     expect(sent).toHaveLength(0);
@@ -344,7 +364,7 @@ describe('runEpisodeAiredScan', () => {
     });
     const { messaging, sent } = createFakeMessaging();
 
-    await runEpisodeAiredScan(db, messaging, now);
+    await runEpisodeAiredScan(db, messaging, ['u1'], now);
 
     expect(writes.filter((w) => w.op === 'set')).toHaveLength(0);
     expect(sent).toHaveLength(0);
@@ -376,7 +396,7 @@ describe('runEpisodeAiredScan', () => {
     });
     const { messaging, sent } = createFakeMessaging();
 
-    await runEpisodeAiredScan(db, messaging, now);
+    await runEpisodeAiredScan(db, messaging, ['u1'], now);
 
     expect(writes.filter((w) => w.op === 'set')).toHaveLength(0);
     expect(sent).toHaveLength(0);
@@ -408,7 +428,7 @@ describe('runEpisodeAiredScan', () => {
     });
     const { messaging, sent } = createFakeMessaging();
 
-    await runEpisodeAiredScan(db, messaging, now);
+    await runEpisodeAiredScan(db, messaging, ['u1'], now);
 
     expect(writes.filter((w) => w.op === 'set')).toHaveLength(1);
     expect(sent).toHaveLength(1);
@@ -446,7 +466,7 @@ describe('runEpisodeAiredScan', () => {
     });
     const { messaging, sent } = createFakeMessaging();
 
-    await runEpisodeAiredScan(db, messaging, now);
+    await runEpisodeAiredScan(db, messaging, ['u1'], now);
 
     expect(sent).toHaveLength(2);
     const bodies = sent.map((m) => m.notification.body);
@@ -481,7 +501,7 @@ describe('runEpisodeAiredScan', () => {
     });
     const { messaging, sent } = createFakeMessaging();
 
-    await runEpisodeAiredScan(db, messaging, now);
+    await runEpisodeAiredScan(db, messaging, ['u1'], now);
 
     expect(writes.filter((w) => w.op === 'set')).toHaveLength(1);
     expect(sent).toHaveLength(0);
@@ -509,7 +529,7 @@ describe('runEpisodeAiredScan', () => {
     });
     const { messaging } = createFakeMessaging(['stale']);
 
-    await runEpisodeAiredScan(db, messaging, now);
+    await runEpisodeAiredScan(db, messaging, ['u1'], now);
 
     const prunes = writes.filter(
       (w) => w.op === 'update' && /^users\/[^/]+$/.test(w.path),
@@ -540,9 +560,197 @@ describe('runEpisodeAiredScan', () => {
     });
     const { messaging, sent } = createFakeMessaging();
 
-    await runEpisodeAiredScan(db, messaging, now);
+    await runEpisodeAiredScan(db, messaging, ['u1'], now);
 
     expect(writes.filter((w) => w.op === 'set')).toHaveLength(0);
     expect(sent).toHaveLength(0);
+  });
+
+  it('subset scan: reads ONLY the shard uids watchlists, never a collectionGroup gather', async () => {
+    const { db, writes, collectionGroupCalls } = createFakeDb({
+      shows: [
+        {
+          uid: 'u1',
+          titleId: 't1',
+          tmdbId: 1396,
+          title: 'Breaking Bad',
+          episodes: [{ id: 's05e014', airDate: daysBefore(1) }],
+        },
+        // u2 is a tracked user NOT in this shard — must be untouched.
+        {
+          uid: 'u2',
+          titleId: 't2',
+          tmdbId: 1400,
+          title: 'The Sopranos',
+          episodes: [{ id: 's06e021', airDate: daysBefore(1) }],
+        },
+      ],
+      users: {
+        u1: {
+          region: 'NL',
+          notificationPrefs: PREFS_ON,
+          fcmTokens: [{ token: 'tok-1' }],
+        },
+        u2: {
+          region: 'NL',
+          notificationPrefs: PREFS_ON,
+          fcmTokens: [{ token: 'tok-2' }],
+        },
+      },
+      availability: {
+        [availabilityDocPath(1396, 'NL')]: FLATRATE,
+        [availabilityDocPath(1400, 'NL')]: FLATRATE,
+      },
+    });
+    const { messaging, sent } = createFakeMessaging();
+
+    // Only u1 is in this shard.
+    const result = await runEpisodeAiredScan(db, messaging, ['u1'], now);
+
+    // No full collection-group gather in shard mode (the third gather is gone).
+    expect(collectionGroupCalls).toHaveLength(0);
+
+    // Exactly u1's episode notified; u2 (not in the shard) is never notified.
+    const notifWrites = writes.filter((w) => w.op === 'set');
+    expect(notifWrites).toHaveLength(1);
+    expect(notifWrites[0].path).toBe(
+      notificationPath('u1', '1396-NL-episode-aired-s05e014'),
+    );
+    expect(sent).toHaveLength(1);
+    expect(sent[0].data.episodeId).toBe('s05e014');
+
+    // The scan reports its dispatched count and zero errors.
+    expect(result.dispatched).toBe(1);
+    expect(result.errored).toBe(0);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('per-uid error isolation: a uid whose watchlist read throws is counted, the rest still scan', async () => {
+    const { db, writes } = createFakeDb({
+      shows: [
+        {
+          uid: 'u1',
+          titleId: 't1',
+          tmdbId: 1396,
+          title: 'Breaking Bad',
+          episodes: [{ id: 's05e014', airDate: daysBefore(1) }],
+        },
+        {
+          uid: 'u2',
+          titleId: 't2',
+          tmdbId: 1400,
+          title: 'The Sopranos',
+          episodes: [{ id: 's06e021', airDate: daysBefore(1) }],
+        },
+      ],
+      users: {
+        u1: {
+          region: 'NL',
+          notificationPrefs: PREFS_ON,
+          fcmTokens: [{ token: 'tok-1' }],
+        },
+        u2: {
+          region: 'NL',
+          notificationPrefs: PREFS_ON,
+          fcmTokens: [{ token: 'tok-2' }],
+        },
+      },
+      availability: {
+        [availabilityDocPath(1396, 'NL')]: FLATRATE,
+        [availabilityDocPath(1400, 'NL')]: FLATRATE,
+      },
+      // u1's watchlist read rejects — must not abort the shard.
+      failWatchlistUids: ['u1'],
+    });
+    const { messaging, sent } = createFakeMessaging();
+
+    const result = await runEpisodeAiredScan(db, messaging, ['u1', 'u2'], now);
+
+    // u2 was still scanned + notified despite u1 failing.
+    const notifWrites = writes.filter((w) => w.op === 'set');
+    expect(notifWrites).toHaveLength(1);
+    expect(notifWrites[0].path).toBe(
+      notificationPath('u2', '1400-NL-episode-aired-s06e021'),
+    );
+    expect(sent).toHaveLength(1);
+
+    // The u1 failure is aggregated into the shard's error counters.
+    expect(result.dispatched).toBe(1);
+    expect(result.errored).toBe(1);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain('u1');
+  });
+});
+
+describe('runAiringScanShard', () => {
+  const task = (over: Partial<AiringScanTask> = {}): AiringScanTask => ({
+    runId: 'run-1',
+    shardIndex: 2,
+    uids: ['a', 'b'],
+    ...over,
+  });
+
+  it('runs the scan over the shard uids and ALWAYS records the shard result under stage airingScan', async () => {
+    const recorded: RecordShardResultParams[] = [];
+    let scannedUids: readonly string[] = [];
+    let clock = 1000;
+
+    await runAiringScanShard(
+      {
+        now: () => (clock += 5),
+        scan: (uids) => {
+          scannedUids = uids;
+          return Promise.resolve({
+            dispatched: 3,
+            errored: 1,
+            errors: ['dispatch boom'],
+          });
+        },
+        recordShard: (params) => {
+          recorded.push(params);
+          return Promise.resolve({ isLastShardOfStage: true, finalized: true });
+        },
+      },
+      task({ uids: ['a', 'b'] }),
+    );
+
+    expect(scannedUids).toEqual(['a', 'b']);
+    expect(recorded).toHaveLength(1);
+    const p = recorded[0];
+    expect(p.stage).toBe('airingScan');
+    expect(p.runId).toBe('run-1');
+    expect(p.shardIndex).toBe(2);
+    expect(p.synced).toBe(3);
+    expect(p.skipped).toBe(0);
+    expect(p.errored).toBe(1);
+    expect(p.errors).toEqual(['dispatch boom']);
+    // startedAt is captured before completedAt (monotonic injected clock).
+    expect(p.startedAt).toBeLessThan(p.completedAt);
+  });
+
+  it('a whole-shard scan failure is caught and recorded as fully-errored (task does not crash)', async () => {
+    const recorded: RecordShardResultParams[] = [];
+
+    await runAiringScanShard(
+      {
+        now: () => 1,
+        scan: () => Promise.reject(new Error('scan blew up')),
+        recordShard: (params) => {
+          recorded.push(params);
+          return Promise.resolve({
+            isLastShardOfStage: false,
+            finalized: false,
+          });
+        },
+      },
+      task({ shardIndex: 0, uids: ['a', 'b', 'c'] }),
+    );
+
+    // Recorded as fully-errored (== uids.length), never re-thrown.
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0].stage).toBe('airingScan');
+    expect(recorded[0].synced).toBe(0);
+    expect(recorded[0].errored).toBe(3);
+    expect(recorded[0].errors[0]).toContain('scan blew up');
   });
 });

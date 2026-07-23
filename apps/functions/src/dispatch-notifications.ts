@@ -106,7 +106,11 @@ export async function handleDispatch(
  * `handleDispatch` on every availability-doc write.
  */
 export const dispatchNotifications = onDocumentWritten(
-  'title-cache/{tmdbId}/availability/{region}',
+  // Per-function cap (spec 0101 §5): the old global maxInstances:1 is gone.
+  {
+    document: 'title-cache/{tmdbId}/availability/{region}',
+    maxInstances: 5,
+  },
   async (event) => {
     const { db, messaging } = ensureAdminForDispatch();
     await handleDispatch(event, db, messaging);

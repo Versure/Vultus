@@ -2,24 +2,33 @@
  * Firebase Cloud Functions entry point for Vultus.
  *
  * This file is the deployable barrel: every exported symbol becomes a Cloud
- * Function. It exposes the single HTTPS `syncTitles` function (spec 0009) that
- * wraps the spec-0008 sync engine: it authenticates the caller (cron shared
- * secret OR Firebase ID token), rate-limits the user path, gathers + dedupes the
- * global union of tracked titles, applies the staleness window, runs one sync
- * pass, and returns a JSON summary.
+ * Function. Since spec 0101 the nightly sync is SHARDED over Cloud Tasks:
+ *  - `syncTitles` (HTTPS) is an **enqueue coordinator** — it authenticates the
+ *    caller (cron shared secret OR Firebase ID token), rate-limits the user path,
+ *    runs ONE consolidated `collectionGroup('watchlist')` gather, dedupes to the
+ *    distinct title union, applies the staleness window, opens the
+ *    `sync-run-progress/{runId}` staging doc, enqueues a delayed dead-run
+ *    watchdog, fans the title work out into `title-sync` shards, and returns a
+ *    `SyncEnqueueResponse`. It runs NO pipeline work inline and writes NO
+ *    `sync-runs/{runId}` summary — that is written only at finalization.
+ *  - `titleSyncWorker` (`onTaskDispatched`) runs the spec-0008 title-cache engine
+ *    over one shard's titles and records its shard result.
+ *  - `syncWatchdog` (`onTaskDispatched`) force-finalizes a dead run.
+ *  - `triggerSync` (per-user manual) stays a single synchronous, unsharded pass.
  *
- * The Firebase Admin SDK + `firebase-functions/params` enter ONLY at the
- * `onRequest` wiring below; the core flow (`runSync`) is a pure-ish function
- * driven by injected dependencies so it can be unit-tested without the SDK,
- * network, or secrets.
+ * The Firebase Admin SDK + `firebase-functions/params` enter ONLY at the trigger
+ * wiring below; the core flows (`runSync`, `runTitleSyncShard`, `runSyncWatchdog`,
+ * `runTriggerSync`, `runGetWatchProviders`) are driven by injected dependencies so
+ * they can be unit-tested without the SDK, network, or secrets.
  */
 import { logger, setGlobalOptions } from 'firebase-functions';
 import { onRequest, onCall, HttpsError } from 'firebase-functions/https';
+import { onTaskDispatched } from 'firebase-functions/v2/tasks';
 import { defineSecret, defineString } from 'firebase-functions/params';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import type { Firestore } from 'firebase-admin/firestore';
-import { getMessaging } from 'firebase-admin/messaging';
+import { randomUUID } from 'node:crypto';
 import {
   createSyncEngine,
   createTmdbClient,
@@ -43,33 +52,59 @@ import {
   dataToProviderCatalog,
 } from '@vultus/shared/firestore-schema';
 import type { ProviderCatalogReadData } from '@vultus/shared/firestore-schema';
-import { createEpisodeSyncEngine } from '@vultus/functions/sync-episodes';
-import type { EpisodeSyncEngine } from '@vultus/functions/sync-episodes';
-import {
-  createTmdbEpisodeSourceAdapter,
-  createEpisodeUpsertStore,
-  createWatchlistTvSourceAdapter,
-  createWatchlistStatusStoreAdapter,
-  createNextWatchableStoreAdapter,
-} from './sync-episodes';
-import { runEpisodeAiredScan } from './dispatch-episode-aired';
 import { classifyAuth } from './lib/auth';
 import type { VerifyToken } from './lib/auth';
-import { dedupeTitles } from './lib/gather';
+import { consolidateGather } from './lib/gather';
 import type { GatheredTitle } from './lib/gather';
 import { filterStale } from './lib/staleness';
 import { isRateLimited } from './lib/rate-limit';
 import {
-  gatherWatchlistTitles,
+  gatherWatchlistEntries,
   gatherActiveRegions,
   readSyncState,
   writeSyncState,
   writeSyncRun,
   verifyIdToken,
 } from './lib/firestore-io';
+import {
+  createTaskEnqueuer,
+  chunk,
+  shardTaskName,
+  watchdogTaskName,
+  QUEUE_NAMES,
+  SHARD_SIZE_TITLES,
+  SHARD_SIZE_SHOWS,
+} from './lib/task-queue';
+import type {
+  TaskEnqueuer,
+  TitleSyncTask,
+  EpisodeCacheTask,
+  SyncWatchdogTask,
+  SyncStage,
+} from './lib/task-queue';
+import {
+  openRun as trackerOpenRun,
+  recordShardResult,
+  finalizeHealthyRun,
+  finalizeAsDead,
+  persistStagedData,
+  readStagedShows,
+  readStagedAssignments,
+  readStagedUids,
+  setStageShardCount,
+} from './lib/sync-run-tracker';
+import type {
+  OpenRunParams,
+  RecordShardResultParams,
+  RecordShardResultOutcome,
+  StagedData,
+} from './lib/sync-run-tracker';
+import { enqueueFanoutAndAiringStages } from './sync-episodes';
 
-// Keep deployments in a single region (free-tier friendly, PLAN §2).
-setGlobalOptions({ region: 'europe-west1', maxInstances: 1 });
+// Keep deployments in a single region (free-tier friendly, PLAN §2). Concurrency
+// is now set PER-FUNCTION (spec 0101 §5) — the old global `maxInstances: 1`
+// serialized the whole deployment and is gone.
+setGlobalOptions({ region: 'europe-west1' });
 
 // Initialize the Admin SDK eagerly at module load, not lazily inside a
 // handler: a lazy `getApps().length === 0` check race can leave a cold-start
@@ -97,31 +132,36 @@ const WATCHMODE_API_KEY = defineString('WATCHMODE_API_KEY', { default: '' });
 export const RATE_LIMIT_MS = 5 * 60 * 1000;
 /** Staleness window (~20h): skip a title synced more recently, unless forced. */
 export const STALENESS_WINDOW_MS = 20 * 60 * 60 * 1000;
+/**
+ * Dead-run watchdog delay (seconds). ~2× the worst-case (non-retry) run duration
+ * (spec 0101 Risks): the coordinator enqueues one delayed watchdog per run; if the
+ * run has not finalized by then it is force-finalized into an error summary.
+ */
+export const WATCHDOG_DELAY_SECONDS = 7200;
 
-/** The JSON summary returned on a 200. Never includes a secret or token.
- *  `errorSample` is exactly the capped, credential-free per-title reason list
- *  mirrored from the `sync-runs` doc (same array — spec 0089 / D4 / NB1), so the
- *  200 body and the `sync-runs` record carry identical content. */
-export interface SyncRunResponse {
+/**
+ * The JSON body `syncTitles` returns on a 2xx — the run has been ENQUEUED, not
+ * completed. Never includes a secret or token. Per-title outcome counts
+ * (synced/skipped/errored) are NOT known at enqueue time; they land in
+ * `sync-runs/{runId}` at finalization (settings sync-health, spec 0049).
+ */
+export interface SyncEnqueueResponse {
   ok: true;
   trigger: 'cron' | 'user';
-  gathered: number; // distinct titles before the staleness filter
-  synced: number; // engine results with outcome 'synced'
-  skipped: number; // staleness-skipped + engine 'skipped'
-  errored: number; // engine results with outcome 'error'
+  /** The `sync-runs` doc id — observe the run's outcome there. */
+  runId: string;
+  /** Distinct titles after dedupe, before the staleness filter. */
+  gathered: number;
+  /** Distinct titles that passed the staleness filter (== title-sync work). */
+  toSync: number;
+  /** Phase-1 title-sync shards enqueued (0 ⇒ healthy no-op). */
+  shardCount: number;
   forced: boolean;
-  durationMs: number;
-  /** Capped (≤10), credential-free per-title error reasons — identical to the
-   *  `sync-runs` doc's `errors` array (spec 0089 / D4). */
-  errorSample: string[];
 }
 
 /** Dependencies injected into `runSync`, so tests drive it with fakes. */
 export interface RunSyncDeps {
   db: Firestore;
-  /** Builds the credentialed engine for the gathered store. Injected so the
-   *  handler test can supply a fake engine without the real clients. */
-  createEngine: (db: Firestore) => SyncEngine;
   /** Verifies a Firebase ID token (Admin SDK in production). */
   verifyToken: VerifyToken;
   /** The shared secret value (`SYNC_SHARED_SECRET.value()`). */
@@ -130,13 +170,42 @@ export interface RunSyncDeps {
   now: () => number;
   rateLimitMs: number;
   stalenessWindowMs: number;
-  /** Factory for the episode sync engine (best-effort daily pass, entry point B).
-   *  Optional — omit to skip the episode pass (existing tests remain green). */
-  createEpisodeEngine?: (db: Firestore) => EpisodeSyncEngine;
-  /** The daily episode-aired airing-scan (spec 0089 / D3), invoked right AFTER
-   *  the episode-insert pass (best-effort). Optional — omit to skip the scan
-   *  (wired for `syncTitles`, not `triggerSync`; existing tests remain green). */
-  runEpisodeAiredScan?: (db: Firestore) => Promise<void>;
+  /** Cloud Tasks enqueuer (real in prod; fake in tests). */
+  enqueuer: TaskEnqueuer;
+  /** Fresh runId per invocation (uuid in prod; fixed in tests). */
+  generateRunId: () => string;
+  /** Open the run's `sync-run-progress/{runId}` staging doc (tracker.openRun,
+   *  bound to `db`, in prod). Injected so tests assert it without a transaction. */
+  openRun: (params: OpenRunParams) => Promise<void>;
+  /**
+   * Persist the consolidated gather's downstream-stage inputs (TV fan-out
+   * assignments, distinct show tmdbIds, distinct uids) under the run's
+   * `sync-run-progress/{runId}/staged/*` subcollection (tracker.persistStagedData
+   * in prod). Called ONCE per run, BEFORE any shard is enqueued, so the workers'
+   * staged reads always see the data.
+   */
+  persistStagedData: (runId: string, data: StagedData) => Promise<void>;
+  /** Finalize a healthy 0-shard run (tracker.finalizeHealthyRun in prod). */
+  finalizeHealthyRun: (runId: string, now: number) => Promise<void>;
+  /**
+   * Kick off the episode-cache stage directly (bypassing the title stage), used
+   * when the title staleness filter left 0 title-sync work but the run still has
+   * TV shows whose episodes must be cached + fanned out + scanned this night
+   * (`enqueueEpisodeCacheStage` wired to the real deps in prod). Reads the just-
+   * persisted staged shows, so it MUST run after `persistStagedData`.
+   */
+  enqueueEpisodeCacheStage: (runId: string) => Promise<void>;
+  /**
+   * Gather the distinct union of all users' regions for the Watchmode gap-fill
+   * (spec 0099; `gatherActiveRegions(db)` in prod). Injected — rather than called
+   * on `deps.db` like the watchlist gather — because it scans a DIFFERENT
+   * collection (`users`), so injecting keeps this core testable without a full
+   * users-collection fake. Called ONCE per run, only when there is title-sync
+   * work, and carried on each `TitleSyncTask` (the fallback runs in the worker).
+   */
+  gatherActiveRegions: () => Promise<Region[]>;
+  /** Watchdog schedule delay, seconds (default `WATCHDOG_DELAY_SECONDS`). */
+  watchdogDelaySeconds?: number;
 }
 
 /** A minimal view of the request `runSync` needs — satisfied by the real
@@ -161,8 +230,12 @@ function parseForce(body: unknown): boolean {
 }
 
 /**
- * Core sync flow, SDK-agnostic via injected deps. Returns the status + body the
- * caller should send. Best-effort: per-title engine errors still yield 200.
+ * Enqueue-coordinator core, SDK-agnostic via injected deps. Authenticates + rate-
+ * limits, runs ONE consolidated gather → dedupe → staleness filter, opens the
+ * `sync-run-progress/{runId}` staging doc, enqueues the delayed watchdog, and fans
+ * the surviving titles out into `title-sync` shards. Runs NO pipeline work inline
+ * and writes NO `sync-runs/{runId}` summary (finalization-only invariant). Returns
+ * the status + `SyncEnqueueResponse` body the caller should send.
  */
 export async function runSync(
   deps: RunSyncDeps,
@@ -199,20 +272,21 @@ export async function runSync(
     }
   }
 
-  // Gather the global union and dedupe to distinct titles.
-  const gatheredRaw = await gatherWatchlistTitles(deps.db);
-  const distinct = dedupeTitles(gatheredRaw);
+  // ONE consolidated gather (spec 0101): read the whole watchlist collection group
+  // exactly once, then fold it into every downstream stage's input — the distinct
+  // title union (title-sync), the TV fan-out assignments, the distinct TV show
+  // tmdbIds (episode-cache), and the distinct TV-tracking uids (airing-scan).
+  const entries = await gatherWatchlistEntries(deps.db);
+  const consolidated = consolidateGather(entries);
+  const distinct = consolidated.titles;
   const gathered = distinct.length;
 
-  // Build the engine (also gives us the store for the staleness reads).
-  const engine = deps.createEngine(deps.db);
-  const store = createFirestoreTitleCacheStore(deps.db);
-
-  // Apply the staleness window unless forced.
-  let toSync: GatheredTitle[];
+  // Apply the staleness window unless forced (reads `title-cache.lastSyncedAt`).
+  let toSyncTitles: GatheredTitle[];
   if (forced) {
-    toSync = distinct;
+    toSyncTitles = distinct;
   } else {
+    const store = createFirestoreTitleCacheStore(deps.db);
     const lastSyncedByTmdbId = new Map<number, string | null>();
     await Promise.all(
       distinct.map(async (title) => {
@@ -220,7 +294,7 @@ export async function runSync(
         lastSyncedByTmdbId.set(title.tmdbId, entry?.lastSyncedAt ?? null);
       }),
     );
-    toSync = filterStale(
+    toSyncTitles = filterStale(
       distinct,
       lastSyncedByTmdbId,
       start,
@@ -229,122 +303,109 @@ export async function runSync(
     );
   }
 
-  const stalenessSkipped = gathered - toSync.length;
-  const inputs: SyncTitleInput[] = toSync.map((t) => ({
-    tmdbId: t.tmdbId,
-    type: t.type,
-  }));
+  const shards = chunk(toSyncTitles, SHARD_SIZE_TITLES);
+  const shardCount = shards.length;
+  const toSync = toSyncTitles.length;
+  const runId = deps.generateRunId();
 
-  const results: SyncResult[] = await engine.sync(inputs);
+  // Open the in-flight staging doc (`sync-run-progress/{runId}`) — NEVER the
+  // `sync-runs/{runId}` summary, which is written only at finalization so the
+  // settings sync-health card's "newest-by-startedAt is always complete"
+  // invariant holds (spec 0101 Data model). syncTitles is the GLOBAL sync, so
+  // the staging kind is always `cron`/`userId: null` (the per-USER manual pass
+  // is `triggerSync`); the response `trigger` still distinguishes cron vs user.
+  await deps.openRun({
+    runId,
+    kind: 'cron',
+    userId: null,
+    startedAt: start,
+    shardCounts: { titleSync: shardCount },
+  });
 
-  const synced = results.filter((r) => r.outcome === 'synced').length;
-  const engineSkipped = results.filter((r) => r.outcome === 'skipped').length;
-  const errored = results.filter((r) => r.outcome === 'error').length;
+  // Persist the consolidated gather's downstream inputs (TV fan-out assignments,
+  // distinct show tmdbIds, distinct uids) under `sync-run-progress/{runId}/staged/*`
+  // BEFORE enqueueing any shard — so the last title shard's `readStagedShows`
+  // (episode-cache handoff), and the direct episode-cache cascade below, always see
+  // the data (spec 0101 T8). Chunked into its own subcollection (not a doc field) to
+  // stay under the 1MB doc limit at design scale.
+  await deps.persistStagedData(runId, {
+    assignments: consolidated.assignments,
+    shows: consolidated.shows,
+    uids: consolidated.uids,
+  });
 
-  // Episode sync pass (entry point B) — best-effort. `syncAll()` isolates
-  // per-show errors, but watchlist enumeration (and engine construction) run
-  // before that loop and can reject on a transient Firestore error; a wrapping
-  // try/catch keeps the title-cache result, sync-state persistence, and the
-  // returned SyncRunResponse unaffected by any episode-pass failure (R9 / DoD e).
-  if (deps.createEpisodeEngine) {
-    try {
-      const episodeEngine = deps.createEpisodeEngine(deps.db);
-      const episodeResults = await episodeEngine.syncAll();
-      const episodesSynced = episodeResults.filter(
-        (r) => r.outcome === 'synced',
-      ).length;
-      const episodesErrored = episodeResults.filter(
-        (r) => r.outcome === 'error',
-      ).length;
-      const revertedToWatching = episodeResults.filter(
-        (r) => r.statusRevertedToWatching,
-      ).length;
-      logger.info('episode sync pass complete', {
-        episodesSynced,
-        episodesErrored,
-        revertedToWatching,
+  // Enqueue the delayed dead-run watchdog ONCE. The task name is deterministic,
+  // so a retried enqueue of the same run cannot double-create it.
+  const watchdogPayload: SyncWatchdogTask = { runId };
+  await deps.enqueuer.enqueue(QUEUE_NAMES.watchdog, watchdogPayload, {
+    name: watchdogTaskName(runId),
+    scheduleDelaySeconds: deps.watchdogDelaySeconds ?? WATCHDOG_DELAY_SECONDS,
+  });
+
+  if (shardCount === 0) {
+    // No title-sync work: the staleness filter dropped every title (all fresh) or
+    // none were tracked. BUT the episode-cache/fan-out/airing stages run per-night
+    // regardless of the TITLE staleness filter (spec 0101 T8) — a run with TV shows
+    // still needs its episodes cached, fanned out, and scanned. There are no title
+    // shards to cascade the episode-cache stage from, so kick it off DIRECTLY.
+    //
+    // `openRun` above already recorded `titleSync` shardCount 0 (a trivially-complete
+    // stage the terminal barrier will count as done), so no extra setStageShardCount
+    // is needed here.
+    if (consolidated.shows.length > 0) {
+      await deps.enqueueEpisodeCacheStage(runId);
+    } else {
+      // No TV content at all (0 shows ⟺ 0 assignments ⟺ 0 uids, see
+      // `consolidateGather`) → no per-user work exists and no shard will ever run to
+      // fire the terminal barrier, so FINALIZE IMMEDIATELY into a normal (zero-stats)
+      // `sync-runs/{runId}` summary — a healthy empty night yields a complete summary
+      // doc, never a watchdog error summary and never a permanent "Never synced". The
+      // already-enqueued watchdog will find the run finalized and no-op.
+      await deps.finalizeHealthyRun(runId, deps.now());
+    }
+  } else {
+    // Gather the Watchmode active-regions union ONCE (spec 0099), only now that
+    // we know there IS title-sync work — the fallback runs in the title-cache
+    // engine, which executes only inside title shards, so an all-fresh/empty
+    // night skips this extra `users` scan entirely.
+    const activeRegions = await deps.gatherActiveRegions();
+    // Fan out one `title-sync` task per shard. Named → Cloud Tasks de-dupes a
+    // retried enqueue of the same run/shard.
+    for (let i = 0; i < shards.length; i++) {
+      const payload: TitleSyncTask = {
+        runId,
+        shardIndex: i,
+        titles: shards[i],
+        forced,
+        activeRegions,
+      };
+      await deps.enqueuer.enqueue(QUEUE_NAMES.titleSync, payload, {
+        name: shardTaskName(runId, 'titleSync', i),
       });
-    } catch (err) {
-      logger.error('episode sync pass failed (best-effort, continuing)', err);
     }
   }
 
-  // Episode-aired airing-scan (spec 0089 / D3) — runs STRICTLY AFTER the
-  // episode-insert pass so it reads each show's `status` after spec 0074's
-  // completed→watching revert write has committed (NB2), and so it sees the
-  // just-inserted episode docs. Best-effort: a scan failure is logged and NEVER
-  // fails the run (mirrors the episode pass above).
-  if (deps.runEpisodeAiredScan) {
-    try {
-      await deps.runEpisodeAiredScan(deps.db);
-    } catch (err) {
-      logger.error(
-        'episode-aired airing-scan failed (best-effort, continuing)',
-        err,
-      );
-    }
-  }
+  // Persist the run on `system/sync` so the user-path rate limit still works
+  // (behavior unchanged from the pre-sharding coordinator; last-run == last
+  // enqueue). Not the `sync-runs` summary.
+  await writeSyncState(deps.db, deps.now(), start);
 
-  const end = deps.now();
-  await writeSyncState(deps.db, end, start);
-
-  // Best-effort sync-run record (observability only). A write failure is logged
-  // and NEVER alters or fails the run — the sync already succeeded above. The
-  // SyncRunResponse below is byte-for-byte unchanged regardless of this write.
-  const errors = results
-    .filter((r) => r.outcome === 'error')
-    .map((r) => r.reason)
-    .filter((s): s is string => !!s)
-    .slice(0, 10);
-  // Per-title error visibility (spec 0089 / D4): log each errored title's
-  // (already credential-free) reason so a half-failing nightly run is no longer
-  // invisible in the logs. Aggregate counts alone hid the ~47% failure.
-  for (const r of results) {
-    if (r.outcome === 'error') {
-      logger.error('[syncTitles] title errored', {
-        tmdbId: r.tmdbId,
-        type: r.type,
-        reason: r.reason,
-      });
-    }
-  }
-  try {
-    await writeSyncRun(deps.db, {
-      kind: 'cron',
-      userId: null,
-      startedAt: new Date(start).toISOString(),
-      completedAt: new Date(end).toISOString(),
-      durationMs: end - start,
-      titlesGathered: gathered,
-      titlesUpdated: synced,
-      errorCount: errored,
-      errors,
-    });
-  } catch (err) {
-    logger.error('[syncRun] failed to record run', err);
-  }
-
-  const response: SyncRunResponse = {
+  const response: SyncEnqueueResponse = {
     ok: true,
     trigger,
+    runId,
     gathered,
-    synced,
-    skipped: stalenessSkipped + engineSkipped,
-    errored,
+    toSync,
+    shardCount,
     forced,
-    durationMs: end - start,
-    // Identical to the `sync-runs` doc's `errors` array (NB1): same capped,
-    // credential-free per-title reasons — no new credential-exposure surface.
-    errorSample: errors,
   };
-  logger.info('syncTitles run complete', {
+  logger.info('syncTitles enqueue complete', {
     trigger,
+    runId,
     gathered,
-    synced,
-    skipped: response.skipped,
-    errored,
+    toSync,
+    shardCount,
     forced,
-    durationMs: response.durationMs,
   });
   return { status: 200, body: response };
 }
@@ -353,64 +414,263 @@ function ensureAdmin(): Firestore {
   return getFirestore();
 }
 
+/** Dependencies injected into `runTitleSyncShard`, so tests drive it with fakes. */
+export interface RunTitleSyncShardDeps {
+  db: Firestore;
+  /**
+   * Builds the credentialed title-cache engine (fake in tests). `activeRegions`
+   * is the shard payload's carried region union (spec 0099) — the production
+   * factory feeds it, plus the Watchmode client, into `createSyncEngine`.
+   */
+  createEngine: (db: Firestore, activeRegions: string[]) => SyncEngine;
+  /** Clock in epoch ms; injected for deterministic tests. */
+  now: () => number;
+  /** Record this shard's result (tracker.recordShardResult, bound to db, in prod). */
+  recordShard: (
+    params: RecordShardResultParams,
+  ) => Promise<RecordShardResultOutcome>;
+  /**
+   * Called ONCE, on the shard that completes the title stage: hand off to the
+   * episode-cache stage (`enqueueEpisodeCacheStage`) — read the run's staged
+   * distinct-show list, chunk by `SHARD_SIZE_SHOWS`, set the `episodeCache` shard
+   * count, and enqueue the cache shards. When there are no TV shows to cache it
+   * cascades straight to the terminal fan-out/airing stages (or finalizes healthy
+   * if there is no per-user work at all). The run summary is written later by the
+   * terminal barrier in `recordShardResult` (or by the watchdog).
+   */
+  onLastShard: (runId: string) => Promise<void>;
+}
+
 /**
- * The deployable HTTPS sync function. Binds the secrets it reads (`secrets: [...]`)
- * so the runtime injects them, wires the real Admin SDK + credentialed clients
- * into `runSync`, and sends its status + JSON body.
+ * Title-sync shard worker core. Runs the spec-0008 title-cache engine over the
+ * shard's titles, then ALWAYS records the shard result. A whole-shard failure
+ * (engine construction / transient enumeration) is CAUGHT and recorded as
+ * fully-errored — the task does not crash — so the stage still reaches its
+ * `shardCount` and the run can finalize with accurate error counts (an uncaught
+ * infra loss is the watchdog's concern, spec 0101 Risks). On the shard that
+ * completes the stage it invokes `onLastShard`.
+ *
+ * Staleness/force are applied UPSTREAM in the coordinator; by the time titles
+ * reach a shard they are already the set to sync, so the engine syncs them all.
+ * `payload.forced` is carried for observability/parity, not re-applied here.
+ */
+export async function runTitleSyncShard(
+  deps: RunTitleSyncShardDeps,
+  task: TitleSyncTask,
+): Promise<void> {
+  const start = deps.now();
+  const inputs: SyncTitleInput[] = task.titles.map((t) => ({
+    tmdbId: t.tmdbId,
+    type: t.type,
+  }));
+
+  let synced = 0;
+  let skipped = 0;
+  let errored = 0;
+  let errors: string[] = [];
+  try {
+    const engine = deps.createEngine(deps.db, task.activeRegions);
+    const results: SyncResult[] = await engine.sync(inputs);
+    synced = results.filter((r) => r.outcome === 'synced').length;
+    skipped = results.filter((r) => r.outcome === 'skipped').length;
+    errored = results.filter((r) => r.outcome === 'error').length;
+    errors = results
+      .filter((r) => r.outcome === 'error')
+      .map((r) => r.reason)
+      .filter((s): s is string => !!s)
+      .slice(0, 10);
+    // Per-title error visibility (spec 0089 / D4): each errored title's
+    // (credential-free) reason, now scoped to its run + shard.
+    for (const r of results) {
+      if (r.outcome === 'error') {
+        logger.error('[titleSyncWorker] title errored', {
+          runId: task.runId,
+          shardIndex: task.shardIndex,
+          tmdbId: r.tmdbId,
+          type: r.type,
+          reason: r.reason,
+        });
+      }
+    }
+  } catch (err) {
+    // Whole-shard failure → record as fully-errored (do NOT crash the task) so
+    // the stage still advances and the run finalizes with an accurate count.
+    errored = inputs.length;
+    errors = [err instanceof Error ? err.message : 'title shard failed'];
+    logger.error('[titleSyncWorker] shard failed (recorded as errored)', {
+      runId: task.runId,
+      shardIndex: task.shardIndex,
+    });
+  }
+
+  const outcome = await deps.recordShard({
+    runId: task.runId,
+    stage: 'titleSync',
+    shardIndex: task.shardIndex,
+    startedAt: start,
+    completedAt: deps.now(),
+    synced,
+    skipped,
+    errored,
+    errors,
+    counters: { titlesGathered: inputs.length, titlesUpdated: synced },
+  });
+
+  if (outcome.isLastShardOfStage) {
+    await deps.onLastShard(task.runId);
+  }
+}
+
+/** Dependencies injected into `enqueueEpisodeCacheStage`, so tests drive it with
+ *  fakes (fake enqueuer, fake staged reads, fake tracker). */
+export interface EnqueueEpisodeCacheStageDeps {
+  enqueuer: TaskEnqueuer;
+  /** Read the run's staged distinct TV show tmdbIds (T8-persisted). */
+  readStagedShows: (runId: string) => Promise<number[]>;
+  /** Set a stage's shard count on the staging doc. */
+  setStageShardCount: (
+    runId: string,
+    stage: SyncStage,
+    shardCount: number,
+  ) => Promise<void>;
+  /** Cascade to the terminal fan-out/airing stages when there is no show to
+   *  cache (delegates to `enqueueFanoutAndAiringStages`). */
+  enqueueFanoutAndAiring: (runId: string) => Promise<void>;
+}
+
+/**
+ * Title→episode-cache stage handoff, run by the title stage's last shard. Reads
+ * the run's staged distinct-show list, chunks it by `SHARD_SIZE_SHOWS`, sets the
+ * `episodeCache` shard count on the staging doc, and enqueues one
+ * `EpisodeCacheTask` per shard (deterministic task names → Cloud Tasks de-dupes a
+ * retried enqueue). If there are NO TV shows to cache (empty staged list — also
+ * the pre-T8 state, before the coordinator persists staged data), it sets
+ * `episodeCache` to 0 and cascades straight to the terminal fan-out/airing stages
+ * (which finalize the run, or finalize healthy if there is no per-user work at
+ * all). SDK-agnostic via injected deps.
+ */
+export async function enqueueEpisodeCacheStage(
+  deps: EnqueueEpisodeCacheStageDeps,
+  runId: string,
+): Promise<void> {
+  const shows = await deps.readStagedShows(runId);
+  const shards = chunk(shows, SHARD_SIZE_SHOWS);
+  await deps.setStageShardCount(runId, 'episodeCache', shards.length);
+
+  if (shards.length === 0) {
+    // No shows to cache → skip the cache stage, hand straight to fan-out/airing.
+    await deps.enqueueFanoutAndAiring(runId);
+    return;
+  }
+
+  for (let i = 0; i < shards.length; i++) {
+    const payload: EpisodeCacheTask = {
+      runId,
+      shardIndex: i,
+      shows: shards[i],
+    };
+    await deps.enqueuer.enqueue(QUEUE_NAMES.episodeCache, payload, {
+      name: shardTaskName(runId, 'episodeCache', i),
+    });
+  }
+}
+
+/** Dependencies injected into `runSyncWatchdog`, so tests drive it with fakes. */
+export interface RunSyncWatchdogDeps {
+  db: Firestore;
+  /** Clock in epoch ms; injected for deterministic tests. */
+  now: () => number;
+  /** Force-finalize a dead run (tracker.finalizeAsDead in prod). */
+  finalizeAsDead: (
+    db: Firestore,
+    runId: string,
+    now: number,
+  ) => Promise<{ wroteSummary: boolean }>;
+}
+
+/**
+ * Dead-run watchdog core. Delegates to `finalizeAsDead`: if the run already
+ * finalized (normal completion or a prior watchdog) it no-ops; otherwise it
+ * force-writes the `sync-runs/{runId}` error summary. Idempotent by construction
+ * (the finalizer transacts on `finalized`).
+ */
+export async function runSyncWatchdog(
+  deps: RunSyncWatchdogDeps,
+  task: SyncWatchdogTask,
+): Promise<void> {
+  await deps.finalizeAsDead(deps.db, task.runId, deps.now());
+}
+
+/**
+ * Build the (Admin-SDK-bound) `EnqueueEpisodeCacheStageDeps` for a run. Shared by
+ * BOTH entry points into the episode-cache stage — the title stage's last shard
+ * (`titleSyncWorker.onLastShard`) and the coordinator's direct 0-title-work cascade
+ * (`syncTitles` → `runSync.enqueueEpisodeCacheStage`) — so the two paths wire the
+ * identical staged reads / shard-count / fan-out-airing cascade. Kept as one factory
+ * to avoid divergence between the two call sites.
+ */
+function buildEpisodeCacheStageDeps(
+  db: Firestore,
+  enqueuer: TaskEnqueuer,
+): EnqueueEpisodeCacheStageDeps {
+  return {
+    enqueuer,
+    readStagedShows: (r) => readStagedShows(db, r),
+    setStageShardCount: (r, stage, n) => setStageShardCount(db, r, stage, n),
+    enqueueFanoutAndAiring: (r) =>
+      enqueueFanoutAndAiringStages(
+        {
+          enqueuer,
+          readStagedAssignments: (rid) => readStagedAssignments(db, rid),
+          readStagedUids: (rid) => readStagedUids(db, rid),
+          setStageShardCount: (rid, stage, n) =>
+            setStageShardCount(db, rid, stage, n),
+          finalizeHealthyRun: (rid, now) =>
+            finalizeHealthyRun(db, rid, now).then(() => undefined),
+          now: () => Date.now(),
+        },
+        r,
+      ),
+  };
+}
+
+/**
+ * The deployable HTTPS enqueue coordinator (spec 0101). Binds `SYNC_SHARED_SECRET`
+ * (auth) + `TMDB_READ_TOKEN` (bound for continuity; the coordinator itself makes no
+ * TMDB call — the title work runs in `titleSyncWorker`). `timeoutSeconds: 540`
+ * covers the single big gather + staleness reads; `maxInstances: 2`.
  */
 export const syncTitles = onRequest(
-  // Default gen2 timeout is 60s; a full pass over the tracked-title union
-  // (serial TMDB/Trakt throttle, spec 0009 §Scaling) already exceeds that at
-  // current watchlist size (~130s observed). The spec-0089 backoff floor +
-  // second-pass retry + episode-aired airing-scan can push total runtime past
-  // the previous 300s ceiling, so it is raised to 540s (the workflow's
-  // `curl --max-time` sits above this — spec 0089 / D2 / D4).
-  { secrets: [SYNC_SHARED_SECRET, TMDB_READ_TOKEN], timeoutSeconds: 540 },
+  {
+    secrets: [SYNC_SHARED_SECRET, TMDB_READ_TOKEN],
+    timeoutSeconds: 540,
+    maxInstances: 2,
+  },
   async (req, res) => {
     const db = ensureAdmin();
-    // Watchmode gap-fill (spec 0099): construct the client ONLY when the key is
-    // present — an empty/absent key → undefined → the engine runs TMDB-only
-    // (graceful no-key degrade). The key value is read here and never logged.
-    const watchmodeKey = WATCHMODE_API_KEY.value();
-    const watchmode = watchmodeKey
-      ? createWatchmodeClient({ apiKey: watchmodeKey })
-      : undefined;
-    // Active regions = the distinct union of all users' regions (one users scan).
-    const activeRegions = await gatherActiveRegions(db);
-    const createEngine = (firestore: Firestore): SyncEngine =>
-      createSyncEngine({
-        tmdb: createTmdbClient({ readAccessToken: TMDB_READ_TOKEN.value() }),
-        trakt: createTraktClient({ clientId: TRAKT_CLIENT_ID.value() }),
-        store: createFirestoreTitleCacheStore(firestore),
-        // Spec 0089 / D2: one extra pass over retryable-errored (429/transport)
-        // titles after a short cooldown, so a transient rate-limit blip never
-        // permanently skips a title's availability write for the day. The manual
-        // `triggerSync` path is left unconfigured (never rate-limits).
-        retryErroredPasses: 1,
-        retryDelayMs: 2000,
-        // Spec 0099: Watchmode fallback wired into the CRON path only.
-        watchmode,
-        activeRegions,
-      });
-
+    const enqueuer = createTaskEnqueuer();
     const output = await runSync(
       {
         db,
-        createEngine,
-        createEpisodeEngine: (firestore: Firestore): EpisodeSyncEngine =>
-          createEpisodeSyncEngine({
-            tmdb: createTmdbEpisodeSourceAdapter(
-              createTmdbClient({ readAccessToken: TMDB_READ_TOKEN.value() }),
-            ),
-            episodes: createEpisodeUpsertStore(firestore),
-            watchlist: createWatchlistTvSourceAdapter(firestore),
-            watchlistStatus: createWatchlistStatusStoreAdapter(firestore), // NEW (spec 0074, D5)
-            nextWatchable: createNextWatchableStoreAdapter(firestore), // NEW (spec 0081)
-          }),
-        // Spec 0089 / D3: the daily episode-aired airing-scan, invoked right
-        // after the episode-insert pass. Wired for `syncTitles` only.
-        runEpisodeAiredScan: (firestore: Firestore): Promise<void> =>
-          runEpisodeAiredScan(firestore, getMessaging()),
+        enqueuer,
+        generateRunId: () => randomUUID(),
+        openRun: (params) => trackerOpenRun(db, params),
+        persistStagedData: (runId, data) => persistStagedData(db, runId, data),
+        finalizeHealthyRun: (runId, now) =>
+          finalizeHealthyRun(db, runId, now).then(() => undefined),
+        // Watchmode gap-fill (spec 0099, reconciled into the 0101 sharding): the
+        // distinct union of all users' regions, gathered ONCE per run (one users
+        // scan) and carried on each title-sync shard payload. The coordinator
+        // builds NO Watchmode/TMDB client — the client is constructed in the
+        // `titleSyncWorker`, where the title-cache engine (and the fallback) run.
+        gatherActiveRegions: () => gatherActiveRegions(db),
+        // 0-title-work-but-TV-shows cascade: kick off the episode-cache stage
+        // directly (same wiring the title stage's last shard uses).
+        enqueueEpisodeCacheStage: (runId) =>
+          enqueueEpisodeCacheStage(
+            buildEpisodeCacheStageDeps(db, enqueuer),
+            runId,
+          ),
         verifyToken: verifyIdToken,
         secret: SYNC_SHARED_SECRET.value(),
         now: () => Date.now(),
@@ -421,6 +681,108 @@ export const syncTitles = onRequest(
     );
 
     res.status(output.status).json(output.body);
+  },
+);
+
+/**
+ * The deployable `title-sync` shard worker (spec 0101, `onTaskDispatched`). The
+ * backing Cloud Tasks queue is auto-created on deploy with the code-declared
+ * `rateLimits`/`retryConfig` below — the queue name equals this FUNCTION name
+ * (`titleSyncWorker`, see `QUEUE_NAMES.titleSync`). Title-stage aggregate TMDB
+ * throughput = maxConcurrentDispatches(10) × 4 req/s = 40 req/s (spec 0101). Binds
+ * `TMDB_READ_TOKEN` (+ the `TRAKT_CLIENT_ID` param) exactly as the pre-sharding
+ * `syncTitles` engine wiring did.
+ */
+export const titleSyncWorker = onTaskDispatched<TitleSyncTask>(
+  {
+    secrets: [TMDB_READ_TOKEN],
+    retryConfig: {
+      maxAttempts: 3,
+      minBackoffSeconds: 30,
+      maxBackoffSeconds: 300,
+      maxRetrySeconds: 3600,
+    },
+    rateLimits: { maxConcurrentDispatches: 10, maxDispatchesPerSecond: 10 },
+    maxInstances: 10,
+    timeoutSeconds: 540,
+  },
+  async (request) => {
+    const db = ensureAdmin();
+    const enqueuer = createTaskEnqueuer();
+    await runTitleSyncShard(
+      {
+        db,
+        now: () => Date.now(),
+        createEngine: (
+          firestore: Firestore,
+          activeRegions: string[],
+        ): SyncEngine => {
+          // Watchmode gap-fill (spec 0099), on the nightly (sharded) path only.
+          // Build the client ONLY when the key is present — an empty/absent key
+          // → undefined → the engine runs TMDB-only (graceful no-key degrade).
+          // WATCHMODE_API_KEY is a defineString param (like TRAKT_CLIENT_ID), not
+          // a secret, so it needs no `secrets:` binding; its value is read here
+          // and never logged.
+          const watchmodeKey = WATCHMODE_API_KEY.value();
+          const watchmode = watchmodeKey
+            ? createWatchmodeClient({ apiKey: watchmodeKey })
+            : undefined;
+          return createSyncEngine({
+            tmdb: createTmdbClient({
+              readAccessToken: TMDB_READ_TOKEN.value(),
+            }),
+            trakt: createTraktClient({ clientId: TRAKT_CLIENT_ID.value() }),
+            store: createFirestoreTitleCacheStore(firestore),
+            // Spec 0089 / D2: one extra pass over retryable-errored titles.
+            retryErroredPasses: 1,
+            retryDelayMs: 2000,
+            // Spec 0099: Watchmode fallback + the run's active-regions union
+            // (carried on the shard payload; re-filtered against REGIONS inside).
+            watchmode,
+            activeRegions: activeRegions as Region[],
+          });
+        },
+        recordShard: (params) => recordShardResult(db, params),
+        // Spec 0101 T6: the title stage's last shard hands off to the
+        // episode-cache stage (chunk staged shows → enqueue `episode-cache`
+        // shards), cascading to the terminal fan-out/airing stages when there is
+        // no show to cache. The run summary is written later by the terminal
+        // barrier in `recordShardResult` (or force-finalized by the watchdog).
+        onLastShard: (runId) =>
+          enqueueEpisodeCacheStage(
+            buildEpisodeCacheStageDeps(db, enqueuer),
+            runId,
+          ),
+      },
+      request.data,
+    );
+  },
+);
+
+/**
+ * The deployable dead-run watchdog (spec 0101, `onTaskDispatched`). Enqueued once
+ * per run by `syncTitles` with `scheduleDelaySeconds ≈ WATCHDOG_DELAY_SECONDS`.
+ * Makes NO TMDB calls (needs no secrets). Queue name == this function name
+ * (`syncWatchdog`, see `QUEUE_NAMES.watchdog`).
+ */
+export const syncWatchdog = onTaskDispatched<SyncWatchdogTask>(
+  {
+    retryConfig: {
+      maxAttempts: 3,
+      minBackoffSeconds: 30,
+      maxBackoffSeconds: 300,
+      maxRetrySeconds: 3600,
+    },
+    rateLimits: { maxConcurrentDispatches: 2 },
+    maxInstances: 2,
+    timeoutSeconds: 120,
+  },
+  async (request) => {
+    const db = ensureAdmin();
+    await runSyncWatchdog(
+      { db, now: () => Date.now(), finalizeAsDead },
+      request.data,
+    );
   },
 );
 
@@ -521,6 +883,7 @@ export async function runTriggerSync(
 export const triggerSync = onCall<unknown, Promise<TriggerSyncResponse>>(
   {
     secrets: [TMDB_READ_TOKEN],
+    maxInstances: 3,
     cors: [
       'https://vultus-cab62.web.app',
       'https://vultus-cab62.firebaseapp.com',
@@ -670,6 +1033,7 @@ export const getWatchProviders = onCall<
 >(
   {
     secrets: [TMDB_READ_TOKEN],
+    maxInstances: 5,
     cors: [
       'https://vultus-cab62.web.app',
       'https://vultus-cab62.firebaseapp.com',
@@ -698,4 +1062,9 @@ export const getWatchProviders = onCall<
 );
 
 export { dispatchNotifications } from './dispatch-notifications';
-export { syncWatchlistEpisodes } from './sync-episodes';
+export {
+  syncWatchlistEpisodes,
+  episodeCacheWorker,
+  episodeFanoutWorker,
+} from './sync-episodes';
+export { airingScanWorker } from './dispatch-episode-aired';

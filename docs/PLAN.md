@@ -285,6 +285,19 @@ title-cache/{tmdbId}/availability/{region}
   lastSyncedAt: timestamp
   previousSnapshot: [ ... ]               # For transition detection
 
+title-cache/{tmdbId}/episodes/{episodeId}   # tv only; episodeId = s{SS}e{EEE} (spec 0101)
+  season: number
+  episode: number
+  title: string | null                    # TMDB episode name; null when unknown
+  airDate: timestamp                       # non-null (null-air-date episodes are skipped, spec 0047)
+  lastSyncedAt: timestamp                  # when this cache doc was last fetched from TMDB
+  # Global episode cache: each distinct show's episode list is fetched from TMDB
+  # ONCE per night (episodeCacheWorker), then read (no TMDB) by episodeFanoutWorker
+  # to write the per-user `users/{uid}/watchlist/{titleId}/episodes/{episodeId}` docs.
+  # Stores TMDB facts only — no `watched`/`watchedAt` (those are per-user).
+  # functions-write-only; NO client read (falls to default-deny — mobile reads its
+  # own per-user episode docs, never this global cache).
+
 # Global provider catalog (authenticated read, written by functions only; spec 0060)
 provider-catalog/{region}
   providers: [ { providerId, name, logoPath } ]
@@ -292,6 +305,19 @@ provider-catalog/{region}
 
 sync-runs/{runId}                         # One doc per full sync run (spec 0049); authenticated read, Admin-SDK-only write
   runId, kind, userId, startedAt, completedAt, durationMs, titlesGathered, titlesUpdated, errorCount, errors
+  # Written ONCE, at finalization only (never in a `running` state) — the settings
+  # sync-health card reads newest-by-startedAt and calls completedAt.toDate(), so
+  # every sync-runs doc must be complete. In-flight progress lives in the separate
+  # sync-run-progress staging collection below (spec 0101).
+
+# In-flight sync staging (functions-write-only, NO client read; spec 0101)
+sync-run-progress/{runId}                 # per-stage shard progress + rolled-up counters; finalized: boolean
+sync-run-progress/{runId}/shards/{stage}-{shardIndex}   # one subdoc per shard (idempotency + barrier counting)
+sync-run-progress/{runId}/staged/{chunkId}              # chunked fan-out assignments / uids / show tmdbIds (>1MB-safe)
+  # All sharded/staged progress moves here so `sync-runs` stays finalization-only.
+  # Not matched by any security rule → default-deny (clients read only the finalized
+  # `sync-runs/{runId}` summary). The last shard of the final stage (or the syncWatchdog
+  # on a dead run) writes the `sync-runs/{runId}` summary once, then flips finalized: true.
 ```
 
 `title-cache` is shared across users — if you and a future user both track
@@ -538,6 +564,29 @@ These you have to do yourself; Claude Code can't.
       403 because the service was private). The `deploy-functions.yml` pipeline
       now verifies invokability after each deploy (smoke gate); it does **not**
       auto-grant it — this is a one-time manual step, like the secrets above.
+- [ ] **Cloud Tasks IAM for the sharded nightly sync (spec 0101).** The Cloud
+      Tasks queues (`title-sync`, `episode-cache`, `episode-fanout`,
+      `airing-scan`, `sync-watchdog`, all region `europe-west1`) are
+      **auto-created on deploy** by firebase-functions v2 `onTaskDispatched` —
+      the function name is the queue name and the code-declared
+      `rateLimits`/`retryConfig` options ARE the queue config. So there is **no
+      `gcloud tasks queues create` step and no `firebase.json` queue block**. The
+      **only** manual prereq is IAM, mirroring the public-invokability grant
+      above — run:
+      `gcloud projects add-iam-policy-binding vultus-cab62 --member=serviceAccount:<functions-runtime-SA> --role=roles/cloudtasks.enqueuer`
+      (so the `syncTitles` coordinator may enqueue tasks), plus a
+      `run.invoker` binding on each worker's Cloud Run service so Cloud Tasks may
+      dispatch to it, e.g.
+      `gcloud run services add-iam-policy-binding titlesyncworker --region=europe-west1 --member=serviceAccount:<cloud-tasks-SA> --role=roles/run.invoker --project=vultus-cab62`
+      (repeat for `episodecacheworker`, `episodefanoutworker`, `airingscanworker`,
+      `syncwatchdog` — service names are the **lowercased** function names).
+      **Why:** the runtime SA needs `cloudtasks.enqueuer` to enqueue, and each
+      gen2 `onTaskDispatched` service is a private Cloud Run service Cloud Tasks
+      can only reach with `run.invoker`. **Deploy overwrites console tuning:**
+      because the code-declared `rateLimits` are re-applied on every deploy, the
+      `onTaskDispatched` options in code are the single source of truth — never
+      hand-tune these queues in the console (it will be reverted on the next
+      deploy).
 - [ ] Install Claude Code locally (`npm install -g @anthropic-ai/claude-code`),
       authenticate.
 - [ ] Install Node.js LTS, Android Studio (for Capacitor builds), Firebase
