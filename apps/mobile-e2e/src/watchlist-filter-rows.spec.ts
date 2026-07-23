@@ -64,8 +64,9 @@ const VIEWPORT_TOLERANCE = 2;
  * type / tmdbId / traktId / title / addedAt ({ __timestamp } marker) / status /
  * posterPath / voteAverage / releaseDate / nextUnwatchedEpisodeAirDate /
  * watchingViaPlex. The `tmdbId`s (9001+) do NOT collide with the shared `seeded`
- * fixture's single watchlist doc (id 2). Eight docs push well past a single
- * 812px-tall e2e screen so the list overflows and applies shrink pressure.
+ * fixture's watchlist docs (2 = Breaking Bad, 3 = The Bear). Eight docs push well
+ * past a single 812px-tall e2e screen so the list overflows and applies shrink
+ * pressure.
  */
 const OVERFLOW_ITEMS = Array.from({ length: 8 }, (_, i) => ({
   tmdbId: 9001 + i,
