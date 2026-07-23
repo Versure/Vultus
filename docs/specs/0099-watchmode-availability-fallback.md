@@ -2,7 +2,7 @@
 number: 0099
 slug: watchmode-availability-fallback
 title: Watchmode streaming-availability fallback for TMDB provider gaps
-status: implementing
+status: done
 slices: [slice:sync-titles]
 scopes: [scope:functions, scope:shared]
 created: 2026-07-22
