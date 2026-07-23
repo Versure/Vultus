@@ -1,7 +1,10 @@
 // Raw Watchmode HTTP response DTOs. Slice-internal — NOT exported from the
-// barrel; only the mappers consume them. Field names mirror the Watchmode v1
-// API verbatim (verified against https://api.watchmode.com/docs 2026-07 — see
-// the README + spec Risks for the one assumption flagged as unconfirmed).
+// barrel; only the mappers consume them. Field names are based on the
+// community-documented / secondary-source Watchmode v1 API shape (the live
+// credentialed docs at https://api.watchmode.com/docs could not be rendered
+// during implementation) and should be re-confirmed against the live docs with
+// credentials — see the README + spec Risks for the assumptions flagged as
+// unconfirmed.
 
 /** GET /v1/search/?search_field={tmdb_movie_id|tmdb_tv_id}&search_value={id}
  *  Watchmode returns `title_results` (title matches) and `people_results`

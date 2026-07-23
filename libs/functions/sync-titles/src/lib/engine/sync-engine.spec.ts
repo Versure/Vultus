@@ -692,6 +692,36 @@ describe('createSyncEngine — Watchmode fallback (spec 0099)', () => {
     });
   });
 
+  it('GAP, Watchmode returns an unmapped source_id → drop is logged (decision 3), title still filled', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const tmdb = createTmdbMock({
+        getWatchProviders: vi.fn(() =>
+          Promise.resolve<RegionProviders | null>({ NL: [] }),
+        ),
+      });
+      const wm = createWatchmodeMock({
+        getTitleSources: vi.fn(() =>
+          Promise.resolve<WatchmodeSource[] | null>([
+            wmNetflixSource,
+            // sourceId 999 has no crosswalk entry → dropped, must be logged.
+            { sourceId: 999, type: 'sub', region: 'NL' },
+          ]),
+        ),
+      });
+      const engine = engineWith(tmdb.client, wm.client, ['NL']);
+
+      await engine.sync([{ tmdbId: 603, type: 'movie' }]);
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      const msg = String(warn.mock.calls[0]?.[0]);
+      expect(msg).toContain('603');
+      expect(msg).toContain('1');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it('GAP, rent/buy-only still counts as a gap → Watchmode fills flatrate on top', async () => {
     const tmdb = createTmdbMock({
       getWatchProviders: vi.fn(

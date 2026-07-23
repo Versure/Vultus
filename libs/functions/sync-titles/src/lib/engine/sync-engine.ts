@@ -180,10 +180,18 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
               if (sources === null) {
                 watchmodeUnavailable = true;
               } else {
-                fill = mapSourcesToFlatrateProviders(
+                const mapped = mapSourcesToFlatrateProviders(
                   sources,
                   WATCHMODE_TO_TMDB_PROVIDER,
-                ).fill;
+                );
+                fill = mapped.fill;
+                if (mapped.dropped > 0) {
+                  // Decision 3: an unmapped Watchmode source_id is counted, never
+                  // guessed. Surface it so crosswalk staleness is diagnosable.
+                  console.warn(
+                    `[sync-titles] watchmode: dropped ${mapped.dropped} unmapped source_id(s) for tmdbId ${tmdbId}`,
+                  );
+                }
               }
             } else {
               // resolveTitleId → null (unresolved title id) → unavailable.
