@@ -2,7 +2,7 @@
 number: 0102
 slug: fix-watchlist-filter-rows-squash
 title: Fix the Watchlist top filter rows collapsing when the list overflows — `flex-shrink: 0` on the persistent control rows
-status: implementing
+status: done
 slices: [slice:watchlist]
 scopes: [scope:mobile]
 created: 2026-07-23
