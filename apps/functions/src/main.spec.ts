@@ -7,6 +7,8 @@ import type {
 import {
   QUEUE_NAMES,
   type EnqueueOptions,
+  type EpisodeCacheTask,
+  type SyncStage,
   type SyncWatchdogTask,
   type TaskEnqueuer,
   type TitleSyncTask,
@@ -19,6 +21,7 @@ import {
   RATE_LIMIT_MS,
   STALENESS_WINDOW_MS,
   WATCHDOG_DELAY_SECONDS,
+  enqueueEpisodeCacheStage,
   runSync,
   runSyncWatchdog,
   runTitleSyncShard,
@@ -553,7 +556,7 @@ describe('runTitleSyncShard — title-sync worker core', () => {
     expect(onLastShardCalls).toHaveLength(0);
   });
 
-  it('last shard of the stage → onLastShard(runId) is invoked (interim finalize hook)', async () => {
+  it('last shard of the stage → onLastShard(runId) is invoked (episode-cache stage handoff)', async () => {
     const engineFactory = createFakeEngine((inputs) =>
       inputs.map(syncedResult),
     );
@@ -605,6 +608,87 @@ describe('runTitleSyncShard — title-sync worker core', () => {
       errors: ['enumeration blew up'],
       counters: { titlesGathered: 3, titlesUpdated: 0 },
     });
+  });
+});
+
+// --- enqueueEpisodeCacheStage — title→episode-cache handoff (spec 0101 T6) -----
+
+describe('enqueueEpisodeCacheStage', () => {
+  interface RecordedEnqueue {
+    queue: string;
+    payload: unknown;
+    name?: string;
+  }
+
+  function fakeEnqueuer() {
+    const calls: RecordedEnqueue[] = [];
+    const enqueuer: TaskEnqueuer = {
+      enqueue: <T>(queue: string, payload: T, options?: EnqueueOptions) => {
+        calls.push({ queue, payload, name: options?.name });
+        return Promise.resolve();
+      },
+    };
+    return { enqueuer, calls };
+  }
+
+  it('chunks the staged shows, sets the episodeCache shard count, and enqueues one cache task per shard', async () => {
+    const { enqueuer, calls } = fakeEnqueuer();
+    const setCounts: { stage: SyncStage; n: number }[] = [];
+    const fanoutCalls: string[] = [];
+    // 301 shows @ SHARD_SIZE_SHOWS=150 → 3 shards (150 + 150 + 1).
+    const shows = Array.from({ length: 301 }, (_v, i) => 1000 + i);
+    await enqueueEpisodeCacheStage(
+      {
+        enqueuer,
+        readStagedShows: () => Promise.resolve(shows),
+        setStageShardCount: (_runId, stage, n) => {
+          setCounts.push({ stage, n });
+          return Promise.resolve();
+        },
+        enqueueFanoutAndAiring: (runId) => {
+          fanoutCalls.push(runId);
+          return Promise.resolve();
+        },
+      },
+      RUN_ID,
+    );
+
+    expect(setCounts).toEqual([{ stage: 'episodeCache', n: 3 }]);
+    expect(calls).toHaveLength(3);
+    expect(calls.every((c) => c.queue === QUEUE_NAMES.episodeCache)).toBe(true);
+    expect(calls.map((c) => c.name)).toEqual([
+      'run-1-episodeCache-0',
+      'run-1-episodeCache-1',
+      'run-1-episodeCache-2',
+    ]);
+    const last = calls[2].payload as EpisodeCacheTask;
+    expect(last.shows).toHaveLength(1);
+    // No fan-out cascade when there ARE shows to cache.
+    expect(fanoutCalls).toHaveLength(0);
+  });
+
+  it('no staged shows → sets episodeCache 0 and cascades to fan-out/airing (no cache enqueue)', async () => {
+    const { enqueuer, calls } = fakeEnqueuer();
+    const setCounts: { stage: SyncStage; n: number }[] = [];
+    const fanoutCalls: string[] = [];
+    await enqueueEpisodeCacheStage(
+      {
+        enqueuer,
+        readStagedShows: () => Promise.resolve([]),
+        setStageShardCount: (_runId, stage, n) => {
+          setCounts.push({ stage, n });
+          return Promise.resolve();
+        },
+        enqueueFanoutAndAiring: (runId) => {
+          fanoutCalls.push(runId);
+          return Promise.resolve();
+        },
+      },
+      RUN_ID,
+    );
+    expect(setCounts).toEqual([{ stage: 'episodeCache', n: 0 }]);
+    expect(calls).toHaveLength(0);
+    expect(fanoutCalls).toEqual([RUN_ID]);
   });
 });
 

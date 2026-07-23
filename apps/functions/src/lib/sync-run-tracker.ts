@@ -56,7 +56,23 @@ export const SYNC_STAGES: readonly SyncStage[] = [
   'airingScan',
 ];
 
-/** The last stage — the shard that completes it finalizes the run. */
+/**
+ * The TERMINAL stages of the pipeline DAG. Since spec 0101 T6 the pipeline is a
+ * fork, not a line: `episodeCache`'s last shard enqueues BOTH `episodeFanout` and
+ * `airingScan`, which run in PARALLEL. The run is done only when BOTH terminal
+ * stages have drained, so finalization keys off "all stages complete", triggered
+ * from whichever terminal shard finishes last (see `recordShardResult`).
+ */
+export const TERMINAL_STAGES: readonly SyncStage[] = [
+  'episodeFanout',
+  'airingScan',
+];
+
+/**
+ * The nominal final stage (`airingScan`). Retained for reference/observability;
+ * finalization no longer keys strictly off it (a fork means `episodeFanout` can
+ * finish after `airingScan`) — see `TERMINAL_STAGES` / `recordShardResult`.
+ */
 export const LAST_STAGE: SyncStage = 'airingScan';
 
 /** Max errors retained on the staging doc (and each shard subdoc). */
@@ -261,8 +277,29 @@ export async function recordShardResult(
 
     const errors = capErrors([...progress.errors, ...params.errors]);
     const isLastShardOfStage = nextCompleted === stage.shardCount;
+
+    // Finalization fires when EVERY stage is complete (`completedShards ===
+    // shardCount`; a 0-shard stage is trivially complete), but ONLY from a
+    // TERMINAL shard (`episodeFanout`/`airingScan`). Rationale: the non-terminal
+    // stages (titleSync/episodeCache) enqueue their successor stage(s) in the
+    // worker's `onLastShard` AFTER this transaction returns, so at the instant a
+    // non-terminal stage completes the downstream shardCounts are still 0 and
+    // would spuriously read as "complete" — the terminal-stage guard suppresses
+    // that premature finalization. By the time any terminal shard runs, all
+    // upstream + both terminal shardCounts are already set (the cache stage sets
+    // BOTH before enqueueing either), so `allStagesComplete` is authoritative and
+    // the LAST of {episodeFanout, airingScan} to finish finalizes the run exactly
+    // once (the read-in-txn duplicate guard keeps it once under at-least-once).
+    const stagesAfter: Record<SyncStage, StageProgress> = {
+      ...progress.stages,
+      [params.stage]: updatedStage,
+    };
+    const allStagesComplete = SYNC_STAGES.every(
+      (s) => stagesAfter[s].completedShards === stagesAfter[s].shardCount,
+    );
+    const isTerminalStage = TERMINAL_STAGES.includes(params.stage);
     const shouldFinalize =
-      isLastShardOfStage && params.stage === LAST_STAGE && !progress.finalized;
+      isTerminalStage && allStagesComplete && !progress.finalized;
 
     // Write shard subdoc.
     const shardRecord: ShardRecord = {
@@ -321,12 +358,14 @@ export interface FinalizeAsDeadOutcome {
 
 /**
  * Healthy direct finalizer for a run whose completion is NOT signalled by the
- * `recordShardResult` last-shard barrier:
- *  - a title pass that filtered every title as fresh — a healthy no-op with **no
- *    shards at all** (there is nothing to record, so the barrier never fires); and
- *  - the interim Phase-1 completion of the title stage, whose last shard finalizes
- *    the run because the downstream stages do not exist yet (spec 0101 T2 interim
- *    contract; see `main.ts` `titleSyncWorker`).
+ * `recordShardResult` terminal-stage barrier (which needs at least one terminal
+ * shard to fire). Two cases use it:
+ *  - the coordinator's 0-toSync path — a title pass that filtered every title as
+ *    fresh, a healthy no-op with **no shards at all** (nothing to record, so the
+ *    barrier never fires); and
+ *  - the fan-out/airing cascade's no-per-user-work path — when the run has 0 TV
+ *    fan-out assignments AND 0 airing uids, both terminal stages have 0 shards, so
+ *    no terminal shard runs to fire the barrier (`enqueueFanoutAndAiringStages`).
  *
  * Transactional on `finalized` (mirrors `finalizeAsDead` / the barrier): a run
  * already finalized (normally, or by the watchdog) → NO-OP; otherwise it writes the
@@ -334,11 +373,6 @@ export interface FinalizeAsDeadOutcome {
  * **normal (non-error) outcome** and flips `finalized: true`. Because it targets
  * the same `sync-runs/{runId}` doc id as the other finalizers, a racing watchdog
  * self-heals to a single summary.
- *
- * **Interim scaffolding.** When T6/T7 land, the last title shard enqueues the
- * episode-cache stage instead of calling this, and the final airing-scan barrier
- * in `recordShardResult` writes the summary. The `finalizeAsDead`/barrier
- * finalization paths are unchanged.
  */
 export async function finalizeHealthyRun(
   db: Firestore,
@@ -450,4 +484,144 @@ export async function finalizeAsDead(
 
     return { wroteSummary: true };
   });
+}
+
+// --- Staged fan-out data (`sync-run-progress/{runId}/staged/*`) ---------------
+//
+// The single consolidated coordinator gather (T8) emits, besides the distinct
+// titles it shards for `titleSync`, the downstream stages' inputs: the TV episode
+// fan-out ASSIGNMENTS `{ uid, titleId, tmdbId }`, the distinct SHOW tmdbIds, and
+// the distinct UIDs. At design scale (100k users × shows) these sets can exceed
+// the 1 MB Firestore doc limit even chunked, so they live in their OWN
+// subcollection (like `shards/*`) — NOT as fields on the progress doc — one
+// bounded chunk per doc. `episodeCacheWorker` reads `shows`; the fan-out cascade
+// reads `assignments` + `uids`. `persistStagedData` is the WRITE helper T8 calls
+// from the coordinator; the `read*` helpers are what the workers consume here.
+
+/** `sync-run-progress/{runId}/staged` — the chunked staged-input subcollection. */
+export function syncRunProgressStagedCollection(runId: string): string {
+  return `${syncRunProgressDocPath(runId)}/staged`;
+}
+
+/** The discriminator distinguishing the three staged input kinds. */
+export type StagedKind = 'assignments' | 'shows' | 'uids';
+
+/** `sync-run-progress/{runId}/staged/{kind}-{index}` — one bounded chunk doc. */
+export function syncRunProgressStagedDocPath(
+  runId: string,
+  kind: StagedKind,
+  index: number,
+): string {
+  return `${syncRunProgressStagedCollection(runId)}/${kind}-${index}`;
+}
+
+/**
+ * Per-kind chunk sizes. Bounded so each staged chunk doc stays well under the 1 MB
+ * Firestore doc limit: assignments carry three fields (a uid, a titleId, a number)
+ * so they are chunked smaller than the scalar `shows`/`uids` lists.
+ */
+export const STAGED_ASSIGNMENTS_CHUNK = 2000;
+export const STAGED_SHOWS_CHUNK = 5000;
+export const STAGED_UIDS_CHUNK = 5000;
+
+/** One TV episode fan-out assignment (TV only). */
+export interface StagedAssignment {
+  uid: string;
+  titleId: string;
+  tmdbId: number;
+}
+
+/** The consolidated gather's downstream-stage inputs (T8 persists these). */
+export interface StagedData {
+  assignments: StagedAssignment[];
+  shows: number[];
+  uids: string[];
+}
+
+/** The persisted shape of one staged chunk doc. */
+interface StagedChunkDoc {
+  kind: StagedKind;
+  index: number;
+  items: unknown[];
+}
+
+/** Firestore batched-write op limit. */
+const STAGED_BATCH_LIMIT = 500;
+
+/**
+ * Persist the coordinator gather's downstream inputs for a run as chunked docs
+ * under `sync-run-progress/{runId}/staged/*` (T8 calls this from `main.ts`). Each
+ * kind is split into bounded chunks (`{ kind, index, items }`); an empty kind
+ * writes no doc. Writes are batched at the 500-op Firestore limit. Idempotent by
+ * doc id (`{kind}-{index}`) — a retried gather rewrites the same chunk docs.
+ */
+export async function persistStagedData(
+  db: Firestore,
+  runId: string,
+  data: StagedData,
+): Promise<void> {
+  const docs: { path: string; doc: StagedChunkDoc }[] = [];
+  const pushChunks = (kind: StagedKind, size: number, items: unknown[]) => {
+    let index = 0;
+    for (let i = 0; i < items.length; i += size) {
+      docs.push({
+        path: syncRunProgressStagedDocPath(runId, kind, index),
+        doc: { kind, index, items: items.slice(i, i + size) },
+      });
+      index++;
+    }
+  };
+  pushChunks('assignments', STAGED_ASSIGNMENTS_CHUNK, data.assignments);
+  pushChunks('shows', STAGED_SHOWS_CHUNK, data.shows);
+  pushChunks('uids', STAGED_UIDS_CHUNK, data.uids);
+
+  for (let i = 0; i < docs.length; i += STAGED_BATCH_LIMIT) {
+    const batch = db.batch();
+    for (const { path, doc } of docs.slice(i, i + STAGED_BATCH_LIMIT)) {
+      batch.set(db.doc(path), doc);
+    }
+    await batch.commit();
+  }
+}
+
+/** Read + concatenate all chunk docs of one kind (ordered by chunk index). */
+async function readStagedKind<T>(
+  db: Firestore,
+  runId: string,
+  kind: StagedKind,
+): Promise<T[]> {
+  const snap = await db
+    .collection(syncRunProgressStagedCollection(runId))
+    .get();
+  const chunks = snap.docs
+    .map((d) => d.data() as StagedChunkDoc)
+    .filter((c) => c?.kind === kind)
+    .sort((a, b) => a.index - b.index);
+  const out: T[] = [];
+  for (const c of chunks) out.push(...(c.items as T[]));
+  return out;
+}
+
+/** Distinct TV show tmdbIds staged for the run (empty when none/unpersisted). */
+export function readStagedShows(
+  db: Firestore,
+  runId: string,
+): Promise<number[]> {
+  return readStagedKind<number>(db, runId, 'shows');
+}
+
+/** TV episode fan-out assignments staged for the run (empty when none). */
+export function readStagedAssignments(
+  db: Firestore,
+  runId: string,
+): Promise<StagedAssignment[]> {
+  return readStagedKind<StagedAssignment>(db, runId, 'assignments');
+}
+
+/** Distinct uids staged for the run's airing scan (empty when none). */
+export function readStagedUids(
+  db: Firestore,
+  runId: string,
+): Promise<string[]> {
+  return readStagedKind<string>(db, runId, 'uids');
 }

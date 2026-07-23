@@ -71,23 +71,31 @@ import {
   watchdogTaskName,
   QUEUE_NAMES,
   SHARD_SIZE_TITLES,
+  SHARD_SIZE_SHOWS,
 } from './lib/task-queue';
 import type {
   TaskEnqueuer,
   TitleSyncTask,
+  EpisodeCacheTask,
   SyncWatchdogTask,
+  SyncStage,
 } from './lib/task-queue';
 import {
   openRun as trackerOpenRun,
   recordShardResult,
   finalizeHealthyRun,
   finalizeAsDead,
+  readStagedShows,
+  readStagedAssignments,
+  readStagedUids,
+  setStageShardCount,
 } from './lib/sync-run-tracker';
 import type {
   OpenRunParams,
   RecordShardResultParams,
   RecordShardResultOutcome,
 } from './lib/sync-run-tracker';
+import { enqueueFanoutAndAiringStages } from './sync-episodes';
 
 // Keep deployments in a single region (free-tier friendly, PLAN §2). Concurrency
 // is now set PER-FUNCTION (spec 0101 §5) — the old global `maxInstances: 1`
@@ -349,12 +357,13 @@ export interface RunTitleSyncShardDeps {
     params: RecordShardResultParams,
   ) => Promise<RecordShardResultOutcome>;
   /**
-   * Called ONCE, on the shard that completes the title stage. INTERIM (Phase 1,
-   * spec 0101 T2): finalize the run — the title stage is the only stage with
-   * shards, so its completion completes the run. T6 replaces this with the
-   * episode-cache stage enqueue (`setStageShardCount` + enqueue `episode-cache`
-   * shards, done BEFORE recording the last shard so the barrier does not finalize
-   * early), after which the airing-scan barrier writes the summary instead.
+   * Called ONCE, on the shard that completes the title stage: hand off to the
+   * episode-cache stage (`enqueueEpisodeCacheStage`) — read the run's staged
+   * distinct-show list, chunk by `SHARD_SIZE_SHOWS`, set the `episodeCache` shard
+   * count, and enqueue the cache shards. When there are no TV shows to cache it
+   * cascades straight to the terminal fan-out/airing stages (or finalizes healthy
+   * if there is no per-user work at all). The run summary is written later by the
+   * terminal barrier in `recordShardResult` (or by the watchdog).
    */
   onLastShard: (runId: string) => Promise<void>;
 }
@@ -436,6 +445,60 @@ export async function runTitleSyncShard(
 
   if (outcome.isLastShardOfStage) {
     await deps.onLastShard(task.runId);
+  }
+}
+
+/** Dependencies injected into `enqueueEpisodeCacheStage`, so tests drive it with
+ *  fakes (fake enqueuer, fake staged reads, fake tracker). */
+export interface EnqueueEpisodeCacheStageDeps {
+  enqueuer: TaskEnqueuer;
+  /** Read the run's staged distinct TV show tmdbIds (T8-persisted). */
+  readStagedShows: (runId: string) => Promise<number[]>;
+  /** Set a stage's shard count on the staging doc. */
+  setStageShardCount: (
+    runId: string,
+    stage: SyncStage,
+    shardCount: number,
+  ) => Promise<void>;
+  /** Cascade to the terminal fan-out/airing stages when there is no show to
+   *  cache (delegates to `enqueueFanoutAndAiringStages`). */
+  enqueueFanoutAndAiring: (runId: string) => Promise<void>;
+}
+
+/**
+ * Title→episode-cache stage handoff, run by the title stage's last shard. Reads
+ * the run's staged distinct-show list, chunks it by `SHARD_SIZE_SHOWS`, sets the
+ * `episodeCache` shard count on the staging doc, and enqueues one
+ * `EpisodeCacheTask` per shard (deterministic task names → Cloud Tasks de-dupes a
+ * retried enqueue). If there are NO TV shows to cache (empty staged list — also
+ * the pre-T8 state, before the coordinator persists staged data), it sets
+ * `episodeCache` to 0 and cascades straight to the terminal fan-out/airing stages
+ * (which finalize the run, or finalize healthy if there is no per-user work at
+ * all). SDK-agnostic via injected deps.
+ */
+export async function enqueueEpisodeCacheStage(
+  deps: EnqueueEpisodeCacheStageDeps,
+  runId: string,
+): Promise<void> {
+  const shows = await deps.readStagedShows(runId);
+  const shards = chunk(shows, SHARD_SIZE_SHOWS);
+  await deps.setStageShardCount(runId, 'episodeCache', shards.length);
+
+  if (shards.length === 0) {
+    // No shows to cache → skip the cache stage, hand straight to fan-out/airing.
+    await deps.enqueueFanoutAndAiring(runId);
+    return;
+  }
+
+  for (let i = 0; i < shards.length; i++) {
+    const payload: EpisodeCacheTask = {
+      runId,
+      shardIndex: i,
+      shows: shards[i],
+    };
+    await deps.enqueuer.enqueue(QUEUE_NAMES.episodeCache, payload, {
+      name: shardTaskName(runId, 'episodeCache', i),
+    });
   }
 }
 
@@ -524,6 +587,7 @@ export const titleSyncWorker = onTaskDispatched<TitleSyncTask>(
   },
   async (request) => {
     const db = ensureAdmin();
+    const enqueuer = createTaskEnqueuer();
     await runTitleSyncShard(
       {
         db,
@@ -540,11 +604,36 @@ export const titleSyncWorker = onTaskDispatched<TitleSyncTask>(
             retryDelayMs: 2000,
           }),
         recordShard: (params) => recordShardResult(db, params),
-        // INTERIM (spec 0101 T2): the title stage is the only stage with shards,
-        // so its completion finalizes the run. T6 replaces this with the
-        // episode-cache stage enqueue.
+        // Spec 0101 T6: the title stage's last shard hands off to the
+        // episode-cache stage (chunk staged shows → enqueue `episode-cache`
+        // shards), cascading to the terminal fan-out/airing stages when there is
+        // no show to cache. The run summary is written later by the terminal
+        // barrier in `recordShardResult` (or force-finalized by the watchdog).
         onLastShard: (runId) =>
-          finalizeHealthyRun(db, runId, Date.now()).then(() => undefined),
+          enqueueEpisodeCacheStage(
+            {
+              enqueuer,
+              readStagedShows: (r) => readStagedShows(db, r),
+              setStageShardCount: (r, stage, n) =>
+                setStageShardCount(db, r, stage, n),
+              enqueueFanoutAndAiring: (r) =>
+                enqueueFanoutAndAiringStages(
+                  {
+                    enqueuer,
+                    readStagedAssignments: (rid) =>
+                      readStagedAssignments(db, rid),
+                    readStagedUids: (rid) => readStagedUids(db, rid),
+                    setStageShardCount: (rid, stage, n) =>
+                      setStageShardCount(db, rid, stage, n),
+                    finalizeHealthyRun: (rid, now) =>
+                      finalizeHealthyRun(db, rid, now).then(() => undefined),
+                    now: () => Date.now(),
+                  },
+                  r,
+                ),
+            },
+            runId,
+          ),
       },
       request.data,
     );
@@ -854,4 +943,8 @@ export const getWatchProviders = onCall<
 );
 
 export { dispatchNotifications } from './dispatch-notifications';
-export { syncWatchlistEpisodes } from './sync-episodes';
+export {
+  syncWatchlistEpisodes,
+  episodeCacheWorker,
+  episodeFanoutWorker,
+} from './sync-episodes';

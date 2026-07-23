@@ -43,6 +43,28 @@ export interface TmdbEpisodeSource {
   ): Promise<Episode[] | null>;
 }
 
+/** Global episode cache store (`title-cache/{tmdbId}/episodes`, spec 0101).
+ *  Fetch-once/fan-out model (entry point B, sharded): `episodeCacheWorker`
+ *  fetches each distinct show's episodes from TMDB ONCE per night and upserts
+ *  them here; `episodeFanoutWorker` then reads them (NO TMDB) and writes the
+ *  per-user episode docs. The cache stores ONLY TMDB facts — no per-user
+ *  `watched`/`watchedAt`. Doc ids are `episodeId(season, episode)`
+ *  (`s{SS}e{EEE}`), identical to the per-user id scheme. Admin-SDK-backed in
+ *  `apps/functions`; faked in tests. Firebase-free interface. */
+export interface TitleCacheEpisodeStore {
+  /** All cached episodes for a show (empty array when nothing is cached yet).
+   *  Order is not guaranteed. */
+  getCachedEpisodes(tmdbId: number): Promise<Episode[]>;
+  /** Upsert cached episodes for a show, keyed by the id the engine built with
+   *  `episodeId(season, episode)` (never re-padded downstream). Idempotent:
+   *  re-upserting the same episodes re-writes the same doc ids. The adapter
+   *  stamps each doc's `lastSyncedAt` at write time. */
+  upsertCachedEpisodes(
+    tmdbId: number,
+    episodes: { id: string; episode: Episode }[],
+  ): Promise<void>;
+}
+
 /** Per-user episode subcollection store. Insert-only: the engine pre-filters
  *  against `getExistingEpisodeIds`, so `writeEpisodes` only ever receives new
  *  ids — existing docs (and their `watched`/`watchedAt` state) are never
