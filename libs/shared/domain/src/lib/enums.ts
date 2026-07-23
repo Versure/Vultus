@@ -57,3 +57,8 @@ export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 // Internal discriminants — not iterated → bare unions, no companion array.
 export type TitleType = 'movie' | 'tv';
 export type WatchProviderType = 'flatrate' | 'rent' | 'buy';
+
+/** Which data source produced the CURRENT providers on an availability doc
+ *  (spec 0099). 'tmdb' = TMDB watch/providers (default / legacy); 'watchmode' =
+ *  Watchmode gap-fill. Provenance/diagnostics only — NOT a transition input. */
+export type AvailabilitySource = 'tmdb' | 'watchmode';

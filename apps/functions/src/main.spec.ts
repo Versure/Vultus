@@ -186,6 +186,7 @@ function coordinatorDeps(
       enqueueEpisodeCacheStageCalls.push(runId);
       return Promise.resolve();
     },
+    gatherActiveRegions: () => Promise.resolve([]),
     ...overrides,
   };
   return {
@@ -273,6 +274,7 @@ describe('runSync — enqueue coordinator', () => {
           { tmdbId: 1396, type: 'tv' },
         ],
         forced: true,
+        activeRegions: [],
       } satisfies TitleSyncTask,
       options: { name: 'run-1-titleSync-0' },
     });
@@ -305,6 +307,66 @@ describe('runSync — enqueue coordinator', () => {
       ?.payload as TitleSyncTask;
     expect(shard.titles).toEqual([{ tmdbId: 603, type: 'movie' }]);
     expect(shard.forced).toBe(false);
+  });
+
+  it('gathers the active-regions union ONCE and carries it on every title shard payload (spec 0099)', async () => {
+    const { db } = createFakeDb({
+      watchlist: [
+        { tmdbId: 603, type: 'movie' },
+        { tmdbId: 1396, type: 'tv' },
+      ],
+    });
+    const { enqueuer, calls } = createFakeEnqueuer();
+    let gatherCount = 0;
+    const { deps } = coordinatorDeps({
+      db,
+      enqueuer,
+      gatherActiveRegions: () => {
+        gatherCount += 1;
+        return Promise.resolve(['US', 'NL']);
+      },
+    });
+
+    await runSync(
+      deps,
+      req({
+        headers: { 'x-vultus-sync-secret': SECRET },
+        body: { force: true },
+      }),
+    );
+
+    // Gathered exactly once (one users scan per run), then carried on the shard.
+    expect(gatherCount).toBe(1);
+    const shard = calls.find((c) => c.queueName === QUEUE_NAMES.titleSync)
+      ?.payload as TitleSyncTask;
+    expect(shard.activeRegions).toEqual(['US', 'NL']);
+  });
+
+  it('does NOT scan for active regions when there is no title-sync work (0 shards)', async () => {
+    // All titles fresh → staleness drops them → 0 title shards; the region scan
+    // is only needed by the title-cache engine (which runs inside title shards),
+    // so an all-fresh night skips it.
+    const recentMs = NOW - 60 * 1000;
+    const { db } = createFakeDb({
+      watchlist: [{ tmdbId: 1396, type: 'tv' }],
+      titleCache: { 'title-cache/1396': { lastSyncedAtMs: recentMs } },
+    });
+    let gatherCount = 0;
+    const { deps } = coordinatorDeps({
+      db,
+      gatherActiveRegions: () => {
+        gatherCount += 1;
+        return Promise.resolve(['US']);
+      },
+    });
+
+    const out = await runSync(
+      deps,
+      req({ headers: { 'x-vultus-sync-secret': SECRET } }),
+    );
+
+    expect((out.body as SyncEnqueueResponse).shardCount).toBe(0);
+    expect(gatherCount).toBe(0);
   });
 
   it('consolidated gather: emits distinct titles, TV assignments, distinct shows + uids, and persists staged data BEFORE any enqueue', async () => {
@@ -662,6 +724,7 @@ describe('runTitleSyncShard — title-sync worker core', () => {
       { tmdbId: 1399, type: 'tv' },
     ],
     forced: false,
+    activeRegions: ['US', 'NL'],
   };
 
   it('runs the engine over the shard titles and records the shard result (non-last shard → onLastShard NOT called)', async () => {
@@ -712,6 +775,28 @@ describe('runTitleSyncShard — title-sync worker core', () => {
       counters: { titlesGathered: 3, titlesUpdated: 2 },
     });
     expect(onLastShardCalls).toHaveLength(0);
+  });
+
+  it('passes the shard payload activeRegions through to the engine factory (spec 0099)', async () => {
+    const engineFactory = createFakeEngine((inputs) =>
+      inputs.map(syncedResult),
+    );
+    const createEngineArgs: string[][] = [];
+    await runTitleSyncShard(
+      {
+        db: {} as RunTitleSyncShardDeps['db'],
+        now: () => NOW,
+        createEngine: (_db, activeRegions) => {
+          createEngineArgs.push(activeRegions);
+          return engineFactory.engine;
+        },
+        recordShard: () =>
+          Promise.resolve({ isLastShardOfStage: false, finalized: false }),
+        onLastShard: () => Promise.resolve(),
+      },
+      task,
+    );
+    expect(createEngineArgs).toEqual([['US', 'NL']]);
   });
 
   it('last shard of the stage → onLastShard(runId) is invoked (episode-cache stage handoff)', async () => {

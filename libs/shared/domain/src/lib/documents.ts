@@ -2,7 +2,13 @@
 // timestamps are ISO 8601 strings (no Date, no Firestore Timestamp, no Firebase
 // import). The ISO ↔ Timestamp mapping lives in spec 0004's converters.
 
-import type { NotificationKind, Region, TitleType, WatchStatus } from './enums';
+import type {
+  AvailabilitySource,
+  NotificationKind,
+  Region,
+  TitleType,
+  WatchStatus,
+} from './enums';
 import type { CatalogProvider, WatchProvider } from './entities';
 
 export interface FcmToken {
@@ -180,10 +186,18 @@ export interface TitleCacheEntry {
   traktId: number | null; // Trakt show id (tv only); null for movies and unresolved
   metadata: TitleMetadata;
   lastSyncedAt: string; // ISO 8601
+  /** Cached Watchmode title id resolved once from the TMDB id (spec 0099), so
+   *  subsequent daily syncs skip the id-resolution call. null = not resolved /
+   *  no Watchmode match. Optional; legacy docs missing it → null via the
+   *  converter. */
+  watchmodeId?: number | null;
 }
 
 export interface RegionAvailability {
   providers: WatchProvider[];
   lastSyncedAt: string; // ISO 8601
   previousSnapshot: WatchProvider[]; // prior providers array, for transition detection
+  /** Which source produced `providers` this pass (spec 0099). Optional; legacy
+   *  docs missing it → 'tmdb' via the converter. */
+  source?: AvailabilitySource;
 }

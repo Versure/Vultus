@@ -24,6 +24,46 @@ Imported from `@vultus/functions/sync-titles`:
   - `getWatchProviders(tmdbId, type)` → `Promise<RegionProviders | null>`
   - `getSeasonEpisodes(tmdbId, seasonNumber)` → `Promise<Episode[] | null>` — each returned `Episode` now carries `title: string | null` (spec 0047)
   - `getRegionWatchProviders(region)` → `Promise<CatalogProvider[] | null>` — the region-wide watch-provider **catalog** (spec 0060). Fetches `GET /watch/providers/movie` and `GET /watch/providers/tv` with `watch_region={region}`, then merges the two lists into one `CatalogProvider[]` (deduped by `providerId`, first occurrence wins; sorted by `name`, case-insensitive) via the pure `mergeCatalogProviders` mapper. The real TMDB "Plex" provider (name matched case-insensitive, trimmed, **exact** `'plex'`) is excluded from the merged catalog (spec 0077 / #195) so it never collides with the manual "I use Plex" chip (spec 0061). `logoPath` is `logo_path ?? null`. Per-side 404 → that side treated as `[]`; **only** when **both** endpoints 404 → `null` (mirrors the other methods' 404 → null contract). An empty catalog → `[]`. This is a region catalog (not per-title flatrate/rent/buy), so `CatalogProvider` has no `type` field. Consumed by the `getWatchProviders` callable (spec 0060), NOT the daily sync.
+- `createWatchmodeClient(config: WatchmodeClientConfig): WatchmodeClient` — the
+  **Watchmode gap-fill client** (spec 0099), mirroring the TMDB client shape
+  (injected `apiKey`, injectable `fetch`, the shared http core, `404 → null`,
+  `WatchmodeError` on any other non-2xx). Two methods:
+  - `resolveTitleId(tmdbId, type)` → `Promise<number | null>` — resolves a TMDB
+    id to a Watchmode title id via `GET /search/?search_field={tmdb_movie_id|tmdb_tv_id}&search_value={tmdbId}`
+    (first `title_results[].id`; no match / 404 → `null`).
+  - `getTitleSources(watchmodeId, regions)` → `Promise<WatchmodeSource[] | null>`
+    — one multi-region call `GET /title/{watchmodeId}/sources/?regions={csv}`,
+    mapped to `WatchmodeSource { sourceId, type, region }` rows (filtered to
+    `REGIONS` countries + known `type`s; 404 → `null`).
+  - **Query-param auth (credential-safe).** Unlike TMDB/Trakt (header auth),
+    Watchmode authenticates via `?apiKey=…`. The client passes the key to the
+    http core as `authQuery`, which appends it to the fetch URL **but excludes it
+    from the `WatchmodeError.endpoint` and any log** — so the credential never
+    leaks into a diagnostic surface (asserted in the client spec). The client
+    **never** reads the key from env/secret; the composition root injects it, and
+    when the key is absent the client is simply **not constructed** (graceful
+    TMDB-only degrade).
+  - The Watchmode `source_id` → TMDB `{ providerId, name }` mapping is a
+    **committed, region-agnostic, human-verified crosswalk**
+    (`watchmode/watchmode-provider-map.ts`, `WATCHMODE_TO_TMDB_PROVIDER`)
+    generated once from Watchmode `/sources/` cross-referenced to TMDB's provider
+    catalog **by name**. It covers major GLOBAL flatrate services (Netflix,
+    Disney+, Prime Video, Max/HBO Max, Apple TV+, Paramount+, Peacock, Hulu) —
+    not an NL-only list. A Watchmode source with **no** crosswalk entry is
+    **dropped** (counted, never guessed); extending it is a one-line addition and
+    a verification test locks its shape. The numeric `source_id`/`providerId`
+    pairings are the well-known community-documented ids as of 2026-07 and should
+    be re-confirmed against live `/sources/` + TMDB catalog before production use
+    (see spec 0099 Risks). The crosswalk + mappers + DTOs are **slice-internal**
+    (not barrel-exported), like `tmdb-mappers`.
+  - **Cost model.** For a title with any active-region flatrate gap, Watchmode is
+    called **at most twice** — one `resolveTitleId` (only when `watchmodeId` is
+    uncached on the shared `title-cache` entry) + one **multi-region**
+    `getTitleSources` (all gap regions in one request) — regardless of the number
+    of gap regions or how many users track the title (the title-cache is shared).
+    Once `watchmodeId` is cached, later syncs make at most **one** `getTitleSources`
+    per title-with-gap. A title with TMDB flatrate in every active region makes
+    **zero** Watchmode calls.
 - `createTraktClient(config: TraktClientConfig): TraktClient` — factory returning
   a client with two methods:
   - `getCalendar(startDate, days)` → `Promise<TraktCalendarEntry[]>` — every show
@@ -59,11 +99,13 @@ Imported from `@vultus/functions/sync-titles`:
   callable (`apps/functions/src/main.ts`) **consumes** this to gather the caller's
   own titles before running one force-fresh engine pass.
 - Types: `TmdbClientConfig`, `TmdbClient`, `RegionProviders`, `TraktClientConfig`,
-  `TraktClient`, `TraktCalendarEntry`, `SyncEngine`, `SyncEngineConfig`,
-  `SyncTitleInput`, `TitleCacheStore`, `SyncResult`, `ProviderTransition`,
-  `SyncOutcome`, `GatheredUserTitle`.
-- Errors: `TmdbError`, `TraktError` (kept distinct — each carries `status` +
-  `endpoint`, neither embeds its credential).
+  `TraktClient`, `TraktCalendarEntry`, `WatchmodeClientConfig`, `WatchmodeClient`,
+  `WatchmodeSource`, `SyncEngine`, `SyncEngineConfig`, `SyncTitleInput`,
+  `TitleCacheStore`, `SyncResult`, `ProviderTransition`, `SyncOutcome`,
+  `GatheredUserTitle`.
+- Errors: `TmdbError`, `TraktError`, `WatchmodeError` (kept distinct — each
+  carries `status` + `endpoint`, none embeds its credential — for Watchmode the
+  `apiKey` query param is stripped from `endpoint`).
 
 Return types are `@vultus/shared/domain` types where one exists (`TitleMetadata`,
 `WatchProvider`, `Episode`); `RegionProviders` and `TraktCalendarEntry` are thin
@@ -131,6 +173,43 @@ dependencies are **injected**, mirroring the client factories:
   was a **retryable** error (`429` or `0` transport). Default `0` (current
   behavior, so existing callers are unaffected). Spec 0089 / D2.
 - `retryDelayMs?` — cooldown (ms) slept before each retry pass. Default `0`.
+- `watchmode?` — the optional `WatchmodeClient` gap-fill (spec 0099). **Absent →
+  the fallback is skipped entirely and the engine is byte-for-byte TMDB-only**
+  (graceful no-key degrade: it iterates only the regions TMDB returned, no
+  union expansion, no carry-forward).
+- `activeRegions?` — the regions the Watchmode fallback may gap-fill (the union
+  of all users' regions, spec 0099). Default `[]`; filtered to `REGIONS`. A region
+  not in this list is never gap-filled.
+
+**Watchmode gap-fill (spec 0099, step 4).** When `watchmode` is configured, step
+4 considers the **union** of the TMDB-returned regions and `activeRegions`. A
+**gap** is an active region with **no TMDB flatrate** provider (rent/buy-only or
+empty both count). For the gap regions it makes **one** `resolveTitleId` (only
+when `watchmodeId` is uncached on the shared `title-cache` entry — the resolved
+id is written back so later syncs skip it) + **one** multi-region
+`getTitleSources`, maps the `sub` sources through the committed crosswalk to TMDB
+flatrate providers, and per region:
+
+- **active gap, Watchmode available:** `next = dedupe([...tmdbProviders,
+...fill])` — **TMDB entries win** (never overridden, decision 1); `source =
+'watchmode'` when the fill added a provider, else `'tmdb'` (Watchmode confirmed
+  zero flatrate — a genuine `'removed'` still fires if `prev` had flatrate).
+- **active gap, Watchmode UNAVAILABLE** (no client-resolution / `resolveTitleId →
+null` / `getTitleSources → null` / thrown error — one failing call marks **all**
+  gap regions unavailable): the write is **SKIPPED** (transition-safety
+  carry-forward) — the stored `providers`/`previousSnapshot`/`source` carry
+  forward unchanged so a transient TMDB+Watchmode gap does **not** fire a false
+  `'removed'`. The title does **not** error.
+- **non-active region, or active-with-flatrate:** written exactly as today,
+  `source = 'tmdb'`.
+
+Every availability write now carries a `source: 'tmdb' | 'watchmode'` provenance
+marker, and every entry write carries `watchmodeId` (preserving any cached id).
+A null TMDB provider block (404 / no block) is treated as an **empty** region map
+(the former early return is gone) so a fully-null title is still a gap candidate
+for its active regions; a fully-null title with **no** active region (or no
+`watchmode`) still writes nothing and reports `outcome: 'synced'` / `reason: 'no
+watch providers'` (unchanged no-fallback behavior).
 
 Per input `{ tmdbId, type }`, in order: fetch metadata (`getMovie` for movies,
 `getTvShow` for tv) — a `null` (TMDB 404) is a clean **skip** (no write); for
@@ -207,8 +286,17 @@ const results = await engine.sync([
   (`tmdb-mappers.ts`), and error (`tmdb-error.ts`) plus their specs.
 - `trakt/` — Trakt API v2 client (`trakt-client.ts`), DTOs (`trakt-dtos.ts`),
   mappers (`trakt-mappers.ts`), and error (`trakt-error.ts`) plus their specs.
-- `shared/` — the auth-agnostic HTTP transport (`http.ts`) consumed by both
-  clients (imported as `../shared/http`).
+- `watchmode/` — the Watchmode gap-fill client (`watchmode-client.ts`), its DTOs
+  (`watchmode-dtos.ts`), mappers (`watchmode-mappers.ts`), error
+  (`watchmode-error.ts`), and the committed region-agnostic crosswalk
+  (`watchmode-provider-map.ts`) plus their specs (spec 0099). Only the client
+  factory + `WatchmodeClient`/`WatchmodeClientConfig`/`WatchmodeSource` types +
+  `WatchmodeError` are barrel-exported; the DTOs, mappers, and crosswalk stay
+  slice-internal (consumed by the engine via relative import).
+- `shared/` — the auth-agnostic HTTP transport (`http.ts`) consumed by all three
+  clients (imported as `../shared/http`). Its optional `authQuery` config
+  (spec 0099) appends query-param credentials (Watchmode's `apiKey`) to the fetch
+  URL while keeping them out of the error `endpoint`/logs; TMDB/Trakt omit it.
 - `engine/` — the title-cache sync engine: the factory + orchestration
   (`sync-engine.ts`), the pure transition-detection function (`transitions.ts`),
   the `TitleCacheStore` port (`store.ts`), and the contract types (`types.ts`)

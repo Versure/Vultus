@@ -8,6 +8,7 @@
 // write side is a plain `Date`.
 
 import type {
+  AvailabilitySource,
   CatalogProvider,
   NotificationKind,
   NotificationPayload,
@@ -142,12 +143,14 @@ export interface TitleCacheReadData {
   traktId: number | null;
   metadata: TitleMetadata;
   lastSyncedAt: FirestoreTimestampLike;
+  watchmodeId?: number | null; // optional on read: legacy docs pre-0099 lack this field
 }
 export interface TitleCacheWriteData {
   type: TitleType;
   traktId: number | null;
   metadata: TitleMetadata;
   lastSyncedAt: Date;
+  watchmodeId?: number | null; // the coalesce supplies it (`?? null`)
 }
 
 // --- SyncRun: startedAt + completedAt; everything else passes through ---
@@ -191,9 +194,11 @@ export interface RegionAvailabilityReadData {
   providers: WatchProvider[];
   lastSyncedAt: FirestoreTimestampLike;
   previousSnapshot: WatchProvider[];
+  source?: AvailabilitySource; // optional on read: legacy docs pre-0099 lack this field
 }
 export interface RegionAvailabilityWriteData {
   providers: WatchProvider[];
   lastSyncedAt: Date;
   previousSnapshot: WatchProvider[];
+  source?: AvailabilitySource; // the coalesce supplies it (`?? 'tmdb'`)
 }

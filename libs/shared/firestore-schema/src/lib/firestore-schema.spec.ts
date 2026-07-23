@@ -867,7 +867,7 @@ describe('converters — round-trip identity', () => {
     expect(result.payload.tmdbId).toBe(11111);
   });
 
-  it('TitleCacheEntry: lastSyncedAt; metadata posterPath/releaseDate null; traktId null', () => {
+  it('TitleCacheEntry: lastSyncedAt; metadata posterPath/releaseDate null; traktId null; watchmodeId coalesces to null', () => {
     const t: TitleCacheEntry = {
       type: 'movie',
       traktId: null,
@@ -882,8 +882,10 @@ describe('converters — round-trip identity', () => {
     const result = dataToTitleCache(
       simulateStored(titleCacheToData(t)) as never,
     );
-    expect(result).toEqual(t);
+    // The converter emits watchmodeId (?? null) even when the domain object omits it.
+    expect(result).toEqual({ ...t, watchmodeId: null });
     expect(result.traktId).toBeNull();
+    expect(result.watchmodeId).toBeNull();
   });
 
   it('TitleCacheEntry: traktId number round-trips', () => {
@@ -901,11 +903,75 @@ describe('converters — round-trip identity', () => {
     const result = dataToTitleCache(
       simulateStored(titleCacheToData(t)) as never,
     );
-    expect(result).toEqual(t);
+    expect(result).toEqual({ ...t, watchmodeId: null });
     expect(result.traktId).toBe(42);
   });
 
-  it('RegionAvailability: providers + previousSnapshot pass through', () => {
+  it('TitleCacheEntry: watchmodeId value round-trips (spec 0099)', () => {
+    const t: TitleCacheEntry = {
+      type: 'movie',
+      traktId: null,
+      metadata: {
+        title: 'Dune',
+        overview: 'A boy.',
+        posterPath: null,
+        releaseDate: null,
+      },
+      lastSyncedAt: '2026-06-01T00:00:00.000Z',
+      watchmodeId: 3427892,
+    };
+    const result = dataToTitleCache(
+      simulateStored(titleCacheToData(t)) as never,
+    );
+    expect(result).toEqual(t);
+    expect(result.watchmodeId).toBe(3427892);
+  });
+
+  it('TitleCacheEntry: watchmodeId null round-trips as null (spec 0099)', () => {
+    const t: TitleCacheEntry = {
+      type: 'tv',
+      traktId: 42,
+      metadata: {
+        title: 'Severance',
+        overview: 'A mysterious job.',
+        posterPath: '/poster.jpg',
+        releaseDate: '2022-02-18T00:00:00.000Z',
+      },
+      lastSyncedAt: '2026-06-01T00:00:00.000Z',
+      watchmodeId: null,
+    };
+    const result = dataToTitleCache(
+      simulateStored(titleCacheToData(t)) as never,
+    );
+    expect(result).toEqual(t);
+    expect(result.watchmodeId).toBeNull();
+  });
+
+  it('TitleCacheEntry: backward-compat — legacy doc missing watchmodeId reads back as null (spec 0099)', () => {
+    // Simulates a doc written before spec 0099 (no watchmodeId field stored).
+    const t: TitleCacheEntry = {
+      type: 'movie',
+      traktId: null,
+      metadata: {
+        title: 'Dune',
+        overview: 'A boy.',
+        posterPath: null,
+        releaseDate: null,
+      },
+      lastSyncedAt: '2026-06-01T00:00:00.000Z',
+      watchmodeId: 12345,
+    };
+    const stored = simulateStored(titleCacheToData(t)) as Record<
+      string,
+      unknown
+    >;
+    // Delete watchmodeId to simulate a pre-0099 stored doc.
+    delete stored['watchmodeId'];
+    const result = dataToTitleCache(stored as never);
+    expect(result.watchmodeId).toBeNull();
+  });
+
+  it('RegionAvailability: providers + previousSnapshot pass through; source coalesces to tmdb', () => {
     const a: RegionAvailability = {
       providers: [
         { providerId: 8, name: 'Netflix', type: 'flatrate' },
@@ -914,9 +980,10 @@ describe('converters — round-trip identity', () => {
       lastSyncedAt: '2026-06-10T00:00:00.000Z',
       previousSnapshot: [{ providerId: 8, name: 'Netflix', type: 'rent' }],
     };
+    // The converter emits source (?? 'tmdb') even when the domain object omits it.
     expect(
       dataToAvailability(simulateStored(availabilityToData(a)) as never),
-    ).toEqual(a);
+    ).toEqual({ ...a, source: 'tmdb' });
   });
 
   it('RegionAvailability: empty previousSnapshot', () => {
@@ -927,7 +994,54 @@ describe('converters — round-trip identity', () => {
     };
     expect(
       dataToAvailability(simulateStored(availabilityToData(a)) as never),
-    ).toEqual(a);
+    ).toEqual({ ...a, source: 'tmdb' });
+  });
+
+  it('RegionAvailability: source "watchmode" round-trips (spec 0099)', () => {
+    const a: RegionAvailability = {
+      providers: [{ providerId: 8, name: 'Netflix', type: 'flatrate' }],
+      lastSyncedAt: '2026-06-10T00:00:00.000Z',
+      previousSnapshot: [],
+      source: 'watchmode',
+    };
+    const result = dataToAvailability(
+      simulateStored(availabilityToData(a)) as never,
+    );
+    expect(result).toEqual(a);
+    expect(result.source).toBe('watchmode');
+  });
+
+  it('RegionAvailability: source "tmdb" round-trips (spec 0099)', () => {
+    const a: RegionAvailability = {
+      providers: [{ providerId: 8, name: 'Netflix', type: 'flatrate' }],
+      lastSyncedAt: '2026-06-10T00:00:00.000Z',
+      previousSnapshot: [],
+      source: 'tmdb',
+    };
+    const result = dataToAvailability(
+      simulateStored(availabilityToData(a)) as never,
+    );
+    expect(result).toEqual(a);
+    expect(result.source).toBe('tmdb');
+  });
+
+  it('RegionAvailability: backward-compat — legacy doc missing source reads back as tmdb (spec 0099)', () => {
+    // Simulates a doc written before spec 0099 (no source field stored) — such
+    // docs were TMDB-sourced, so they must read back as 'tmdb'.
+    const a: RegionAvailability = {
+      providers: [{ providerId: 8, name: 'Netflix', type: 'flatrate' }],
+      lastSyncedAt: '2026-06-10T00:00:00.000Z',
+      previousSnapshot: [],
+      source: 'watchmode',
+    };
+    const stored = simulateStored(availabilityToData(a)) as Record<
+      string,
+      unknown
+    >;
+    // Delete source to simulate a pre-0099 stored doc.
+    delete stored['source'];
+    const result = dataToAvailability(stored as never);
+    expect(result.source).toBe('tmdb');
   });
 
   it('ProviderCatalogDoc: lastSyncedAt ISO↔Timestamp; providers pass through', () => {

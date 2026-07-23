@@ -33,6 +33,7 @@ import {
   createSyncEngine,
   createTmdbClient,
   createTraktClient,
+  createWatchmodeClient,
   createFirestoreTitleCacheStore,
   gatherUserWatchlistTitles,
 } from '@vultus/functions/sync-titles';
@@ -59,6 +60,7 @@ import { filterStale } from './lib/staleness';
 import { isRateLimited } from './lib/rate-limit';
 import {
   gatherWatchlistEntries,
+  gatherActiveRegions,
   readSyncState,
   writeSyncState,
   writeSyncRun,
@@ -119,6 +121,12 @@ if (getApps().length === 0) {
 const SYNC_SHARED_SECRET = defineSecret('SYNC_SHARED_SECRET');
 const TMDB_READ_TOKEN = defineSecret('TMDB_READ_TOKEN');
 const TRAKT_CLIENT_ID = defineString('TRAKT_CLIENT_ID');
+// Watchmode gap-fill API key (spec 0099). Rides the .env.vultus-cab62
+// defineString param channel (like TRAKT_CLIENT_ID), NOT defineSecret: `default:
+// ''` means an absent key never blocks deploy and degrades gracefully at runtime
+// (no client constructed → TMDB-only). Value read via .value() ONLY inside the
+// syncTitles handler; never logged. Functions-only — never exposed to mobile.
+const WATCHMODE_API_KEY = defineString('WATCHMODE_API_KEY', { default: '' });
 
 /** User-path rate-limit window: reject a second user run within 5 minutes. */
 export const RATE_LIMIT_MS = 5 * 60 * 1000;
@@ -187,6 +195,15 @@ export interface RunSyncDeps {
    * persisted staged shows, so it MUST run after `persistStagedData`.
    */
   enqueueEpisodeCacheStage: (runId: string) => Promise<void>;
+  /**
+   * Gather the distinct union of all users' regions for the Watchmode gap-fill
+   * (spec 0099; `gatherActiveRegions(db)` in prod). Injected — rather than called
+   * on `deps.db` like the watchlist gather — because it scans a DIFFERENT
+   * collection (`users`), so injecting keeps this core testable without a full
+   * users-collection fake. Called ONCE per run, only when there is title-sync
+   * work, and carried on each `TitleSyncTask` (the fallback runs in the worker).
+   */
+  gatherActiveRegions: () => Promise<Region[]>;
   /** Watchdog schedule delay, seconds (default `WATCHDOG_DELAY_SECONDS`). */
   watchdogDelaySeconds?: number;
 }
@@ -347,6 +364,11 @@ export async function runSync(
       await deps.finalizeHealthyRun(runId, deps.now());
     }
   } else {
+    // Gather the Watchmode active-regions union ONCE (spec 0099), only now that
+    // we know there IS title-sync work — the fallback runs in the title-cache
+    // engine, which executes only inside title shards, so an all-fresh/empty
+    // night skips this extra `users` scan entirely.
+    const activeRegions = await deps.gatherActiveRegions();
     // Fan out one `title-sync` task per shard. Named → Cloud Tasks de-dupes a
     // retried enqueue of the same run/shard.
     for (let i = 0; i < shards.length; i++) {
@@ -355,6 +377,7 @@ export async function runSync(
         shardIndex: i,
         titles: shards[i],
         forced,
+        activeRegions,
       };
       await deps.enqueuer.enqueue(QUEUE_NAMES.titleSync, payload, {
         name: shardTaskName(runId, 'titleSync', i),
@@ -394,8 +417,12 @@ function ensureAdmin(): Firestore {
 /** Dependencies injected into `runTitleSyncShard`, so tests drive it with fakes. */
 export interface RunTitleSyncShardDeps {
   db: Firestore;
-  /** Builds the credentialed title-cache engine (fake in tests). */
-  createEngine: (db: Firestore) => SyncEngine;
+  /**
+   * Builds the credentialed title-cache engine (fake in tests). `activeRegions`
+   * is the shard payload's carried region union (spec 0099) — the production
+   * factory feeds it, plus the Watchmode client, into `createSyncEngine`.
+   */
+  createEngine: (db: Firestore, activeRegions: string[]) => SyncEngine;
   /** Clock in epoch ms; injected for deterministic tests. */
   now: () => number;
   /** Record this shard's result (tracker.recordShardResult, bound to db, in prod). */
@@ -442,7 +469,7 @@ export async function runTitleSyncShard(
   let errored = 0;
   let errors: string[] = [];
   try {
-    const engine = deps.createEngine(deps.db);
+    const engine = deps.createEngine(deps.db, task.activeRegions);
     const results: SyncResult[] = await engine.sync(inputs);
     synced = results.filter((r) => r.outcome === 'synced').length;
     skipped = results.filter((r) => r.outcome === 'skipped').length;
@@ -631,6 +658,12 @@ export const syncTitles = onRequest(
         persistStagedData: (runId, data) => persistStagedData(db, runId, data),
         finalizeHealthyRun: (runId, now) =>
           finalizeHealthyRun(db, runId, now).then(() => undefined),
+        // Watchmode gap-fill (spec 0099, reconciled into the 0101 sharding): the
+        // distinct union of all users' regions, gathered ONCE per run (one users
+        // scan) and carried on each title-sync shard payload. The coordinator
+        // builds NO Watchmode/TMDB client — the client is constructed in the
+        // `titleSyncWorker`, where the title-cache engine (and the fallback) run.
+        gatherActiveRegions: () => gatherActiveRegions(db),
         // 0-title-work-but-TV-shows cascade: kick off the episode-cache stage
         // directly (same wiring the title stage's last shard uses).
         enqueueEpisodeCacheStage: (runId) =>
@@ -680,8 +713,21 @@ export const titleSyncWorker = onTaskDispatched<TitleSyncTask>(
       {
         db,
         now: () => Date.now(),
-        createEngine: (firestore: Firestore): SyncEngine =>
-          createSyncEngine({
+        createEngine: (
+          firestore: Firestore,
+          activeRegions: string[],
+        ): SyncEngine => {
+          // Watchmode gap-fill (spec 0099), on the nightly (sharded) path only.
+          // Build the client ONLY when the key is present — an empty/absent key
+          // → undefined → the engine runs TMDB-only (graceful no-key degrade).
+          // WATCHMODE_API_KEY is a defineString param (like TRAKT_CLIENT_ID), not
+          // a secret, so it needs no `secrets:` binding; its value is read here
+          // and never logged.
+          const watchmodeKey = WATCHMODE_API_KEY.value();
+          const watchmode = watchmodeKey
+            ? createWatchmodeClient({ apiKey: watchmodeKey })
+            : undefined;
+          return createSyncEngine({
             tmdb: createTmdbClient({
               readAccessToken: TMDB_READ_TOKEN.value(),
             }),
@@ -690,7 +736,12 @@ export const titleSyncWorker = onTaskDispatched<TitleSyncTask>(
             // Spec 0089 / D2: one extra pass over retryable-errored titles.
             retryErroredPasses: 1,
             retryDelayMs: 2000,
-          }),
+            // Spec 0099: Watchmode fallback + the run's active-regions union
+            // (carried on the shard payload; re-filtered against REGIONS inside).
+            watchmode,
+            activeRegions: activeRegions as Region[],
+          });
+        },
         recordShard: (params) => recordShardResult(db, params),
         // Spec 0101 T6: the title stage's last shard hands off to the
         // episode-cache stage (chunk staged shows → enqueue `episode-cache`

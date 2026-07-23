@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Firestore } from 'firebase-admin/firestore';
 import type { SyncRun } from '@vultus/shared/domain';
-import { writeSyncRun } from './firestore-io';
+import { gatherActiveRegions, writeSyncRun } from './firestore-io';
 
 // A fake Firestore that records the auto-id `.doc().set(...)` write the helper
 // performs — no Admin SDK, no network.
@@ -90,5 +90,57 @@ describe('writeSyncRun', () => {
     expect(data.kind).toBe('manual');
     expect(data.userId).toBe('user-1');
     expect(data.errors).toEqual(['tmdb 500']);
+  });
+});
+
+// A fake Firestore whose users collection `.get()` yields the given raw docs.
+function createUsersDb(userDocs: { region?: unknown }[]) {
+  const collectionCalls: string[] = [];
+  const db = {
+    collection: (path: string) => {
+      collectionCalls.push(path);
+      return {
+        get: () =>
+          Promise.resolve({
+            docs: userDocs.map((data) => ({ data: () => data })),
+          }),
+      };
+    },
+  };
+  return { db: db as unknown as Firestore, collectionCalls };
+}
+
+describe('gatherActiveRegions (spec 0099)', () => {
+  it('returns the distinct union of users[].region', async () => {
+    const { db } = createUsersDb([
+      { region: 'NL' },
+      { region: 'DE' },
+      { region: 'NL' }, // duplicate → deduped
+    ]);
+    const regions = await gatherActiveRegions(db);
+    expect(new Set(regions)).toEqual(new Set(['NL', 'DE']));
+    expect(regions).toHaveLength(2);
+  });
+
+  it('reads the `users` collection (COLLECTIONS.users constant, not a literal)', async () => {
+    const { db, collectionCalls } = createUsersDb([{ region: 'NL' }]);
+    await gatherActiveRegions(db);
+    expect(collectionCalls).toEqual(['users']);
+  });
+
+  it('drops values not in REGIONS (and missing/non-string region fields)', async () => {
+    const { db } = createUsersDb([
+      { region: 'NL' },
+      { region: 'ZZ' }, // not a REGIONS member
+      { region: 123 }, // non-string
+      {}, // missing region
+    ]);
+    const regions = await gatherActiveRegions(db);
+    expect(regions).toEqual(['NL']);
+  });
+
+  it('returns [] for an empty users collection', async () => {
+    const { db } = createUsersDb([]);
+    expect(await gatherActiveRegions(db)).toEqual([]);
   });
 });

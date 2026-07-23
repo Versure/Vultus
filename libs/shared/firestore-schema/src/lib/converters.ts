@@ -216,6 +216,8 @@ export function titleCacheToData(t: TitleCacheEntry): TitleCacheWriteData {
     traktId: t.traktId,
     metadata: t.metadata,
     lastSyncedAt: new Date(t.lastSyncedAt),
+    // Legacy/unresolved coalesces to null (spec 0099).
+    watchmodeId: t.watchmodeId ?? null,
   };
 }
 export function dataToTitleCache(data: TitleCacheReadData): TitleCacheEntry {
@@ -224,6 +226,8 @@ export function dataToTitleCache(data: TitleCacheReadData): TitleCacheEntry {
     traktId: data.traktId,
     metadata: data.metadata,
     lastSyncedAt: data.lastSyncedAt.toDate().toISOString(),
+    // Legacy docs (pre-0099) lack watchmodeId; coalesce missing → null.
+    watchmodeId: data.watchmodeId ?? null,
   };
 }
 
@@ -283,6 +287,8 @@ export function availabilityToData(
     providers: a.providers,
     lastSyncedAt: new Date(a.lastSyncedAt),
     previousSnapshot: a.previousSnapshot,
+    // Legacy/unmarked coalesces to 'tmdb' (spec 0099).
+    source: a.source ?? 'tmdb',
   };
 }
 export function dataToAvailability(
@@ -292,5 +298,7 @@ export function dataToAvailability(
     providers: data.providers,
     lastSyncedAt: data.lastSyncedAt.toDate().toISOString(),
     previousSnapshot: data.previousSnapshot,
+    // Legacy docs (pre-0099) lack source; coalesce missing → 'tmdb'.
+    source: data.source ?? 'tmdb',
   };
 }

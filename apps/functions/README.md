@@ -12,7 +12,13 @@ wired in here through hexagonal adapters.
 
 - **`syncTitles`** — HTTP/scheduled sync engine entry point (`src/lib/*`,
   `src/main.ts`). Fetches metadata + providers + episodes and writes
-  `title-cache`.
+  `title-cache`. On the **cron path** it also wires the spec-0099 **Watchmode
+  streaming-availability fallback**: it computes `activeRegions` (the distinct
+  union of all users' regions, via `gatherActiveRegions`) and, when the
+  `WATCHMODE_API_KEY` `defineString` param is non-empty, constructs a Watchmode
+  client and passes both into the sync engine so active-region TMDB flatrate gaps
+  are gap-filled. An empty/absent key → no client → byte-for-byte TMDB-only
+  (graceful degrade). The manual `triggerSync` callable stays TMDB-only.
 - **`getWatchProviders`** — `onCall` callable (spec 0060). Given `{ region }`
   it reads-or-refreshes the global `provider-catalog/{region}` cache (7-day
   staleness) and returns `{ providers: CatalogProvider[] }`. On a cache miss/stale

@@ -59,6 +59,15 @@ export interface TitleSyncTask {
   shardIndex: number;
   titles: { tmdbId: number; type: 'movie' | 'tv' }[];
   forced: boolean;
+  /**
+   * The distinct union of all users' regions for this run (spec 0099, reconciled
+   * into the 0101 sharding). Gathered ONCE by the coordinator and carried on the
+   * shard so the WORKER's title-cache engine can drive the Watchmode availability
+   * gap-fill without re-scanning `users`. JSON-plain (`string[]`) to keep this
+   * generic Cloud Tasks payload free of the domain `Region` type; the worker
+   * hands it to `createSyncEngine`, which re-filters it against `REGIONS`.
+   */
+  activeRegions: string[];
 }
 
 /** One `episode-cache` shard: distinct TV tmdbIds to fetch + cache once. */

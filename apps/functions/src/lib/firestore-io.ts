@@ -19,8 +19,10 @@ import {
   syncRunsCollection,
   syncRunToData,
 } from '@vultus/shared/firestore-schema';
-import type { SyncRun } from '@vultus/shared/domain';
+import { REGIONS, type Region, type SyncRun } from '@vultus/shared/domain';
 import type { GatheredEntry } from './gather';
+
+const REGION_SET = new Set<string>(REGIONS);
 
 /** Top-level rate-limit / idempotency doc path (`system/sync`). */
 export const SYNC_STATE_DOC = 'system/sync';
@@ -61,6 +63,27 @@ export async function gatherWatchlistEntries(
     });
   }
   return entries;
+}
+
+/**
+ * Distinct union of all users' regions, for the Watchmode fallback's
+ * `activeRegions` (spec 0099). Plain `.get()` on the `users` collection reading
+ * only the raw `region` field (no converter → avoids the `fcmTokens` Timestamps;
+ * no where/orderBy → no composite index). Values not in `REGIONS` are dropped.
+ * Mirrors how `gatherWatchlistEntries` scans a collection via a `COLLECTIONS`
+ * constant rather than a hardcoded literal.
+ */
+export async function gatherActiveRegions(db: Firestore): Promise<Region[]> {
+  const snap = await db.collection(COLLECTIONS.users).get();
+  const regions = new Set<Region>();
+  for (const doc of snap.docs) {
+    const data = doc.data() as { region?: unknown } | undefined;
+    const region = data?.region;
+    if (typeof region === 'string' && REGION_SET.has(region)) {
+      regions.add(region as Region);
+    }
+  }
+  return [...regions];
 }
 
 /** Read the `system/sync` rate-limit doc; absent → `lastRunAt: null`. */

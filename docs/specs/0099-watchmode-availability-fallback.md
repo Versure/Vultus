@@ -2,7 +2,7 @@
 number: 0099
 slug: watchmode-availability-fallback
 title: Watchmode streaming-availability fallback for TMDB provider gaps
-status: approved
+status: done
 slices: [slice:sync-titles]
 scopes: [scope:functions, scope:shared]
 created: 2026-07-22
@@ -879,12 +879,12 @@ Tailored from PLAN §5. Affected Nx projects: `shared-domain`,
 builds).
 
 - [ ] `pnpm nx typecheck shared-domain shared-firestore-schema
-  functions-sync-titles functions` passes — `AvailabilitySource`, the two
+functions-sync-titles functions` passes — `AvailabilitySource`, the two
       optional fields, the converters, the Watchmode client + crosswalk, the
       `authQuery` transport, the engine config + fallback, and the composition-root
       wiring all compile.
 - [ ] `pnpm nx lint shared-domain shared-firestore-schema functions-sync-titles
-  functions` passes **with Sheriff active**: the engine + Watchmode client stay
+functions` passes **with Sheriff active**: the engine + Watchmode client stay
       Firebase-free (`firebase-admin` only in `firestore-title-cache-store.ts`); no
       new cross-slice edge; `scope:shared` imports only `scope:shared`.
 - [ ] `pnpm nx test shared-firestore-schema` passes — `watchmodeId` and `source`
