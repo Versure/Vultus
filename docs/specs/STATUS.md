@@ -12,8 +12,8 @@
 
 Total specs: 102
 
-- done: 99
-- approved: 3
+- done: 100
+- approved: 2
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -118,4 +118,4 @@ Total specs: 102
 | 99 | watchmode-availability-fallback | Watchmode streaming-availability fallback for TMDB provider gaps | approved | slice:sync-titles | scope:functions, scope:shared |
 | 100 | indexed-dispatch-lookups | Indexed tracking-user lookups in notification dispatch | done | — | scope:functions |
 | 101 | sync-pipeline-sharding | Shard the nightly sync pipeline (Cloud Tasks) and dedupe episode fetching | approved | — | scope:functions |
-| 102 | fix-watchlist-filter-rows-squash | Fix the Watchlist top filter rows collapsing when the list overflows — `flex-shrink: 0` on the persistent control rows | approved | slice:watchlist | scope:mobile |
+| 102 | fix-watchlist-filter-rows-squash | Fix the Watchlist top filter rows collapsing when the list overflows — `flex-shrink: 0` on the persistent control rows | done | slice:watchlist | scope:mobile |
