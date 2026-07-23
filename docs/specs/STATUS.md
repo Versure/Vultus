@@ -12,8 +12,7 @@
 
 Total specs: 102
 
-- done: 101
-- implementing: 1
+- done: 102
 
 | # | slug | title | status | slices | scopes |
 | --- | --- | --- | --- | --- | --- |
@@ -117,5 +116,5 @@ Total specs: 102
 | 98 | fix-plex-episode-watch-sync | Fix Plex sync — create missing episode docs on-device so watched episodes mark immediately | done | slice:settings | scope:mobile |
 | 99 | watchmode-availability-fallback | Watchmode streaming-availability fallback for TMDB provider gaps | done | slice:sync-titles | scope:functions, scope:shared |
 | 100 | indexed-dispatch-lookups | Indexed tracking-user lookups in notification dispatch | done | — | scope:functions |
-| 101 | sync-pipeline-sharding | Shard the nightly sync pipeline (Cloud Tasks) and dedupe episode fetching | implementing | — | scope:functions |
+| 101 | sync-pipeline-sharding | Shard the nightly sync pipeline (Cloud Tasks) and dedupe episode fetching | done | — | scope:functions |
 | 102 | fix-watchlist-filter-rows-squash | Fix the Watchlist top filter rows collapsing when the list overflows — `flex-shrink: 0` on the persistent control rows | done | slice:watchlist | scope:mobile |
