@@ -90,6 +90,12 @@ vultus-error-state.fill-state {
 // -----------------------------------------------------------------------------
 .status-filter {
   display: flex;
+  // These persistent control rows live in the spec-0076 flex-column
+  // `ion-content::part(scroll)`. Because `overflow-x: auto` (below) gives a flex
+  // item an automatic minimum main-size of 0, without `flex-shrink: 0` an
+  // overflowing list squashes this row to its padding (measured 48→16px) —
+  // issue #230, third fix in the story.
+  flex-shrink: 0;
   gap: var(--vultus-space-sm);
   padding: var(--vultus-space-md) var(--vultus-space-md) 0;
   margin-bottom: var(--vultus-space-lg);
@@ -163,6 +169,10 @@ vultus-error-state.fill-state {
 // -----------------------------------------------------------------------------
 .type-tabs {
   display: flex;
+  // Same flex-column scroll host + `overflow-x: auto` squash as `.status-filter`
+  // (automatic minimum main-size 0). Without `flex-shrink: 0` an overflowing
+  // list collapsed this row to its padding (measured 26→4px) — issue #230.
+  flex-shrink: 0;
   gap: var(--vultus-space-md);
   padding: 0 var(--vultus-space-md);
   padding-bottom: var(--vultus-space-xs);
@@ -215,6 +225,11 @@ vultus-error-state.fill-state {
 // -----------------------------------------------------------------------------
 .search-row {
   position: relative;
+  // Defensive: this row's `overflow: visible` already protects it from the
+  // spec-0076 flex-column squash (its content-based minimum size holds it at
+  // 42px), but `flex-shrink: 0` keeps it explicitly pinned alongside its sibling
+  // control rows under overflow pressure — issue #230, third fix.
+  flex-shrink: 0;
   margin: 0 var(--vultus-space-md) var(--vultus-space-lg);
 }
 

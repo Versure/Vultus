@@ -10,10 +10,10 @@
 
 # Spec status ledger
 
-Total specs: 101
+Total specs: 102
 
-- done: 98
-- approved: 2
+- done: 100
+- approved: 1
 - implementing: 1
 
 | # | slug | title | status | slices | scopes |
@@ -117,5 +117,6 @@ Total specs: 101
 | 97 | fix-plex-sync-unmatched-shows | Fix Plex sync dropping unmatched shows (issue | done | slice:settings | scope:mobile, scope:shared |
 | 98 | fix-plex-episode-watch-sync | Fix Plex sync — create missing episode docs on-device so watched episodes mark immediately | done | slice:settings | scope:mobile |
 | 99 | watchmode-availability-fallback | Watchmode streaming-availability fallback for TMDB provider gaps | approved | slice:sync-titles | scope:functions, scope:shared |
-| 100 | indexed-dispatch-lookups | Indexed tracking-user lookups in notification dispatch | approved | — | scope:functions |
+| 100 | indexed-dispatch-lookups | Indexed tracking-user lookups in notification dispatch | done | — | scope:functions |
 | 101 | sync-pipeline-sharding | Shard the nightly sync pipeline (Cloud Tasks) and dedupe episode fetching | implementing | — | scope:functions |
+| 102 | fix-watchlist-filter-rows-squash | Fix the Watchlist top filter rows collapsing when the list overflows — `flex-shrink: 0` on the persistent control rows | done | slice:watchlist | scope:mobile |
