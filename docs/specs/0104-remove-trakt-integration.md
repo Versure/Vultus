@@ -30,13 +30,15 @@ TV show before it can write metadata or availability.
 - The daily-sync GHA runs 504'd 2026-07-03 → 07-20. Raising `syncTitles`
   `timeoutSeconds` (PR #227; later 540s via spec 0089) fixed the timeout, after
   which runs returned HTTP 200 — but **silently** with `errored ≈ 69` of ~171
-  titles gathered (run 2026-07-21 "succeeded" despite this). Spec 0089's **D4
-  error-rate gate** in `.github/workflows/daily-sync.yml` (fail when
-  `errored*100 >= 20*gathered` **OR** `errored >= 20`) then correctly turned the
-  07-22 and 07-23 runs **red**. The `errorSample` is 10× `"TraktError (status
-403)"`.
+  titles gathered (run 2026-07-21 "succeeded" despite this). At the time, spec
+  0089's **D4 error-rate gate** in `.github/workflows/daily-sync.yml` (fail when
+  `errored*100 >= 20*gathered` **OR** `errored >= 20`) turned the 07-22 and 07-23
+  runs **red**. The `errorSample` was 10× `"TraktError (status 403)"`. **(Post-0101
+  note — see below: that D4 gate no longer exists; error accounting moved to the
+  `sync-runs/{runId}` doc. The historical red runs are what surfaced #282; the
+  underlying error is unchanged.)**
 - **Mechanism.** In `libs/functions/sync-titles/src/lib/engine/sync-engine.ts`
-  (~line 93) every TV title without a cached `traktId` calls
+  (the `syncOne` traktId step) every TV title without a cached `traktId` calls
   `trakt.getShowTraktId(tmdbId)`. Trakt returns **403** for every call (verified
   live against `api.trakt.tv`: **both** a missing and an invalid `trakt-api-key`
   yield 403 on `/search/tmdb/{id}?type=show`, so the deployed `TRAKT_CLIENT_ID`
@@ -45,7 +47,22 @@ TV show before it can write metadata or availability.
   writes — so those ~69 TV shows get **no** metadata refresh, **no** availability
   sync, and **no** provider-transition detection, **every day**. 403 is
   non-retryable by design (deterministic for the day — see `isRetryableStatus`),
-  so spec 0089's retry pass never rescues them.
+  so spec 0089's retry pass never rescues them. **Feature 0101 (sync-pipeline
+  sharding) did NOT restructure `libs/functions/sync-titles`** — the engine and
+  this failing code path are byte-for-byte unchanged — so this root-cause
+  analysis stands post-0101.
+- **How the failure surfaces now (post-0101).** Feature 0101 turned `syncTitles`
+  into an **enqueue coordinator**: it gathers + dedupes, fans work out to Cloud
+  Tasks shards (`titleSyncWorker`), and returns **before** the pipeline runs. The
+  `daily-sync.yml` job therefore only asserts the pipeline was **enqueued**
+  (parseable `runId` + `shardCount > 0`) — it can no longer see per-title
+  outcomes, and the old D4 error-rate gate is **gone**. Each shard still runs the
+  unchanged engine, so the `TraktError (status 403)` per-title errors now
+  accumulate into the `sync-runs/{runId}` doc via `sync-run-tracker.ts`
+  (`errorCount` + capped `errors[]`), which the settings **sync-health card**
+  (spec 0049) renders. The bug's user-visible symptom is unchanged (TV titles
+  never refresh); only the observability surface moved from a red workflow to a
+  non-zero `errorCount` in the run doc.
 - **The integration is vestigial.** `getCalendar` has **no** production caller
   (PLAN.md §2 data-sources row already documents this; episode sync uses the TMDB
   adapter). The resolved `traktId`'s **only** consumer is the sync engine itself
@@ -61,8 +78,12 @@ This spec **supersedes** the Trakt portions of historical specs 0007 (Trakt
 client), 0008 (sync engine), and 0009 (title-cache store); those specs are
 immutable **records** and are **not** edited (README lifecycle is forward-only).
 
-**Definition of done (behavioral):** after deploy, the next scheduled daily-sync
-run (~06:20 UTC) goes green with `errored ≈ 0`, and issue #282 is closed.
+**Definition of done (behavioral):** after deploy, the next scheduled nightly run
+finalizes its `sync-runs/{runId}` doc with `errorCount ≈ 0` and **no**
+`"TraktError …"` entries in `errors[]` (visible in the settings sync-health card,
+spec 0049); the `daily-sync.yml` job continues to report enqueue success. Then
+issue #282 is closed. (Post-0101 the workflow's red/green no longer reflects
+per-title errors — see the root-cause note above.)
 
 ## Scope
 
@@ -83,9 +104,10 @@ In scope — a **complete removal** of Trakt from the codebase:
   gone, a TV title no longer needs the entry loaded unless Watchmode is
   configured for `watchmodeId` reuse).
 - **Composition-root removal:** drop the `TRAKT_CLIENT_ID` `defineString`, the
-  `createTraktClient` import, and both `trakt:` wirings (`syncTitles` +
-  `triggerSync`) in `apps/functions/src/main.ts`; reword the two comments that
-  reference Trakt.
+  `createTraktClient` import, and **both** `trakt:` engine wirings in
+  `apps/functions/src/main.ts` — the sharded `titleSyncWorker` shard-worker
+  `createEngine` closure (post-0101) and the `triggerSync` `createEngine`; reword
+  the three comments that reference `TRAKT_CLIENT_ID`.
 - **Deploy plumbing:** remove the `TRAKT_CLIENT_ID` fail-fast + env-write from
   `.github/workflows/deploy-functions.yml` (so a now-nonexistent param is not a
   required deploy variable), promoting the `WATCHMODE_API_KEY` line to seed the
@@ -105,8 +127,11 @@ Out of scope (explicitly):
 
 - **No Firestore data migration.** Existing docs keep a stale `traktId` field on
   disk; the read converters simply ignore the extra field (see Data model).
-- **The D4 error-rate gate** in `.github/workflows/daily-sync.yml` — it works as
-  intended and **stays untouched**.
+- **`.github/workflows/daily-sync.yml` is not touched.** Post-0101 this workflow
+  no longer runs the D4 error-rate gate — it only asserts the pipeline was
+  **enqueued** (parseable `runId` + `shardCount`); per-title error accounting now
+  lives in the `sync-runs/{runId}` doc. Removing Trakt changes neither the enqueue
+  path nor this workflow, so it stays as-is.
 - **Historical records:** specs 0007/0008/0009 and
   `docs/reports/2026-07-22-monetization-and-scale.md` are not edited (records of
   their time; this spec supersedes them).
@@ -254,17 +279,30 @@ TraktError` branches (keep the `TmdbError` handling).
   only prose that used Trakt as an example needs updating). Likewise reword the
   incidental "Trakt" mention in `tmdb/tmdb-client.spec.ts` if present.
 
-### `apps/functions/src/main.ts`
+### `apps/functions/src/main.ts` (post-0101 sharded layout)
 
-- Remove `createTraktClient` from the `@vultus/functions/sync-titles` import.
-- Remove `const TRAKT_CLIENT_ID = defineString('TRAKT_CLIENT_ID');`.
+Line numbers below reflect the current (0101-merged) file; the implementer should
+locate by symbol, not line.
+
+- Remove `createTraktClient` from the `@vultus/functions/sync-titles` import
+  (~line 35).
+- Remove `const TRAKT_CLIENT_ID = defineString('TRAKT_CLIENT_ID');` (~line 123).
+  `TRAKT_CLIENT_ID` is a `defineString` param referenced via `.value()`, **not**
+  in any `secrets: [...]` binding array, so removing the declaration + the two
+  `.value()` call sites is sufficient (no params-array cleanup needed).
 - Remove `trakt: createTraktClient({ clientId: TRAKT_CLIENT_ID.value() }),` from
-  **both** `createSyncEngine({...})` calls (the `syncTitles` cron path ~line 383
-  and the `triggerSync` callable path ~line 538).
-- Reword the two Trakt-referencing comments: the `WATCHMODE_API_KEY` param
-  comment (~line 90, which uses `TRAKT_CLIENT_ID` as its "rides the param
-  channel" example — repoint it to a neutral phrasing) and the "serial
-  TMDB/Trakt throttle" comment (~line 363 → "serial TMDB throttle").
+  **both** `createSyncEngine({...})` call sites: the sharded **`titleSyncWorker`**
+  `onTaskDispatched` shard-worker `createEngine` closure (~line 734, the nightly
+  path post-0101) and the **`triggerSync`** `onCall` `createEngine` (~line 901,
+  the manual path).
+- Reword the **three** `TRAKT_CLIENT_ID`-referencing comments: the
+  `WATCHMODE_API_KEY` param comment (~line 125, which uses `TRAKT_CLIENT_ID` as
+  its "rides the defineString param channel" example), the `titleSyncWorker`
+  doc-comment "Binds `TMDB_READ_TOKEN` (+ the `TRAKT_CLIENT_ID` param)…"
+  (~line 693), and the in-closure `WATCHMODE_API_KEY` comment "…a defineString
+  param (like TRAKT_CLIENT_ID)…" (~line 723) — repoint each to neutral phrasing.
+  (The pre-0101 "serial TMDB/Trakt throttle" comment no longer exists — 0101
+  removed it.)
 
 ## UI / Stitch screen refs
 
@@ -344,20 +382,28 @@ Trakt barrel symbols and `SyncEngineConfig.trakt`.
 `apps/functions/**`, `.github/workflows/deploy-functions.yml`,
 `.github/workflows/ci.yml`
 
-- `src/main.ts`: remove the `createTraktClient` import, the `TRAKT_CLIENT_ID`
-  `defineString`, both `trakt:` wirings, and reword the two Trakt comments (~90,
-  ~363).
-- `src/main.spec.ts`: drop `traktId` from the fixture (~line 69).
-- `src/main.watchmode-wiring.spec.ts` + `src/sync-episodes.spec.ts`: remove the
-  `createTraktClient: vi.fn(...)` module-mock entries.
+- `src/main.ts` (post-0101 sharded layout — locate by symbol, not line): remove
+  the `createTraktClient` import (~35), the `TRAKT_CLIENT_ID` `defineString`
+  (~123), **both** `trakt:` engine wirings (the `titleSyncWorker` shard-worker
+  closure ~734 and the `triggerSync` closure ~901), and reword the **three**
+  `TRAKT_CLIENT_ID`-referencing comments (~125, ~693, ~723). See the
+  `apps/functions/src/main.ts` subsection above for the full detail.
+- `src/main.spec.ts`: drop `traktId` from the fixture (~line 79).
+- `src/main.watchmode-wiring.spec.ts` (~line 28) + `src/sync-episodes.spec.ts`
+  (~line 107): remove the `createTraktClient: vi.fn(...)` module-mock entries.
 - `src/sync-titles.integration.spec.ts` (emulator-only, **CI**): remove the
-  `TraktClient` import, the `fakeTrakt()` helper + `TV_TRAKT_ID`, the `trakt:
-fakeTrakt()` engine wiring, and the `traktId` assertions in the round-trip
-  `.toEqual` expected entries (~lines 174, 248–268); reword the header comment
-  (~lines 8–11, 69) to drop Trakt. **This target does not run under
+  `TraktClient` import (~65), the `fakeTrakt()` helper (~138) + `TV_TRAKT_ID`
+  (~91), the `trakt: fakeTrakt()` engine wiring (~198), and the `traktId`
+  assertions in the seed + round-trip `.toEqual` expected entries (~lines 244,
+  326, 339); reword the header + inline comments that mention Trakt (~lines
+  12–15, 85, 312, 319, 334). **This target does not run under
   `nx affected -t test`** (`vite.integration.config.mts` behind
   `functions:test-integration`) and **cannot run under Claude Code tools here** —
   the implementer updates it blind; CI's emulator run confirms.
+- **New-from-0101 files carry no Trakt reference (verified by grep):**
+  `apps/functions/src/lib/task-queue.ts`, `sync-run-tracker.ts`, `gather.ts`,
+  `firestore-io.ts`, `sync-episodes.ts` and their specs contain **no**
+  `trakt`/`traktId` — no additional ownership is needed beyond the files above.
 - `.github/workflows/deploy-functions.yml`: remove the `TRAKT_CLIENT_ID`
   env-var, the fail-fast check, and the `printf 'TRAKT_CLIENT_ID=%s\n' … >
 apps/functions/.env.vultus-cab62` seeding line; promote the
@@ -368,12 +414,13 @@ apps/functions/.env.vultus-cab62` seeding line; promote the
   (~line 95) to drop Trakt.
 - `apps/functions/README.md`: update if it enumerates function params / env.
 - **Docs of record** (touch as part of this task — disjoint files):
-  - `docs/PLAN.md`: update the Data-sources row (~67) and the hosting-cost note
-    (~69) to TMDB (+ Watchmode fallback, spec 0099); soften the §"Data source
-    reliability" Trakt-calendar sentence (~89–91); component list item 10
-    ("Trakt client", ~453–454) and the architecture-tree comment (~172); the
-    `title-cache`/`watchlist` schema listings (~253, ~279) drop `traktId`; the
-    Secrets table row (~402) and the setup-checklist Trakt item (~510–511).
+  - `docs/PLAN.md` (line refs are post-0101/0103-merge; locate by content):
+    update the Data-sources row (~67) and the hosting-cost note (~69) to TMDB
+    (+ Watchmode fallback, spec 0099); soften the §"Data source reliability"
+    Trakt-calendar sentence (~89); component list item 10 ("Trakt client", ~479)
+    and the architecture-tree comment (~172); the `title-cache`/`watchlist`
+    schema listings (~253, ~279) drop `traktId`; the Secrets table row (~428) and
+    the setup-checklist Trakt item (~536).
   - `docs/ARCHITECTURE.md`: remove the Trakt node/edge (~44, ~51) and the
     external-data-source Trakt mentions (~60, ~215).
   - `docs/setup/firebase-and-secrets.md`: remove the Trakt secret rows and the
@@ -534,11 +581,11 @@ Tailored from PLAN §5. Affected Nx projects: `shared-domain`,
 `mobile-notifications`.
 
 - [ ] `pnpm nx typecheck shared-domain shared-firestore-schema
-    functions-sync-titles functions` passes — the shrunk domain types, the
+  functions-sync-titles functions` passes — the shrunk domain types, the
       converters, the engine config/flow, and the composition root all compile
       with no `traktId` / Trakt symbol referenced.
 - [ ] `pnpm nx lint shared-domain shared-firestore-schema functions-sync-titles
-    functions` passes **with Sheriff active** — no orphaned imports; the engine
+  functions` passes **with Sheriff active** — no orphaned imports; the engine
       stays Firebase-free; boundaries unchanged.
 - [ ] `pnpm nx test shared-firestore-schema` passes — write payloads omit
       `traktId`; a legacy read-data doc carrying `traktId` still converts and the
@@ -550,7 +597,7 @@ Tailored from PLAN §5. Affected Nx projects: `shared-domain`,
       builds the engine without a `trakt` member; existing handler tests stay
       green.
 - [ ] `pnpm nx test mobile-search mobile-title-detail mobile-settings
-    mobile-watchlist mobile-today mobile-notifications` passes — no
+  mobile-watchlist mobile-today mobile-notifications` passes — no
       write-payload/fixture assertion references `traktId`.
 - [ ] `pnpm nx run functions:test-integration` is green (emulator-backed,
       **CI-only** — cannot run under Claude Code tools here): the integration
@@ -594,9 +641,13 @@ Tailored from PLAN §5. Affected Nx projects: `shared-domain`,
 
 - **Post-merge deploy is required to fix #282.** The workflow ends at a green
   merged PR; the actual fix reaches production only after `/deploy-functions`.
-  **Verification of done-ness:** after deploy, the next scheduled daily-sync run
-  (~06:20 UTC) must go green with `errored ≈ 0` (the D4 gate confirms), then
-  close issue #282. Until deploy, the daily-sync stays red — expected.
+  **Verification of done-ness (post-0101 observability):** after deploy, inspect
+  the next nightly run's `sync-runs/{runId}` doc (settings **sync-health card**,
+  spec 0049) — it must finalize with `errorCount ≈ 0` and **no** `"TraktError …"`
+  strings in `errors[]`. The `daily-sync.yml` job itself only asserts enqueue
+  success (it no longer reflects per-title errors — the D4 gate that first turned
+  #282 red was removed by feature 0101), so **do not** use the workflow's
+  red/green as the fix signal; use the run doc. Then close issue #282.
 - **Stale `traktId` on existing docs (accepted, no migration).** Existing
   `watchlist` and `title-cache` docs keep an inert `traktId` field on disk. The
   read-tolerant converters ignore it; a locked regression test proves this. No
